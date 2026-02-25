@@ -1,13 +1,14 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Radar, LayoutGrid, Bell, AlertTriangle, Menu, X, Zap } from "lucide-react";
+import { Radar, LayoutGrid, Bell, AlertTriangle, Menu, X, Zap, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/hooks/useCurrency";
 import { Button } from "@/components/ui/button";
 import { isStale } from "@/lib/formatters";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { playGoAlert, requestNotificationPermission, showGoNotification } from "@/lib/notifications";
 
 const NAV = [
   { to: "/", label: "GO Radar", icon: Radar },
@@ -24,6 +25,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [goBanner, setGoBanner] = useState<GoBanner>(null);
+  const [notifEnabled, setNotifEnabled] = useState(
+    typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted"
+  );
 
   // Subscribe to realtime GO signals
   useEffect(() => {
@@ -42,11 +46,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
               .eq("netuid", row.netuid)
               .maybeSingle()
               .then(({ data }) => {
+                const name = data?.name || null;
                 setGoBanner({
                   netuid: row.netuid,
-                  subnetName: data?.name || null,
+                  subnetName: name,
                   score: row.score,
                 });
+                // Sound + Push notification
+                playGoAlert();
+                showGoNotification(name || `SN-${row.netuid}`, row.netuid, row.score);
               });
           }
         }
@@ -130,6 +138,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
         >
           {currency === "USD" ? "$ USD" : "τ TAO"}
         </Button>
+
+        {!notifEnabled && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs flex items-center gap-1.5"
+            onClick={async () => {
+              const granted = await requestNotificationPermission();
+              setNotifEnabled(granted);
+            }}
+          >
+            <Volume2 className="h-3.5 w-3.5" />
+            Enable Alerts
+          </Button>
+        )}
 
         {stale && (
           <div className="flex items-center gap-1.5 text-xs text-signal-exit">
