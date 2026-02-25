@@ -1,12 +1,12 @@
-import { Link, useLocation } from "react-router-dom";
-import { Radar, LayoutGrid, Bell, AlertTriangle, Menu, X } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Radar, LayoutGrid, Bell, AlertTriangle, Menu, X, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/hooks/useCurrency";
 import { Button } from "@/components/ui/button";
 import { isStale } from "@/lib/formatters";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const NAV = [
@@ -15,11 +15,55 @@ const NAV = [
   { to: "/alerts", label: "Alerts", icon: Bell },
 ];
 
+type GoBanner = { netuid: number; subnetName: string | null; score: number | null } | null;
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const { currency, toggleCurrency } = useCurrency();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [goBanner, setGoBanner] = useState<GoBanner>(null);
+
+  // Subscribe to realtime GO signals
+  useEffect(() => {
+    const channel = supabase
+      .channel("go-signals")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "signals" },
+        (payload) => {
+          const row = payload.new as any;
+          if (row?.state === "GO" || row?.state === "GO_SPECULATIVE") {
+            // Fetch subnet name
+            supabase
+              .from("subnets")
+              .select("name")
+              .eq("netuid", row.netuid)
+              .maybeSingle()
+              .then(({ data }) => {
+                setGoBanner({
+                  netuid: row.netuid,
+                  subnetName: data?.name || null,
+                  score: row.score,
+                });
+              });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Auto-dismiss banner after 30s
+  useEffect(() => {
+    if (!goBanner) return;
+    const timer = setTimeout(() => setGoBanner(null), 30000);
+    return () => clearTimeout(timer);
+  }, [goBanner]);
 
   // Close sidebar on route change (mobile)
   useEffect(() => {
@@ -124,6 +168,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
           )}
           <span>TEST MODE – Data refresh every 5 minutes</span>
         </div>
+        {/* GO Signal Banner */}
+        {goBanner && (
+          <div className="bg-signal-go/15 border-b border-signal-go/30 px-4 py-2.5 flex items-center justify-center gap-3 animate-in slide-in-from-top duration-300">
+            <Zap className="h-4 w-4 text-signal-go flex-shrink-0" />
+            <span className="text-sm font-medium text-signal-go">
+              🚀 GO Signal — {goBanner.subnetName || `SN-${goBanner.netuid}`}
+              {goBanner.score != null && <span className="ml-1 font-mono">(score {goBanner.score})</span>}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs border-signal-go/40 text-signal-go hover:bg-signal-go/20 ml-2"
+              onClick={() => {
+                navigate(`/subnet/${goBanner.netuid}`);
+                setGoBanner(null);
+              }}
+            >
+              View
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 ml-1 text-signal-go/70 hover:text-signal-go"
+              onClick={() => setGoBanner(null)}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
         {children}
       </main>
     </div>
