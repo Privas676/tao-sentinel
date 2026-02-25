@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Radar, LayoutGrid, Bell, AlertTriangle, Menu, X, Zap, Volume2 } from "lucide-react";
+import { Radar, LayoutGrid, Bell, AlertTriangle, Menu, X, Zap, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/hooks/useCurrency";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { playGoAlert, requestNotificationPermission, showGoNotification } from "@/lib/notifications";
+import { useNotificationSettings } from "@/hooks/useNotificationSettings";
 
 const NAV = [
   { to: "/", label: "GO Radar", icon: Radar },
   { to: "/subnets", label: "Subnets", icon: LayoutGrid },
   { to: "/alerts", label: "Alerts", icon: Bell },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 type GoBanner = { netuid: number; subnetName: string | null; score: number | null } | null;
@@ -22,12 +24,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { currency, toggleCurrency } = useCurrency();
+  const { soundEnabled, pushEnabled } = useNotificationSettings();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [goBanner, setGoBanner] = useState<GoBanner>(null);
-  const [notifEnabled, setNotifEnabled] = useState(
-    typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted"
-  );
 
   // Subscribe to realtime GO signals
   useEffect(() => {
@@ -52,9 +52,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   subnetName: name,
                   score: row.score,
                 });
-                // Sound + Push notification
-                playGoAlert();
-                showGoNotification(name || `SN-${row.netuid}`, row.netuid, row.score);
+                // Sound + Push notification (respect user settings)
+                if (soundEnabled) playGoAlert();
+                if (pushEnabled) showGoNotification(name || `SN-${row.netuid}`, row.netuid, row.score);
               });
           }
         }
@@ -64,7 +64,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [soundEnabled, pushEnabled]);
 
   // Auto-dismiss banner after 30s
   useEffect(() => {
@@ -139,20 +139,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {currency === "USD" ? "$ USD" : "τ TAO"}
         </Button>
 
-        {!notifEnabled && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-xs flex items-center gap-1.5"
-            onClick={async () => {
-              const granted = await requestNotificationPermission();
-              setNotifEnabled(granted);
-            }}
-          >
-            <Volume2 className="h-3.5 w-3.5" />
-            Enable Alerts
-          </Button>
-        )}
+
+
 
         {stale && (
           <div className="flex items-center gap-1.5 text-xs text-signal-exit">
