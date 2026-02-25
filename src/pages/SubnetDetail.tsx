@@ -6,16 +6,18 @@ import { Button } from "@/components/ui/button";
 import { SignalBadge, MinerBadge } from "@/components/SignalBadge";
 import { formatZurichTime, signalAge } from "@/lib/formatters";
 import { useCurrency } from "@/hooks/useCurrency";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function SubnetDetail() {
   const { netuid } = useParams<{ netuid: string }>();
   const nid = Number(netuid);
   const [range, setRange] = useState<"6h" | "24h">("6h");
   const { currency } = useCurrency();
+  const isMobile = useIsMobile();
 
   const since = new Date(Date.now() - (range === "6h" ? 6 : 24) * 3600 * 1000).toISOString();
 
@@ -80,17 +82,38 @@ export default function SubnetDetail() {
     buys: m.daily_chain_buys_3m,
   }));
 
+  const prefix = currency === "USD" ? "$" : "τ";
+
+  const formatYAxis = useCallback((value: number, isCurrency: boolean) => {
+    if (!isCurrency) return value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toFixed(1);
+    if (Math.abs(value) >= 1e6) return `${prefix}${(value / 1e6).toFixed(1)}M`;
+    if (Math.abs(value) >= 1e3) return `${prefix}${(value / 1e3).toFixed(1)}K`;
+    return `${prefix}${value.toFixed(2)}`;
+  }, [prefix]);
+
+  const formatTooltipValue = useCallback((value: number, isCurrency: boolean) => {
+    if (!isCurrency) return value?.toFixed(2) ?? "—";
+    return `${prefix}${value?.toFixed(4) ?? "—"}`;
+  }, [prefix]);
+
   const name = signal?.subnet_name || `SN-${nid}`;
 
+  const chartConfigs = [
+    { key: "price", label: `Price (${currency})`, color: "hsl(var(--chart-1))", isCurrency: true },
+    { key: "liquidity", label: `Liquidity (${currency})`, color: "hsl(var(--chart-2))", isCurrency: true },
+    { key: "flow", label: "Flow (3m)", color: "hsl(var(--chart-3))", isCurrency: false },
+    { key: "buys", label: "Buys (3m)", color: "hsl(var(--chart-4))", isCurrency: false },
+  ];
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{name}</h1>
           <p className="text-sm text-muted-foreground font-mono">NetUID {nid}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {signal && (
             <>
               <SignalBadge state={signal.state} />
@@ -99,7 +122,7 @@ export default function SubnetDetail() {
               <span className="text-xs text-muted-foreground">{signalAge(signal.ts)}</span>
             </>
           )}
-          <div className="flex gap-1 ml-4">
+          <div className="flex gap-1 ml-auto sm:ml-4">
             <Button variant={range === "6h" ? "default" : "outline"} size="sm" onClick={() => setRange("6h")}>6h</Button>
             <Button variant={range === "24h" ? "default" : "outline"} size="sm" onClick={() => setRange("24h")}>24h</Button>
           </div>
@@ -122,22 +145,25 @@ export default function SubnetDetail() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {[
-          { key: "price", label: `Price (${currency})`, color: "hsl(var(--chart-1))" },
-          { key: "liquidity", label: `Liquidity (${currency})`, color: "hsl(var(--chart-2))" },
-          { key: "flow", label: "Flow (3m)", color: "hsl(var(--chart-3))" },
-          { key: "buys", label: "Buys (3m)", color: "hsl(var(--chart-4))" },
-        ].map(({ key, label, color }) => (
+        {chartConfigs.map(({ key, label, color, isCurrency }) => (
           <Card key={key}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">{label}</CardTitle>
             </CardHeader>
-            <CardContent className="h-48">
+            <CardContent className={isMobile ? "h-40" : "h-56"}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
+                <LineChart data={chartData} margin={{ left: isMobile ? 0 : 10, right: 8, top: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                  <XAxis
+                    dataKey="time"
+                    tick={{ fontSize: isMobile ? 9 : 10, fill: "hsl(var(--muted-foreground))" }}
+                    interval={isMobile ? "preserveStartEnd" : undefined}
+                  />
+                  <YAxis
+                    tick={{ fontSize: isMobile ? 9 : 10, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={(v) => formatYAxis(v, isCurrency)}
+                    width={isMobile ? 50 : 65}
+                  />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
@@ -146,6 +172,7 @@ export default function SubnetDetail() {
                       color: "hsl(var(--foreground))",
                       fontSize: 12,
                     }}
+                    formatter={(value: number) => [formatTooltipValue(value, isCurrency), label]}
                   />
                   <Line type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={1.5} />
                 </LineChart>
