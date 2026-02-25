@@ -6,9 +6,13 @@ import { signalAge, signalSortKey } from "@/lib/formatters";
 import { useCurrency } from "@/hooks/useCurrency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+
+type SortKey = "price" | "cap" | "vol_24h" | "vol_cap" | "liquidity" | "flow_3m" | null;
+type SortDir = "asc" | "desc";
 
 const FILTERS = ["ALL", "GO", "GO_SPECULATIVE", "HOLD", "EXIT_FAST", "WATCH"] as const;
 
@@ -42,8 +46,26 @@ type SignalRow = {
 export default function SubnetsOverview() {
   const [filter, setFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const navigate = useNavigate();
   const { currency, formatValue } = useCurrency();
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === "desc" ? "asc" : "desc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDir === "desc"
+      ? <ArrowDown className="h-3 w-3 ml-1" />
+      : <ArrowUp className="h-3 w-3 ml-1" />;
+  };
 
   const { data: metrics } = useQuery({
     queryKey: ["subnet-latest-display"],
@@ -78,7 +100,23 @@ export default function SubnetsOverview() {
       }
       return true;
     })
-    .sort((a, b) => signalSortKey(a.signal?.state || null) - signalSortKey(b.signal?.state || null));
+    .sort((a, b) => {
+      if (sortKey) {
+        const valA = (currency === "USD" && sortKey === "price" ? a.price_usd
+          : currency === "USD" && sortKey === "cap" ? a.cap_usd
+          : currency === "USD" && sortKey === "vol_24h" ? a.vol_24h_usd
+          : currency === "USD" && sortKey === "liquidity" ? a.liquidity_usd
+          : a[sortKey]) ?? -Infinity;
+        const valB = (currency === "USD" && sortKey === "price" ? b.price_usd
+          : currency === "USD" && sortKey === "cap" ? b.cap_usd
+          : currency === "USD" && sortKey === "vol_24h" ? b.vol_24h_usd
+          : currency === "USD" && sortKey === "liquidity" ? b.liquidity_usd
+          : b[sortKey]) ?? -Infinity;
+        const cmp = valA - valB;
+        if (cmp !== 0) return sortDir === "desc" ? -cmp : cmp;
+      }
+      return signalSortKey(a.signal?.state || null) - signalSortKey(b.signal?.state || null);
+    });
 
   return (
     <div className="p-6 space-y-4">
@@ -113,12 +151,24 @@ export default function SubnetsOverview() {
             <TableRow className="bg-secondary/50">
               <TableHead className="w-16 font-mono">ID</TableHead>
               <TableHead>Name</TableHead>
-              <TableHead className="text-right">Price</TableHead>
-              <TableHead className="text-right">Cap</TableHead>
-              <TableHead className="text-right">Vol(24h)</TableHead>
-              <TableHead className="text-right">Vol/Cap</TableHead>
-              <TableHead className="text-right">Liquidity</TableHead>
-              <TableHead className="text-right">Flow(3m)</TableHead>
+              <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("price")}>
+                <span className="inline-flex items-center">Price<SortIcon col="price" /></span>
+              </TableHead>
+              <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("cap")}>
+                <span className="inline-flex items-center">Cap<SortIcon col="cap" /></span>
+              </TableHead>
+              <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("vol_24h")}>
+                <span className="inline-flex items-center">Vol(24h)<SortIcon col="vol_24h" /></span>
+              </TableHead>
+              <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("vol_cap")}>
+                <span className="inline-flex items-center">Vol/Cap<SortIcon col="vol_cap" /></span>
+              </TableHead>
+              <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("liquidity")}>
+                <span className="inline-flex items-center">Liquidity<SortIcon col="liquidity" /></span>
+              </TableHead>
+              <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("flow_3m")}>
+                <span className="inline-flex items-center">Flow(3m)<SortIcon col="flow_3m" /></span>
+              </TableHead>
               <TableHead>Miner</TableHead>
               <TableHead>Signal</TableHead>
             </TableRow>
