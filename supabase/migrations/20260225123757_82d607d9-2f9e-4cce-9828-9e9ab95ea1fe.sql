@@ -1,0 +1,1 @@
+UPDATE subnets SET name = NULL WHERE name = 'Unknown';
