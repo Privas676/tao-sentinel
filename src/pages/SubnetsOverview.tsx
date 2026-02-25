@@ -78,6 +78,21 @@ export default function SubnetsOverview() {
     refetchInterval: 60000,
   });
 
+  const { data: lastTs } = useQuery({
+    queryKey: ["last-metrics-ts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subnet_metrics_ts")
+        .select("ts")
+        .order("ts", { ascending: false })
+        .limit(1)
+        .single();
+      if (error) throw error;
+      return data?.ts || null;
+    },
+    refetchInterval: 60000,
+  });
+
   const { data: signals } = useQuery({
     queryKey: ["signals-latest"],
     queryFn: async () => {
@@ -149,9 +164,16 @@ export default function SubnetsOverview() {
 
   return (
     <div className="p-6 space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Subnets Overview</h1>
-        <p className="text-sm text-muted-foreground">All Bittensor subnets with live metrics and signals</p>
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Subnets Overview</h1>
+          <p className="text-sm text-muted-foreground">All Bittensor subnets with live metrics and signals</p>
+        </div>
+        {lastTs && (
+          <p className="text-xs text-muted-foreground font-mono">
+            Updated {signalAge(lastTs)}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
