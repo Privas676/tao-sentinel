@@ -10,6 +10,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Sparkline } from "@/components/Sparkline";
 
 type SortKey = "price" | "cap" | "vol_24h" | "vol_cap" | "liquidity" | "flow_3m" | null;
 type SortDir = "asc" | "desc";
@@ -86,6 +87,32 @@ export default function SubnetsOverview() {
     },
     refetchInterval: 60000,
   });
+
+  const since24h = useMemo(() => new Date(Date.now() - 24 * 3600 * 1000).toISOString(), []);
+
+  const { data: priceHistory } = useQuery({
+    queryKey: ["sparkline-prices", since24h],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subnet_metrics_ts")
+        .select("netuid, price, ts")
+        .gte("ts", since24h)
+        .order("ts", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    refetchInterval: 120000,
+  });
+
+  const sparklineMap = useMemo(() => {
+    const map = new Map<number, number[]>();
+    for (const row of priceHistory || []) {
+      if (row.netuid == null || row.price == null) continue;
+      if (!map.has(row.netuid)) map.set(row.netuid, []);
+      map.get(row.netuid)!.push(Number(row.price));
+    }
+    return map;
+  }, [priceHistory]);
 
   const signalMap = new Map((signals || []).map((s) => [s.netuid, s]));
 
@@ -196,7 +223,10 @@ export default function SubnetsOverview() {
                     {sig?.subnet_name || `SN-${r.netuid}`}
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
-                    {currency === "USD" ? `$${(r.price_usd ?? 0).toFixed(2)}` : `τ${(r.price ?? 0).toFixed(4)}`}
+                    <div className="flex items-center justify-end gap-2">
+                      <Sparkline data={sparklineMap.get(r.netuid!) || []} color="auto" />
+                      <span>{currency === "USD" ? `$${(r.price_usd ?? 0).toFixed(2)}` : `τ${(r.price ?? 0).toFixed(4)}`}</span>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
                     {currency === "USD" ? `$${((r.cap_usd ?? 0) / 1e6).toFixed(1)}M` : `τ${((r.cap ?? 0) / 1e3).toFixed(1)}K`}
