@@ -84,6 +84,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 overflow-auto">
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-1.5 text-center text-xs font-medium text-amber-400 tracking-wide">
+          TEST MODE – Data refresh every 5 minutes
+        </div>
         {children}
       </main>
     </div>
