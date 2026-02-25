@@ -97,7 +97,9 @@ export default function SubnetsOverview() {
         .from("subnet_metrics_ts")
         .select("netuid, price, ts")
         .gte("ts", since24h)
-        .order("ts", { ascending: true });
+        .not("price", "is", null)
+        .order("ts", { ascending: true })
+        .limit(5000);
       if (error) throw error;
       return data || [];
     },
