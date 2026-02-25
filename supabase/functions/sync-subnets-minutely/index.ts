@@ -33,17 +33,37 @@ Deno.serve(async (req) => {
         const identities = Array.isArray(idJson) ? idJson : idJson.data || [];
         for (const identity of identities) {
           const nid = Number(identity.netuid);
-          if (!isNaN(nid) && identity.subnet_name) {
-            nameMap[nid] = identity.subnet_name;
+          if (isNaN(nid)) continue;
+          // Try multiple possible name fields
+          const name = identity.subnet_name || identity.name || identity.identity_name || null;
+          if (name && name !== "Unknown" && name.trim() !== "") {
+            nameMap[nid] = name.trim();
           }
         }
         console.log(`Loaded ${Object.keys(nameMap).length} subnet names from identity API`);
       } else {
         console.warn("Identity API returned status:", idRes.status);
-        await idRes.text(); // consume body
+        await idRes.text();
       }
     } catch (e) {
       console.warn("Failed to fetch subnet identities:", e);
+    }
+
+    // Also extract names from subnet/latest response as fallback
+    for (const s of subnets) {
+      const nid = Number(s.netuid ?? s.subnet_id ?? s.id);
+      if (isNaN(nid) || nameMap[nid]) continue;
+      const fallbackName = s.name || s.subnet_name || null;
+      if (fallbackName && fallbackName !== "Unknown" && fallbackName.trim() !== "") {
+        nameMap[nid] = fallbackName.trim();
+      }
+    }
+    console.log(`Total names after fallback: ${Object.keys(nameMap).length}`);
+    const missingNetuids = subnets
+      .map((s: any) => Number(s.netuid ?? s.subnet_id ?? s.id))
+      .filter((nid: number) => !isNaN(nid) && !nameMap[nid]);
+    if (missingNetuids.length > 0) {
+      console.log(`Netuids without names: ${missingNetuids.join(', ')}`);
     }
 
     // Get existing netuids
@@ -77,10 +97,9 @@ Deno.serve(async (req) => {
           evidence: { source: "taostats", raw: s },
         });
       } else {
-        const { error, count } = await sb.from("subnets").update({
-          name,
-          last_seen_at: now,
-        }).eq("netuid", netuid);
+        const updatePayload: Record<string, any> = { last_seen_at: now };
+        if (name) updatePayload.name = name; // Only update name if we have a real one
+        const { error, count } = await sb.from("subnets").update(updatePayload).eq("netuid", netuid);
         if (error) { console.error(`Update subnet ${netuid} error:`, error); errors++; }
         else { updated++; }
       }
