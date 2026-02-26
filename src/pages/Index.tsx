@@ -130,17 +130,19 @@ export default function SentinelCockpit() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Test Mode Toggle */}
-      <div className="flex justify-end">
-        <Button
-          variant={testMode ? "destructive" : "outline"}
-          size="sm"
-          className="font-mono text-xs gap-1.5"
-          onClick={() => setTestMode(!testMode)}
-        >
-          {testMode ? "⚡ TEST MODE ON" : "🧪 Test Glow"}
-        </Button>
-      </div>
+      {/* Test Mode Toggle (dev only) */}
+      {import.meta.env.DEV && (
+        <div className="flex justify-end">
+          <Button
+            variant={testMode ? "destructive" : "outline"}
+            size="sm"
+            className="font-mono text-xs gap-1.5"
+            onClick={() => setTestMode(!testMode)}
+          >
+            {testMode ? "⚡ TEST MODE ON" : "🧪 Test Glow"}
+          </Button>
+        </div>
+      )}
       {/* Section 1: ACTIONABLE NOW */}
       {actionable.length > 0 && (
         <section>
