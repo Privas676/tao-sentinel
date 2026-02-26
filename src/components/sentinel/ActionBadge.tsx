@@ -12,7 +12,7 @@ const ACTION_STYLES: Record<string, string> = {
 export function ActionBadge({ state, isNew }: { state: string | null; isNew?: boolean }) {
   const label = state || "HOLD";
   return (
-    <div className="flex items-center gap-1.5">
+    <div className={cn("flex items-center gap-1.5 rounded-md px-1 -mx-1 transition-all", isNew && "animate-state-glow")}>
       <Badge className={cn("text-sm font-mono uppercase tracking-wider border-0 px-3 py-1", ACTION_STYLES[label] || ACTION_STYLES.HOLD)}>
         {label}
       </Badge>
