@@ -289,7 +289,7 @@ function RayTooltip({
         fontFamily="monospace"
         letterSpacing="0.05em"
       >
-        SN-{signal.netuid} {signal.name} | T-{signal.t_minus_minutes}m | ASYM: {signal.asymmetry}
+        {signal.name.startsWith("SN-") ? signal.name : `SN-${signal.netuid} ${signal.name}`} | T-{signal.t_minus_minutes}m | ASYM: {signal.asymmetry}
       </text>
     </g>
   );
