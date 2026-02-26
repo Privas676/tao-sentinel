@@ -9,10 +9,20 @@ const ACTION_STYLES: Record<string, string> = {
   BREAK: "bg-signal-exit text-destructive-foreground font-bold animate-pulse-glow shadow-[0_0_12px_hsl(var(--signal-exit)/0.5)]",
 };
 
+const GLOW_VAR: Record<string, string> = {
+  GO: "--signal-go",
+  EARLY: "--signal-go-spec",
+  BREAK: "--signal-exit",
+};
+
 export function ActionBadge({ state, isNew }: { state: string | null; isNew?: boolean }) {
   const label = state || "HOLD";
+  const glowVar = GLOW_VAR[label];
   return (
-    <div className={cn("flex items-center gap-1.5 rounded-md px-1 -mx-1 transition-all", isNew && "animate-state-glow")}>
+    <div
+      className={cn("flex items-center gap-1.5 rounded-md px-1 -mx-1 transition-all", isNew && glowVar && "animate-state-glow")}
+      style={isNew && glowVar ? { "--glow-color": `var(${glowVar})` } as React.CSSProperties : undefined}
+    >
       <Badge className={cn("text-sm font-mono uppercase tracking-wider border-0 px-3 py-1", ACTION_STYLES[label] || ACTION_STYLES.HOLD)}>
         {label}
       </Badge>

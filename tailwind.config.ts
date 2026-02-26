@@ -90,8 +90,8 @@ export default {
           "50%": { opacity: "0.6" },
         },
         "state-glow": {
-          "0%, 100%": { boxShadow: "0 0 0px 0px hsl(var(--signal-go-spec) / 0)" },
-          "50%": { boxShadow: "0 0 12px 4px hsl(var(--signal-go-spec) / 0.25)" },
+          "0%, 100%": { boxShadow: "0 0 0px 0px hsl(var(--glow-color) / 0)" },
+          "50%": { boxShadow: "0 0 12px 4px hsl(var(--glow-color) / 0.25)" },
         },
       },
       animation: {
