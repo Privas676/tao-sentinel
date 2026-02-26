@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { ActionBadge } from "@/components/sentinel/ActionBadge";
 import { RiskPill } from "@/components/sentinel/RiskPill";
 import { SentinelSparkline } from "@/components/sentinel/SentinelSparkline";
@@ -26,6 +27,7 @@ type Signal = {
 export default function SentinelCockpit() {
   const [allOpen, setAllOpen] = useState(false);
   const [testMode, setTestMode] = useState(false);
+  const navigate = useNavigate();
 
   const { data: signals, isLoading } = useQuery({
     queryKey: ["signals-latest"],
@@ -80,7 +82,7 @@ export default function SentinelCockpit() {
   }
 
   const renderRow = (s: Signal) => (
-    <TableRow key={s.netuid} className="border-border/30 hover:bg-accent/30 transition-colors">
+    <TableRow key={s.netuid} className="border-border/30 hover:bg-accent/30 transition-colors cursor-pointer" onClick={() => navigate(`/subnet/${s.netuid}`)}>
       <TableCell className="font-mono text-xs py-2.5">
         <span className="text-muted-foreground">SN-{s.netuid}</span>
         <span className="ml-1.5 text-sm text-foreground">{s.subnet_name || ""}</span>
