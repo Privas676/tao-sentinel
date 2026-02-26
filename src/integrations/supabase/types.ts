@@ -58,30 +58,39 @@ export type Database = {
       }
       signals: {
         Row: {
+          confidence_pct: number | null
           last_notified_at: string | null
           last_state_change_at: string | null
           miner_filter: string | null
+          mpi: number | null
           netuid: number
+          quality_score: number | null
           reasons: Json | null
           score: number | null
           state: string | null
           ts: string
         }
         Insert: {
+          confidence_pct?: number | null
           last_notified_at?: string | null
           last_state_change_at?: string | null
           miner_filter?: string | null
+          mpi?: number | null
           netuid: number
+          quality_score?: number | null
           reasons?: Json | null
           score?: number | null
           state?: string | null
           ts: string
         }
         Update: {
+          confidence_pct?: number | null
           last_notified_at?: string | null
           last_state_change_at?: string | null
           miner_filter?: string | null
+          mpi?: number | null
           netuid?: number
+          quality_score?: number | null
           reasons?: Json | null
           score?: number | null
           state?: string | null
@@ -174,6 +183,41 @@ export type Database = {
           },
         ]
       }
+      subnet_price_daily: {
+        Row: {
+          date: string
+          id: number
+          netuid: number
+          price_close: number | null
+          price_high: number | null
+          price_low: number | null
+        }
+        Insert: {
+          date: string
+          id?: never
+          netuid: number
+          price_close?: number | null
+          price_high?: number | null
+          price_low?: number | null
+        }
+        Update: {
+          date?: string
+          id?: never
+          netuid?: number
+          price_close?: number | null
+          price_high?: number | null
+          price_low?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subnet_price_daily_netuid_fkey"
+            columns: ["netuid"]
+            isOneToOne: false
+            referencedRelation: "subnets"
+            referencedColumns: ["netuid"]
+          },
+        ]
+      }
       subnets: {
         Row: {
           first_seen_at: string | null
@@ -206,10 +250,13 @@ export type Database = {
       }
       signals_latest: {
         Row: {
+          confidence_pct: number | null
           last_notified_at: string | null
           last_state_change_at: string | null
           miner_filter: string | null
+          mpi: number | null
           netuid: number | null
+          quality_score: number | null
           reasons: Json | null
           score: number | null
           state: string | null
