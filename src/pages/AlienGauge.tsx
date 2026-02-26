@@ -261,7 +261,8 @@ export default function AlienGauge() {
   const glowOpacity = conf > 90 ? 0.18 + breathe * 0.22 : conf > 75 ? 0.1 + breathe * 0.12 : 0;
 
   const SIZE = 480;
-  const CX = SIZE / 2, CY = SIZE / 2;
+  const SVG_SIZE = 560; // larger to accommodate radial lines
+  const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
 
   return (
     <div
@@ -300,7 +301,7 @@ export default function AlienGauge() {
           />
         )}
 
-        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+        <svg width={SIZE} height={SIZE} viewBox={`${(SVG_SIZE - SIZE) / -2} ${(SVG_SIZE - SIZE) / -2} ${SVG_SIZE} ${SVG_SIZE}`} style={{ overflow: "visible" }}>
           {/* outer track */}
           <circle cx={CX} cy={CY} r={210} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="7" />
           {/* outer ring — market energy */}
