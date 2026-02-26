@@ -1,0 +1,2 @@
+ALTER TABLE public.signals DROP CONSTRAINT signals_state_check;
+ALTER TABLE public.signals ADD CONSTRAINT signals_state_check CHECK (state = ANY (ARRAY['GO', 'GO_SPECULATIVE', 'HOLD', 'WATCH', 'NO', 'EXIT_FAST', 'BREAK']));
