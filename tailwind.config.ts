@@ -89,11 +89,16 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.6" },
         },
+        "state-glow": {
+          "0%, 100%": { boxShadow: "0 0 0px 0px hsl(var(--signal-go-spec) / 0)" },
+          "50%": { boxShadow: "0 0 12px 4px hsl(var(--signal-go-spec) / 0.25)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "state-glow": "state-glow 1.5s ease-in-out infinite",
       },
     },
   },
