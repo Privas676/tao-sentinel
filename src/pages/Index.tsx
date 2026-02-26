@@ -5,7 +5,7 @@ import { signalAge, signalSortKey } from "@/lib/formatters";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { EcosystemHealth } from "@/components/EcosystemHealth";
 import { AccelIndicator } from "@/components/AccelIndicator";
@@ -34,6 +34,7 @@ export default function OperatorRadar() {
   const [onlyPass, setOnlyPass] = useState(false);
   const [hideWatch, setHideWatch] = useState(false);
   const { t, lang } = useLanguage();
+  const navigate = useNavigate();
 
   const { data: signals, isLoading } = useQuery({
     queryKey: ["signals-latest"],
@@ -115,7 +116,7 @@ export default function OperatorRadar() {
                   </TableHeader>
                   <TableBody>
                     {items.map((s) => (
-                      <TableRow key={s.netuid} className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => window.location.href = `/subnet/${s.netuid}`}>
+                      <TableRow key={s.netuid} className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate(`/subnet/${s.netuid}`)}>
                         <TableCell className="font-medium text-sm">
                           <span className="font-mono text-xs text-muted-foreground mr-1.5">SN-{s.netuid}</span>
                           {s.subnet_name || ""}
