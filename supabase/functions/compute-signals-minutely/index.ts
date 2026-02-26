@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
       if (minerFilter === "FAIL" && prevState !== "NO" && prevState !== "WATCH") breakConditions.push("Miner became FAIL");
 
       if (isActive && breakConditions.length > 0) {
-        newState = "BREAK";
+        newState = "EXIT_FAST";
         reasons = breakConditions.slice(0, 3);
         const lastNotif = existingSignal?.last_notified_at;
         const canNotify = !lastNotif || (now.getTime() - new Date(lastNotif).getTime() > 15 * 60000);
@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
       }
       // NO
       else {
-        newState = prevState === "BREAK" ? "BREAK" : "NO";
+        newState = prevState === "EXIT_FAST" ? "EXIT_FAST" : "NO";
         reasons = [];
       }
 
