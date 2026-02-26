@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
-import { ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
-import { useState, useMemo } from "react";
+import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActionBadge } from "@/components/sentinel/ActionBadge";
 import { RiskPill } from "@/components/sentinel/RiskPill";
@@ -27,6 +27,8 @@ type Signal = {
 export default function SentinelCockpit() {
   const [allOpen, setAllOpen] = useState(false);
   const [testMode, setTestMode] = useState(false);
+  const [sortKey, setSortKey] = useState<"mpi" | "confidence" | "subnet" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const navigate = useNavigate();
 
   const { data: signals, isLoading } = useQuery({
@@ -65,9 +67,28 @@ export default function SentinelCockpit() {
     return Date.now() - new Date(s.last_state_change_at).getTime() < 10 * 60000;
   };
 
+  const toggleSort = useCallback((key: "mpi" | "confidence" | "subnet") => {
+    if (sortKey === key) {
+      setSortDir(d => d === "desc" ? "asc" : "desc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }, [sortKey]);
+
   const sorted = useMemo(() => {
-    return [...(signals || [])].sort((a, b) => (b.confidence_pct || 0) - (a.confidence_pct || 0));
-  }, [signals]);
+    const list = [...(signals || [])];
+    if (!sortKey) {
+      return list.sort((a, b) => (b.confidence_pct || 0) - (a.confidence_pct || 0));
+    }
+    const dir = sortDir === "desc" ? -1 : 1;
+    return list.sort((a, b) => {
+      if (sortKey === "mpi") return dir * ((a.mpi ?? a.score ?? 0) - (b.mpi ?? b.score ?? 0));
+      if (sortKey === "confidence") return dir * ((a.confidence_pct ?? 0) - (b.confidence_pct ?? 0));
+      if (sortKey === "subnet") return dir * (a.subnet_name || "").localeCompare(b.subnet_name || "");
+      return 0;
+    });
+  }, [signals, sortKey, sortDir]);
 
   const actionable = sorted.filter(s => s.state === "GO" || s.state === "EARLY").slice(0, 5);
   const breakZone = sorted.filter(s => s.state === "BREAK");
@@ -116,14 +137,27 @@ export default function SentinelCockpit() {
     </TableRow>
   );
 
+  const SortIcon = ({ col }: { col: "mpi" | "confidence" | "subnet" }) => {
+    if (sortKey !== col) return <ArrowUpDown className="h-2.5 w-2.5 opacity-40" />;
+    return sortDir === "desc" ? <ArrowDown className="h-2.5 w-2.5" /> : <ArrowUp className="h-2.5 w-2.5" />;
+  };
+
+  const sortableHeadClass = "text-[10px] font-mono uppercase tracking-widest text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors";
+
   const tableHeader = (
     <TableHeader>
       <TableRow className="border-border/30">
-        <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Subnet</TableHead>
+        <TableHead className={sortableHeadClass} onClick={() => toggleSort("subnet")}>
+          <span className="inline-flex items-center gap-1">Subnet <SortIcon col="subnet" /></span>
+        </TableHead>
         <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground w-[80px]">30D</TableHead>
         <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Action</TableHead>
-        <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground text-right w-14">MPI</TableHead>
-        <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground text-right w-16">Conf%</TableHead>
+        <TableHead className={`${sortableHeadClass} text-right w-14`} onClick={() => toggleSort("mpi")}>
+          <span className="inline-flex items-center gap-1 justify-end">MPI <SortIcon col="mpi" /></span>
+        </TableHead>
+        <TableHead className={`${sortableHeadClass} text-right w-16`} onClick={() => toggleSort("confidence")}>
+          <span className="inline-flex items-center gap-1 justify-end">Conf% <SortIcon col="confidence" /></span>
+        </TableHead>
         <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Risk</TableHead>
         <TableHead className="w-8" />
       </TableRow>
