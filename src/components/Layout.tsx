@@ -34,7 +34,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       .channel("go-signals")
       .on("postgres_changes", { event: "*", schema: "public", table: "signals" }, (payload) => {
         const row = payload.new as any;
-        if (row?.state === "GO" || row?.state === "GO_SPECULATIVE" || row?.state === "BREAK") {
+        if (row?.state === "GO" || row?.state === "GO_SPECULATIVE" || row?.state === "BREAK" || row?.state === "EXIT_FAST") {
           supabase.from("subnets").select("name").eq("netuid", row.netuid).maybeSingle().then(({ data }) => {
             const name = data?.name || null;
             setGoBanner({ netuid: row.netuid, subnetName: name, score: row.score, state: row.state });
@@ -65,7 +65,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   });
 
   const stale = isStale(latestTs);
-  const isBreak = goBanner?.state === "BREAK";
+  const isBreak = goBanner?.state === "BREAK" || goBanner?.state === "EXIT_FAST";
 
   const sidebarContent = (
     <>
