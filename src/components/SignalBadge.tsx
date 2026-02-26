@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 
 const SIGNAL_STYLES: Record<string, string> = {
   GO: "bg-signal-go text-primary-foreground",
+  EARLY: "bg-signal-go-spec text-primary-foreground",
   GO_SPECULATIVE: "bg-signal-go-spec text-primary-foreground",
   HOLD: "bg-signal-hold text-primary-foreground",
   BREAK: "bg-signal-exit text-destructive-foreground animate-pulse-glow",
@@ -13,6 +14,7 @@ const SIGNAL_STYLES: Record<string, string> = {
 
 const SIGNAL_LABELS: Record<string, Record<string, string>> = {
   GO: { en: "GO", fr: "ENTRER" },
+  EARLY: { en: "EARLY", fr: "PRÉCOCE" },
   GO_SPECULATIVE: { en: "GO SPEC", fr: "ENTRER SPEC" },
   HOLD: { en: "HOLD", fr: "CONSERVER" },
   BREAK: { en: "BREAK", fr: "SORTIE" },

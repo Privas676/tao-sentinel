@@ -23,19 +23,20 @@ export function signalAge(ts: string | null | undefined): string {
 
 export function isStale(ts: string | null | undefined): boolean {
   if (!ts) return true;
-  return Date.now() - new Date(ts).getTime() > 2 * 60 * 1000;
+  return Date.now() - new Date(ts).getTime() > 10 * 60 * 1000;
 }
 
 export const SIGNAL_ORDER: Record<string, number> = {
   BREAK: 0,
   EXIT_FAST: 0,
   GO: 1,
-  GO_SPECULATIVE: 2,
-  HOLD: 3,
-  WATCH: 4,
-  NO: 5,
+  EARLY: 2,
+  GO_SPECULATIVE: 3,
+  HOLD: 4,
+  WATCH: 5,
+  NO: 6,
 };
 
 export function signalSortKey(state: string | null): number {
-  return SIGNAL_ORDER[state || "NO"] ?? 5;
+  return SIGNAL_ORDER[state || "NO"] ?? 6;
 }

@@ -7,7 +7,7 @@ import { Layout } from "@/components/Layout";
 import { CurrencyProvider } from "@/hooks/useCurrency";
 import { NotificationSettingsProvider } from "@/hooks/useNotificationSettings";
 import { LanguageProvider } from "@/i18n/LanguageContext";
-import OperatorRadar from "./pages/Index";
+import SentinelCockpit from "./pages/Index";
 import SubnetsOverview from "./pages/SubnetsOverview";
 import SubnetDetail from "./pages/SubnetDetail";
 import Alerts from "./pages/Alerts";
@@ -27,7 +27,7 @@ const App = () => (
             <BrowserRouter>
               <Layout>
                 <Routes>
-                  <Route path="/" element={<OperatorRadar />} />
+                  <Route path="/" element={<SentinelCockpit />} />
                   <Route path="/subnets" element={<SubnetsOverview />} />
                   <Route path="/subnet/:netuid" element={<SubnetDetail />} />
                   <Route path="/alerts" element={<Alerts />} />

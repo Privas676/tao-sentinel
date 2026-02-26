@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
-function normalize(v: number, max: number) { return clamp(v / max, 0, 1); }
+function scoreClip(x: number, lo: number, hi: number) { return 100 * clamp((x - lo) / (hi - lo), 0, 1); }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -15,9 +15,9 @@ Deno.serve(async (req) => {
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const now = new Date();
     const nowIso = now.toISOString();
-    const ago30m = new Date(now.getTime() - 30 * 60000).toISOString();
+    const ago5m = new Date(now.getTime() - 5 * 60000).toISOString();
     const ago1h = new Date(now.getTime() - 60 * 60000).toISOString();
-    const ago10m = new Date(now.getTime() - 10 * 60000).toISOString();
+    const ago7d = new Date(now.getTime() - 7 * 24 * 60 * 60000).toISOString();
 
     const { data: subnets } = await sb.from("subnets").select("netuid");
     if (!subnets?.length) {
@@ -34,205 +34,149 @@ Deno.serve(async (req) => {
         .eq("netuid", netuid).order("ts", { ascending: false }).limit(1).maybeSingle();
       if (!latest) continue;
 
-      // 30m window for averages
-      const { data: window30m } = await sb.from("subnet_metrics_ts")
-        .select("flow_3m, flow_5m, flow_6m, flow_15m, daily_chain_buys_3m, price, liquidity, miners_active")
-        .eq("netuid", netuid).gte("ts", ago30m).order("ts", { ascending: true });
+      // 5m ago snapshot
+      const { data: snap5m } = await sb.from("subnet_metrics_ts").select("price, liquidity, miners_active")
+        .eq("netuid", netuid).lte("ts", ago5m).order("ts", { ascending: false }).limit(1).maybeSingle();
 
-      // Previous snapshot (for consecutive BREAK detection)
-      const { data: prevSnapshot } = await sb.from("subnet_metrics_ts").select("flow_3m, price, liquidity")
-        .eq("netuid", netuid).order("ts", { ascending: false }).limit(2);
-
-      // 1h ago for miner delta
-      const { data: snap1h } = await sb.from("subnet_metrics_ts").select("miners_active, price, liquidity")
+      // 1h ago snapshot
+      const { data: snap1h } = await sb.from("subnet_metrics_ts").select("price, liquidity, miners_active")
         .eq("netuid", netuid).lte("ts", ago1h).order("ts", { ascending: false }).limit(1).maybeSingle();
 
-      // Deltas
-      const ago6m = new Date(now.getTime() - 6 * 60000).toISOString();
-      const ago15m = new Date(now.getTime() - 15 * 60000).toISOString();
-      const ago5m = new Date(now.getTime() - 5 * 60000).toISOString();
-      const ago3m = new Date(now.getTime() - 3 * 60000).toISOString();
+      // 7d price max for breakout
+      const { data: prices7d } = await sb.from("subnet_metrics_ts").select("price")
+        .eq("netuid", netuid).gte("ts", ago7d).order("ts", { ascending: true });
 
-      const { data: snap6m } = await sb.from("subnet_metrics_ts").select("price, liquidity")
-        .eq("netuid", netuid).lte("ts", ago6m).order("ts", { ascending: false }).limit(1).maybeSingle();
-      const { data: snap15m } = await sb.from("subnet_metrics_ts").select("price, liquidity, flow_5m")
-        .eq("netuid", netuid).lte("ts", ago15m).order("ts", { ascending: false }).limit(1).maybeSingle();
-      const { data: snap5m } = await sb.from("subnet_metrics_ts").select("price")
-        .eq("netuid", netuid).lte("ts", ago5m).order("ts", { ascending: false }).limit(1).maybeSingle();
-      const { data: snap3m } = await sb.from("subnet_metrics_ts").select("liquidity")
-        .eq("netuid", netuid).lte("ts", ago3m).order("ts", { ascending: false }).limit(1).maybeSingle();
+      const priceNow = Number(latest.price) || 0;
+      const price5m = Number(snap5m?.price) || priceNow;
+      const price1h = Number(snap1h?.price) || priceNow;
+      const minersNow = Number(latest.miners_active) || 0;
+      const miners1h = Number(snap1h?.miners_active) || minersNow;
+      const liqNow = Number(latest.liquidity) || 0;
+      const topMinersShare = Number(latest.top_miners_share) || 0;
 
-      const w = window30m || [];
+      // Approximate unavailable fields with sensible defaults
+      const minerBurnPct = 0; // Not available
+      const deregRank = 999; // Not available, safe default
+      const repoInactive = false;
+      const xInactive = false;
+      const discordInactive = false;
+      const whaleImpactPct = topMinersShare * 100; // approximate
+      const gini = Math.min(topMinersShare * 1.2, 1); // approximate
 
-      // === FLOW RATIOS ===
-      const flow3m = latest.flow_3m || 0;
-      const flow6m = latest.flow_6m || 0;
-      const flow15m = latest.flow_15m || 0;
-      const avgFlow3m = w.length > 0 ? w.reduce((s, r) => s + (r.flow_3m || 0), 0) / w.length : 0;
-      const avgFlow6m = w.length > 0 ? w.reduce((s, r) => s + (r.flow_6m || 0), 0) / w.length : 0;
-      const avgFlow15m = w.length > 0 ? w.reduce((s, r) => s + (r.flow_15m || 0), 0) / w.length : 0;
+      // Liquidity haircut: % change from 1h ago
+      const liq1h = Number(snap1h?.liquidity) || liqNow;
+      const liqHaircut = liq1h > 0 ? ((liqNow - liq1h) / liq1h) * 100 : 0;
 
-      const flowRatio3m = avgFlow3m > 0 ? flow3m / avgFlow3m : 0;
-      const flowRatio6m = avgFlow6m > 0 ? flow6m / avgFlow6m : 0;
-      const flowRatio15m = avgFlow15m > 0 ? flow15m / avgFlow15m : 0;
+      // ============= 1. GATING =============
+      const gatingFail =
+        minerBurnPct === 100 ||
+        deregRank <= 5 ||
+        minersNow === 0 ||
+        liqHaircut <= -60;
 
-      // Flow Structure Score
-      let flowStructureScore = 0;
-      if (flowRatio3m > flowRatio6m && flowRatio6m > flowRatio15m) flowStructureScore = 1;
-      else if (flowRatio3m > flowRatio6m) flowStructureScore = 0.5;
+      // ============= 2. QUALITY SCORE (Q) =============
+      let penalty = 0;
+      if (whaleImpactPct >= 30) penalty += 25;
+      if (gini >= 0.75) penalty += 20;
+      if (repoInactive) penalty += 15;
+      if (xInactive && discordInactive) penalty += 10;
+      const Q = clamp(100 - penalty, 0, 100);
 
-      // === BUYS RATIO ===
-      const buys3m = latest.daily_chain_buys_3m || 0;
-      const avgBuys3m = w.length > 0 ? w.reduce((s, r) => s + (r.daily_chain_buys_3m || 0), 0) / w.length : 0;
-      const buysRatio3m = avgBuys3m > 0 ? buys3m / avgBuys3m : 0;
+      // ============= 3. MOMENTUM (M) =============
+      const r5m = priceNow > 0 && price5m > 0 ? Math.log(priceNow / price5m) : 0;
+      const r1h = priceNow > 0 && price1h > 0 ? Math.log(priceNow / price1h) : 0;
+      const M = 0.4 * scoreClip(r1h, -0.02, 0.04) + 0.6 * scoreClip(r5m, -0.004, 0.010);
 
-      // === PRICE COMPRESSION ===
-      const priceNow = latest.price || 0;
-      const price6m = snap6m?.price || priceNow;
-      const priceChange6m = price6m > 0 ? ((priceNow - price6m) / price6m) : 0;
-      const priceAbs6m = Math.abs(priceChange6m);
-      const priceCompressionScore = clamp(1 - priceAbs6m / 0.03, 0, 1);
+      // ============= 4. ADOPTION (A) =============
+      const minersDelta = minersNow - miners1h;
+      const A = scoreClip(minersDelta, -5, 25);
 
-      // === LIQUIDITY STABILITY ===
-      const liqNow = latest.liquidity || 0;
-      const liq15m = snap15m?.liquidity || liqNow;
-      const liqChange15m = liq15m > 0 ? ((liqNow - liq15m) / liq15m) * 100 : 0;
-      let liquidityStabilityScore = 0;
-      if (liqChange15m >= -3) liquidityStabilityScore = 1;
-      else if (liqChange15m >= -6) liquidityStabilityScore = 0.5;
+      // ============= 5. LIQUIDITY SAFETY (L) =============
+      const L = liqHaircut !== 0 ? 100 - scoreClip(Math.abs(liqHaircut), 0, 60) : 50;
 
-      // === MINER FILTER ===
-      const minersNow = latest.miners_active || 0;
-      const miners1h = snap1h?.miners_active || minersNow;
-      const minersDelta1h = miners1h > 0 ? (minersNow - miners1h) / miners1h : 0;
+      // ============= 6. BREAKOUT (B) =============
+      const priceMax7d = (prices7d || []).reduce((max, r) => Math.max(max, Number(r.price) || 0), 0);
+      const breakout = priceNow > priceMax7d && priceMax7d > 0;
+      const B = breakout ? 100 : 0;
 
-      let minerFilter: "PASS" | "WARN" | "FAIL";
-      if (minersDelta1h <= -0.05) minerFilter = "FAIL";
-      else if (minersDelta1h < 0) minerFilter = "WARN";
-      else minerFilter = "PASS";
+      // ============= 7. MPI =============
+      const mpi = clamp(Math.round(
+        0.30 * M +
+        0.20 * A +
+        0.15 * L +
+        0.15 * B +
+        0.20 * Q
+      ), 0, 100);
 
-      // === MINER BONUS ===
-      const minerBonus = minerFilter === "PASS" ? 10 : minerFilter === "WARN" ? 5 : 0;
-
-      // === RISK PENALTIES ===
-      const liq6m = snap6m?.liquidity || liqNow;
-      const liqChange6m = liq6m > 0 ? ((liqNow - liq6m) / liq6m) * 100 : 0;
-      const price5m = snap5m?.price || priceNow;
-      const priceChange5m = price5m > 0 ? ((priceNow - price5m) / price5m) * 100 : 0;
-
-      let riskPenalties = 0;
-      if (liqChange6m < -5) riskPenalties += 8;
-      if (priceChange5m <= -4) riskPenalties += 7;
-
-      // === OPERATOR SCORE ===
-      let score = Math.round(
-        35 * normalize(flowRatio3m, 3) +
-        15 * flowStructureScore +
-        20 * normalize(buysRatio3m, 3) +
-        15 * priceCompressionScore +
-        15 * liquidityStabilityScore +
-        minerBonus -
-        riskPenalties
-      );
-      score = clamp(score, 0, 100);
-
-      // === EXISTING SIGNAL ===
+      // ============= 8. DECISION LOGIC =============
       const { data: existingSignal } = await sb.from("signals").select("*")
         .eq("netuid", netuid).maybeSingle();
       const prevState = existingSignal?.state || "NO";
-      const prevScore = existingSignal?.score || 0;
 
-      // === STATE LOGIC ===
-      let newState = "NO";
+      let newState: string;
       let reasons: string[] = [];
       let eventType: string | null = null;
       let severity = 0;
 
-      const isActive = ["GO", "GO_SPECULATIVE", "HOLD"].includes(prevState);
-
-      // BREAK detection (highest priority for active positions)
-      const liq3m = snap3m?.liquidity || liqNow;
-      const liqChange3m = liq3m > 0 ? ((liqNow - liq3m) / liq3m) * 100 : 0;
-      const price15m = snap15m?.price || priceNow;
-      const priceChange15m = price15m > 0 ? ((priceNow - price15m) / price15m) * 100 : 0;
-
-      // Check consecutive flow breakdown
-      const prevSnapshots = prevSnapshot || [];
-      const flowConsecutiveBreak = prevSnapshots.length >= 2 &&
-        avgFlow3m > 0 &&
-        (prevSnapshots[0]?.flow_3m || 0) < avgFlow3m &&
-        (prevSnapshots[1]?.flow_3m || 0) < avgFlow3m;
-
-      // Score drop in 10 min
-      const { data: snap10m } = await sb.from("signals").select("score")
-        .eq("netuid", netuid).maybeSingle();
-      const scoreDrop = (snap10m?.score || prevScore) - score;
-
-      const breakConditions: string[] = [];
-      if (flowConsecutiveBreak) breakConditions.push("Flow breakdown detected");
-      if (liqChange3m < -5) breakConditions.push("Liquidity shock detected");
-      if (priceChange5m <= -4) breakConditions.push("Price dropped sharply");
-      if (scoreDrop >= 15) breakConditions.push("Score dropped rapidly");
-      if (minerFilter === "FAIL" && prevState !== "NO" && prevState !== "WATCH") breakConditions.push("Miner became FAIL");
-
-      if (isActive && breakConditions.length > 0) {
+      if (gatingFail) {
         newState = "BREAK";
-        reasons = breakConditions.slice(0, 3);
-        const lastNotif = existingSignal?.last_notified_at;
-        const canNotify = !lastNotif || (now.getTime() - new Date(lastNotif).getTime() > 15 * 60000);
-        if (canNotify) { eventType = "BREAK"; severity = 3; }
-      }
-      // GO
-      else if (score >= 80 && flowStructureScore >= 0.5 && liquidityStabilityScore >= 0.5 && minerFilter !== "FAIL") {
-        newState = "GO";
         reasons = [];
-        if (flowStructureScore === 1) reasons.push("Flow acceleration confirmed");
-        if (buysRatio3m > 1.5) reasons.push("Strong buy pressure");
-        if (priceCompressionScore > 0.8) reasons.push("Price compression before breakout");
-        if (liquidityStabilityScore === 1) reasons.push("Liquidity stable");
-        if (minerFilter === "PASS") reasons.push("Miner stability strong");
+        if (minersNow === 0) reasons.push("Zero miners");
+        if (liqHaircut <= -60) reasons.push("Liquidity collapse");
+        if (minerBurnPct === 100) reasons.push("100% miner burn");
+        if (deregRank <= 5) reasons.push("Near deregistration");
+        const canNotify = !existingSignal?.last_notified_at ||
+          (now.getTime() - new Date(existingSignal.last_notified_at).getTime() > 15 * 60000);
+        if (canNotify && prevState !== "BREAK") { eventType = "BREAK"; severity = 3; }
+      }
+      else if (mpi >= 85 && M >= 65 && Q >= 60) {
+        newState = "GO";
+        reasons = ["High MPI", `Momentum ${Math.round(M)}`, `Quality ${Q}`];
+        if (breakout) reasons.push("7d breakout");
         reasons = reasons.slice(0, 3);
-
-        const lastNotif = existingSignal?.last_notified_at;
-        const canGo = !lastNotif || (now.getTime() - new Date(lastNotif).getTime() > 30 * 60000);
+        const canGo = !existingSignal?.last_notified_at ||
+          (now.getTime() - new Date(existingSignal.last_notified_at).getTime() > 30 * 60000);
         if (canGo) { eventType = "GO"; severity = 2; }
       }
-      // GO_SPECULATIVE
-      else if (score >= 72 && score <= 79 && flowStructureScore === 1 && minerFilter === "WARN") {
-        newState = "GO_SPECULATIVE";
-        reasons = ["Flow acceleration confirmed", "Miner filter WARN"];
-        if (buysRatio3m > 1.3) reasons.push("Strong buy pressure");
+      else if (mpi >= 72 && M >= 55 && Q >= 55) {
+        newState = "EARLY";
+        reasons = ["Early momentum detected", `MPI ${mpi}`, `Quality ${Q}`];
+        if (breakout) reasons.push("Approaching breakout");
         reasons = reasons.slice(0, 3);
-
-        const lastNotif = existingSignal?.last_notified_at;
-        const canGo = !lastNotif || (now.getTime() - new Date(lastNotif).getTime() > 30 * 60000);
-        if (canGo) { eventType = "GO_SPECULATIVE"; severity = 2; }
+        // Anti-spam: 60min cooldown for EARLY unless upgrading to GO
+        const lastChange = existingSignal?.last_state_change_at;
+        const cooldownOk = !lastChange || prevState !== "EARLY" ||
+          (now.getTime() - new Date(lastChange).getTime() > 60 * 60000);
+        if (cooldownOk) {
+          const canNotify = !existingSignal?.last_notified_at ||
+            (now.getTime() - new Date(existingSignal.last_notified_at).getTime() > 60 * 60000);
+          if (canNotify) { eventType = "EARLY"; severity = 2; }
+        } else {
+          // Still in cooldown, stay at previous state
+          newState = prevState === "EARLY" ? "EARLY" : prevState;
+        }
       }
-      // HOLD
-      else if (score >= 70 && priceChange15m >= 6 && (latest.flow_5m || 0) >= 1.2 * (w.length > 0 ? w.reduce((s, r) => s + (r.flow_5m || 0), 0) / w.length : 1)) {
-        newState = "HOLD";
-        reasons = [`Price +${priceChange15m.toFixed(1)}% 15m`, "Flow sustained", "Liquidity stable"];
-        const lastNotif = existingSignal?.last_notified_at;
-        const canNotify = !lastNotif || (now.getTime() - new Date(lastNotif).getTime() > 60 * 60000);
-        if (canNotify && prevState !== "HOLD") { eventType = "HOLD"; severity = 2; }
-      }
-      // WATCH
-      else if (score >= 55 && score <= 70) {
+      else if (mpi >= 55) {
         newState = "WATCH";
-        reasons = ["Partial signal conditions"];
-        if (flowRatio3m > 1) reasons.push(`Flow ${flowRatio3m.toFixed(1)}x avg`);
-        reasons = reasons.slice(0, 3);
+        reasons = [`MPI ${mpi}`, "Partial conditions"];
       }
-      // NO
+      else if (mpi >= 40) {
+        newState = "HOLD";
+        reasons = [`MPI ${mpi}`];
+      }
       else {
-        newState = prevState === "BREAK" ? "BREAK" : "NO";
-        reasons = [];
+        newState = prevState === "BREAK" ? "BREAK" : "BREAK";
+        reasons = ["Low MPI"];
       }
 
-      // === DEPEG Detection ===
-      const price1h = snap1h?.price || priceNow;
+      // ============= 9. CONFIDENCE =============
+      const confSignal = clamp((mpi - 60) / 40, 0, 1);
+      const confQuality = Q / 100;
+      const confidencePct = Math.round(100 * (0.55 * confSignal + 0.45 * confQuality));
+
+      // ============= DEPEG Detection =============
+      const priceChange5m = price5m > 0 ? ((priceNow - price5m) / price5m) * 100 : 0;
       const priceChange1h = price1h > 0 ? ((priceNow - price1h) / price1h) * 100 : 0;
-      const liq1h = snap1h?.liquidity || liqNow;
       const liqChange1h = liq1h > 0 ? ((liqNow - liq1h) / liq1h) * 100 : 0;
 
       if (priceChange5m <= -6 && liqChange1h <= -15) {
@@ -241,8 +185,11 @@ Deno.serve(async (req) => {
         await sb.from("events").insert({ netuid, ts: nowIso, type: "DEPEG_WARNING", severity: 3, evidence: { priceChange5m, priceChange1h } });
       }
 
-      // === Upsert signal ===
-      const signalData: any = { netuid, ts: nowIso, state: newState, score, reasons, miner_filter: minerFilter };
+      // ============= Upsert signal =============
+      const signalData: any = {
+        netuid, ts: nowIso, state: newState, score: mpi, mpi, confidence_pct: confidencePct,
+        quality_score: Q, reasons, miner_filter: minersNow > 0 ? (minersDelta >= 0 ? "PASS" : "WARN") : "FAIL",
+      };
       if (newState !== prevState) signalData.last_state_change_at = nowIso;
       if (eventType) signalData.last_notified_at = nowIso;
 
@@ -251,9 +198,16 @@ Deno.serve(async (req) => {
       if (eventType) {
         await sb.from("events").insert({
           netuid, ts: nowIso, type: eventType, severity,
-          evidence: { score, reasons, minerFilter, flowRatio3m, flowStructureScore, buysRatio3m, priceCompressionScore, liquidityStabilityScore, minerBonus, riskPenalties },
+          evidence: { mpi, confidencePct, M: Math.round(M), A: Math.round(A), L: Math.round(L), B, Q, reasons },
         });
       }
+
+      // ============= Daily price snapshot =============
+      const today = now.toISOString().split("T")[0];
+      await sb.from("subnet_price_daily").upsert(
+        { netuid, date: today, price_close: priceNow, price_high: Math.max(priceNow, priceMax7d || 0), price_low: priceNow },
+        { onConflict: "netuid,date" }
+      );
 
       processed++;
     }

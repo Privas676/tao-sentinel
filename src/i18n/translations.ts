@@ -2,19 +2,20 @@ export type Lang = "en" | "fr";
 
 const translations = {
   // Navigation
-  "nav.radar": { en: "Operator Radar", fr: "Radar Opérateur" },
+  "nav.radar": { en: "Cockpit", fr: "Cockpit" },
   "nav.subnets": { en: "Subnets", fr: "Sous-réseaux" },
   "nav.alerts": { en: "Alerts", fr: "Alertes" },
   "nav.settings": { en: "Settings", fr: "Paramètres" },
 
   // App
-  "app.title": { en: "TAO Sentinel", fr: "TAO Sentinel" },
-  "app.subtitle": { en: "Operator Hybrid v3", fr: "Opérateur Hybride v3" },
+  "app.title": { en: "TAO SENTINEL", fr: "TAO SENTINEL" },
+  "app.subtitle": { en: "Early Alpha Cockpit", fr: "Cockpit Alpha" },
   "app.testMode": { en: "TEST MODE – Data refresh every 5 minutes", fr: "MODE TEST – Rafraîchissement toutes les 5 minutes" },
   "app.dataStale": { en: "Data stale", fr: "Données obsolètes" },
 
   // Signal states
   "signal.GO": { en: "GO", fr: "ENTRER" },
+  "signal.EARLY": { en: "EARLY", fr: "PRÉCOCE" },
   "signal.GO_SPECULATIVE": { en: "GO SPEC", fr: "ENTRER SPEC" },
   "signal.HOLD": { en: "HOLD", fr: "CONSERVER" },
   "signal.BREAK": { en: "BREAK", fr: "SORTIE" },

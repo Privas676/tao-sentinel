@@ -1,40 +1,30 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { SignalBadge, MinerBadge } from "@/components/SignalBadge";
-import { signalAge, signalSortKey } from "@/lib/formatters";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@/components/ui/table";
+import { ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useMemo } from "react";
+import { ActionBadge } from "@/components/sentinel/ActionBadge";
+import { RiskPill } from "@/components/sentinel/RiskPill";
+import { SentinelSparkline } from "@/components/sentinel/SentinelSparkline";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useLanguage } from "@/i18n/LanguageContext";
-import { EcosystemHealth } from "@/components/EcosystemHealth";
-import { AccelIndicator } from "@/components/AccelIndicator";
-import { LiqIndicator } from "@/components/LiqIndicator";
 
 type Signal = {
   netuid: number | null;
   subnet_name: string | null;
   state: string | null;
   score: number | null;
+  mpi: number | null;
+  confidence_pct: number | null;
+  quality_score: number | null;
   reasons: any;
   miner_filter: string | null;
   ts: string | null;
+  last_state_change_at: string | null;
 };
 
-const SECTIONS = [
-  { key: "BREAK", filter: (s: Signal) => s.state === "BREAK" || s.state === "EXIT_FAST" },
-  { key: "GO", filter: (s: Signal) => s.state === "GO" },
-  { key: "GO_SPECULATIVE", filter: (s: Signal) => s.state === "GO_SPECULATIVE" },
-  { key: "HOLD", filter: (s: Signal) => s.state === "HOLD" },
-  { key: "WATCH", filter: (s: Signal) => s.state === "WATCH" },
-];
-
-export default function OperatorRadar() {
-  const [onlyActionable, setOnlyActionable] = useState(false);
-  const [onlyPass, setOnlyPass] = useState(false);
-  const [hideWatch, setHideWatch] = useState(false);
-  const { t, lang } = useLanguage();
-  const navigate = useNavigate();
+export default function SentinelCockpit() {
+  const [allOpen, setAllOpen] = useState(false);
 
   const { data: signals, isLoading } = useQuery({
     queryKey: ["signals-latest"],
@@ -46,117 +36,147 @@ export default function OperatorRadar() {
     refetchInterval: 60000,
   });
 
-  const filtered = (signals || []).filter((s) => {
-    if (onlyPass && s.miner_filter !== "PASS") return false;
-    if (onlyActionable && !["GO", "GO_SPECULATIVE", "BREAK", "EXIT_FAST"].includes(s.state || "")) return false;
-    return true;
+  // Fetch sparkline data
+  const { data: sparklines } = useQuery({
+    queryKey: ["sparklines-30d"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subnet_price_daily")
+        .select("netuid, date, price_close")
+        .gte("date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
+        .order("date", { ascending: true });
+      if (error) throw error;
+      const map: Record<number, number[]> = {};
+      for (const row of data || []) {
+        if (!map[row.netuid]) map[row.netuid] = [];
+        map[row.netuid].push(Number(row.price_close) || 0);
+      }
+      return map;
+    },
+    refetchInterval: 300000,
   });
 
-  const visibleSections = SECTIONS.filter((sec) => {
-    if (hideWatch && sec.key === "WATCH") return false;
-    return true;
-  });
-
-  const stateEmoji: Record<string, string> = {
-    BREAK: "🔴",
-    GO: "🟢",
-    GO_SPECULATIVE: "🟡",
-    HOLD: "🔵",
-    WATCH: "⚪",
+  const isNew = (s: Signal) => {
+    if (!s.last_state_change_at) return false;
+    return Date.now() - new Date(s.last_state_change_at).getTime() < 10 * 60000;
   };
 
-  return (
-    <div className="p-4 md:p-6 space-y-4">
-      {/* Ecosystem Health Panel */}
-      {signals && signals.length > 0 && <EcosystemHealth signals={signals} />}
+  const sorted = useMemo(() => {
+    return [...(signals || [])].sort((a, b) => (b.confidence_pct || 0) - (a.confidence_pct || 0));
+  }, [signals]);
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t("radar.title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("radar.subtitle")}</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant={onlyActionable ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setOnlyActionable(!onlyActionable)}>
-            {t("radar.onlyActionable")}
-          </Button>
-          <Button variant={onlyPass ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setOnlyPass(!onlyPass)}>
-            {t("radar.onlyPass")}
-          </Button>
-          <Button variant={hideWatch ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setHideWatch(!hideWatch)}>
-            {t("radar.hideWatch")}
-          </Button>
-        </div>
+  const actionable = sorted.filter(s => s.state === "GO" || s.state === "EARLY").slice(0, 5);
+  const breakZone = sorted.filter(s => s.state === "BREAK");
+  const allSubnets = sorted;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground font-mono text-sm animate-pulse">LOADING SIGNALS...</div>
       </div>
+    );
+  }
 
-      {isLoading ? (
-        <div className="text-muted-foreground text-sm">{t("loading")}</div>
-      ) : (
-        visibleSections.map((sec) => {
-          const items = filtered.filter(sec.filter).sort((a, b) => (b.score || 0) - (a.score || 0));
-          if (items.length === 0) return null;
+  const renderRow = (s: Signal) => (
+    <TableRow key={s.netuid} className="border-border/30 hover:bg-accent/30 transition-colors">
+      <TableCell className="font-mono text-xs py-2.5">
+        <span className="text-muted-foreground">SN-{s.netuid}</span>
+        <span className="ml-1.5 text-sm text-foreground">{s.subnet_name || ""}</span>
+      </TableCell>
+      <TableCell className="py-2.5">
+        <SentinelSparkline data={sparklines?.[s.netuid!] || []} state={s.state} />
+      </TableCell>
+      <TableCell className="py-2.5">
+        <ActionBadge state={s.state} isNew={isNew(s)} />
+      </TableCell>
+      <TableCell className="text-right font-mono text-sm font-bold text-primary py-2.5">
+        {s.mpi ?? s.score ?? "—"}
+      </TableCell>
+      <TableCell className="text-right font-mono text-sm py-2.5">
+        {s.confidence_pct != null ? `${s.confidence_pct}%` : "—"}
+      </TableCell>
+      <TableCell className="py-2.5">
+        <RiskPill qualityScore={s.quality_score} reasons={s.reasons} />
+      </TableCell>
+      <TableCell className="py-2.5">
+        <a
+          href={`https://taostats.io/subnets/${s.netuid}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </TableCell>
+    </TableRow>
+  );
 
-          return (
-            <div key={sec.key} className="space-y-2">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                {stateEmoji[sec.key]} {t(`signal.${sec.key}` as any)} ({items.length})
-              </h2>
-              <div className="rounded-md border border-border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-secondary/50">
-                      <TableHead className="w-28">{t("table.subnet")}</TableHead>
-                      <TableHead>{t("table.action")}</TableHead>
-                      <TableHead className="text-right w-16">{t("table.score")}</TableHead>
-                      <TableHead className="w-16">{t("table.accel")}</TableHead>
-                      <TableHead className="w-16">{t("table.liquidity")}</TableHead>
-                      <TableHead>{t("table.miner")}</TableHead>
-                      <TableHead>{t("table.why")}</TableHead>
-                      <TableHead className="text-right w-20"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((s) => (
-                      <TableRow key={s.netuid} className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate(`/subnet/${s.netuid}`)}>
-                        <TableCell className="font-medium text-sm">
-                          <span className="font-mono text-xs text-muted-foreground mr-1.5">SN-{s.netuid}</span>
-                          {s.subnet_name || ""}
-                        </TableCell>
-                        <TableCell>
-                          <SignalBadge state={s.state} lang={lang} />
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm font-bold text-primary">
-                          {s.score ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          <AccelIndicator flow3m={null} flow6m={null} flow15m={null} />
-                        </TableCell>
-                        <TableCell>
-                          <LiqIndicator />
-                        </TableCell>
-                        <TableCell>
-                          <MinerBadge filter={s.miner_filter} />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1 flex-wrap max-w-[200px]">
-                            {(Array.isArray(s.reasons) ? s.reasons : []).slice(0, 3).map((r: string, i: number) => (
-                              <span key={i} className="text-xs bg-secondary px-1.5 py-0.5 rounded text-secondary-foreground">
-                                {r}
-                              </span>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="text-xs text-muted-foreground">{signalAge(s.ts)}</span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          );
-        })
+  const tableHeader = (
+    <TableHeader>
+      <TableRow className="border-border/30">
+        <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Subnet</TableHead>
+        <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground w-[80px]">30D</TableHead>
+        <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Action</TableHead>
+        <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground text-right w-14">MPI</TableHead>
+        <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground text-right w-16">Conf%</TableHead>
+        <TableHead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Risk</TableHead>
+        <TableHead className="w-8" />
+      </TableRow>
+    </TableHeader>
+  );
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Section 1: ACTIONABLE NOW */}
+      {actionable.length > 0 && (
+        <section>
+          <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-muted-foreground mb-3 flex items-center gap-2">
+            <span className="text-signal-go">🔥</span> ACTIONABLE NOW
+            <span className="text-[10px] font-mono text-muted-foreground/60 ml-1">({actionable.length})</span>
+          </h2>
+          <div className="rounded-md border border-border/50 overflow-hidden bg-card/30">
+            <Table>
+              {tableHeader}
+              <TableBody>{actionable.map(renderRow)}</TableBody>
+            </Table>
+          </div>
+        </section>
       )}
+
+      {/* Section 2: BREAK ZONE */}
+      {breakZone.length > 0 && (
+        <section>
+          <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-muted-foreground mb-3 flex items-center gap-2">
+            <span className="text-signal-exit">🚨</span> BREAK ZONE
+            <span className="text-[10px] font-mono text-muted-foreground/60 ml-1">({breakZone.length})</span>
+          </h2>
+          <div className="rounded-md border border-signal-exit/20 overflow-hidden bg-signal-exit/5">
+            <Table>
+              {tableHeader}
+              <TableBody>{breakZone.map(renderRow)}</TableBody>
+            </Table>
+          </div>
+        </section>
+      )}
+
+      {/* Section 3: ALL SUBNETS */}
+      <Collapsible open={allOpen} onOpenChange={setAllOpen}>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" className="w-full justify-between text-xs font-mono uppercase tracking-[0.2em] text-muted-foreground h-8 px-2 hover:bg-accent/30">
+            <span>ALL SUBNETS ({allSubnets.length})</span>
+            {allOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-2">
+          <div className="rounded-md border border-border/50 overflow-hidden bg-card/20">
+            <Table>
+              {tableHeader}
+              <TableBody>{allSubnets.map(renderRow)}</TableBody>
+            </Table>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
