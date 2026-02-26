@@ -91,6 +91,63 @@ function GaugeSparkline({ data, directive }: { data: number[]; directive: Direct
   );
 }
 
+/* ─── Radial indicator line color ─── */
+function radialColor(d: Directive): string {
+  if (d === "ENTER") return "rgba(198,40,40,0.55)";
+  if (d === "EXIT")  return "rgba(109,27,27,0.45)";
+  if (d === "WAIT")  return "rgba(96,125,139,0.45)";
+  return "rgba(255,255,255,0.08)";
+}
+
+/* ─── Radial lines component ─── */
+function RadialIndicators({ signals, cx, cy, innerR, outerR }: {
+  signals: Signal[];
+  cx: number; cy: number; innerR: number; outerR: number;
+}) {
+  const eligible = useMemo(() => {
+    if (!signals?.length) return [];
+    return [...signals]
+      .filter(s => (s.confidence_pct ?? 0) >= 60)
+      .sort((a, b) => (b.confidence_pct ?? 0) - (a.confidence_pct ?? 0))
+      .slice(0, 7);
+  }, [signals]);
+
+  if (!eligible.length) return null;
+
+  const count = eligible.length;
+  // Distribute evenly around full circle
+  const angleStep = 360 / count;
+
+  return (
+    <>
+      {eligible.map((s, i) => {
+        const conf = clamp(s.confidence_pct ?? 0, 0, 100);
+        const directive = deriveDirective(s);
+        const angle = ((i * angleStep) - 90) * (Math.PI / 180); // start from top
+        const gap = 14; // gap from outer ring
+        const r1 = outerR + gap;
+        const maxLen = 38;
+        const len = 8 + (conf / 100) * maxLen; // length proportional to confidence
+        const r2 = r1 + len;
+        const x1 = cx + r1 * Math.cos(angle);
+        const y1 = cy + r1 * Math.sin(angle);
+        const x2 = cx + r2 * Math.cos(angle);
+        const y2 = cy + r2 * Math.sin(angle);
+
+        return (
+          <line
+            key={s.netuid ?? i}
+            x1={x1} y1={y1} x2={x2} y2={y2}
+            stroke={radialColor(directive)}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+        );
+      })}
+    </>
+  );
+}
+
 /* ═══════════════════════════════════════ */
 /*           ALIEN GAUGE PAGE             */
 /* ═══════════════════════════════════════ */
@@ -271,6 +328,9 @@ export default function AlienGauge() {
               style={{ opacity: 0.9, transition: "d 500ms ease, stroke 500ms ease" }}
             />
           )}
+
+          {/* radial indicators */}
+          <RadialIndicators signals={signals ?? []} cx={CX} cy={CY} innerR={180} outerR={210} />
 
           {/* micro arc — acceleration */}
           {microAngle > 2 && (
