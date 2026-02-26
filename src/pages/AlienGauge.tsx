@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 /* ═══════════════════════════════════════ */
 /*              TYPES                      */
@@ -367,6 +367,49 @@ export default function AlienGauge() {
     return confs.length ? Math.round(confs.reduce((a, b) => a + b, 0) / confs.length) : 0;
   }, [rawSignals]);
   const phase = derivePhase(globalPsi);
+
+  /* ─── mechanical click sound ─── */
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const playClick = useCallback(() => {
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+      const ctx = audioCtxRef.current;
+      const now = ctx.currentTime;
+
+      // Short noise burst (mechanical tick)
+      const bufLen = Math.floor(ctx.sampleRate * 0.035); // 35ms
+      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufLen; i++) {
+        const env = Math.exp(-i / (bufLen * 0.12)); // sharp decay
+        data[i] = (Math.random() * 2 - 1) * env * 0.15;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+
+      // Bandpass for metallic character
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 3200;
+      bp.Q.value = 2.5;
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+      src.connect(bp).connect(gain).connect(ctx.destination);
+      src.start(now);
+      src.stop(now + 0.06);
+    } catch { /* silent fail if audio blocked */ }
+  }, []);
+
+  const prevStateRef = useRef<OracleState | null>(null);
+  useEffect(() => {
+    if (prevStateRef.current !== null && prevStateRef.current !== globalState) {
+      playClick();
+    }
+    prevStateRef.current = globalState;
+  }, [globalState, playClick]);
 
   /* ─── breathing animation ─── */
   const [breathe, setBreathe] = useState(0);
