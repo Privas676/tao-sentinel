@@ -103,9 +103,11 @@ export type Database = {
           daily_chain_buys_1m: number | null
           daily_chain_buys_3m: number | null
           daily_chain_buys_5m: number | null
+          flow_15m: number | null
           flow_1m: number | null
           flow_3m: number | null
           flow_5m: number | null
+          flow_6m: number | null
           id: number
           liquidity: number | null
           miners_active: number | null
@@ -123,9 +125,11 @@ export type Database = {
           daily_chain_buys_1m?: number | null
           daily_chain_buys_3m?: number | null
           daily_chain_buys_5m?: number | null
+          flow_15m?: number | null
           flow_1m?: number | null
           flow_3m?: number | null
           flow_5m?: number | null
+          flow_6m?: number | null
           id?: number
           liquidity?: number | null
           miners_active?: number | null
@@ -143,9 +147,11 @@ export type Database = {
           daily_chain_buys_1m?: number | null
           daily_chain_buys_3m?: number | null
           daily_chain_buys_5m?: number | null
+          flow_15m?: number | null
           flow_1m?: number | null
           flow_3m?: number | null
           flow_5m?: number | null
+          flow_6m?: number | null
           id?: number
           liquidity?: number | null
           miners_active?: number | null

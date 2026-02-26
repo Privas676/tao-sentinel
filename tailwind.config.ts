@@ -65,6 +65,7 @@ export default {
           go: "hsl(var(--signal-go))",
           "go-spec": "hsl(var(--signal-go-spec))",
           hold: "hsl(var(--signal-hold))",
+          break: "hsl(var(--signal-break))",
           exit: "hsl(var(--signal-exit))",
           watch: "hsl(var(--signal-watch))",
           no: "hsl(var(--signal-no))",

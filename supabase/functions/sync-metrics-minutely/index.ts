@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const RAO = 1e9; // 1 TAO = 1e9 rao
+const RAO = 1e9;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -15,19 +15,16 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("TAOSTATS_API_KEY")!;
     const headers = { Authorization: apiKey, Accept: "application/json" };
 
-    // Fetch dTAO pool data (price, cap, vol, liquidity)
     const poolRes = await fetch("https://api.taostats.io/api/dtao/pool/latest/v1?limit=200", { headers });
     if (!poolRes.ok) throw new Error(`Taostats pools error: ${poolRes.status}`);
     const poolJson = await poolRes.json();
     const pools = poolJson.data || [];
 
-    // Fetch subnet chain data (emission, registrations, miners)
     const subnetRes = await fetch("https://api.taostats.io/api/subnet/latest/v1", { headers });
     if (!subnetRes.ok) throw new Error(`Taostats subnet error: ${subnetRes.status}`);
     const subnetJson = await subnetRes.json();
     const subnets = Array.isArray(subnetJson) ? subnetJson : subnetJson.data || [];
 
-    // Build chain data lookup
     const chainMap = new Map<number, any>();
     for (const s of subnets) {
       const nid = Number(s.netuid);
@@ -49,36 +46,33 @@ Deno.serve(async (req) => {
       // Get previous snapshot for EMA smoothing
       const { data: prev } = await sb
         .from("subnet_metrics_ts")
-        .select("flow_1m, flow_3m, flow_5m, daily_chain_buys_1m, daily_chain_buys_3m, daily_chain_buys_5m")
+        .select("flow_1m, flow_3m, flow_5m, flow_6m, flow_15m, daily_chain_buys_1m, daily_chain_buys_3m, daily_chain_buys_5m")
         .eq("netuid", netuid)
         .order("ts", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      // Pool data - price is in TAO, market_cap/liquidity are in rao
       const price = Number(p.price) || null;
       const cap = p.market_cap ? Number(p.market_cap) / RAO : null;
       const liquidity = p.liquidity ? Number(p.liquidity) / RAO : null;
-      // Volume: use tao_volume_24_hr if available, else alpha_volume_24_hr
       const vol24hRaw = p.tao_volume_24_hr || p.alpha_volume_24_hr;
       const vol24h = vol24hRaw ? Number(vol24hRaw) / RAO : null;
       const volCap = cap && vol24h ? vol24h / cap : null;
 
-      // Miners from chain data
       const minersActive = chain ? (Number(chain.active_miners ?? 0) || null) : null;
       const topMinersShare = chain ? (Number(chain.top_miners_share ?? 0) || null) : null;
 
-      // Flow proxy from chain data
       const emission = chain ? (Number(chain.emission ?? 0) || 0) : 0;
       const registration = chain ? (Number(chain.registrations ?? chain.neuron_registrations_this_interval ?? 0) || 0) : 0;
       const flowProxy = emission + registration;
-
       const buysProxy = Number(p.buys_24_hr ?? 0) || 0;
 
-      // EMA smoothing
+      // EMA smoothing - multiple timeframes
       const flow_1m = flowProxy;
       const flow_3m = prev?.flow_3m ? prev.flow_3m * 0.6 + flowProxy * 0.4 : flowProxy;
       const flow_5m = prev?.flow_5m ? prev.flow_5m * 0.7 + flowProxy * 0.3 : flowProxy;
+      const flow_6m = prev?.flow_6m ? prev.flow_6m * 0.75 + flowProxy * 0.25 : flowProxy;
+      const flow_15m = prev?.flow_15m ? prev.flow_15m * 0.85 + flowProxy * 0.15 : flowProxy;
       const buys_1m = buysProxy;
       const buys_3m = prev?.daily_chain_buys_3m ? prev.daily_chain_buys_3m * 0.6 + buysProxy * 0.4 : buysProxy;
       const buys_5m = prev?.daily_chain_buys_5m ? prev.daily_chain_buys_5m * 0.7 + buysProxy * 0.3 : buysProxy;
@@ -94,6 +88,8 @@ Deno.serve(async (req) => {
         flow_1m,
         flow_3m,
         flow_5m,
+        flow_6m,
+        flow_15m,
         daily_chain_buys_1m: buys_1m,
         daily_chain_buys_3m: buys_3m,
         daily_chain_buys_5m: buys_5m,

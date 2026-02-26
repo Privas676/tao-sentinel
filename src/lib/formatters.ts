@@ -27,6 +27,7 @@ export function isStale(ts: string | null | undefined): boolean {
 }
 
 export const SIGNAL_ORDER: Record<string, number> = {
+  BREAK: 0,
   EXIT_FAST: 0,
   GO: 1,
   GO_SPECULATIVE: 2,
