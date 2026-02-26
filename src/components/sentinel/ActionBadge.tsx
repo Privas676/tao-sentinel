@@ -27,7 +27,7 @@ export function ActionBadge({ state, isNew }: { state: string | null; isNew?: bo
         {label}
       </Badge>
       {isNew && (
-        <span className="text-[10px] font-bold text-signal-go-spec animate-pulse">NEW</span>
+        <span className={cn("text-[10px] font-bold animate-pulse", glowVar === "--signal-go" ? "text-signal-go" : glowVar === "--signal-exit" ? "text-signal-exit" : "text-signal-go-spec")}>NEW</span>
       )}
     </div>
   );
