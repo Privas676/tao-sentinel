@@ -201,15 +201,15 @@ export default function AlienGauge() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const glowOpacity = conf > 90 ? 0.15 + breathe * 0.2 : conf > 75 ? 0.08 + breathe * 0.1 : 0;
+  const glowOpacity = conf > 90 ? 0.18 + breathe * 0.22 : conf > 75 ? 0.1 + breathe * 0.12 : 0;
 
-  const SIZE = 380;
+  const SIZE = 480;
   const CX = SIZE / 2, CY = SIZE / 2;
 
   return (
     <div
-      className="fixed inset-0 flex flex-col items-center justify-center select-none overflow-hidden"
-      style={{ background: "#050505" }}
+      className="fixed inset-0 flex flex-col items-center justify-center select-none"
+      style={{ background: "#050505", overflow: "hidden" }}
     >
       {/* ─── HEADER ─── */}
       <div className="absolute top-6 left-0 right-0 text-center">
@@ -245,28 +245,28 @@ export default function AlienGauge() {
 
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
           {/* outer track */}
-          <circle cx={CX} cy={CY} r={165} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="6" />
+          <circle cx={CX} cy={CY} r={210} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="7" />
           {/* outer ring — market energy */}
           {outerAngle > 0 && (
             <path
-              d={describeArc(CX, CY, 165, -135, -135 + outerAngle)}
+              d={describeArc(CX, CY, 210, -135, -135 + outerAngle)}
               fill="none"
               stroke={colors.ring}
-              strokeWidth="6"
+              strokeWidth="7"
               strokeLinecap="round"
               style={{ opacity: 0.7, transition: "d 500ms ease, stroke 500ms ease" }}
             />
           )}
 
           {/* inner track */}
-          <circle cx={CX} cy={CY} r={140} fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="4" />
+          <circle cx={CX} cy={CY} r={180} fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="8" />
           {/* inner ring — confidence */}
           {innerAngle > 0 && (
             <path
-              d={describeArc(CX, CY, 140, -135, -135 + innerAngle)}
+              d={describeArc(CX, CY, 180, -135, -135 + innerAngle)}
               fill="none"
               stroke={colors.ring}
-              strokeWidth="4"
+              strokeWidth="8"
               strokeLinecap="round"
               style={{ opacity: 0.9, transition: "d 500ms ease, stroke 500ms ease" }}
             />
@@ -275,10 +275,10 @@ export default function AlienGauge() {
           {/* micro arc — acceleration */}
           {microAngle > 2 && (
             <path
-              d={describeArc(CX, CY, 120, -135, -135 + microAngle)}
+              d={describeArc(CX, CY, 155, -135, -135 + microAngle)}
               fill="none"
               stroke={colors.ring}
-              strokeWidth="2"
+              strokeWidth="3"
               strokeLinecap="round"
               style={{ opacity: 0.5, transition: "d 500ms ease" }}
             />
@@ -289,18 +289,18 @@ export default function AlienGauge() {
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
             className="font-mono font-light leading-none"
-            style={{ fontSize: 56, color: colors.ring, transition: "color 500ms ease" }}
+            style={{ fontSize: 70, color: colors.ring, transition: "color 500ms ease" }}
           >
             {conf}%
           </span>
           <span
-            className="font-mono text-sm tracking-[0.35em] mt-2"
+            className="font-mono text-base tracking-[0.55em] mt-3"
             style={{ color: colors.ring, opacity: 0.85, transition: "color 500ms ease" }}
           >
             {directive}
           </span>
           <span
-            className="font-mono text-[11px] tracking-[0.2em] mt-3"
+            className="font-mono text-xs tracking-[0.25em] mt-4"
             style={{ color: "rgba(255,255,255,0.3)" }}
           >
             {subnetName}
