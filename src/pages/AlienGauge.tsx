@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 
 /* ═══════════════════════════════════════ */
 /*              TYPES                      */
@@ -20,6 +20,8 @@ type RawSignal = {
 
 type OracleState = "IDLE" | "BUILD" | "ARMED" | "TRIGGER";
 type Asymmetry = "LOW" | "MED" | "HIGH";
+type Phase = "ACCUMULATION" | "EXPANSION" | "DISTRIBUTION";
+type StateFR = "CALME" | "TENSION" | "IMMINENT" | "RUPTURE";
 
 type SubnetSignal = {
   netuid: number;
@@ -46,8 +48,22 @@ function deriveOracleState(mpi: number): OracleState {
   return "IDLE";
 }
 
+function stateFR(state: OracleState): StateFR {
+  switch (state) {
+    case "TRIGGER": return "RUPTURE";
+    case "ARMED": return "IMMINENT";
+    case "BUILD": return "TENSION";
+    case "IDLE": return "CALME";
+  }
+}
+
+function derivePhase(avgMpi: number): Phase {
+  if (avgMpi >= 65) return "EXPANSION";
+  if (avgMpi >= 45) return "DISTRIBUTION";
+  return "ACCUMULATION";
+}
+
 function deriveTMinus(mpi: number): number {
-  // Higher MPI = closer to event. Map 0-100 → 120-0 minutes (inverse, nonlinear)
   if (mpi >= 95) return 1;
   if (mpi >= 85) return Math.max(1, Math.round(8 - (mpi - 85) * 0.7));
   if (mpi >= 72) return Math.round(25 - (mpi - 72) * 1.3);
@@ -56,7 +72,7 @@ function deriveTMinus(mpi: number): number {
 }
 
 function deriveAsymmetry(quality: number, confidence: number): Asymmetry {
-  const score = (confidence * 0.6 + quality * 0.4);
+  const score = confidence * 0.6 + quality * 0.4;
   if (score >= 75) return "HIGH";
   if (score >= 55) return "MED";
   return "LOW";
@@ -67,22 +83,26 @@ function processSignals(
   sparklines: Record<number, number[]>
 ): SubnetSignal[] {
   return raw
-    .filter(s => s.netuid != null && (s.confidence_pct ?? 0) >= 55)
+    .filter(s => s.netuid != null)
     .map(s => {
       const mpi = s.mpi ?? s.score ?? 0;
       const conf = s.confidence_pct ?? 0;
       const quality = s.quality_score ?? 0;
+      const tMinus = deriveTMinus(mpi);
+      const asym = deriveAsymmetry(quality, conf);
       return {
         netuid: s.netuid!,
         name: s.subnet_name || `SN-${s.netuid}`,
-        t_minus_minutes: deriveTMinus(mpi),
+        t_minus_minutes: tMinus,
         confidence: conf,
         state: deriveOracleState(mpi),
-        asymmetry: deriveAsymmetry(quality, conf),
+        asymmetry: asym,
         sparkline_30d: sparklines[s.netuid!] ?? [],
         mpi,
       };
     })
+    // Ray display conditions: conf≥60, T<35, asym≠LOW
+    .filter(s => s.confidence >= 60 && s.t_minus_minutes < 35 && s.asymmetry !== "LOW")
     .sort((a, b) => a.t_minus_minutes - b.t_minus_minutes)
     .slice(0, 7);
 }
@@ -103,27 +123,27 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
 function stateColor(state: OracleState): string {
   switch (state) {
     case "TRIGGER": return "#c62828";
-    case "ARMED":   return "#bf360c";
-    case "BUILD":   return "#f9a825";
-    case "IDLE":    return "#607d8b";
+    case "ARMED": return "#bf360c";
+    case "BUILD": return "#f9a825";
+    case "IDLE": return "#607d8b";
   }
 }
 
 function stateGlow(state: OracleState): string {
   switch (state) {
     case "TRIGGER": return "rgba(198,40,40,0.35)";
-    case "ARMED":   return "rgba(191,54,12,0.2)";
-    case "BUILD":   return "rgba(249,168,37,0.1)";
-    case "IDLE":    return "rgba(96,125,139,0.05)";
+    case "ARMED": return "rgba(191,54,12,0.2)";
+    case "BUILD": return "rgba(249,168,37,0.1)";
+    case "IDLE": return "rgba(96,125,139,0.05)";
   }
 }
 
 function rayColor(state: OracleState): string {
   switch (state) {
     case "TRIGGER": return "rgba(198,40,40,0.7)";
-    case "ARMED":   return "rgba(191,54,12,0.55)";
-    case "BUILD":   return "rgba(249,168,37,0.4)";
-    case "IDLE":    return "rgba(96,125,139,0.25)";
+    case "ARMED": return "rgba(191,54,12,0.55)";
+    case "BUILD": return "rgba(249,168,37,0.4)";
+    case "IDLE": return "rgba(96,125,139,0.25)";
   }
 }
 
@@ -136,22 +156,16 @@ function RaySparkline({
   data: number[]; x1: number; y1: number; x2: number; y2: number; state: OracleState;
 }) {
   if (data.length < 3) return null;
-
-  // Compute direction vector and perpendicular
   const dx = x2 - x1, dy = y2 - y1;
   const len = Math.sqrt(dx * dx + dy * dy);
   if (len < 10) return null;
-
-  // Unit vectors along ray and perpendicular
   const ux = dx / len, uy = dy / len;
-  const px = -uy, py = ux; // perpendicular
-
+  const px = -uy, py = ux;
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
-  const sparkW = len * 0.7; // use 70% of ray length
-  const sparkH = 6; // max perpendicular deviation
+  const sparkW = len * 0.7;
+  const sparkH = 6;
   const startOffset = len * 0.15;
-
   const pts = data.map((v, i) => {
     const t = i / (data.length - 1);
     const along = startOffset + t * sparkW;
@@ -160,7 +174,6 @@ function RaySparkline({
     const sy = y1 + uy * along + py * perp;
     return `${sx},${sy}`;
   });
-
   return (
     <polyline
       points={pts.join(" ")}
@@ -186,51 +199,39 @@ function SacredRays({
   setHoveredIdx: (i: number | null) => void;
 }) {
   if (!signals.length) return null;
-
-  const count = signals.length;
-  const angleStep = 360 / 7; // Always divide by 7 for sacred geometry
-  const gap = 16;
+  const angleStep = 360 / 7;
+  const gap = 20;
 
   return (
     <>
       {signals.map((s, i) => {
-        const angleDeg = (i * angleStep) - 90; // start from top
+        const angleDeg = (i * angleStep) - 90;
         const angle = angleDeg * (Math.PI / 180);
         const r1 = outerR + gap;
-
-        // Length: inversely proportional to t_minus (closer = longer)
-        const maxLen = 85;
-        const minLen = 18;
+        const maxLen = 110;
+        const minLen = 22;
         const imminenceFactor = clamp(1 - (s.t_minus_minutes / 120), 0, 1);
         const len = minLen + imminenceFactor * (maxLen - minLen);
         const r2 = r1 + len;
-
-        // Thickness: proportional to confidence
-        const thickness = 1 + (s.confidence / 100) * 2; // 1-3px
-
+        const thickness = 1 + (s.confidence / 100) * 2.5;
         const x1 = cx + r1 * Math.cos(angle);
         const y1 = cy + r1 * Math.sin(angle);
         const x2 = cx + r2 * Math.cos(angle);
         const y2 = cy + r2 * Math.sin(angle);
-
-        // Dashed if asymmetry LOW (noisy)
-        const dashArray = s.asymmetry === "LOW" ? "3,3" : s.asymmetry === "MED" ? "6,2" : undefined;
-
+        const dashArray = s.asymmetry === "MED" ? "6,2" : undefined;
         const isHovered = hoveredIdx === i;
 
         return (
           <g key={s.netuid}>
-            {/* Invisible wider hit area */}
             <line
               x1={x1} y1={y1} x2={x2} y2={y2}
               stroke="transparent"
-              strokeWidth={16}
+              strokeWidth={18}
               style={{ cursor: "pointer" }}
               onMouseEnter={() => setHoveredIdx(i)}
               onMouseLeave={() => setHoveredIdx(null)}
               onClick={() => window.open(`https://taostats.io/subnets/${s.netuid}`, "_blank")}
             />
-            {/* Actual ray */}
             <line
               x1={x1} y1={y1} x2={x2} y2={y2}
               stroke={rayColor(s.state)}
@@ -243,7 +244,6 @@ function SacredRays({
                 pointerEvents: "none",
               }}
             />
-            {/* Sparkline along the ray */}
             <RaySparkline
               data={s.sparkline_30d}
               x1={x1} y1={y1} x2={x2} y2={y2}
@@ -259,44 +259,57 @@ function SacredRays({
 /* ═══════════════════════════════════════ */
 /*          TOOLTIP                        */
 /* ═══════════════════════════════════════ */
+const asymFR: Record<Asymmetry, string> = { HIGH: "HAUTE", MED: "MOYENNE", LOW: "FAIBLE" };
+
 function RayTooltip({
-  signal, cx, cy, outerR, index, total
+  signal, cx, cy, outerR, index
 }: {
-  signal: SubnetSignal; cx: number; cy: number; outerR: number; index: number; total: number;
+  signal: SubnetSignal; cx: number; cy: number; outerR: number; index: number;
 }) {
   const angleStep = 360 / 7;
   const angleDeg = (index * angleStep) - 90;
   const angle = angleDeg * (Math.PI / 180);
-  const r = outerR + 105; // position beyond ray end
+  const r = outerR + 140;
   const x = cx + r * Math.cos(angle);
   const y = cy + r * Math.sin(angle);
+  const displayName = signal.name.startsWith("SN-") ? signal.name : `SN-${signal.netuid} ${signal.name}`;
 
   return (
     <g style={{ pointerEvents: "none" }}>
       <rect
-        x={x - 90} y={y - 14}
-        width={180} height={28}
+        x={x - 95} y={y - 30}
+        width={190} height={52}
         rx={4}
-        fill="rgba(10,10,12,0.92)"
-        stroke="rgba(255,255,255,0.08)"
+        fill="rgba(8,8,10,0.94)"
+        stroke="rgba(255,255,255,0.06)"
         strokeWidth={0.5}
       />
       <text
-        x={x} y={y + 4}
+        x={x} y={y - 10}
         textAnchor="middle"
-        fill="rgba(255,255,255,0.65)"
+        fill="rgba(255,255,255,0.75)"
+        fontSize="10"
+        fontFamily="monospace"
+        letterSpacing="0.04em"
+      >
+        {displayName}
+      </text>
+      <text
+        x={x} y={y + 8}
+        textAnchor="middle"
+        fill="rgba(255,255,255,0.45)"
         fontSize="9"
         fontFamily="monospace"
-        letterSpacing="0.05em"
+        letterSpacing="0.04em"
       >
-        {signal.name.startsWith("SN-") ? signal.name : `SN-${signal.netuid} ${signal.name}`} | T-{signal.t_minus_minutes}m | ASYM: {signal.asymmetry}
+        T-{signal.t_minus_minutes}m · ASYM: {asymFR[signal.asymmetry]}
       </text>
     </g>
   );
 }
 
 /* ═══════════════════════════════════════ */
-/*        ORACLE D'IMMINENCE PAGE          */
+/*    ORACLE DE PRESSION TAO — PAGE        */
 /* ═══════════════════════════════════════ */
 export default function AlienGauge() {
   /* ─── data fetch ─── */
@@ -335,22 +348,29 @@ export default function AlienGauge() {
     [rawSignals, sparklines]
   );
 
-  const dominant = signals[0] ?? null;
-  const globalState: OracleState = dominant?.state ?? "IDLE";
-  const globalTMinus = dominant?.t_minus_minutes ?? 99;
-  const dominantName = dominant?.name ?? "—";
-
-  /* ─── market energy ─── */
-  const marketEnergy = useMemo(() => {
+  /* ─── global PSI (weighted avg of all subnet MPIs) ─── */
+  const globalPsi = useMemo(() => {
     if (!rawSignals?.length) return 0;
-    const mpis = rawSignals.map(s => s.mpi ?? s.score ?? 0);
-    return Math.round(mpis.reduce((a, b) => a + b, 0) / mpis.length);
+    const mpis = rawSignals.map(s => s.mpi ?? s.score ?? 0).filter(m => m > 0);
+    if (!mpis.length) return 0;
+    // Weight higher MPIs more (square weighting for pressure sensitivity)
+    const totalW = mpis.reduce((a, m) => a + m, 0);
+    const weighted = mpis.reduce((a, m) => a + m * m, 0);
+    return Math.round(weighted / totalW);
   }, [rawSignals]);
+
+  const globalState: OracleState = deriveOracleState(globalPsi);
+  const globalTMinus = deriveTMinus(globalPsi);
+  const globalConfidence = useMemo(() => {
+    if (!rawSignals?.length) return 0;
+    const confs = rawSignals.map(s => s.confidence_pct ?? 0).filter(c => c > 0);
+    return confs.length ? Math.round(confs.reduce((a, b) => a + b, 0) / confs.length) : 0;
+  }, [rawSignals]);
+  const phase = derivePhase(globalPsi);
 
   /* ─── breathing animation ─── */
   const [breathe, setBreathe] = useState(0);
   useEffect(() => {
-    // ARMED/TRIGGER: no breathing, perfectly stable
     if (globalState === "ARMED" || globalState === "TRIGGER") {
       setBreathe(0);
       return;
@@ -375,33 +395,30 @@ export default function AlienGauge() {
       setFlashActive(true);
       setTimeout(() => setFlashActive(false), 150);
     }
-    if (globalState !== "TRIGGER") {
-      hasFlashed.current = false;
-    }
+    if (globalState !== "TRIGGER") hasFlashed.current = false;
   }, [globalState]);
 
   /* ─── hover ─── */
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
-  /* ─── gauge geometry ─── */
-  const SIZE = 480;
-  const SVG_SIZE = 620;
+  /* ─── gauge geometry (40% larger) ─── */
+  const SIZE = 672;
+  const SVG_SIZE = 880;
   const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
-  const R_TENSION = 215;   // outer
-  const R_PRESSION = 185;  // middle
-  const R_TRIGGER_RING = 158; // inner
+  const R_TENSION = 300;
+  const R_PRESSION = 260;
+  const R_TRIGGER_RING = 222;
 
   const color = stateColor(globalState);
   const glow = stateGlow(globalState);
 
   /* ─── ring arcs ─── */
-  const tensionAngle = (marketEnergy / 100) * 270;
-  const pressionAngle = dominant ? (dominant.confidence / 100) * 270 : 0;
+  const tensionAngle = (globalPsi / 100) * 270;
+  const pressionAngle = (globalConfidence / 100) * 270;
   const pressionOpacity = globalState === "ARMED" || globalState === "TRIGGER"
     ? 0.9
     : 0.55 + breathe * 0.35;
 
-  // Trigger ring: micro ticks only when ARMED or TRIGGER
   const triggerTicks = useMemo(() => {
     if (globalState !== "ARMED" && globalState !== "TRIGGER") return [];
     const count = globalState === "TRIGGER" ? 24 : 12;
@@ -412,10 +429,12 @@ export default function AlienGauge() {
     return ticks;
   }, [globalState]);
 
-  /* ─── glow ─── */
   const glowOpacity = globalState === "ARMED" ? 0.15
     : globalState === "TRIGGER" ? 0.3
     : 0;
+
+  const isImminent = globalTMinus < 12;
+  const isRupture = globalTMinus <= 2;
 
   return (
     <div
@@ -433,25 +452,35 @@ export default function AlienGauge() {
         />
       )}
 
-      {/* ─── HEADER ─── */}
-      <div className="absolute top-6 left-0 right-0 text-center">
+      {/* ─── PHASE (top) ─── */}
+      <div className="absolute top-5 left-0 right-0 text-center">
         <span
-          className="font-mono text-xs tracking-[0.3em] uppercase"
-          style={{ color: "rgba(255,255,255,0.2)" }}
+          className="font-mono tracking-[0.35em] uppercase"
+          style={{ color: "rgba(255,255,255,0.12)", fontSize: 9 }}
         >
-          CONF {marketEnergy}%
+          PHASE : {phase}
+        </span>
+      </div>
+
+      {/* ─── CONF (below phase) ─── */}
+      <div className="absolute top-12 left-0 right-0 text-center">
+        <span
+          className="font-mono tracking-[0.3em] uppercase"
+          style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}
+        >
+          CONF {globalConfidence}%
         </span>
       </div>
 
       {/* ─── GAUGE ─── */}
       <div className="relative" style={{ width: SIZE, height: SIZE }}>
         {/* Glow layer */}
-        {glowOpacity > 0 && (
+        {(glowOpacity > 0 || isImminent) && (
           <div
             className="absolute inset-0 rounded-full pointer-events-none"
             style={{
-              background: `radial-gradient(circle, ${glow} 0%, transparent 70%)`,
-              opacity: glowOpacity,
+              background: `radial-gradient(circle, ${isImminent ? "rgba(198,40,40,0.18)" : glow} 0%, transparent 70%)`,
+              opacity: isImminent ? 0.4 : glowOpacity,
               transform: "scale(1.35)",
               transition: "opacity 800ms ease",
             }}
@@ -497,8 +526,8 @@ export default function AlienGauge() {
           <circle cx={CX} cy={CY} r={R_TRIGGER_RING} fill="none" stroke="rgba(255,255,255,0.02)" strokeWidth="2" />
           {triggerTicks.map((tick, i) => {
             const rad = ((tick.angle - 90) * Math.PI) / 180;
-            const r1 = R_TRIGGER_RING - 4;
-            const r2 = R_TRIGGER_RING + 4;
+            const r1 = R_TRIGGER_RING - 5;
+            const r2 = R_TRIGGER_RING + 5;
             return (
               <line
                 key={i}
@@ -530,17 +559,17 @@ export default function AlienGauge() {
               cx={CX} cy={CY}
               outerR={R_TENSION}
               index={hoveredIdx}
-              total={signals.length}
             />
           )}
         </svg>
 
         {/* ── Center text ── */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          {/* T-minus (large) */}
           <span
             className="font-mono font-light leading-none"
             style={{
-              fontSize: 64,
+              fontSize: 80,
               color,
               transition: "color 500ms ease",
               letterSpacing: "0.03em",
@@ -548,17 +577,34 @@ export default function AlienGauge() {
           >
             T-{globalTMinus}m
           </span>
+
+          {/* State FR (medium) */}
           <span
-            className="font-mono text-sm tracking-[0.55em] mt-3"
-            style={{ color, opacity: 0.8, transition: "color 500ms ease" }}
+            className="font-mono tracking-[0.5em] mt-3"
+            style={{
+              fontSize: 16,
+              color,
+              opacity: 0.85,
+              transition: "color 500ms ease",
+            }}
+          >
+            {isRupture ? "RUPTURE" : stateFR(globalState)}
+          </span>
+
+          {/* TAO GLOBAL (small) */}
+          <span
+            className="font-mono mt-5 tracking-[0.2em]"
+            style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}
+          >
+            TAO GLOBAL
+          </span>
+
+          {/* State EN subtitle (discrete) */}
+          <span
+            className="font-mono mt-1 tracking-[0.15em]"
+            style={{ color: "rgba(255,255,255,0.1)", fontSize: 8 }}
           >
             {globalState}
-          </span>
-          <span
-            className="font-mono mt-4 tracking-[0.2em]"
-            style={{ color: "rgba(255,255,255,0.25)", fontSize: 10 }}
-          >
-            {dominantName}
           </span>
         </div>
       </div>
