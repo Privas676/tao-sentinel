@@ -25,6 +25,7 @@ type Signal = {
 
 export default function SentinelCockpit() {
   const [allOpen, setAllOpen] = useState(false);
+  const [testMode, setTestMode] = useState(false);
 
   const { data: signals, isLoading } = useQuery({
     queryKey: ["signals-latest"],
@@ -57,6 +58,7 @@ export default function SentinelCockpit() {
   });
 
   const isNew = (s: Signal) => {
+    if (testMode) return true;
     if (!s.last_state_change_at) return false;
     return Date.now() - new Date(s.last_state_change_at).getTime() < 10 * 60000;
   };
@@ -128,6 +130,17 @@ export default function SentinelCockpit() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
+      {/* Test Mode Toggle */}
+      <div className="flex justify-end">
+        <Button
+          variant={testMode ? "destructive" : "outline"}
+          size="sm"
+          className="font-mono text-xs gap-1.5"
+          onClick={() => setTestMode(!testMode)}
+        >
+          {testMode ? "⚡ TEST MODE ON" : "🧪 Test Glow"}
+        </Button>
+      </div>
       {/* Section 1: ACTIONABLE NOW */}
       {actionable.length > 0 && (
         <section>
