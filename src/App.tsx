@@ -1,11 +1,132 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, useLocation, Link } from "react-router-dom";
+import { I18nProvider, useI18n } from "@/lib/i18n";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 import AlienGauge from "./pages/AlienGauge";
+import SubnetsPage from "./pages/SubnetsPage";
+import AlertsPage from "./pages/AlertsPage";
+import SettingsPage from "./pages/SettingsPage";
+import { Toaster } from "@/components/ui/sonner";
 
 const queryClient = new QueryClient();
 
+function AppLayout() {
+  const location = useLocation();
+  const { t } = useI18n();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Unread events count for badge
+  const { data: unreadCount } = useQuery({
+    queryKey: ["unread-events"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 24 * 3600000).toISOString();
+      const { count, error } = await supabase
+        .from("events")
+        .select("*", { count: "exact", head: true })
+        .gte("ts", since);
+      if (error) return 0;
+      return count || 0;
+    },
+    refetchInterval: 60_000,
+  });
+
+  const isGauge = location.pathname === "/";
+
+  const navItems = [
+    { path: "/", label: t("nav.gauge"), icon: "◎" },
+    { path: "/subnets", label: t("nav.subnets"), icon: "⊞" },
+    { path: "/alerts", label: t("nav.alerts"), icon: "⚡", badge: unreadCount },
+    { path: "/settings", label: t("nav.settings"), icon: "⚙" },
+  ];
+
+  return (
+    <div className="h-screen w-screen flex bg-black overflow-hidden">
+      {/* Sidebar toggle (always visible) */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="fixed top-4 left-4 z-50 w-8 h-8 flex items-center justify-center rounded-md transition-all"
+        style={{
+          background: sidebarOpen ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
+          color: "rgba(255,255,255,0.4)",
+          border: "1px solid rgba(255,255,255,0.06)",
+        }}
+      >
+        <span className="font-mono text-xs">{sidebarOpen ? "✕" : "☰"}</span>
+      </button>
+
+      {/* Notification badge (top-right) */}
+      {(unreadCount ?? 0) > 0 && (
+        <Link to="/alerts"
+          className="fixed top-4 right-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all hover:bg-white/[0.06]"
+          style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.06)",
+          }}
+          onClick={() => setSidebarOpen(false)}
+        >
+          <span className="font-mono text-[10px] text-white/40">⚡</span>
+          <span className="font-mono text-[10px] font-bold" style={{ color: "rgba(229,57,53,0.8)" }}>
+            {unreadCount}
+          </span>
+        </Link>
+      )}
+
+      {/* Sidebar */}
+      <div className="flex-shrink-0 transition-all duration-300 ease-in-out"
+        style={{
+          width: sidebarOpen ? 200 : 0,
+          opacity: sidebarOpen ? 1 : 0,
+          overflow: "hidden",
+        }}>
+        <nav className="h-full w-[200px] border-r border-white/[0.04] pt-16 px-3 flex flex-col gap-1"
+          style={{ background: "rgba(5,5,8,0.98)" }}>
+          {navItems.map(item => {
+            const active = location.pathname === item.path;
+            return (
+              <Link key={item.path} to={item.path}
+                onClick={() => { if (isGauge) setSidebarOpen(false); }}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all font-mono text-xs tracking-wider"
+                style={{
+                  background: active ? "rgba(255,255,255,0.06)" : "transparent",
+                  color: active ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)",
+                }}>
+                <span className="text-sm">{item.icon}</span>
+                <span>{item.label}</span>
+                {item.badge != null && item.badge > 0 && (
+                  <span className="ml-auto font-mono text-[9px] px-1.5 py-0.5 rounded-full"
+                    style={{ background: "rgba(229,57,53,0.2)", color: "rgba(229,57,53,0.8)" }}>
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 h-full overflow-hidden">
+        <Routes>
+          <Route path="/" element={<AlienGauge />} />
+          <Route path="/subnets" element={<SubnetsPage />} />
+          <Route path="/alerts" element={<AlertsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Routes>
+      </div>
+    </div>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AlienGauge />
+    <I18nProvider>
+      <BrowserRouter>
+        <AppLayout />
+      </BrowserRouter>
+      <Toaster />
+    </I18nProvider>
   </QueryClientProvider>
 );
 

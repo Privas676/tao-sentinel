@@ -1,111 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-
-/* ═══════════════════════════════════════ */
-/*              TYPES                      */
-/* ═══════════════════════════════════════ */
-type RawSignal = {
-  netuid: number | null;
-  subnet_name: string | null;
-  state: string | null;
-  score: number | null;
-  mpi: number | null;
-  confidence_pct: number | null;
-  quality_score: number | null;
-  reasons: any;
-  miner_filter: string | null;
-  ts: string | null;
-};
-
-type OracleState = "IDLE" | "BUILD" | "ARMED" | "TRIGGER";
-type Asymmetry = "LOW" | "MED" | "HIGH";
-type Phase = "ACCUMULATION" | "EXPANSION" | "DISTRIBUTION";
-type StateFR = "CALME" | "TENSION" | "IMMINENT" | "RUPTURE";
-
-type SubnetSignal = {
-  netuid: number;
-  name: string;
-  t_minus_minutes: number;
-  confidence: number;
-  state: OracleState;
-  asymmetry: Asymmetry;
-  sparkline_30d: number[];
-  mpi: number;
-};
-
-/* ═══════════════════════════════════════ */
-/*          DERIVATION HELPERS             */
-/* ═══════════════════════════════════════ */
-function clamp(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, v));
-}
-
-function deriveOracleState(mpi: number): OracleState {
-  if (mpi >= 85) return "TRIGGER";
-  if (mpi >= 72) return "ARMED";
-  if (mpi >= 55) return "BUILD";
-  return "IDLE";
-}
-
-function stateFR(state: OracleState): StateFR {
-  switch (state) {
-    case "TRIGGER": return "RUPTURE";
-    case "ARMED": return "IMMINENT";
-    case "BUILD": return "TENSION";
-    case "IDLE": return "CALME";
-  }
-}
-
-function derivePhase(avgMpi: number): Phase {
-  if (avgMpi >= 65) return "EXPANSION";
-  if (avgMpi >= 45) return "DISTRIBUTION";
-  return "ACCUMULATION";
-}
-
-function deriveTMinus(mpi: number): number {
-  if (mpi >= 95) return 1;
-  if (mpi >= 85) return Math.max(1, Math.round(8 - (mpi - 85) * 0.7));
-  if (mpi >= 72) return Math.round(25 - (mpi - 72) * 1.3);
-  if (mpi >= 55) return Math.round(55 - (mpi - 55) * 1.8);
-  return Math.round(90 + (100 - mpi) * 0.5);
-}
-
-function deriveAsymmetry(quality: number, confidence: number): Asymmetry {
-  const score = confidence * 0.6 + quality * 0.4;
-  if (score >= 75) return "HIGH";
-  if (score >= 55) return "MED";
-  return "LOW";
-}
-
-function processSignals(
-  raw: RawSignal[],
-  sparklines: Record<number, number[]>
-): SubnetSignal[] {
-  return raw
-    .filter(s => s.netuid != null)
-    .map(s => {
-      const mpi = s.mpi ?? s.score ?? 0;
-      const conf = s.confidence_pct ?? 0;
-      const quality = s.quality_score ?? 0;
-      const tMinus = deriveTMinus(mpi);
-      const asym = deriveAsymmetry(quality, conf);
-      return {
-        netuid: s.netuid!,
-        name: s.subnet_name || `SN-${s.netuid}`,
-        t_minus_minutes: tMinus,
-        confidence: conf,
-        state: deriveOracleState(mpi),
-        asymmetry: asym,
-        sparkline_30d: sparklines[s.netuid!] ?? [],
-        mpi,
-      };
-    })
-    // Ray display conditions: conf≥60, T<35, asym≠LOW
-    .filter(s => s.confidence >= 60 && s.t_minus_minutes < 35 && s.asymmetry !== "LOW")
-    .sort((a, b) => a.t_minus_minutes - b.t_minus_minutes)
-    .slice(0, 7);
-}
+import { useI18n } from "@/lib/i18n";
+import {
+  SubnetSignal, RawSignal, GaugeState, GaugePhase,
+  clamp, deriveGaugeState, derivePhase, deriveTMinus, formatTMinus,
+  stateColor, stateGlow, rayColor, processSignals,
+  computeGlobalPsi, computeGlobalConfidence,
+} from "@/lib/gauge-engine";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 /* ═══════════════════════════════════════ */
 /*          VISUAL HELPERS                 */
@@ -120,40 +23,28 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
   return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
 }
 
-function stateColor(state: OracleState): string {
-  switch (state) {
-    case "TRIGGER": return "#c62828";
-    case "ARMED": return "#bf360c";
-    case "BUILD": return "#f9a825";
-    case "IDLE": return "#607d8b";
-  }
-}
-
-function stateGlow(state: OracleState): string {
-  switch (state) {
-    case "TRIGGER": return "rgba(198,40,40,0.35)";
-    case "ARMED": return "rgba(191,54,12,0.2)";
-    case "BUILD": return "rgba(249,168,37,0.1)";
-    case "IDLE": return "rgba(96,125,139,0.05)";
-  }
-}
-
-function rayColor(state: OracleState): string {
-  switch (state) {
-    case "TRIGGER": return "rgba(198,40,40,0.7)";
-    case "ARMED": return "rgba(191,54,12,0.55)";
-    case "BUILD": return "rgba(249,168,37,0.4)";
-    case "IDLE": return "rgba(96,125,139,0.25)";
-  }
+/* ═══════════════════════════════════════ */
+/*       MINI SPARKLINE IN TOOLTIP         */
+/* ═══════════════════════════════════════ */
+function TooltipSparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
+  if (data.length < 2) return null;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - ((v - min) / range) * height;
+    return `${x},${y}`;
+  }).join(" ");
+  return (
+    <polyline points={pts} fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+  );
 }
 
 /* ═══════════════════════════════════════ */
-/*           RAY SPARKLINE                 */
+/*       RAY SPARKLINE (on ray body)       */
 /* ═══════════════════════════════════════ */
-function RaySparkline({
-  data, x1, y1, x2, y2, state
-}: {
-  data: number[]; x1: number; y1: number; x2: number; y2: number; state: OracleState;
+function RaySparkline({ data, x1, y1, x2, y2, state }: {
+  data: number[]; x1: number; y1: number; x2: number; y2: number; state: GaugeState;
 }) {
   if (data.length < 3) return null;
   const dx = x2 - x1, dy = y2 - y1;
@@ -163,44 +54,43 @@ function RaySparkline({
   const px = -uy, py = ux;
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
-  const sparkW = len * 0.7;
-  const sparkH = 6;
-  const startOffset = len * 0.15;
+  const sparkW = len * 0.7, sparkH = 6, startOffset = len * 0.15;
   const pts = data.map((v, i) => {
     const t = i / (data.length - 1);
     const along = startOffset + t * sparkW;
     const perp = ((v - min) / range - 0.5) * sparkH * 2;
-    const sx = x1 + ux * along + px * perp;
-    const sy = y1 + uy * along + py * perp;
-    return `${sx},${sy}`;
+    return `${x1 + ux * along + px * perp},${y1 + uy * along + py * perp}`;
   });
   return (
-    <polyline
-      points={pts.join(" ")}
-      fill="none"
-      stroke={rayColor(state)}
-      strokeWidth="0.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ opacity: 0.5 }}
-    />
+    <polyline points={pts.join(" ")} fill="none" stroke={rayColor(state, 0.35)} strokeWidth="0.8"
+      strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }} />
   );
 }
 
 /* ═══════════════════════════════════════ */
 /*          SACRED RAYS                    */
 /* ═══════════════════════════════════════ */
-function SacredRays({
-  signals, cx, cy, outerR, hoveredIdx, setHoveredIdx
-}: {
-  signals: SubnetSignal[];
-  cx: number; cy: number; outerR: number;
-  hoveredIdx: number | null;
-  setHoveredIdx: (i: number | null) => void;
+function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClickRay }: {
+  signals: SubnetSignal[]; cx: number; cy: number; outerR: number;
+  hoveredIdx: number | null; setHoveredIdx: (i: number | null) => void;
+  onClickRay: (s: SubnetSignal) => void;
 }) {
-  if (!signals.length) return null;
   const angleStep = 360 / 7;
-  const gap = 20;
+  const gap = 24;
+  const [tremble, setTremble] = useState(0);
+
+  useEffect(() => {
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      setTremble(Math.sin((now - start) / 80) * 2);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  if (!signals.length) return null;
 
   return (
     <>
@@ -208,47 +98,58 @@ function SacredRays({
         const angleDeg = (i * angleStep) - 90;
         const angle = angleDeg * (Math.PI / 180);
         const r1 = outerR + gap;
-        const maxLen = 110;
-        const minLen = 22;
-        const imminenceFactor = clamp(1 - (s.t_minus_minutes / 120), 0, 1);
+        const maxLen = 130;
+        const minLen = 25;
+        const imminenceFactor = clamp(1 - (s.t_minus_minutes / 240), 0, 1);
         const len = minLen + imminenceFactor * (maxLen - minLen);
-        const r2 = r1 + len;
-        const thickness = 1 + (s.confidence / 100) * 2.5;
+        const isImm = s.state === "IMMINENT";
+        const trembleOffset = isImm ? tremble : 0;
+        const r2 = r1 + len + trembleOffset;
+        const thickness = 1.5 + (s.confidence / 100) * 3;
         const x1 = cx + r1 * Math.cos(angle);
         const y1 = cy + r1 * Math.sin(angle);
         const x2 = cx + r2 * Math.cos(angle);
         const y2 = cy + r2 * Math.sin(angle);
-        const dashArray = s.asymmetry === "MED" ? "6,2" : undefined;
         const isHovered = hoveredIdx === i;
+
+        // Ring traction effect for IMMINENT rays
+        const tractionPts = isImm ? (() => {
+          const trR = outerR + 2;
+          const spreadDeg = 4;
+          const a1 = (angleDeg - spreadDeg) * (Math.PI / 180);
+          const a2 = (angleDeg + spreadDeg) * (Math.PI / 180);
+          const pull = 4;
+          return {
+            p1: { x: cx + trR * Math.cos(a1), y: cy + trR * Math.sin(a1) },
+            p2: { x: cx + (trR + pull) * Math.cos(angle), y: cy + (trR + pull) * Math.sin(angle) },
+            p3: { x: cx + trR * Math.cos(a2), y: cy + trR * Math.sin(a2) },
+          };
+        })() : null;
 
         return (
           <g key={s.netuid}>
-            <line
-              x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke="transparent"
-              strokeWidth={18}
+            {/* Hit area */}
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={22}
               style={{ cursor: "pointer" }}
               onMouseEnter={() => setHoveredIdx(i)}
               onMouseLeave={() => setHoveredIdx(null)}
-              onClick={() => window.open(`https://taostats.io/subnets/${s.netuid}`, "_blank")}
+              onClick={() => onClickRay(s)}
             />
-            <line
-              x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={rayColor(s.state)}
-              strokeWidth={thickness}
-              strokeLinecap="round"
-              strokeDasharray={dashArray}
-              style={{
-                opacity: isHovered ? 1 : 0.75,
-                transition: "opacity 200ms ease",
-                pointerEvents: "none",
-              }}
+            {/* Visible ray */}
+            <line x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke={rayColor(s.state)} strokeWidth={thickness} strokeLinecap="round"
+              style={{ opacity: isHovered ? 1 : 0.75, transition: "opacity 200ms", pointerEvents: "none" }}
             />
-            <RaySparkline
-              data={s.sparkline_30d}
-              x1={x1} y1={y1} x2={x2} y2={y2}
-              state={s.state}
-            />
+            {/* Sparkline on ray */}
+            <RaySparkline data={s.sparkline_7d} x1={x1} y1={y1} x2={x2} y2={y2} state={s.state} />
+            {/* Traction deformation for IMMINENT */}
+            {tractionPts && (
+              <path
+                d={`M ${tractionPts.p1.x} ${tractionPts.p1.y} Q ${tractionPts.p2.x} ${tractionPts.p2.y} ${tractionPts.p3.x} ${tractionPts.p3.y}`}
+                fill="none" stroke={rayColor(s.state, 0.3)} strokeWidth="1.5"
+                style={{ pointerEvents: "none" }}
+              />
+            )}
           </g>
         );
       })}
@@ -257,61 +158,176 @@ function SacredRays({
 }
 
 /* ═══════════════════════════════════════ */
-/*          TOOLTIP                        */
+/*          ENHANCED TOOLTIP               */
 /* ═══════════════════════════════════════ */
-const asymFR: Record<Asymmetry, string> = { HIGH: "HAUTE", MED: "MOYENNE", LOW: "FAIBLE" };
-
-function RayTooltip({
-  signal, cx, cy, outerR, index
-}: {
+function RayTooltip({ signal, cx, cy, outerR, index }: {
   signal: SubnetSignal; cx: number; cy: number; outerR: number; index: number;
 }) {
+  const { t } = useI18n();
   const angleStep = 360 / 7;
   const angleDeg = (index * angleStep) - 90;
   const angle = angleDeg * (Math.PI / 180);
-  const r = outerR + 140;
+  const r = outerR + 165;
   const x = cx + r * Math.cos(angle);
   const y = cy + r * Math.sin(angle);
   const displayName = signal.name.startsWith("SN-") ? signal.name : `SN-${signal.netuid} ${signal.name}`;
+  const phaseLabel = t(`phase.${signal.phase.toLowerCase()}` as any) || signal.phase;
+  const stateLabel = t(`state.${signal.state.toLowerCase()}` as any) || signal.state;
+  const color = stateColor(signal.state);
 
   return (
     <g style={{ pointerEvents: "none" }}>
-      <rect
-        x={x - 95} y={y - 30}
-        width={190} height={52}
-        rx={4}
-        fill="rgba(8,8,10,0.94)"
-        stroke="rgba(255,255,255,0.06)"
-        strokeWidth={0.5}
-      />
-      <text
-        x={x} y={y - 10}
-        textAnchor="middle"
-        fill="rgba(255,255,255,0.75)"
-        fontSize="10"
-        fontFamily="monospace"
-        letterSpacing="0.04em"
-      >
+      <rect x={x - 105} y={y - 48} width={210} height={90} rx={6}
+        fill="rgba(5,5,8,0.96)" stroke="rgba(255,255,255,0.08)" strokeWidth={0.5} />
+      {/* Name */}
+      <text x={x} y={y - 30} textAnchor="middle" fill="rgba(255,255,255,0.85)"
+        fontSize="11" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.03em" fontWeight="600">
         {displayName}
       </text>
-      <text
-        x={x} y={y + 8}
-        textAnchor="middle"
-        fill="rgba(255,255,255,0.45)"
-        fontSize="9"
-        fontFamily="monospace"
-        letterSpacing="0.04em"
-      >
-        T-{signal.t_minus_minutes}m · ASYM: {asymFR[signal.asymmetry]}
+      {/* PSI + Phase */}
+      <text x={x - 90} y={y - 12} fill={color} fontSize="10" fontFamily="'JetBrains Mono', monospace">
+        PSI {signal.psi}
+      </text>
+      <text x={x + 90} y={y - 12} textAnchor="end" fill="rgba(255,255,255,0.45)"
+        fontSize="9" fontFamily="'JetBrains Mono', monospace">
+        {phaseLabel}
+      </text>
+      {/* Confidence + State */}
+      <text x={x - 90} y={y + 3} fill="rgba(255,255,255,0.4)" fontSize="9" fontFamily="'JetBrains Mono', monospace">
+        {t("tip.confidence")} {signal.confidence}%
+      </text>
+      <text x={x + 90} y={y + 3} textAnchor="end" fill={color} fontSize="9" fontFamily="'JetBrains Mono', monospace">
+        {stateLabel}
+      </text>
+      {/* Sparkline 7d */}
+      <g transform={`translate(${x - 90}, ${y + 10})`}>
+        <svg width="180" height="22" viewBox="0 0 180 22">
+          <TooltipSparkline data={signal.sparkline_7d} width={180} height={20} color={color} />
+        </svg>
+      </g>
+      <text x={x - 90} y={y + 38} fill="rgba(255,255,255,0.2)" fontSize="7" fontFamily="'JetBrains Mono', monospace">
+        {t("tip.price7d")}
       </text>
     </g>
   );
 }
 
 /* ═══════════════════════════════════════ */
-/*    ORACLE DE PRESSION TAO — PAGE        */
+/*        SUBNET SIDE PANEL                */
+/* ═══════════════════════════════════════ */
+function SubnetPanel({ signal, open, onClose }: {
+  signal: SubnetSignal | null; open: boolean; onClose: () => void;
+}) {
+  const { t } = useI18n();
+  if (!signal) return null;
+
+  const { data: metrics } = useQuery({
+    queryKey: ["subnet-detail", signal.netuid],
+    queryFn: async () => {
+      const { data } = await supabase.from("subnet_latest_display")
+        .select("*").eq("netuid", signal.netuid).maybeSingle();
+      return data;
+    },
+    enabled: open,
+  });
+
+  const color = stateColor(signal.state);
+  const phaseLabel = (() => {
+    switch (signal.phase) {
+      case "BUILD": return t("phase.build");
+      case "ARMED": return t("phase.armed");
+      case "TRIGGER": return t("phase.trigger");
+      default: return "—";
+    }
+  })();
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-[380px] border-l border-white/5 bg-[#080810] text-white overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="font-mono text-white/90 tracking-wider">
+            {t("panel.title")}
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="mt-6 space-y-6">
+          {/* Header */}
+          <div className="text-center">
+            <div className="font-mono text-2xl tracking-wider" style={{ color }}>
+              SN-{signal.netuid}
+            </div>
+            <div className="font-mono text-sm text-white/50 mt-1">{signal.name}</div>
+          </div>
+
+          {/* PSI gauge mini */}
+          <div className="flex items-center justify-center gap-8">
+            <div className="text-center">
+              <div className="font-mono text-3xl font-bold" style={{ color }}>{signal.psi}</div>
+              <div className="font-mono text-[9px] text-white/30 tracking-widest mt-1">PSI</div>
+            </div>
+            <div className="text-center">
+              <div className="font-mono text-lg text-white/70">{signal.confidence}%</div>
+              <div className="font-mono text-[9px] text-white/30 tracking-widest mt-1">{t("tip.confidence")}</div>
+            </div>
+            <div className="text-center">
+              <div className="font-mono text-lg text-white/70">{formatTMinus(signal.t_minus_minutes)}</div>
+              <div className="font-mono text-[9px] text-white/30 tracking-widest mt-1">T-MINUS</div>
+            </div>
+          </div>
+
+          {/* Phase + State */}
+          <div className="flex justify-between font-mono text-xs px-2">
+            <span className="text-white/40">{t("sub.phase")}: <span style={{ color }}>{phaseLabel}</span></span>
+            <span className="text-white/40">{t("sub.state")}: <span style={{ color }}>{t(`state.${signal.state.toLowerCase()}` as any)}</span></span>
+          </div>
+
+          {/* Sparkline */}
+          {signal.sparkline_7d.length > 1 && (
+            <div className="bg-white/[0.02] rounded-lg p-4">
+              <div className="font-mono text-[9px] text-white/25 tracking-widest mb-2">{t("tip.price7d")}</div>
+              <svg width="100%" height="60" viewBox="0 0 300 60" preserveAspectRatio="none">
+                <TooltipSparkline data={signal.sparkline_7d} width={300} height={55} color={color} />
+              </svg>
+            </div>
+          )}
+
+          {/* Metrics from DB */}
+          {metrics && (
+            <div className="space-y-3">
+              <div className="font-mono text-[9px] text-white/25 tracking-widest">{t("panel.metrics")}</div>
+              {[
+                [t("panel.liquidity"), metrics.liquidity_usd ? `$${Number(metrics.liquidity_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
+                [t("panel.volume"), metrics.vol_24h_usd ? `$${Number(metrics.vol_24h_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
+                [t("panel.miners"), metrics.miners_active != null ? String(Math.round(Number(metrics.miners_active))) : "—"],
+                [t("panel.cap"), metrics.cap_usd ? `$${Number(metrics.cap_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
+              ].map(([label, val]) => (
+                <div key={label} className="flex justify-between font-mono text-xs border-b border-white/[0.04] pb-2">
+                  <span className="text-white/35">{label}</span>
+                  <span className="text-white/70">{val}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Open Taostats button */}
+          <button
+            onClick={() => window.open(`https://taostats.io/subnets/${signal.netuid}`, "_blank")}
+            className="w-full font-mono text-xs tracking-widest py-3 rounded-lg border border-white/10 hover:border-white/20 text-white/50 hover:text-white/80 transition-all"
+          >
+            {t("panel.open_taostats")} ↗
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ═══════════════════════════════════════ */
+/*    ALIEN GAUGE — MAIN PAGE              */
 /* ═══════════════════════════════════════ */
 export default function AlienGauge() {
+  const { t, lang } = useI18n();
+
   /* ─── data fetch ─── */
   const { data: rawSignals } = useQuery({
     queryKey: ["signals-latest"],
@@ -342,315 +358,226 @@ export default function AlienGauge() {
     refetchInterval: 300_000,
   });
 
-  /* ─── process signals ─── */
-  const signals = useMemo(
-    () => processSignals(rawSignals ?? [], sparklines ?? {}),
-    [rawSignals, sparklines]
-  );
-
-  /* ─── global PSI (weighted avg of all subnet MPIs) ─── */
-  const globalPsi = useMemo(() => {
-    if (!rawSignals?.length) return 0;
-    const mpis = rawSignals.map(s => s.mpi ?? s.score ?? 0).filter(m => m > 0);
-    if (!mpis.length) return 0;
-    // Weight higher MPIs more (square weighting for pressure sensitivity)
-    const totalW = mpis.reduce((a, m) => a + m, 0);
-    const weighted = mpis.reduce((a, m) => a + m * m, 0);
-    return Math.round(weighted / totalW);
-  }, [rawSignals]);
-
-  const globalState: OracleState = deriveOracleState(globalPsi);
+  /* ─── signals ─── */
+  const signals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
+  const globalPsi = useMemo(() => computeGlobalPsi(rawSignals ?? []), [rawSignals]);
+  const globalConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
+  const globalState = deriveGaugeState(globalPsi, globalConf);
+  const globalPhase = derivePhase(globalPsi);
   const globalTMinus = deriveTMinus(globalPsi);
-  const globalConfidence = useMemo(() => {
-    if (!rawSignals?.length) return 0;
-    const confs = rawSignals.map(s => s.confidence_pct ?? 0).filter(c => c > 0);
-    return confs.length ? Math.round(confs.reduce((a, b) => a + b, 0) / confs.length) : 0;
-  }, [rawSignals]);
-  const phase = derivePhase(globalPsi);
 
-  /* ─── mechanical click sound ─── */
+  /* ─── mechanical click ─── */
   const audioCtxRef = useRef<AudioContext | null>(null);
   const playClick = useCallback(() => {
     try {
       if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
       const ctx = audioCtxRef.current;
       const now = ctx.currentTime;
-
-      // Short noise burst (mechanical tick)
-      const bufLen = Math.floor(ctx.sampleRate * 0.035); // 35ms
+      const bufLen = Math.floor(ctx.sampleRate * 0.035);
       const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < bufLen; i++) {
-        const env = Math.exp(-i / (bufLen * 0.12)); // sharp decay
-        data[i] = (Math.random() * 2 - 1) * env * 0.15;
-      }
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-
-      // Bandpass for metallic character
-      const bp = ctx.createBiquadFilter();
-      bp.type = "bandpass";
-      bp.frequency.value = 3200;
-      bp.Q.value = 2.5;
-
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.25, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-
-      src.connect(bp).connect(gain).connect(ctx.destination);
-      src.start(now);
-      src.stop(now + 0.06);
-    } catch { /* silent fail if audio blocked */ }
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufLen * 0.12)) * 0.15;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 3200; bp.Q.value = 2.5;
+      const gain = ctx.createGain(); gain.gain.setValueAtTime(0.25, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      src.connect(bp).connect(gain).connect(ctx.destination); src.start(now); src.stop(now + 0.06);
+    } catch { /* silent */ }
   }, []);
 
-  const prevStateRef = useRef<OracleState | null>(null);
+  const prevStateRef = useRef<GaugeState | null>(null);
   useEffect(() => {
-    if (prevStateRef.current !== null && prevStateRef.current !== globalState) {
-      playClick();
-    }
+    if (prevStateRef.current !== null && prevStateRef.current !== globalState) playClick();
     prevStateRef.current = globalState;
   }, [globalState, playClick]);
 
-  /* ─── breathing animation ─── */
+  /* ─── breathing ─── */
   const [breathe, setBreathe] = useState(0);
   useEffect(() => {
-    if (globalState === "ARMED" || globalState === "TRIGGER") {
-      setBreathe(0);
-      return;
-    }
+    if (globalState === "IMMINENT") { setBreathe(0); return; }
     let raf: number;
     const start = performance.now();
-    const tick = (now: number) => {
-      const t = ((now - start) % 2500) / 2500;
-      setBreathe(Math.sin(t * Math.PI * 2) * 0.5 + 0.5);
-      raf = requestAnimationFrame(tick);
-    };
+    const tick = (now: number) => { setBreathe(Math.sin(((now - start) % 2500) / 2500 * Math.PI * 2) * 0.5 + 0.5); raf = requestAnimationFrame(tick); };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [globalState]);
 
-  /* ─── trigger flash ─── */
+  /* ─── flash ─── */
   const [flashActive, setFlashActive] = useState(false);
   const hasFlashed = useRef(false);
   useEffect(() => {
-    if (globalState === "TRIGGER" && !hasFlashed.current) {
-      hasFlashed.current = true;
-      setFlashActive(true);
-      setTimeout(() => setFlashActive(false), 150);
-    }
-    if (globalState !== "TRIGGER") hasFlashed.current = false;
+    if (globalState === "IMMINENT" && !hasFlashed.current) { hasFlashed.current = true; setFlashActive(true); setTimeout(() => setFlashActive(false), 150); }
+    if (globalState !== "IMMINENT") hasFlashed.current = false;
   }, [globalState]);
 
-  /* ─── hover ─── */
+  /* ─── hover + panel ─── */
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [panelSignal, setPanelSignal] = useState<SubnetSignal | null>(null);
 
-  /* ─── gauge geometry (40% larger) ─── */
-  const SIZE = 672;
-  const SVG_SIZE = 880;
+  const handleClickRay = useCallback((s: SubnetSignal) => {
+    window.open(`https://taostats.io/subnets/${s.netuid}`, "_blank");
+    setPanelSignal(s);
+  }, []);
+
+  /* ─── geometry ─── */
+  const SIZE = 720;
+  const SVG_SIZE = 960;
   const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
-  const R_TENSION = 300;
-  const R_PRESSION = 260;
-  const R_TRIGGER_RING = 222;
+  const R_OUTER = 320;
+  const R_INNER = 275;
+  const R_TRIGGER = 238;
 
   const color = stateColor(globalState);
   const glow = stateGlow(globalState);
-
-  /* ─── ring arcs ─── */
   const tensionAngle = (globalPsi / 100) * 270;
-  const pressionAngle = (globalConfidence / 100) * 270;
-  const pressionOpacity = globalState === "ARMED" || globalState === "TRIGGER"
-    ? 0.9
-    : 0.55 + breathe * 0.35;
+  const innerAngle = (globalConf / 100) * 270;
+  const innerOpacity = globalState === "IMMINENT" ? 0.9 : 0.55 + breathe * 0.35;
+  const showHalo = globalConf >= 70;
 
   const triggerTicks = useMemo(() => {
-    if (globalState !== "ARMED" && globalState !== "TRIGGER") return [];
-    const count = globalState === "TRIGGER" ? 24 : 12;
-    const ticks: { angle: number }[] = [];
-    for (let i = 0; i < count; i++) {
-      ticks.push({ angle: -135 + (i / count) * 270 });
+    if (globalPhase !== "TRIGGER" && globalState !== "IMMINENT") return [];
+    const count = globalState === "IMMINENT" ? 24 : 12;
+    return Array.from({ length: count }, (_, i) => ({ angle: -135 + (i / count) * 270 }));
+  }, [globalPhase, globalState]);
+
+  // State / Phase labels
+  const stateLabel = (() => {
+    switch (globalState) {
+      case "CALM": return t("state.calm");
+      case "ALERT": return t("state.alert");
+      case "IMMINENT": return t("state.imminent");
+      case "EXIT": return t("state.exit");
     }
-    return ticks;
-  }, [globalState]);
+  })();
 
-  const glowOpacity = globalState === "ARMED" ? 0.15
-    : globalState === "TRIGGER" ? 0.3
-    : 0;
-
-  const isImminent = globalTMinus < 12;
-  const isRupture = globalTMinus <= 2;
+  const phaseLabel = (() => {
+    switch (globalPhase) {
+      case "BUILD": return t("phase.build");
+      case "ARMED": return t("phase.armed");
+      case "TRIGGER": return t("phase.trigger");
+      default: return "—";
+    }
+  })();
 
   return (
-    <div
-      className="fixed inset-0 flex flex-col items-center justify-center select-none"
-      style={{ background: "#050608", overflow: "hidden" }}
-    >
-      {/* Flash overlay */}
+    <div className="h-full w-full flex flex-col items-center justify-center select-none relative" style={{ background: "#000", overflow: "hidden" }}>
+      {/* Vignette */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)",
+      }} />
+
+      {/* Flash */}
       {flashActive && (
-        <div
-          className="fixed inset-0 pointer-events-none"
-          style={{
-            background: "radial-gradient(circle, rgba(198,40,40,0.25) 0%, transparent 60%)",
-            zIndex: 50,
-          }}
-        />
+        <div className="absolute inset-0 pointer-events-none z-50" style={{
+          background: "radial-gradient(circle, rgba(229,57,53,0.25) 0%, transparent 60%)",
+        }} />
       )}
 
-      {/* ─── PHASE (top) ─── */}
-      <div className="absolute top-5 left-0 right-0 text-center">
-        <span
-          className="font-mono tracking-[0.35em] uppercase"
-          style={{ color: "rgba(255,255,255,0.12)", fontSize: 9 }}
-        >
-          PHASE : {phase}
+      {/* Phase indicator (top) */}
+      <div className="absolute top-5 left-0 right-0 text-center z-10">
+        <span className="font-mono tracking-[0.35em] uppercase" style={{ color: "rgba(255,255,255,0.12)", fontSize: 9 }}>
+          {t("gauge.phase")} : {phaseLabel}
+        </span>
+      </div>
+      <div className="absolute top-12 left-0 right-0 text-center z-10">
+        <span className="font-mono tracking-[0.3em] uppercase" style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}>
+          {t("gauge.confidence")} {globalConf}%
         </span>
       </div>
 
-      {/* ─── CONF (below phase) ─── */}
-      <div className="absolute top-12 left-0 right-0 text-center">
-        <span
-          className="font-mono tracking-[0.3em] uppercase"
-          style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}
-        >
-          CONF {globalConfidence}%
-        </span>
-      </div>
-
-      {/* ─── GAUGE ─── */}
-      <div className="relative" style={{ width: SIZE, height: SIZE }}>
-        {/* Glow layer */}
-        {(glowOpacity > 0 || isImminent) && (
-          <div
-            className="absolute inset-0 rounded-full pointer-events-none"
-            style={{
-              background: `radial-gradient(circle, ${isImminent ? "rgba(198,40,40,0.18)" : glow} 0%, transparent 70%)`,
-              opacity: isImminent ? 0.4 : glowOpacity,
-              transform: "scale(1.35)",
-              transition: "opacity 800ms ease",
-            }}
-          />
+      {/* GAUGE */}
+      <div className="relative z-10" style={{ width: SIZE, height: SIZE }}>
+        {/* Halo for high confidence */}
+        {showHalo && (
+          <div className="absolute inset-0 rounded-full pointer-events-none" style={{
+            background: `radial-gradient(circle, rgba(100,180,255,0.06) 0%, transparent 70%)`,
+            transform: "scale(1.4)",
+          }} />
         )}
 
-        <svg
-          width={SIZE}
-          height={SIZE}
+        {/* Glow */}
+        {(globalState === "IMMINENT" || globalState === "EXIT") && (
+          <div className="absolute inset-0 rounded-full pointer-events-none" style={{
+            background: `radial-gradient(circle, ${glow} 0%, transparent 70%)`,
+            opacity: globalState === "IMMINENT" ? 0.4 : 0.2,
+            transform: "scale(1.35)",
+            transition: "opacity 800ms ease",
+          }} />
+        )}
+
+        <svg width={SIZE} height={SIZE}
           viewBox={`${(SVG_SIZE - SIZE) / -2} ${(SVG_SIZE - SIZE) / -2} ${SVG_SIZE} ${SVG_SIZE}`}
-          style={{ overflow: "visible" }}
-        >
-          {/* ── Outer ring track (TENSION) ── */}
-          <circle cx={CX} cy={CY} r={R_TENSION} fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="5" />
+          style={{ overflow: "visible" }}>
+
+          {/* Outer ring track (+35% thickness = ~7) */}
+          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="7" />
           {tensionAngle > 0 && (
-            <path
-              d={describeArc(CX, CY, R_TENSION, -135, -135 + tensionAngle)}
-              fill="none"
-              stroke={color}
-              strokeWidth="5"
-              strokeLinecap="round"
-              style={{ opacity: 0.45, transition: "d 600ms ease, stroke 500ms ease" }}
-            />
+            <path d={describeArc(CX, CY, R_OUTER, -135, -135 + tensionAngle)} fill="none"
+              stroke={color} strokeWidth="7" strokeLinecap="round"
+              style={{ opacity: 0.4, transition: "d 600ms ease, stroke 500ms ease" }} />
           )}
 
-          {/* ── Middle ring track (PRESSION) ── */}
-          <circle cx={CX} cy={CY} r={R_PRESSION} fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="9" />
-          {pressionAngle > 0 && (
-            <path
-              d={describeArc(CX, CY, R_PRESSION, -135, -135 + pressionAngle)}
-              fill="none"
-              stroke={color}
-              strokeWidth="9"
-              strokeLinecap="round"
-              style={{
-                opacity: pressionOpacity,
-                transition: "d 600ms ease, stroke 500ms ease, opacity 400ms ease",
-              }}
-            />
+          {/* Inner ring (+20% = ~11) */}
+          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="11" />
+          {innerAngle > 0 && (
+            <path d={describeArc(CX, CY, R_INNER, -135, -135 + innerAngle)} fill="none"
+              stroke={color} strokeWidth="11" strokeLinecap="round"
+              style={{ opacity: innerOpacity, transition: "d 600ms ease, stroke 500ms ease, opacity 400ms ease" }} />
           )}
 
-          {/* ── Inner ring (TRIGGER ticks) ── */}
-          <circle cx={CX} cy={CY} r={R_TRIGGER_RING} fill="none" stroke="rgba(255,255,255,0.02)" strokeWidth="2" />
+          {/* Trigger ticks ring */}
+          <circle cx={CX} cy={CY} r={R_TRIGGER} fill="none" stroke="rgba(255,255,255,0.015)" strokeWidth="2" />
           {triggerTicks.map((tick, i) => {
             const rad = ((tick.angle - 90) * Math.PI) / 180;
-            const r1 = R_TRIGGER_RING - 5;
-            const r2 = R_TRIGGER_RING + 5;
+            const r1 = R_TRIGGER - 6, r2 = R_TRIGGER + 6;
             return (
-              <line
-                key={i}
-                x1={CX + r1 * Math.cos(rad)}
-                y1={CY + r1 * Math.sin(rad)}
-                x2={CX + r2 * Math.cos(rad)}
-                y2={CY + r2 * Math.sin(rad)}
-                stroke={color}
-                strokeWidth={1}
-                strokeLinecap="round"
-                style={{ opacity: globalState === "TRIGGER" ? 0.7 : 0.35 }}
-              />
+              <line key={i}
+                x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)}
+                x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)}
+                stroke={color} strokeWidth={1} strokeLinecap="round"
+                style={{ opacity: globalState === "IMMINENT" ? 0.7 : 0.35 }} />
             );
           })}
 
-          {/* ── Sacred Rays ── */}
-          <SacredRays
-            signals={signals}
-            cx={CX} cy={CY}
-            outerR={R_TENSION}
-            hoveredIdx={hoveredIdx}
-            setHoveredIdx={setHoveredIdx}
-          />
+          {/* Sacred Rays */}
+          <SacredRays signals={signals} cx={CX} cy={CY} outerR={R_OUTER}
+            hoveredIdx={hoveredIdx} setHoveredIdx={setHoveredIdx} onClickRay={handleClickRay} />
 
-          {/* ── Tooltip ── */}
+          {/* Tooltip */}
           {hoveredIdx !== null && signals[hoveredIdx] && (
-            <RayTooltip
-              signal={signals[hoveredIdx]}
-              cx={CX} cy={CY}
-              outerR={R_TENSION}
-              index={hoveredIdx}
-            />
+            <RayTooltip signal={signals[hoveredIdx]} cx={CX} cy={CY} outerR={R_OUTER} index={hoveredIdx} />
           )}
         </svg>
 
-        {/* ── Center text ── */}
+        {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          {/* T-minus (large) */}
-          <span
-            className="font-mono font-light leading-none"
-            style={{
-              fontSize: 80,
-              color,
-              transition: "color 500ms ease",
-              letterSpacing: "0.03em",
-            }}
-          >
-            T-{globalTMinus}m
+          {/* T-minus */}
+          <span className="font-mono font-light leading-none" style={{
+            fontSize: 104, color, transition: "color 500ms ease", letterSpacing: "0.05em",
+          }}>
+            {formatTMinus(globalTMinus)}
           </span>
 
-          {/* State FR (medium) */}
-          <span
-            className="font-mono tracking-[0.5em] mt-3"
-            style={{
-              fontSize: 16,
-              color,
-              opacity: 0.85,
-              transition: "color 500ms ease",
-            }}
-          >
-            {isRupture ? "RUPTURE" : stateFR(globalState)}
+          {/* State */}
+          <span className="font-mono tracking-[0.5em] mt-3" style={{
+            fontSize: 18, color, opacity: 0.85, transition: "color 500ms ease",
+          }}>
+            {stateLabel}
           </span>
 
-          {/* TAO GLOBAL (small) */}
-          <span
-            className="font-mono mt-5 tracking-[0.2em]"
-            style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}
-          >
-            TAO GLOBAL
+          {/* PSI GLOBAL */}
+          <span className="font-mono mt-6 tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
+            {t("gauge.global")}
           </span>
 
-          {/* State EN subtitle (discrete) */}
-          <span
-            className="font-mono mt-1 tracking-[0.15em]"
-            style={{ color: "rgba(255,255,255,0.1)", fontSize: 8 }}
-          >
-            {globalState}
+          {/* PSI value */}
+          <span className="font-mono mt-1 tracking-[0.15em]" style={{ color: "rgba(255,255,255,0.35)", fontSize: 14, fontWeight: 600 }}>
+            {globalPsi}
           </span>
         </div>
       </div>
+
+      {/* Subnet Panel */}
+      <SubnetPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} />
     </div>
   );
 }
