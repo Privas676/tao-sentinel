@@ -1,0 +1,1 @@
+ALTER VIEW public.signals_latest SET (security_invoker = on);
