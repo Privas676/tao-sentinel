@@ -158,54 +158,173 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
 }
 
 /* ═══════════════════════════════════════ */
-/*          ENHANCED TOOLTIP               */
+/*     PREMIUM TOOLTIP + CONNECTOR         */
 /* ═══════════════════════════════════════ */
-function RayTooltip({ signal, cx, cy, outerR, index }: {
-  signal: SubnetSignal; cx: number; cy: number; outerR: number; index: number;
+function RayTooltip({ signal, cx, cy, outerR, index, svgSize }: {
+  signal: SubnetSignal; cx: number; cy: number; outerR: number; index: number; svgSize: number;
 }) {
   const { t } = useI18n();
   const angleStep = 360 / 7;
   const angleDeg = (index * angleStep) - 90;
   const angle = angleDeg * (Math.PI / 180);
-  const r = outerR + 165;
-  const x = cx + r * Math.cos(angle);
-  const y = cy + r * Math.sin(angle);
-  const displayName = signal.name.startsWith("SN-") ? signal.name : `SN-${signal.netuid} ${signal.name}`;
-  const phaseLabel = t(`phase.${signal.phase.toLowerCase()}` as any) || signal.phase;
-  const stateLabel = t(`state.${signal.state.toLowerCase()}` as any) || signal.state;
+
+  // Tooltip dimensions
+  const TW = 270, TH = 160, PAD = 14, BR = 10;
+
+  // Ray tip position (end of ray)
+  const gap = 24;
+  const imminenceFactor = clamp(1 - (signal.t_minus_minutes / 240), 0, 1);
+  const rayLen = 25 + imminenceFactor * 105;
+  const rayTipR = outerR + gap + rayLen;
+  const tipX = cx + rayTipR * Math.cos(angle);
+  const tipY = cy + rayTipR * Math.sin(angle);
+
+  // Tooltip anchor: pushed further out from ray tip
+  const tooltipR = rayTipR + 35;
+  let tx = cx + tooltipR * Math.cos(angle) - TW / 2;
+  let ty = cx + tooltipR * Math.sin(angle) - TH / 2;
+
+  // Viewport clamping (SVG coords)
+  const margin = 8;
+  const minX = -((svgSize - 720) / 2) + margin;
+  const maxX = svgSize - ((svgSize - 720) / 2) - TW - margin;
+  const minY = -((svgSize - 720) / 2) + margin;
+  const maxY = svgSize - ((svgSize - 720) / 2) - TH - margin;
+  tx = Math.max(minX, Math.min(maxX, tx));
+  ty = Math.max(minY, Math.min(maxY, ty));
+
+  const tooltipCx = tx + TW / 2;
+  const tooltipCy = ty + TH / 2;
+
+  const displayName = signal.name.startsWith("SN-") ? signal.name : `SN-${signal.netuid} · ${signal.name}`;
   const color = stateColor(signal.state);
+  const stateLabel = t(`state.${signal.state.toLowerCase()}` as any);
+  const phaseLabel = signal.phase !== "NONE" ? t(`phase.${signal.phase.toLowerCase()}` as any) : "—";
+  const asymLabel = t(`asym.${signal.asymmetry.toLowerCase()}` as any);
+
+  // Sparkline data
+  const sparkData = signal.sparkline_7d;
+  const sparkW = TW - PAD * 2 - 4;
+  const sparkH = 28;
 
   return (
     <g style={{ pointerEvents: "none" }}>
-      <rect x={x - 105} y={y - 48} width={210} height={90} rx={6}
-        fill="rgba(5,5,8,0.96)" stroke="rgba(255,255,255,0.08)" strokeWidth={0.5} />
-      {/* Name */}
-      <text x={x} y={y - 30} textAnchor="middle" fill="rgba(255,255,255,0.85)"
-        fontSize="11" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.03em" fontWeight="600">
-        {displayName}
+      {/* Connector line: ray tip → tooltip center */}
+      <line
+        x1={tipX} y1={tipY}
+        x2={tooltipCx} y2={tooltipCy}
+        stroke="rgba(255,255,255,0.06)"
+        strokeWidth="0.8"
+        strokeDasharray="3,3"
+      />
+
+      {/* Tooltip card */}
+      <rect
+        x={tx} y={ty} width={TW} height={TH} rx={BR}
+        fill="#0E0F12"
+        stroke="#2A2F36"
+        strokeWidth={1}
+        filter="url(#tooltip-shadow)"
+      />
+
+      {/* Shadow filter */}
+      <defs>
+        <filter id="tooltip-shadow" x="-10%" y="-10%" width="130%" height="130%">
+          <feDropShadow dx="0" dy="4" stdDeviation="8" floodColor="rgba(0,0,0,0.5)" floodOpacity="0.4" />
+        </filter>
+      </defs>
+
+      {/* ─ Line 1: Name ─ */}
+      <text
+        x={tx + PAD} y={ty + PAD + 13}
+        fill="rgba(255,255,255,0.88)"
+        fontSize="14" fontWeight="600"
+        fontFamily="'JetBrains Mono', monospace"
+        letterSpacing="0.02em"
+      >
+        {displayName.length > 24 ? displayName.slice(0, 22) + "…" : displayName}
       </text>
-      {/* PSI + Phase */}
-      <text x={x - 90} y={y - 12} fill={color} fontSize="10" fontFamily="'JetBrains Mono', monospace">
-        PSI {signal.psi}
-      </text>
-      <text x={x + 90} y={y - 12} textAnchor="end" fill="rgba(255,255,255,0.45)"
-        fontSize="9" fontFamily="'JetBrains Mono', monospace">
-        {phaseLabel}
-      </text>
-      {/* Confidence + State */}
-      <text x={x - 90} y={y + 3} fill="rgba(255,255,255,0.4)" fontSize="9" fontFamily="'JetBrains Mono', monospace">
-        {t("tip.confidence")} {signal.confidence}%
-      </text>
-      <text x={x + 90} y={y + 3} textAnchor="end" fill={color} fontSize="9" fontFamily="'JetBrains Mono', monospace">
+
+      {/* ─ Line 2: State badge ─ */}
+      <rect
+        x={tx + PAD} y={ty + PAD + 22}
+        width={stateLabel.length * 8.5 + 16} height={20} rx={4}
+        fill={color} fillOpacity={0.12}
+        stroke={color} strokeOpacity={0.25} strokeWidth={0.5}
+      />
+      <text
+        x={tx + PAD + 8} y={ty + PAD + 37}
+        fill={color}
+        fontSize="11" fontWeight="500"
+        fontFamily="'JetBrains Mono', monospace"
+        letterSpacing="0.08em"
+      >
         {stateLabel}
       </text>
-      {/* Sparkline 7d */}
-      <g transform={`translate(${x - 90}, ${y + 10})`}>
-        <svg width="180" height="22" viewBox="0 0 180 22">
-          <TooltipSparkline data={signal.sparkline_7d} width={180} height={20} color={color} />
-        </svg>
-      </g>
-      <text x={x - 90} y={y + 38} fill="rgba(255,255,255,0.2)" fontSize="7" fontFamily="'JetBrains Mono', monospace">
+      {/* Phase next to state */}
+      <text
+        x={tx + PAD + stateLabel.length * 8.5 + 28} y={ty + PAD + 37}
+        fill="rgba(255,255,255,0.35)"
+        fontSize="10"
+        fontFamily="'JetBrains Mono', monospace"
+        letterSpacing="0.04em"
+      >
+        {phaseLabel}
+      </text>
+
+      {/* ─ Line 3: T-minus (large) ─ */}
+      <text
+        x={tx + PAD} y={ty + PAD + 62}
+        fill={color}
+        fontSize="16" fontWeight="600"
+        fontFamily="'JetBrains Mono', monospace"
+        letterSpacing="0.04em"
+      >
+        {formatTMinus(signal.t_minus_minutes)}
+      </text>
+      {/* PSI + Confidence on same line */}
+      <text
+        x={tx + TW - PAD} y={ty + PAD + 62}
+        textAnchor="end"
+        fill="rgba(255,255,255,0.5)"
+        fontSize="11"
+        fontFamily="'JetBrains Mono', monospace"
+      >
+        PSI {signal.psi} · {signal.confidence}%
+      </text>
+
+      {/* ─ Line 4: Asymmetry ─ */}
+      <text
+        x={tx + PAD} y={ty + PAD + 80}
+        fill="rgba(255,255,255,0.22)"
+        fontSize="10"
+        fontFamily="'JetBrains Mono', monospace"
+        letterSpacing="0.06em"
+      >
+        {t("tip.asym")}: {asymLabel}
+      </text>
+
+      {/* ─ Sparkline 7d ─ */}
+      <line
+        x1={tx + PAD} y1={ty + PAD + 90}
+        x2={tx + TW - PAD} y2={ty + PAD + 90}
+        stroke="rgba(255,255,255,0.04)" strokeWidth="0.5"
+      />
+      {sparkData.length >= 2 && (
+        <g transform={`translate(${tx + PAD + 2}, ${ty + PAD + 96})`}>
+          <svg width={sparkW} height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`}>
+            <TooltipSparkline data={sparkData} width={sparkW} height={sparkH - 2} color={color} />
+          </svg>
+        </g>
+      )}
+      <text
+        x={tx + TW - PAD} y={ty + TH - 8}
+        textAnchor="end"
+        fill="rgba(255,255,255,0.15)"
+        fontSize="8"
+        fontFamily="'JetBrains Mono', monospace"
+        letterSpacing="0.05em"
+      >
         {t("tip.price7d")}
       </text>
     </g>
@@ -538,13 +657,26 @@ export default function AlienGauge() {
             );
           })}
 
+          {/* Micro-pulse on ring toward hovered ray */}
+          {hoveredIdx !== null && signals[hoveredIdx] && (() => {
+            const hAngleDeg = (hoveredIdx * (360 / 7)) - 90;
+            const spread = 8;
+            return (
+              <path
+                d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
+                fill="none" stroke={stateColor(signals[hoveredIdx].state)} strokeWidth="9" strokeLinecap="round"
+                style={{ opacity: 0.25, transition: "opacity 200ms ease" }}
+              />
+            );
+          })()}
+
           {/* Sacred Rays */}
           <SacredRays signals={signals} cx={CX} cy={CY} outerR={R_OUTER}
             hoveredIdx={hoveredIdx} setHoveredIdx={setHoveredIdx} onClickRay={handleClickRay} />
 
           {/* Tooltip */}
           {hoveredIdx !== null && signals[hoveredIdx] && (
-            <RayTooltip signal={signals[hoveredIdx]} cx={CX} cy={CY} outerR={R_OUTER} index={hoveredIdx} />
+            <RayTooltip signal={signals[hoveredIdx]} cx={CX} cy={CY} outerR={R_OUTER} index={hoveredIdx} svgSize={SVG_SIZE} />
           )}
         </svg>
 

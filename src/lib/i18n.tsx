@@ -30,6 +30,10 @@ const translations = {
   "tip.phase": { fr: "Phase", en: "Phase" },
   "tip.confidence": { fr: "Confiance", en: "Confidence" },
   "tip.price7d": { fr: "Prix 7j", en: "7d Price" },
+  "tip.asym": { fr: "ASYM", en: "ASYM" },
+  "asym.high": { fr: "HAUTE", en: "HIGH" },
+  "asym.med": { fr: "MOYENNE", en: "MEDIUM" },
+  "asym.low": { fr: "FAIBLE", en: "LOW" },
 
   // Subnets page
   "sub.title": { fr: "Subnets Détaillés", en: "Detailed Subnets" },

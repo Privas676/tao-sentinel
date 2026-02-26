@@ -4,6 +4,7 @@
 
 export type GaugeState = "CALM" | "ALERT" | "IMMINENT" | "EXIT";
 export type GaugePhase = "BUILD" | "ARMED" | "TRIGGER" | "NONE";
+export type Asymmetry = "HIGH" | "MED" | "LOW";
 
 export type SubnetSignal = {
   netuid: number;
@@ -13,6 +14,7 @@ export type SubnetSignal = {
   confidence: number;
   state: GaugeState;
   phase: GaugePhase;
+  asymmetry: Asymmetry;
   sparkline_7d: number[];
   liquidity: number;
   momentum: number;
@@ -119,6 +121,9 @@ export function processSignals(
       const conf = s.confidence_pct ?? 0;
       const tMinus = deriveTMinus(psi);
       const isBreak = s.state === "BREAK" || s.state === "EXIT_FAST";
+      const quality = s.quality_score ?? 0;
+      const asymScore = conf * 0.6 + quality * 0.4;
+      const asymmetry: Asymmetry = asymScore >= 75 ? "HIGH" : asymScore >= 55 ? "MED" : "LOW";
       return {
         netuid: s.netuid!,
         name: s.subnet_name || `SN-${s.netuid}`,
@@ -127,8 +132,9 @@ export function processSignals(
         confidence: conf,
         state: deriveGaugeState(psi, conf, isBreak),
         phase: derivePhase(psi),
+        asymmetry,
         sparkline_7d: (sparklines[s.netuid!] ?? []).slice(-7),
-        liquidity: 50, // proxy from confidence
+        liquidity: 50,
         momentum: clamp(psi - 40, 0, 60) / 60 * 100,
       };
     })
