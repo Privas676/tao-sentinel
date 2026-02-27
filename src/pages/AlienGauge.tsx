@@ -897,7 +897,7 @@ export default function AlienGauge() {
       `}</style>
 
       {/* Phase indicator (top) — large and clear */}
-      <div className="absolute top-4 sm:top-10 left-0 right-0 flex flex-col items-center z-10">
+      <div className="absolute top-4 sm:top-10 left-0 right-0 flex flex-col items-center z-10" style={{ paddingLeft: isMobile ? 60 : 0, paddingRight: isMobile ? 60 : 0 }}>
         <span className="font-mono tracking-[0.3em] sm:tracking-[0.5em] uppercase" style={{
           color: "rgba(255,255,255,0.35)",
           fontSize: isMobile ? 11 : 14,
