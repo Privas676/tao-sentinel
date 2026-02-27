@@ -227,18 +227,47 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
 
   const isMobileSize = outerR <= 250;
   const maxLen = isMobileSize ? 85 : 180;
-  const minLen = isMobileSize ? 12 : 20; // minimum visible length even for 8h+
+  const minLen = isMobileSize ? 12 : 20;
+
+  // ── Priority detection: subnet with shortest T-minus ──
+  const priorityIdx = signals.reduce((best, s, i) =>
+    s.t_minus_minutes < signals[best].t_minus_minutes ? i : best, 0);
 
   return (
     <>
+      {/* Gradient defs for each ray */}
+      <defs>
+        {signals.map((s, i) => {
+          const angleDeg = (i * angleStep) - 90;
+          const angle = angleDeg * (Math.PI / 180);
+          const cos = Math.cos(angle), sin = Math.sin(angle);
+          const baseColor = rayColor(s.state, 0.35);
+          const tipColor = rayColor(s.state, 1.0);
+          return (
+            <linearGradient key={`ray-grad-${s.netuid}`} id={`ray-grad-${s.netuid}`}
+              x1={String(0.5 - cos * 0.5)} y1={String(0.5 - sin * 0.5)}
+              x2={String(0.5 + cos * 0.5)} y2={String(0.5 + sin * 0.5)}>
+              <stop offset="0%" stopColor={baseColor} />
+              <stop offset="100%" stopColor={tipColor} />
+            </linearGradient>
+          );
+        })}
+        {/* Priority pulse animation */}
+        <style>{`
+          @keyframes priority-pulse {
+            0%, 100% { opacity: 0.25; }
+            50% { opacity: 0.55; }
+          }
+        `}</style>
+      </defs>
+
       {signals.map((s, i) => {
         const angleDeg = (i * angleStep) - 90;
         const angle = angleDeg * (Math.PI / 180);
         const r1 = outerR + gap;
 
-        // LENGTH = T-minus mapping (shorter T-minus = LONGER ray = closer to triggering)
         const tMinusClamped = clamp(s.t_minus_minutes, 0, TIME_SCALE_MAX_MIN);
-        const tFraction = 1 - (tMinusClamped / TIME_SCALE_MAX_MIN); // invert: short T = long ray
+        const tFraction = 1 - (tMinusClamped / TIME_SCALE_MAX_MIN);
         const len = minLen + tFraction * (maxLen - minLen);
         const isOverflow = s.t_minus_minutes > TIME_SCALE_MAX_MIN;
 
@@ -247,7 +276,6 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const breatheLen = len * (1 + rayBreathe * 0.04);
         const r2 = r1 + breatheLen + trembleOffset;
 
-        // THICKNESS = confidence encoding (min 3, max 12)
         const baseThickness = isMobileSize ? 2.5 : 3.5;
         const maxThickness = isMobileSize ? 8 : 12;
         const thickness = baseThickness + (s.confidence / 100) * (maxThickness - baseThickness);
@@ -257,8 +285,13 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const x2 = cx + r2 * Math.cos(angle);
         const y2 = cy + r2 * Math.sin(angle);
         const isHovered = hoveredIdx === i;
+        const isPriority = i === priorityIdx;
 
-        // Label: always horizontal, with dark halo
+        // ── Dynamic halo intensity based on T-minus ──
+        const haloOpacity = s.t_minus_minutes < 60 ? 0.35 :
+                            s.t_minus_minutes < 240 ? 0.18 : 0.06;
+
+        // Label positioning
         const labelOffset = isMobileSize ? 20 : 18;
         const labelR = r2 + labelOffset;
         const lx = cx + labelR * Math.cos(angle);
@@ -297,12 +330,24 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
               onMouseLeave={() => setHoveredIdx(null)}
               onClick={() => onClickRay(s)}
             />
-            {/* Ray body */}
+            {/* Dynamic halo behind ray */}
             <line x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={rayColor(s.state)} strokeWidth={thickness} strokeLinecap="round"
+              stroke={rayColor(s.state, haloOpacity)}
+              strokeWidth={thickness + (isPriority ? 16 : 10)} strokeLinecap="round"
               style={{
-                opacity: isHovered ? 1 : 0.75,
-                filter: isHovered ? `drop-shadow(0 0 10px ${rayColor(s.state, 0.5)})` : "none",
+                opacity: isPriority ? 1 : 0.6,
+                filter: `blur(${isPriority ? 6 : 4}px)`,
+                animation: isPriority ? "priority-pulse 2.5s ease-in-out infinite" : "none",
+                pointerEvents: "none",
+              }}
+            />
+            {/* Ray body — gradient from dark base to bright tip */}
+            <line x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke={`url(#ray-grad-${s.netuid})`} strokeWidth={thickness} strokeLinecap="round"
+              style={{
+                opacity: isHovered ? 1 : (isPriority ? 0.9 : 0.75),
+                filter: isHovered ? `drop-shadow(0 0 10px ${rayColor(s.state, 0.5)})` :
+                        isPriority ? `drop-shadow(0 0 6px ${rayColor(s.state, 0.3)})` : "none",
                 transition: "opacity 200ms, filter 300ms",
                 pointerEvents: "none",
               }}
@@ -317,6 +362,24 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
             {/* Labels: horizontal text with dark halo */}
             {showLabel && (
               <>
+                {/* "PRIORITÉ" label above priority ray */}
+                {isPriority && (
+                  <>
+                    <rect
+                      x={labelAnchor === "start" ? lx - 3 : lx - (isMobileSize ? 65 : 85)}
+                      y={ly - (isMobileSize ? 28 : 34)}
+                      width={isMobileSize ? 68 : 88} height={isMobileSize ? 13 : 15}
+                      rx={3} fill="rgba(229,57,53,0.15)"
+                      style={{ pointerEvents: "none" }}
+                    />
+                    <text x={lx} y={ly - (isMobileSize ? 18 : 22)} textAnchor={labelAnchor}
+                      fill="rgba(229,57,53,0.7)" fontSize={isMobileSize ? 7 : 9} fontWeight="700"
+                      fontFamily="'JetBrains Mono', monospace" letterSpacing="0.15em"
+                      style={{ pointerEvents: "none", animation: "priority-pulse 2.5s ease-in-out infinite" }}>
+                      PRIORITÉ
+                    </text>
+                  </>
+                )}
                 {/* Dark halo behind text */}
                 <rect
                   x={labelAnchor === "start" ? lx - 3 : lx - (isMobileSize ? 65 : 85)}
@@ -1206,6 +1269,33 @@ export default function AlienGauge() {
         </div>
       </div>
       </div>
+
+      {/* ═══════════════════════════════════════ */}
+      {/* PRIORITY FOOTER LINE                     */}
+      {/* ═══════════════════════════════════════ */}
+      {signals.length > 0 && (() => {
+        const priority = signals.reduce((best, s) =>
+          s.t_minus_minutes < best.t_minus_minutes ? s : best, signals[0]);
+        return (
+          <div className="fixed left-0 right-0 z-20 flex justify-center pointer-events-none"
+            style={{ bottom: isMobile ? 50 : 60 }}>
+            <div className="font-mono text-center px-4 py-1.5 rounded-md" style={{
+              background: "rgba(0,0,0,0.4)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              fontSize: isMobile ? 10 : 12,
+              letterSpacing: "0.12em",
+            }}>
+              <span style={{ color: "rgba(255,255,255,0.35)" }}>PRIORITÉ ACTUELLE : </span>
+              <span style={{ color: stateColor(deriveGaugeState(priority.psi, priority.confidence)), fontWeight: 700 }}>
+                SN-{priority.netuid}
+              </span>
+              <span style={{ color: "rgba(255,255,255,0.5)", marginLeft: 8 }}>
+                ({formatTMinus(priority.t_minus_minutes)})
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Subnet Panel */}
       <SubnetPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} />
