@@ -288,55 +288,26 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
   tx = Math.max(viewMin, Math.min(viewMax, tx));
   ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
 
-   // STRICT: minimum 120px from gauge outer edge, and NEVER overlap sacred center
-   const minDistFromEdge = 120;
+   // STRICT: never overlap the sacred HUD center (timer + PRESSION/CONFIANCE)
+   // HUD is ~220px wide, extends ~100px above center to ~170px below (CONFIANCE bottom)
+   const sacredHalfW = 220;
+   const sacredTop = 100;   // above cy
+   const sacredBottom = 170; // below cy
 
-   // Sacred zone covers the entire HUD area (timer + PRESSION/CONFIANCE)
-   const sacredHalfW = 280; // horizontal half-width of HUD
-   const sacredHalfH = 300; // vertical half-height of HUD (timer top to CONFIANCE bottom)
-
-   // Check if tooltip rectangle overlaps the sacred HUD rectangle
    const doesOverlap = (ttx: number, tty: number) => {
      const tRight = ttx + TW, tBottom = tty + TH;
-     const sLeft = cx - sacredHalfW, sRight = cx + sacredHalfW;
-     const sTop = cy - sacredHalfH, sBottom = cy + sacredHalfH;
-     return ttx < sRight && tRight > sLeft && tty < sBottom && tBottom > sTop;
+     return tRight > (cx - sacredHalfW) && ttx < (cx + sacredHalfW) &&
+            tBottom > (cy - sacredTop) && tty < (cy + sacredBottom);
    };
 
-   // If overlapping, push tooltip outward along its angle AND vertically away from center
    if (doesOverlap(tx, ty)) {
-     const pushAngle = Math.atan2(ty + TH / 2 - cy, tx + TW / 2 - cx);
-     // For near-horizontal rays (±40° from horizontal), shift tooltip above or below the HUD
-     const absCos = Math.abs(Math.cos(pushAngle));
-     if (absCos > 0.6) {
-       // Lateral ray: place tooltip above or below the sacred zone
-       const goUp = Math.sin(pushAngle) < 0;
-       ty = goUp ? (cy - sacredHalfH - TH - 10) : (cy + sacredHalfH + 10);
-       // Keep horizontal position pushed outward
-       const edgePush = outerR + minDistFromEdge;
-       tx = cx + edgePush * Math.cos(pushAngle) - TW / 2;
-     } else {
-       // Non-lateral: push radially outward
-       const targetDist = Math.sqrt(sacredHalfW ** 2 + sacredHalfH ** 2) + TH / 2 + 30;
-       tx = cx + targetDist * Math.cos(pushAngle) - TW / 2;
-       ty = cy + targetDist * Math.sin(pushAngle) - TH / 2;
-     }
-   }
-
-   // Also enforce minimum distance from outer ring edge
-   const edgeDist = outerR + minDistFromEdge;
-   const finalCx = tx + TW / 2;
-   const finalCy = ty + TH / 2;
-   const finalDist = Math.sqrt((finalCx - cx) ** 2 + (finalCy - cy) ** 2);
-   if (finalDist < edgeDist && !doesOverlap(tx, ty)) {
-     // Only push if it won't cause an overlap
-     const pushAngle = Math.atan2(finalCy - cy, finalCx - cx);
-     const newTx = cx + edgeDist * Math.cos(pushAngle) - TW / 2;
-     const newTy = cy + edgeDist * Math.sin(pushAngle) - TH / 2;
-     if (!doesOverlap(newTx, newTy)) {
-       tx = newTx;
-       ty = newTy;
-     }
+     // Determine which side of center the tooltip naturally falls
+     const tooltipMidY = ty + TH / 2;
+     const goBelow = tooltipMidY >= cy;
+     // Shift vertically just outside the sacred zone, keep X near the ray tip
+     ty = goBelow ? (cy + sacredBottom + 8) : (cy - sacredTop - TH - 8);
+     // Keep tx anchored to the ray direction but don't overshoot
+     tx = Math.max(viewMin, Math.min(viewMax, cx + tooltipR * Math.cos(angle) - TW / 2));
    }
 
    // Reclamp to viewport
