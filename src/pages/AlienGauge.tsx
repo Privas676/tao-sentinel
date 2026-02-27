@@ -301,11 +301,20 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
    };
 
    if (doesOverlap(tx, ty)) {
-     const tooltipMidY = ty + TH / 2;
-     const goBelow = tooltipMidY >= cy;
-     ty = goBelow ? (cy + sacredBottom + 15) : (cy - sacredTop - TH - 15);
-     if (doesOverlap(tx, ty)) {
-       tx = angle >= 0 ? (cx + sacredHalfW + 15) : (cx - sacredHalfW - TW - 15);
+     const cosA = Math.cos(angle);
+     const sinA = Math.sin(angle);
+     
+     // For lateral rays (pointing mostly left/right), push tooltip outward horizontally
+     if (Math.abs(cosA) > 0.5) {
+       tx = cosA > 0
+         ? (cx + sacredHalfW + 20)           // push right of sacred zone
+         : (cx - sacredHalfW - TW - 20);     // push left of sacred zone
+       // Keep vertical position near the ray tip
+       ty = cy + tooltipR * sinA - TH / 2;
+     } else {
+       // For vertical rays, push above or below
+       const goBelow = sinA >= 0;
+       ty = goBelow ? (cy + sacredBottom + 15) : (cy - sacredTop - TH - 15);
      }
    }
 
