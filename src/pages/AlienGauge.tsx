@@ -1092,10 +1092,10 @@ export default function AlienGauge() {
         }}>
           {t("gauge.phase")}
         </span>
-        <span className="font-mono font-bold uppercase mt-1" style={{
+        <span className="font-mono font-bold uppercase mt-1 text-center max-w-[calc(100%-120px)] sm:max-w-none" style={{
           color,
-          fontSize: "clamp(18px, 4.2vw, 26px)",
-          letterSpacing: isMobile ? "0.15em" : "0.3em",
+          fontSize: "clamp(14px, 3.8vw, 26px)",
+          letterSpacing: isMobile ? "0.1em" : "0.3em",
           transition: "color 800ms ease",
           textShadow: `0 0 30px ${color}20`,
         }}>
