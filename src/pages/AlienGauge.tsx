@@ -68,6 +68,51 @@ function RaySparkline({ data, x1, y1, x2, y2, state }: {
 }
 
 /* ═══════════════════════════════════════ */
+/*       IMMINENT PARTICLES                */
+/* ═══════════════════════════════════════ */
+function ImminentParticles({ x1, y1, x2, y2, color }: {
+  x1: number; y1: number; x2: number; y2: number; color: string;
+}) {
+  const particles = useMemo(() => {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 10) return [];
+    const ux = dx / len, uy = dy / len;
+    const px = -uy, py = ux;
+    return Array.from({ length: 8 }, (_, i) => {
+      const t = 0.15 + Math.random() * 0.7;
+      const drift = (Math.random() - 0.5) * 18;
+      const size = 1 + Math.random() * 1.5;
+      const delay = Math.random() * 3;
+      const dur = 1.8 + Math.random() * 1.4;
+      return {
+        cx: x1 + ux * len * t + px * drift,
+        cy: y1 + uy * len * t + py * drift,
+        r: size,
+        delay,
+        dur,
+        driftX: px * (Math.random() - 0.5) * 12,
+        driftY: py * (Math.random() - 0.5) * 12,
+      };
+    });
+  }, [x1, y1, x2, y2]);
+
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      {particles.map((p, i) => (
+        <circle key={i} cx={p.cx} cy={p.cy} r={p.r}
+          fill={color} fillOpacity={0.6}
+          style={{
+            animation: `particle-float ${p.dur}s ease-in-out ${p.delay}s infinite`,
+            transformOrigin: `${p.cx}px ${p.cy}px`,
+          }}
+        />
+      ))}
+    </g>
+  );
+}
+
+/* ═══════════════════════════════════════ */
 /*          SACRED RAYS                    */
 /* ═══════════════════════════════════════ */
 function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClickRay }: {
@@ -166,6 +211,10 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
                 fill="none" stroke={rayColor(s.state, 0.3)} strokeWidth="1.5"
                 style={{ pointerEvents: "none" }}
               />
+            )}
+            {/* IMMINENT particles */}
+            {isImm && (
+              <ImminentParticles x1={x1} y1={y1} x2={x2} y2={y2} color={stateColor(s.state)} />
             )}
           </g>
         );
@@ -654,6 +703,12 @@ export default function AlienGauge() {
               @keyframes ring-pulse {
                 0%, 100% { opacity: 0.15; stroke-width: 8; }
                 50% { opacity: 0.35; stroke-width: 12; }
+              }
+              @keyframes particle-float {
+                0%, 100% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+                20% { opacity: 0.7; transform: translate(2px, -3px) scale(1); }
+                50% { opacity: 0.4; transform: translate(-1px, -6px) scale(0.9); }
+                80% { opacity: 0.6; transform: translate(3px, -2px) scale(1.1); }
               }
             `}</style>
           </defs>
