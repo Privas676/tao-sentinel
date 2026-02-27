@@ -288,7 +288,7 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize }: {
   tx = Math.max(viewMin, Math.min(viewMax, tx));
   ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
   // Push tooltip away from vertical center to avoid covering the HUD
-  const centerZoneY = 120;
+  const centerZoneY = 180;
   if (Math.abs(ty + TH / 2 - cy) < centerZoneY && Math.abs(tx + TW / 2 - cx) < outerR + 100) {
     ty = ty + TH / 2 < cy ? cy - centerZoneY - TH / 2 : cy + centerZoneY - TH / 2;
   }
