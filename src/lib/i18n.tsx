@@ -84,10 +84,22 @@ const translations = {
   "pos.profit": { fr: "Profit sécurisé", en: "Secured Profit" },
   "pos.caution": { fr: "Vigilance", en: "Caution" },
   "pos.danger": { fr: "Danger capital", en: "Capital Danger" },
+  "pos.open_title": { fr: "Ouvrir une position", en: "Open Position" },
+  "pos.subnet": { fr: "Subnet", en: "Subnet" },
+  "pos.amount": { fr: "Montant ($)", en: "Amount ($)" },
+  "pos.stop_loss": { fr: "Stop-loss (%)", en: "Stop-loss (%)" },
+  "pos.take_profit": { fr: "Take-profit (%)", en: "Take-profit (%)" },
+  "pos.confirm": { fr: "Confirmer", en: "Confirm" },
+  "pos.cancel": { fr: "Annuler", en: "Cancel" },
+  "pos.close_confirm": { fr: "Fermer la position ?", en: "Close position?" },
+  "pos.login_required": { fr: "Connectez-vous pour gérer vos positions", en: "Sign in to manage positions" },
 
   // Priority
   "priority.current": { fr: "PRIORITÉ ACTUELLE", en: "CURRENT PRIORITY" },
   "priority.before": { fr: "avant risque potentiel", en: "before potential risk" },
+
+  // Auth
+  "auth.logout": { fr: "Déconnexion", en: "Sign out" },
 } as const;
 
 type TKey = keyof typeof translations;
