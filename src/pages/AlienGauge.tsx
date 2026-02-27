@@ -739,7 +739,7 @@ export default function AlienGauge() {
   })();
 
   return (
-    <div className="h-full w-full flex flex-col items-center justify-center select-none relative" style={{ background: "#000", overflow: "hidden" }}>
+    <div className="fixed inset-0 flex flex-col items-center justify-center select-none" style={{ background: "#000", overflow: "hidden" }}>
       {/* Vignette */}
       <div className="absolute inset-0 pointer-events-none" style={{
         background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)",
