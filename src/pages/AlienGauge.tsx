@@ -272,8 +272,8 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const labelAnchor = angleDeg > -45 && angleDeg < 135 ? "start" : "end";
         const labelText = `SN${s.netuid}${isOverflow ? "+" : ""}`;
         const tMinusText = formatTMinus(s.t_minus_minutes);
-        const labelFontSize = isMobileSize ? 11 : 15;
-        const tMinusFontSize = isMobileSize ? 9 : 13;
+        const labelFontSize = isMobileSize ? 13 : 15;
+        const tMinusFontSize = isMobileSize ? 11 : 13;
 
         const tractionPts = isImm ? (() => {
           const trR = outerR + 2;
@@ -822,15 +822,16 @@ export default function AlienGauge() {
     setPanelSignal(s);
   }, []);
 
-  /* ─── geometry (responsive) — 800px gauge ─── */
+  /* ─── geometry (responsive) — mobile-first breakpoints ─── */
   const isMobile = useIsMobile();
-  const SIZE = isMobile ? 340 : 800;
-  const SVG_SIZE = isMobile ? 500 : 1200;
+  const isSmall = typeof window !== "undefined" && window.innerWidth <= 768 && window.innerWidth > 420;
+  const SIZE = isMobile ? 380 : 800; // +12% on mobile (was 340)
+  const SVG_SIZE = isMobile ? 560 : 1200; // scaled up for larger mobile gauge
   const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
-  const R_OUTER = isMobile ? 138 : 360;
-  const R_INNER = isMobile ? 118 : 310;
-  const R_TRIGGER = isMobile ? 100 : 268;
-  const CENTER_RADIUS = isMobile ? 90 : 240; // sacred center zone — no tooltip allowed
+  const R_OUTER = isMobile ? 155 : 360; // +12% (was 138)
+  const R_INNER = isMobile ? 132 : 310; // +12% (was 118)
+  const R_TRIGGER = isMobile ? 112 : 268; // +12% (was 100)
+  const CENTER_RADIUS = isMobile ? 101 : 240; // sacred center zone — no tooltip allowed
 
   const color = stateColor(globalState);
   const glow = stateGlow(globalState);
@@ -896,17 +897,18 @@ export default function AlienGauge() {
       `}</style>
 
       {/* Phase indicator (top) — large and clear */}
-      <div className="absolute top-6 sm:top-10 left-0 right-0 flex flex-col items-center z-10">
-        <span className="font-mono tracking-[0.5em] uppercase" style={{
+      <div className="absolute top-4 sm:top-10 left-0 right-0 flex flex-col items-center z-10">
+        <span className="font-mono tracking-[0.3em] sm:tracking-[0.5em] uppercase" style={{
           color: "rgba(255,255,255,0.35)",
-          fontSize: isMobile ? 10 : 14,
-          letterSpacing: "0.5em",
+          fontSize: isMobile ? 11 : 14,
+          letterSpacing: isMobile ? "0.3em" : "0.5em",
         }}>
           {t("gauge.phase")}
         </span>
-        <span className="font-mono font-bold tracking-[0.3em] uppercase mt-1" style={{
+        <span className="font-mono font-bold uppercase mt-1" style={{
           color,
-          fontSize: isMobile ? 16 : 22,
+          fontSize: "clamp(18px, 4.2vw, 26px)",
+          letterSpacing: isMobile ? "0.15em" : "0.3em",
           transition: "color 800ms ease",
           textShadow: `0 0 30px ${color}20`,
         }}>
@@ -944,7 +946,13 @@ export default function AlienGauge() {
 
 
       {/* GAUGE — arcs are purely decorative, center HUD is an independent layer */}
-      <div className="absolute z-10" style={{ width: SIZE, height: SIZE, top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}>
+      <div className="absolute z-10" style={{
+        width: isMobile ? "min(92vw, 520px)" : SIZE,
+        height: isMobile ? "min(92vw, 520px)" : SIZE,
+        aspectRatio: "1 / 1",
+        top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+        margin: "auto",
+      }}>
         {showHalo && (
           <div className="absolute inset-0 rounded-full pointer-events-none" style={{
             background: `radial-gradient(circle, rgba(100,180,255,0.06) 0%, transparent 70%)`,
@@ -990,18 +998,18 @@ export default function AlienGauge() {
           </defs>
 
           {/* Outer ring track */}
-          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 5 : 8} />
+          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 6 : 8} />
           {tensionAngle > 0 && (
             <path d={describeArc(CX, CY, R_OUTER, -135, -135 + tensionAngle)} fill="none"
-              stroke={color} strokeWidth={isMobile ? 5 : 8} strokeLinecap="round"
+              stroke={color} strokeWidth={isMobile ? 6 : 8} strokeLinecap="round"
               style={{ opacity: 0.4, transition: "d 600ms ease, stroke 500ms ease" }} />
           )}
 
           {/* Inner ring */}
-          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 7 : 12} />
+          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 8 : 12} />
           {innerAngle > 0 && (
             <path d={describeArc(CX, CY, R_INNER, -135, -135 + innerAngle)} fill="none"
-              stroke={color} strokeWidth={isMobile ? 7 : 12} strokeLinecap="round"
+              stroke={color} strokeWidth={isMobile ? 8 : 12} strokeLinecap="round"
               style={{ opacity: innerOpacity, transition: "d 600ms ease, stroke 500ms ease, opacity 400ms ease" }} />
           )}
 
@@ -1077,14 +1085,19 @@ export default function AlienGauge() {
           {/* Time Ring (scale) */}
           <TimeRing cx={CX} cy={CY} outerR={R_OUTER} isMobile={isMobile} />
 
-          {/* Sacred Rays */}
-          <SacredRays signals={signals} cx={CX} cy={CY} outerR={R_OUTER}
-            hoveredIdx={hoveredIdx} setHoveredIdx={setHoveredIdx} onClickRay={handleClickRay} />
-
-          {/* Tooltip */}
-          {hoveredIdx !== null && signals[hoveredIdx] && (
-            <RayTooltip signal={signals[hoveredIdx]} cx={CX} cy={CY} outerR={R_OUTER} index={hoveredIdx} svgSize={SVG_SIZE} total={signals.length} />
-          )}
+          {/* Sacred Rays — limit to 5 on mobile */}
+          {(() => {
+            const displaySignals = isMobile ? signals.slice(0, 5) : signals;
+            return (
+              <>
+                <SacredRays signals={displaySignals} cx={CX} cy={CY} outerR={R_OUTER}
+                  hoveredIdx={hoveredIdx} setHoveredIdx={setHoveredIdx} onClickRay={handleClickRay} />
+                {hoveredIdx !== null && displaySignals[hoveredIdx] && (
+                  <RayTooltip signal={displaySignals[hoveredIdx]} cx={CX} cy={CY} outerR={R_OUTER} index={hoveredIdx} svgSize={SVG_SIZE} total={displaySignals.length} />
+                )}
+              </>
+            );
+          })()}
         </svg>
       </div>
 
@@ -1095,52 +1108,67 @@ export default function AlienGauge() {
       {/* perfect mathematical centering.          */}
       {/* ═══════════════════════════════════════ */}
       <div
-        className="fixed inset-0 pointer-events-none z-20 flex items-center justify-center"
+        className="fixed inset-0 pointer-events-none z-20"
+        style={{ display: "grid", placeItems: "center" }}
       >
         <div
           style={{
-            width: isMobile ? 200 : 440,
+            maxWidth: isMobile ? "min(65vw, 260px)" : 440,
+            width: "100%",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
+            textAlign: "center",
             animation: "phase-pulse 3s ease-in-out infinite",
+            lineHeight: 0.95,
           }}
         >
         {/* Title: FENÊTRE D'OPPORTUNITÉ */}
         <span className="font-mono tracking-[0.35em] uppercase text-center" style={{
           fontSize: isMobile ? 8 : 12,
           color: "rgba(255,255,255,0.3)",
-          letterSpacing: "0.4em",
+          letterSpacing: isMobile ? "0.2em" : "0.4em",
+          lineHeight: 1.2,
         }}>
           {t("gauge.window")}
         </span>
 
-        {/* Timer principal — 88px+ */}
+        {/* Timer principal — fluid sizing, never overflows */}
         <span className="font-mono font-bold leading-none mt-1 sm:mt-3" style={{
-          fontSize: isMobile ? 54 : 88,
+          fontSize: "clamp(44px, 12vw, 92px)",
           color,
           transition: "color 800ms ease",
-          letterSpacing: "0.08em",
+          letterSpacing: "0.04em",
           textShadow: `0 0 60px ${color}30, 0 0 120px ${color}12`,
+          maxWidth: "100%",
+          overflow: "hidden",
+          whiteSpace: "nowrap",
         }}>
           {(() => {
             const h = Math.floor(globalTMinus / 60);
             const m = globalTMinus % 60;
-            return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}m`;
+            if (h > 0) {
+              return <>{h}<span style={{ fontSize: "0.65em" }}>h</span>{String(m).padStart(2, '0')}</>;
+            }
+            return <>{m}<span style={{ fontSize: "0.65em" }}>m</span></>;
           })()}
         </span>
 
-        {/* Sous-texte */}
-        <span className="font-mono tracking-[0.25em] uppercase mt-1 sm:mt-2 text-center" style={{
-          fontSize: isMobile ? 7 : 10,
-          color: "rgba(255,255,255,0.2)",
-        }}>
-          {t("gauge.before")}
-        </span>
+        {/* Sous-texte — hidden on mobile if too dense */}
+        {!isMobile && (
+          <span className="font-mono tracking-[0.25em] uppercase mt-1 sm:mt-2 text-center" style={{
+            fontSize: 10,
+            color: "rgba(255,255,255,0.2)",
+          }}>
+            {t("gauge.before")}
+          </span>
+        )}
 
         {/* State label */}
-        <span className="font-mono tracking-[0.5em] mt-3 sm:mt-6 uppercase" style={{
-          fontSize: isMobile ? 11 : 16,
+        <span className="font-mono uppercase" style={{
+          fontSize: isMobile ? 12 : 16,
+          letterSpacing: isMobile ? "0.3em" : "0.5em",
+          marginTop: isMobile ? 6 : 24,
           color,
           opacity: 0.85,
           transition: "color 800ms ease",
@@ -1149,7 +1177,7 @@ export default function AlienGauge() {
         </span>
 
         {/* Metrics row: PSI + Confidence */}
-        <div className="flex items-center gap-6 sm:gap-10 mt-3 sm:mt-6">
+        <div className="flex items-center mt-2 sm:mt-6" style={{ gap: isMobile ? 16 : 40 }}>
           <div className="flex flex-col items-center">
             <span className="font-mono tracking-[0.2em] uppercase" style={{
               color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 8 : 10,
@@ -1157,12 +1185,12 @@ export default function AlienGauge() {
               {t("gauge.pressure")}
             </span>
             <span className="font-mono font-bold mt-0.5" style={{
-              color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 16 : 22,
+              color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 15 : 22,
             }}>
               {globalPsi}
             </span>
           </div>
-          <div className="w-px h-6 sm:h-8" style={{ background: "rgba(255,255,255,0.08)" }} />
+          <div style={{ width: 1, height: isMobile ? 20 : 32, background: "rgba(255,255,255,0.08)" }} />
           <div className="flex flex-col items-center">
             <span className="font-mono tracking-[0.2em] uppercase" style={{
               color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 8 : 10,
@@ -1170,7 +1198,7 @@ export default function AlienGauge() {
               {t("gauge.confidence")}
             </span>
             <span className="font-mono font-bold mt-0.5" style={{
-              color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 16 : 22,
+              color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 15 : 22,
             }}>
               {globalConf}%
             </span>
