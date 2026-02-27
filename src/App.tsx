@@ -42,17 +42,19 @@ function AppLayout() {
 
   return (
     <div className="h-screen w-screen flex bg-black overflow-hidden">
-      {/* Sidebar toggle (always visible) */}
+      {/* Sidebar toggle — larger, with label and hover animation */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed top-4 left-4 z-50 w-8 h-8 flex items-center justify-center rounded-md transition-all"
+        className="fixed top-4 left-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
         style={{
-          background: sidebarOpen ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
-          color: "rgba(255,255,255,0.4)",
-          border: "1px solid rgba(255,255,255,0.06)",
+          background: sidebarOpen ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
+          color: sidebarOpen ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.4)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          backdropFilter: "blur(8px)",
         }}
       >
-        <span className="font-mono text-xs">{sidebarOpen ? "✕" : "☰"}</span>
+        <span className="font-mono text-sm">{sidebarOpen ? "✕" : "☰"}</span>
+        <span className="font-mono text-[11px] tracking-wider uppercase" style={{ opacity: 0.7 }}>Menu</span>
       </button>
 
       {/* Notification badge removed — accessible via sidebar */}
