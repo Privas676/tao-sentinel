@@ -739,7 +739,7 @@ export default function AlienGauge() {
   })();
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center select-none" style={{ background: "#000", overflow: "hidden" }}>
+    <div className="fixed inset-0 select-none" style={{ background: "#000", overflow: "hidden" }}>
       {/* Vignette */}
       <div className="absolute inset-0 pointer-events-none" style={{
         background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)",
@@ -806,7 +806,7 @@ export default function AlienGauge() {
 
 
       {/* GAUGE — arcs are purely decorative, center HUD is an independent layer */}
-      <div className="relative z-10" style={{ width: SIZE, height: SIZE }}>
+      <div className="absolute z-10" style={{ width: SIZE, height: SIZE, top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}>
         {showHalo && (
           <div className="absolute inset-0 rounded-full pointer-events-none" style={{
             background: `radial-gradient(circle, rgba(100,180,255,0.06) 0%, transparent 70%)`,
@@ -824,7 +824,7 @@ export default function AlienGauge() {
         )}
 
         <svg width={SIZE} height={SIZE}
-          viewBox={`${(SVG_SIZE - SIZE) / -2} ${(SVG_SIZE - SIZE) / -2} ${SVG_SIZE} ${SVG_SIZE}`}
+          viewBox={`${CX - SVG_SIZE / 2} ${CY - SVG_SIZE / 2} ${SVG_SIZE} ${SVG_SIZE}`}
           style={{ overflow: "visible" }}>
 
           <defs>
@@ -945,20 +945,19 @@ export default function AlienGauge() {
             <RayTooltip signal={signals[hoveredIdx]} cx={CX} cy={CY} outerR={R_OUTER} index={hoveredIdx} svgSize={SVG_SIZE} />
           )}
         </svg>
+      </div>
 
-        {/* ═══════════════════════════════════════ */}
-        {/* CENTER HUD — independent of arcs       */}
-        {/* Positioned with absolute 50%/50% +     */}
-        {/* translate(-50%, -50%) for mathematical  */}
-        {/* centering that cannot be influenced by  */}
-        {/* SVG arc rendering.                      */}
-        {/* ═══════════════════════════════════════ */}
+      {/* ═══════════════════════════════════════ */}
+      {/* CENTER HUD — fully independent layer    */}
+      {/* Positioned relative to VIEWPORT, not    */}
+      {/* to the gauge div or SVG, ensuring       */}
+      {/* perfect mathematical centering.          */}
+      {/* ═══════════════════════════════════════ */}
+      <div
+        className="fixed inset-0 pointer-events-none z-20 flex items-center justify-center"
+      >
         <div
-          className="absolute pointer-events-none"
           style={{
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
             width: isMobile ? 200 : 440,
             display: "flex",
             flexDirection: "column",
@@ -966,77 +965,77 @@ export default function AlienGauge() {
             animation: "phase-pulse 3s ease-in-out infinite",
           }}
         >
-          {/* Title: FENÊTRE D'OPPORTUNITÉ */}
-          <span className="font-mono tracking-[0.35em] uppercase text-center" style={{
-            fontSize: isMobile ? 8 : 12,
-            color: "rgba(255,255,255,0.3)",
-            letterSpacing: "0.4em",
-          }}>
-            {t("gauge.window")}
-          </span>
+        {/* Title: FENÊTRE D'OPPORTUNITÉ */}
+        <span className="font-mono tracking-[0.35em] uppercase text-center" style={{
+          fontSize: isMobile ? 8 : 12,
+          color: "rgba(255,255,255,0.3)",
+          letterSpacing: "0.4em",
+        }}>
+          {t("gauge.window")}
+        </span>
 
-          {/* Timer principal — 88px+ */}
-          <span className="font-mono font-bold leading-none mt-1 sm:mt-3" style={{
-            fontSize: isMobile ? 54 : 88,
-            color,
-            transition: "color 800ms ease",
-            letterSpacing: "0.08em",
-            textShadow: `0 0 60px ${color}30, 0 0 120px ${color}12`,
-          }}>
-            {(() => {
-              const h = Math.floor(globalTMinus / 60);
-              const m = globalTMinus % 60;
-              return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}m`;
-            })()}
-          </span>
+        {/* Timer principal — 88px+ */}
+        <span className="font-mono font-bold leading-none mt-1 sm:mt-3" style={{
+          fontSize: isMobile ? 54 : 88,
+          color,
+          transition: "color 800ms ease",
+          letterSpacing: "0.08em",
+          textShadow: `0 0 60px ${color}30, 0 0 120px ${color}12`,
+        }}>
+          {(() => {
+            const h = Math.floor(globalTMinus / 60);
+            const m = globalTMinus % 60;
+            return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}m`;
+          })()}
+        </span>
 
-          {/* Sous-texte */}
-          <span className="font-mono tracking-[0.25em] uppercase mt-1 sm:mt-2 text-center" style={{
-            fontSize: isMobile ? 7 : 10,
-            color: "rgba(255,255,255,0.2)",
-          }}>
-            {t("gauge.before")}
-          </span>
+        {/* Sous-texte */}
+        <span className="font-mono tracking-[0.25em] uppercase mt-1 sm:mt-2 text-center" style={{
+          fontSize: isMobile ? 7 : 10,
+          color: "rgba(255,255,255,0.2)",
+        }}>
+          {t("gauge.before")}
+        </span>
 
-          {/* State label */}
-          <span className="font-mono tracking-[0.5em] mt-3 sm:mt-6 uppercase" style={{
-            fontSize: isMobile ? 11 : 16,
-            color,
-            opacity: 0.85,
-            transition: "color 800ms ease",
-          }}>
-            {stateLabel}
-          </span>
+        {/* State label */}
+        <span className="font-mono tracking-[0.5em] mt-3 sm:mt-6 uppercase" style={{
+          fontSize: isMobile ? 11 : 16,
+          color,
+          opacity: 0.85,
+          transition: "color 800ms ease",
+        }}>
+          {stateLabel}
+        </span>
 
-          {/* Metrics row: PSI + Confidence */}
-          <div className="flex items-center gap-6 sm:gap-10 mt-3 sm:mt-6">
-            <div className="flex flex-col items-center">
-              <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 8 : 10,
-              }}>
-                {t("gauge.pressure")}
-              </span>
-              <span className="font-mono font-bold mt-0.5" style={{
-                color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 16 : 22,
-              }}>
-                {globalPsi}
-              </span>
-            </div>
-            <div className="w-px h-6 sm:h-8" style={{ background: "rgba(255,255,255,0.08)" }} />
-            <div className="flex flex-col items-center">
-              <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 8 : 10,
-              }}>
-                {t("gauge.confidence")}
-              </span>
-              <span className="font-mono font-bold mt-0.5" style={{
-                color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 16 : 22,
-              }}>
-                {globalConf}%
-              </span>
-            </div>
+        {/* Metrics row: PSI + Confidence */}
+        <div className="flex items-center gap-6 sm:gap-10 mt-3 sm:mt-6">
+          <div className="flex flex-col items-center">
+            <span className="font-mono tracking-[0.2em] uppercase" style={{
+              color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 8 : 10,
+            }}>
+              {t("gauge.pressure")}
+            </span>
+            <span className="font-mono font-bold mt-0.5" style={{
+              color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 16 : 22,
+            }}>
+              {globalPsi}
+            </span>
+          </div>
+          <div className="w-px h-6 sm:h-8" style={{ background: "rgba(255,255,255,0.08)" }} />
+          <div className="flex flex-col items-center">
+            <span className="font-mono tracking-[0.2em] uppercase" style={{
+              color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 8 : 10,
+            }}>
+              {t("gauge.confidence")}
+            </span>
+            <span className="font-mono font-bold mt-0.5" style={{
+              color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 16 : 22,
+            }}>
+              {globalConf}%
+            </span>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Subnet Panel */}
