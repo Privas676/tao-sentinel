@@ -764,6 +764,7 @@ export default function AlienGauge() {
         </button>
       )}
 
+
       {/* GAUGE */}
       <div className="relative z-10" style={{ width: SIZE, height: SIZE }}>
         {showHalo && (
