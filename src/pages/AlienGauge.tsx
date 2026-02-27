@@ -606,9 +606,33 @@ export default function AlienGauge() {
   }, []);
 
   const prevStateRef = useRef<GaugeState | null>(null);
+  const [stateTransition, setStateTransition] = useState<{ from: GaugeState; to: GaugeState; progress: number } | null>(null);
+  const transitionRaf = useRef<number | null>(null);
+
   useEffect(() => {
-    if (prevStateRef.current !== null && prevStateRef.current !== globalState) playClick();
+    if (prevStateRef.current !== null && prevStateRef.current !== globalState) {
+      playClick();
+      // Start transition animation
+      const from = prevStateRef.current;
+      const to = globalState;
+      const startTime = performance.now();
+      const duration = 1200; // 1.2s transition
+
+      const animate = (now: number) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        setStateTransition({ from, to, progress });
+        if (progress < 1) {
+          transitionRaf.current = requestAnimationFrame(animate);
+        } else {
+          setStateTransition(null);
+        }
+      };
+      if (transitionRaf.current) cancelAnimationFrame(transitionRaf.current);
+      transitionRaf.current = requestAnimationFrame(animate);
+    }
     prevStateRef.current = globalState;
+    return () => { if (transitionRaf.current) cancelAnimationFrame(transitionRaf.current); };
   }, [globalState, playClick]);
 
   /* ─── breathing ─── */
@@ -622,12 +646,14 @@ export default function AlienGauge() {
     return () => cancelAnimationFrame(raf);
   }, [globalState]);
 
-  /* ─── flash ─── */
+  /* ─── flash (on IMMINENT + on any state change) ─── */
   const [flashActive, setFlashActive] = useState(false);
-  const hasFlashed = useRef(false);
   useEffect(() => {
-    if (globalState === "IMMINENT" && !hasFlashed.current) { hasFlashed.current = true; setFlashActive(true); setTimeout(() => setFlashActive(false), 150); }
-    if (globalState !== "IMMINENT") hasFlashed.current = false;
+    if (prevStateRef.current !== globalState || (globalState === "IMMINENT")) {
+      setFlashActive(true);
+      const timeout = setTimeout(() => setFlashActive(false), 400);
+      return () => clearTimeout(timeout);
+    }
   }, [globalState]);
 
   /* ─── hover + panel ─── */
@@ -697,12 +723,19 @@ export default function AlienGauge() {
         }} />
       </div>
 
-      {/* Flash */}
+      {/* State transition flash */}
       {flashActive && (
         <div className="absolute inset-0 pointer-events-none z-50" style={{
-          background: "radial-gradient(circle, rgba(229,57,53,0.25) 0%, transparent 60%)",
+          background: `radial-gradient(circle, ${color}40 0%, ${color}15 30%, transparent 65%)`,
+          animation: "flash-fade 0.4s ease-out forwards",
         }} />
       )}
+      <style>{`
+        @keyframes flash-fade {
+          0% { opacity: 1; transform: scale(0.95); }
+          100% { opacity: 0; transform: scale(1.1); }
+        }
+      `}</style>
 
       {/* Phase indicator (top) */}
       <div className="absolute top-3 sm:top-6 left-0 right-0 text-center z-10">
@@ -806,6 +839,35 @@ export default function AlienGauge() {
                 style={{ opacity: globalState === "IMMINENT" ? 0.7 : 0.35 }} />
             );
           })}
+
+          {/* State transition sweep — progressive color wash on rings */}
+          {stateTransition && (() => {
+            const toColor = stateColor(stateTransition.to);
+            const eased = 1 - Math.pow(1 - stateTransition.progress, 3);
+            const sweepAngle = eased * 270;
+            const fadeOpacity = stateTransition.progress < 0.7 ? 0.5 : 0.5 * (1 - (stateTransition.progress - 0.7) / 0.3);
+            const glowSize = 16 + eased * 8;
+            const edgeAngleDeg = -135 + sweepAngle;
+            const edgeAngle = (edgeAngleDeg - 90) * Math.PI / 180;
+            return (
+              <g style={{ pointerEvents: "none" }}>
+                <path d={describeArc(CX, CY, R_OUTER, -135, edgeAngleDeg)}
+                  fill="none" stroke={toColor} strokeWidth={glowSize} strokeLinecap="round"
+                  style={{ opacity: fadeOpacity * 0.6, filter: "blur(6px)" }} />
+                <path d={describeArc(CX, CY, R_INNER, -135, -135 + sweepAngle * 0.85)}
+                  fill="none" stroke={toColor} strokeWidth={glowSize * 0.8} strokeLinecap="round"
+                  style={{ opacity: fadeOpacity * 0.4, filter: "blur(4px)" }} />
+                <path d={describeArc(CX, CY, R_TRIGGER, -135, -135 + sweepAngle * 0.7)}
+                  fill="none" stroke={toColor} strokeWidth={glowSize * 0.5} strokeLinecap="round"
+                  style={{ opacity: fadeOpacity * 0.3, filter: "blur(3px)" }} />
+                {sweepAngle < 268 && (
+                  <circle cx={CX + R_OUTER * Math.cos(edgeAngle)} cy={CY + R_OUTER * Math.sin(edgeAngle)}
+                    r={4 + eased * 3} fill={toColor}
+                    style={{ opacity: fadeOpacity, filter: "blur(2px)" }} />
+                )}
+              </g>
+            );
+          })()}
 
           {/* Micro-pulse on ring toward hovered ray */}
           {hoveredIdx !== null && signals[hoveredIdx] && (() => {
