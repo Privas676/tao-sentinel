@@ -47,16 +47,17 @@ function AppLayout() {
       {/* Sidebar toggle */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed top-4 left-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
+        className="fixed top-4 left-4 z-50 flex items-center gap-2 px-3.5 py-2.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
         style={{
-          background: sidebarOpen ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
-          color: sidebarOpen ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.4)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          backdropFilter: "blur(8px)",
+          background: sidebarOpen ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.06)",
+          color: sidebarOpen ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.5)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          backdropFilter: "blur(10px)",
+          boxShadow: "0 0 12px rgba(255,215,0,0.04)",
         }}
       >
         <span className="font-mono text-sm">{sidebarOpen ? "✕" : "☰"}</span>
-        <span className="font-mono text-[11px] tracking-wider uppercase" style={{ opacity: 0.7 }}>Menu</span>
+        <span className="font-mono text-[11px] tracking-wider uppercase font-semibold" style={{ opacity: 0.8 }}>Menu</span>
       </button>
 
       {/* Mobile overlay */}

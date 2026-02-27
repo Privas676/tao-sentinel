@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════ */
-/*     ALIEN GAUGE — PSI ENGINE            */
+/*     ALIEN GAUGE — OPPORTUNITY/RISK ENGINE */
 /* ═══════════════════════════════════════ */
 
 export type GaugeState = "CALM" | "ALERT" | "IMMINENT" | "EXIT";
@@ -10,6 +10,8 @@ export type SubnetSignal = {
   netuid: number;
   name: string;
   psi: number;
+  opportunity: number;      // 0-100
+  risk: number;             // 0-100
   t_minus_minutes: number;
   confidence: number;
   state: GaugeState;
@@ -18,6 +20,8 @@ export type SubnetSignal = {
   sparkline_7d: number[];
   liquidity: number;
   momentum: number;
+  reasons: string[];        // max 3
+  dominant: "opportunity" | "risk" | "neutral";
 };
 
 export type RawSignal = {
@@ -60,11 +64,6 @@ export function derivePhase(psi: number): GaugePhase {
   return "NONE";
 }
 
-/**
- * T-minus estimation based on PSI velocity.
- * Higher PSI = closer to threshold = less time.
- * Returns minutes, bounded [2, 1440] (2min to 24h).
- */
 export function deriveTMinus(psi: number): number {
   if (psi >= 95) return 2;
   if (psi >= 85) return Math.max(2, Math.round(12 - (psi - 85) * 1));
@@ -81,12 +80,76 @@ export function formatTMinus(minutes: number): string {
   return m > 0 ? `T-${h}h${m}m` : `T-${h}h`;
 }
 
-/** Human-readable time: "1h06" or "45min" */
 export function formatTimeClear(minutes: number): string {
   if (minutes < 60) return `${minutes}min`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+}
+
+/* ═══════════════════════════════════════ */
+/*   OPPORTUNITY / RISK ENGINE              */
+/* ═══════════════════════════════════════ */
+
+/** Derive opportunity score from raw signal data */
+function deriveOpportunity(psi: number, conf: number, quality: number, state: string | null): number {
+  let opp = 0;
+  // Momentum component (PSI-based) — higher PSI = more opportunity signal
+  opp += clamp(psi * 0.45, 0, 45);
+  // Confidence/consensus component
+  opp += clamp(conf * 0.25, 0, 25);
+  // Quality/adoption component
+  opp += clamp(quality * 0.20, 0, 20);
+  // Bond/traction bonus for high-signal states
+  if (state === "GO" || state === "GO_SPECULATIVE") opp += 10;
+  return Math.round(clamp(opp, 0, 100));
+}
+
+/** Derive risk score from raw signal data */
+function deriveRisk(psi: number, conf: number, quality: number, state: string | null): number {
+  let risk = 0;
+  // Break/exit states carry high risk
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 45;
+  // Inverse quality = higher risk (low adoption = risky)
+  risk += clamp((100 - quality) * 0.25, 0, 25);
+  // Low confidence = uncertain = risky
+  risk += clamp((100 - conf) * 0.15, 0, 15);
+  // Very high PSI can also signal overheated/volatile
+  if (psi >= 85) risk += clamp((psi - 85) * 1.5, 0, 15);
+  // Low PSI = low activity = low risk but also low signal
+  if (psi < 20) risk = Math.max(risk - 10, 5);
+  return Math.round(clamp(risk, 0, 100));
+}
+
+/** Generate explainable reasons (max 3) */
+function deriveReasons(
+  psi: number, conf: number, quality: number,
+  state: string | null, lang: "fr" | "en" = "fr"
+): string[] {
+  const reasons: string[] = [];
+  const fr = lang === "fr";
+
+  // Momentum
+  if (psi >= 70) reasons.push(fr ? "Momentum fort ↑" : "Strong momentum ↑");
+  else if (psi >= 45) reasons.push(fr ? "Momentum modéré →" : "Moderate momentum →");
+
+  // Consensus / Confidence
+  if (conf >= 75) reasons.push(fr ? "Consensus élevé ✓" : "High consensus ✓");
+  else if (conf < 40) reasons.push(fr ? "Consensus faible ⚠" : "Low consensus ⚠");
+
+  // Quality / Adoption
+  if (quality >= 70) reasons.push(fr ? "Adoption réelle détectée" : "Real adoption detected");
+  else if (quality < 30) reasons.push(fr ? "Hype > Adoption" : "Hype > Adoption");
+
+  // Break/exit
+  if (state === "BREAK" || state === "EXIT_FAST") {
+    reasons.unshift(fr ? "Signal de rupture ⛔" : "Break signal ⛔");
+  }
+  // GO states
+  if (state === "GO") reasons.push(fr ? "Signal d'entrée actif" : "Active entry signal");
+  if (state === "GO_SPECULATIVE") reasons.push(fr ? "Spéculatif · cap faible" : "Speculative · low cap");
+
+  return reasons.slice(0, 3);
 }
 
 /* Colors */
@@ -117,6 +180,22 @@ export function rayColor(state: GaugeState, alpha = 0.6): string {
   }
 }
 
+/** Opportunity color (gold tones) */
+export function opportunityColor(score: number, alpha = 1): string {
+  if (score >= 75) return `rgba(255,215,0,${alpha})`;
+  if (score >= 50) return `rgba(251,192,45,${alpha})`;
+  if (score >= 25) return `rgba(200,170,80,${alpha})`;
+  return `rgba(140,130,90,${alpha * 0.6})`;
+}
+
+/** Risk color (red tones) */
+export function riskColor(score: number, alpha = 1): string {
+  if (score >= 75) return `rgba(229,57,53,${alpha})`;
+  if (score >= 50) return `rgba(255,109,0,${alpha})`;
+  if (score >= 25) return `rgba(200,120,60,${alpha})`;
+  return `rgba(100,90,80,${alpha * 0.5})`;
+}
+
 /* Process raw signals into SubnetSignals */
 export function processSignals(
   raw: RawSignal[],
@@ -127,15 +206,21 @@ export function processSignals(
     .map(s => {
       const psi = s.mpi ?? s.score ?? 0;
       const conf = s.confidence_pct ?? 0;
+      const quality = s.quality_score ?? 0;
       const tMinus = deriveTMinus(psi);
       const isBreak = s.state === "BREAK" || s.state === "EXIT_FAST";
-      const quality = s.quality_score ?? 0;
       const asymScore = conf * 0.6 + quality * 0.4;
       const asymmetry: Asymmetry = asymScore >= 75 ? "HIGH" : asymScore >= 55 ? "MED" : "LOW";
+      const opportunity = deriveOpportunity(psi, conf, quality, s.state);
+      const risk = deriveRisk(psi, conf, quality, s.state);
+      const dominant = opportunity > risk + 10 ? "opportunity" as const :
+                       risk > opportunity + 10 ? "risk" as const : "neutral" as const;
       return {
         netuid: s.netuid!,
         name: s.subnet_name || `SN-${s.netuid}`,
         psi,
+        opportunity,
+        risk,
         t_minus_minutes: tMinus,
         confidence: conf,
         state: deriveGaugeState(psi, conf, isBreak),
@@ -144,13 +229,15 @@ export function processSignals(
         sparkline_7d: (sparklines[s.netuid!] ?? []).slice(-7),
         liquidity: 50,
         momentum: clamp(psi - 40, 0, 60) / 60 * 100,
+        reasons: deriveReasons(psi, conf, quality, s.state),
+        dominant,
       };
     })
     .sort((a, b) => b.psi - a.psi)
     .slice(0, 7);
 }
 
-/* Compute global PSI from all signals */
+/* Compute global scores */
 export function computeGlobalPsi(raw: RawSignal[]): number {
   if (!raw?.length) return 0;
   const mpis = raw.map(s => s.mpi ?? s.score ?? 0).filter(m => m > 0);
@@ -164,4 +251,28 @@ export function computeGlobalConfidence(raw: RawSignal[]): number {
   if (!raw?.length) return 0;
   const confs = raw.map(s => s.confidence_pct ?? 0).filter(c => c > 0);
   return confs.length ? Math.round(confs.reduce((a, b) => a + b, 0) / confs.length) : 0;
+}
+
+export function computeGlobalOpportunity(raw: RawSignal[]): number {
+  if (!raw?.length) return 0;
+  const scores = raw.map(s => {
+    const psi = s.mpi ?? s.score ?? 0;
+    const conf = s.confidence_pct ?? 0;
+    const quality = s.quality_score ?? 0;
+    return deriveOpportunity(psi, conf, quality, s.state);
+  }).filter(s => s > 0);
+  if (!scores.length) return 0;
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
+
+export function computeGlobalRisk(raw: RawSignal[]): number {
+  if (!raw?.length) return 0;
+  const scores = raw.map(s => {
+    const psi = s.mpi ?? s.score ?? 0;
+    const conf = s.confidence_pct ?? 0;
+    const quality = s.quality_score ?? 0;
+    return deriveRisk(psi, conf, quality, s.state);
+  }).filter(s => s > 0);
+  if (!scores.length) return 0;
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 }
