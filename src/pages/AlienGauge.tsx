@@ -288,20 +288,25 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize }: {
   tx = Math.max(viewMin, Math.min(viewMax, tx));
   ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
 
-  // STRICT: minimum 120px from gauge outer edge, and NEVER overlap sacred center
-  const minDistFromEdge = 120;
-  const tooltipCenterX = tx + TW / 2;
-  const tooltipCenterY = ty + TH / 2;
-  const distFromCenter = Math.sqrt((tooltipCenterX - cx) ** 2 + (tooltipCenterY - cy) ** 2);
-  const sacredZone = outerR * 0.7; // sacred center radius in SVG coords
+   // STRICT: minimum 120px from gauge outer edge, and NEVER overlap sacred center
+   const minDistFromEdge = 120;
+   const tooltipCenterX = tx + TW / 2;
+   const tooltipCenterY = ty + TH / 2;
+   const distFromCenter = Math.sqrt((tooltipCenterX - cx) ** 2 + (tooltipCenterY - cy) ** 2);
+   const sacredZone = outerR * 0.85; // enlarged sacred center radius to cover PSI/CONFIANCE metrics
 
-  // If tooltip center is inside sacred zone, push it outward radially
-  if (distFromCenter < sacredZone + TH / 2) {
-    const pushAngle = Math.atan2(tooltipCenterY - cy, tooltipCenterX - cx);
-    const targetDist = sacredZone + TH / 2 + 20;
-    tx = cx + targetDist * Math.cos(pushAngle) - TW / 2;
-    ty = cy + targetDist * Math.sin(pushAngle) - TH / 2;
-  }
+   // Vertical exclusion: HUD extends ~240px above/below center (timer + metrics)
+   const verticalExclusion = 240;
+   const isInVerticalBand = Math.abs(tooltipCenterY - cy) < verticalExclusion;
+   const isInHorizontalBand = Math.abs(tooltipCenterX - cx) < TW * 1.2;
+
+   // If tooltip center is inside sacred zone OR overlaps the vertical HUD band, push outward
+   if (distFromCenter < sacredZone + TH / 2 || (isInVerticalBand && isInHorizontalBand)) {
+     const pushAngle = Math.atan2(tooltipCenterY - cy, tooltipCenterX - cx);
+     const targetDist = Math.max(sacredZone + TH / 2 + 30, distFromCenter);
+     tx = cx + targetDist * Math.cos(pushAngle) - TW / 2;
+     ty = cy + targetDist * Math.sin(pushAngle) - TH / 2;
+   }
 
   // Also enforce minimum distance from outer ring edge
   const edgeDist = outerR + minDistFromEdge;
