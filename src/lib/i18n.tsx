@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 
 export type Lang = "fr" | "en";
 
@@ -13,6 +13,7 @@ const translations = {
   "phase.build": { fr: "PRÉPARATION", en: "BUILD" },
   "phase.armed": { fr: "SOUS SURVEILLANCE", en: "ARMED" },
   "phase.trigger": { fr: "DÉCLENCHEMENT", en: "TRIGGER" },
+  "phase.none": { fr: "—", en: "—" },
 
   // Navigation
   "nav.gauge": { fr: "Alien Gauge", en: "Alien Gauge" },
@@ -25,11 +26,13 @@ const translations = {
   "gauge.confidence": { fr: "CONFIANCE", en: "CONFIDENCE" },
   "gauge.phase": { fr: "PHASE", en: "PHASE" },
   "gauge.notif": { fr: "Activer les notifications", en: "Enable notifications" },
-  "gauge.window": { fr: "SIGNAL MARCHÉ", en: "MARKET SIGNAL" },
-  "gauge.before": { fr: "avant zone de bascule", en: "before tipping zone" },
+  "gauge.window": { fr: "FENÊTRE D'OPPORTUNITÉ", en: "OPPORTUNITY WINDOW" },
+  "gauge.before": { fr: "avant zone de bascule", en: "before inflection risk" },
   "gauge.pressure": { fr: "PRESSION", en: "PRESSURE" },
   "gauge.remaining": { fr: "Fenêtre d'opportunité restante", en: "Remaining opportunity window" },
   "gauge.before_risk": { fr: "avant risque potentiel", en: "before potential risk" },
+  "gauge.opportunity": { fr: "OPPORTUNITÉ", en: "OPPORTUNITY" },
+  "gauge.risk": { fr: "RISQUE", en: "RISK" },
 
   // Tooltip
   "tip.psi": { fr: "PSI", en: "PSI" },
@@ -37,9 +40,17 @@ const translations = {
   "tip.confidence": { fr: "Confiance", en: "Confidence" },
   "tip.price7d": { fr: "Prix 7j", en: "7d Price" },
   "tip.asym": { fr: "ASYM", en: "ASYM" },
+  "tip.why": { fr: "Pourquoi ?", en: "Why?" },
+  "tip.window": { fr: "avant bascule", en: "before inflection" },
   "asym.high": { fr: "HAUTE", en: "HIGH" },
   "asym.med": { fr: "MOYENNE", en: "MEDIUM" },
   "asym.low": { fr: "FAIBLE", en: "LOW" },
+
+  // Tags
+  "tag.low_cap": { fr: "Low Cap", en: "Low Cap" },
+  "tag.momentum": { fr: "Momentum", en: "Momentum" },
+  "tag.high_risk": { fr: "Risque élevé", en: "High Risk" },
+  "tag.consensus": { fr: "Consensus", en: "Consensus" },
 
   // Subnets page
   "sub.title": { fr: "Subnets Détaillés", en: "Detailed Subnets" },
@@ -48,7 +59,15 @@ const translations = {
   "sub.state": { fr: "État", en: "State" },
   "sub.phase": { fr: "Phase", en: "Phase" },
   "sub.confidence": { fr: "Confiance", en: "Confidence" },
-  "sub.tminus": { fr: "T-minus", en: "T-minus" },
+  "sub.tminus": { fr: "Fenêtre", en: "Window" },
+  "sub.opp": { fr: "Opportunité", en: "Opportunity" },
+  "sub.risk": { fr: "Risque", en: "Risk" },
+  "sub.open_pos": { fr: "Ouvrir", en: "Open" },
+  "sub.mode": { fr: "Mode", en: "Mode" },
+  "sub.mode_opp": { fr: "Opportunités", en: "Opportunities" },
+  "sub.mode_risk": { fr: "Risques", en: "Risks" },
+  "sub.mode_all": { fr: "Tous", en: "All" },
+  "sub.phase_all": { fr: "Toutes les phases", en: "All phases" },
 
   // Alerts page
   "alerts.title": { fr: "Journal des Signaux", en: "Signal Log" },
@@ -76,11 +95,12 @@ const translations = {
   "pos.capital": { fr: "Capital investi", en: "Invested Capital" },
   "pos.current": { fr: "Valeur actuelle", en: "Current Value" },
   "pos.pnl": { fr: "Gain/Perte", en: "Gain/Loss" },
-  "pos.protection": { fr: "Seuil de protection", en: "Protection Threshold" },
+  "pos.protection": { fr: "Protection", en: "Protection" },
   "pos.exit_rec": { fr: "Sortie recommandée", en: "Recommended Exit" },
   "pos.no_position": { fr: "Aucune position ouverte", en: "No open position" },
   "pos.open": { fr: "Ouvrir une position", en: "Open a position" },
   "pos.close": { fr: "Fermer", en: "Close" },
+  "pos.take_partial": { fr: "Prendre profit", en: "Take Profit" },
   "pos.profit": { fr: "Profit sécurisé", en: "Secured Profit" },
   "pos.caution": { fr: "Vigilance", en: "Caution" },
   "pos.danger": { fr: "Danger capital", en: "Capital Danger" },
@@ -91,12 +111,14 @@ const translations = {
   "pos.take_profit": { fr: "Take-profit (%)", en: "Take-profit (%)" },
   "pos.confirm": { fr: "Confirmer la position", en: "Confirm Position" },
   "pos.objective": { fr: "Objectif", en: "Objective" },
-  "pos.obj_x2": { fr: "×2 (100%)", en: "×2 (100%)" },
-  "pos.obj_x5": { fr: "×5 (400%)", en: "×5 (400%)" },
-  "pos.obj_custom": { fr: "Personnalisé", en: "Custom" },
+  "pos.obj_x2": { fr: "×2", en: "×2" },
+  "pos.obj_x5": { fr: "×5", en: "×5" },
+  "pos.obj_x10": { fr: "×10", en: "×10" },
+  "pos.obj_x20": { fr: "×20", en: "×20" },
+  "pos.obj_custom": { fr: "Custom", en: "Custom" },
   "pos.stop_mode": { fr: "Mode Stop-Loss", en: "Stop-Loss Mode" },
-  "pos.stop_dynamic": { fr: "Dynamique (trailing)", en: "Dynamic (trailing)" },
-  "pos.stop_manual": { fr: "Manuel (fixe)", en: "Manual (fixed)" },
+  "pos.stop_dynamic": { fr: "Trailing stop", en: "Trailing stop" },
+  "pos.stop_manual": { fr: "Stop fixe", en: "Fixed stop" },
   "pos.entry_price": { fr: "Prix d'entrée", en: "Entry Price" },
   "pos.estimated_qty": { fr: "Quantité estimée", en: "Estimated Qty" },
   "pos.cancel": { fr: "Annuler", en: "Cancel" },
@@ -104,8 +126,10 @@ const translations = {
   "pos.login_required": { fr: "Connectez-vous pour gérer vos positions", en: "Sign in to manage positions" },
   "pos.alert_sl": { fr: "⛔ STOP-LOSS ATTEINT", en: "⛔ STOP-LOSS HIT" },
   "pos.alert_tp": { fr: "🎯 TAKE-PROFIT ATTEINT", en: "🎯 TAKE-PROFIT HIT" },
-  "pos.alert_sl_body": { fr: "Votre position SN-{netuid} a atteint le seuil de protection ({pct}%). P&L actuel : {pnl}%", en: "Your SN-{netuid} position hit the protection threshold ({pct}%). Current P&L: {pnl}%" },
-  "pos.alert_tp_body": { fr: "Votre position SN-{netuid} a atteint la sortie recommandée ({pct}%). P&L actuel : {pnl}%", en: "Your SN-{netuid} position hit the recommended exit ({pct}%). Current P&L: {pnl}%" },
+  "pos.partial_tp": { fr: "Prise de profit partielle", en: "Partial take-profit" },
+  "pos.partial_25_x2": { fr: "25% à ×2", en: "25% at ×2" },
+  "pos.partial_25_x5": { fr: "25% à ×5", en: "25% at ×5" },
+  "pos.partial_50_x10": { fr: "50% à ×10", en: "50% at ×10" },
 
   // Priority
   "priority.current": { fr: "PRIORITÉ ACTUELLE", en: "CURRENT PRIORITY" },

@@ -10,10 +10,13 @@ import {
   clamp, deriveGaugeState, derivePhase, deriveTMinus, formatTimeClear,
   stateColor, stateGlow, rayColor, processSignals,
   computeGlobalPsi, computeGlobalConfidence,
+  computeGlobalOpportunity, computeGlobalRisk,
+  opportunityColor, riskColor,
 } from "@/lib/gauge-engine";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+
 /* ═══════════════════════════════════════ */
 /*          VISUAL HELPERS                 */
 /* ═══════════════════════════════════════ */
@@ -28,7 +31,7 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
 }
 
 /* ═══════════════════════════════════════ */
-/*       MINI SPARKLINE IN TOOLTIP         */
+/*       MINI SPARKLINE                    */
 /* ═══════════════════════════════════════ */
 function TooltipSparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
   if (data.length < 2) return null;
@@ -45,33 +48,6 @@ function TooltipSparkline({ data, width, height, color }: { data: number[]; widt
 }
 
 /* ═══════════════════════════════════════ */
-/*       RAY SPARKLINE (on ray body)       */
-/* ═══════════════════════════════════════ */
-function RaySparkline({ data, x1, y1, x2, y2, state }: {
-  data: number[]; x1: number; y1: number; x2: number; y2: number; state: GaugeState;
-}) {
-  if (data.length < 3) return null;
-  const dx = x2 - x1, dy = y2 - y1;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 10) return null;
-  const ux = dx / len, uy = dy / len;
-  const px = -uy, py = ux;
-  const min = Math.min(...data), max = Math.max(...data);
-  const range = max - min || 1;
-  const sparkW = len * 0.7, sparkH = 6, startOffset = len * 0.15;
-  const pts = data.map((v, i) => {
-    const t = i / (data.length - 1);
-    const along = startOffset + t * sparkW;
-    const perp = ((v - min) / range - 0.5) * sparkH * 2;
-    return `${x1 + ux * along + px * perp},${y1 + uy * along + py * perp}`;
-  });
-  return (
-    <polyline points={pts.join(" ")} fill="none" stroke={rayColor(state, 0.35)} strokeWidth="0.8"
-      strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }} />
-  );
-}
-
-/* ═══════════════════════════════════════ */
 /*       IMMINENT PARTICLES                */
 /* ═══════════════════════════════════════ */
 function ImminentParticles({ x1, y1, x2, y2, color }: {
@@ -83,20 +59,16 @@ function ImminentParticles({ x1, y1, x2, y2, color }: {
     if (len < 10) return [];
     const ux = dx / len, uy = dy / len;
     const px = -uy, py = ux;
-    return Array.from({ length: 8 }, (_, i) => {
-      const t = 0.15 + Math.random() * 0.7;
-      const drift = (Math.random() - 0.5) * 18;
+    return Array.from({ length: 6 }, (_, i) => {
+      const t = 0.2 + Math.random() * 0.6;
+      const drift = (Math.random() - 0.5) * 14;
       const size = 1 + Math.random() * 1.5;
-      const delay = Math.random() * 3;
-      const dur = 1.8 + Math.random() * 1.4;
       return {
         cx: x1 + ux * len * t + px * drift,
         cy: y1 + uy * len * t + py * drift,
         r: size,
-        delay,
-        dur,
-        driftX: px * (Math.random() - 0.5) * 12,
-        driftY: py * (Math.random() - 0.5) * 12,
+        delay: Math.random() * 3,
+        dur: 1.8 + Math.random() * 1.4,
       };
     });
   }, [x1, y1, x2, y2]);
@@ -117,16 +89,14 @@ function ImminentParticles({ x1, y1, x2, y2, color }: {
 }
 
 /* ═══════════════════════════════════════ */
-/*       TIME RING (scale ring)            */
+/*     TIME RING (graduated scale)         */
 /* ═══════════════════════════════════════ */
-const TIME_SCALE_MAX_MIN = 480; // 8h max
+const TIME_SCALE_MAX_MIN = 480;
 const TIME_GRADUATIONS = [
-  { min: 0, label: "0m" },
-  { min: 30, label: "30m" },
+  { min: 0, label: "0" },
   { min: 60, label: "1h" },
   { min: 120, label: "2h" },
-  { min: 240, label: "4h" },
-  { min: 480, label: "8h" },
+  { min: 180, label: "3h" },
 ];
 
 function TimeRing({ cx, cy, outerR, isMobile }: {
@@ -134,68 +104,37 @@ function TimeRing({ cx, cy, outerR, isMobile }: {
 }) {
   const gap = 35;
   const maxLen = isMobile ? 85 : 180;
-  const ringR = outerR + gap; // ring at start of rays
-  const [hovered, setHovered] = useState(false);
+  const ringR = outerR + gap;
 
   return (
     <g style={{ pointerEvents: "none" }}>
-      {/* Subtle scale ring */}
       <circle cx={cx} cy={cy} r={ringR} fill="none"
         stroke="rgba(255,255,255,0.04)" strokeWidth="1" strokeDasharray="4 6" />
-
-      {/* Graduation ticks + labels */}
       {TIME_GRADUATIONS.map((grad) => {
         const fraction = grad.min / TIME_SCALE_MAX_MIN;
         const tickR = ringR + fraction * maxLen;
-        const tickLen = isMobile ? 4 : 6;
-        const labelSize = isMobile ? 7 : 9;
-
-        // Draw ticks at 12 o'clock position (top) and label
-        const tickAngle = -Math.PI / 2; // 12 o'clock
-        const tx1 = cx + tickR * Math.cos(tickAngle);
-        const ty1 = cy + tickR * Math.sin(tickAngle) - tickLen;
-        const tx2 = cx + tickR * Math.cos(tickAngle);
-        const ty2 = cy + tickR * Math.sin(tickAngle) + tickLen;
-
-        // Also draw a subtle concentric arc for major graduations
-        const showArc = grad.min === 60 || grad.min === 240 || grad.min === 480;
-
+        const tickAngle = -Math.PI / 2;
+        const tx = cx + tickR * Math.cos(tickAngle);
+        const ty1 = cy + tickR * Math.sin(tickAngle) - (isMobile ? 4 : 6);
+        const ty2 = cy + tickR * Math.sin(tickAngle) + (isMobile ? 4 : 6);
+        const showArc = grad.min === 60 || grad.min === 180;
         return (
           <g key={grad.min}>
-            {/* Concentric scale arcs for key graduations */}
             {showArc && (
               <circle cx={cx} cy={cy} r={tickR} fill="none"
                 stroke="rgba(255,255,255,0.02)" strokeWidth="0.5" strokeDasharray="2 8" />
             )}
-            {/* Tick mark at 12 o'clock */}
-            <line x1={tx1} y1={ty1} x2={tx2} y2={ty2}
+            <line x1={tx} y1={ty1} x2={tx} y2={ty2}
               stroke="rgba(255,255,255,0.15)" strokeWidth={grad.min === 0 ? 1.5 : 0.8} />
-            {/* Label */}
-            <text x={tx2 + (isMobile ? 6 : 8)} y={ty2 + 1}
-              fill="rgba(255,255,255,0.2)" fontSize={labelSize}
-              fontFamily="'JetBrains Mono', monospace" letterSpacing="0.05em"
-              textAnchor="start" dominantBaseline="middle"
-              style={{ pointerEvents: "none" }}>
+            <text x={tx + (isMobile ? 6 : 8)} y={ty2 + 1}
+              fill="rgba(255,255,255,0.2)" fontSize={isMobile ? 7 : 9}
+              fontFamily="'JetBrains Mono', monospace"
+              textAnchor="start" dominantBaseline="middle">
               {grad.label}
             </text>
           </g>
         );
       })}
-
-      {/* Hover zone for "ÉCHELLE T-MINUS" label */}
-      <circle cx={cx} cy={cy} r={ringR} fill="transparent"
-        strokeWidth={maxLen} stroke="transparent"
-        style={{ pointerEvents: "stroke", cursor: "default" }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)} />
-      {hovered && (
-        <text x={cx} y={cy - outerR - (isMobile ? 10 : 20)}
-          fill="rgba(255,255,255,0.3)" fontSize={isMobile ? 8 : 10}
-          fontFamily="'JetBrains Mono', monospace" letterSpacing="0.2em"
-          textAnchor="middle" dominantBaseline="auto">
-          ÉCHELLE T-MINUS
-        </text>
-      )}
     </g>
   );
 }
@@ -228,24 +167,25 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
 
   if (!signals.length) return null;
 
-  const isMobileSize = outerR <= 250;
+  const isMobileSize = outerR <= 300;
   const maxLen = isMobileSize ? 85 : 180;
   const minLen = isMobileSize ? 12 : 20;
-
-  // ── Priority detection: subnet with shortest T-minus ──
   const priorityIdx = signals.reduce((best, s, i) =>
     s.t_minus_minutes < signals[best].t_minus_minutes ? i : best, 0);
 
   return (
     <>
-      {/* Gradient defs for each ray */}
       <defs>
         {signals.map((s, i) => {
           const angleDeg = (i * angleStep) - 90;
           const angle = angleDeg * (Math.PI / 180);
           const cos = Math.cos(angle), sin = Math.sin(angle);
-          const baseColor = rayColor(s.state, 0.35);
-          const tipColor = rayColor(s.state, 1.0);
+          // Color by dominant: gold for opportunity, dark red for risk
+          const baseAlpha = 0.35;
+          const tipAlpha = 1.0;
+          const isOpp = s.dominant === "opportunity";
+          const baseColor = isOpp ? opportunityColor(s.opportunity, baseAlpha) : s.dominant === "risk" ? riskColor(s.risk, baseAlpha) : rayColor(s.state, baseAlpha);
+          const tipColor = isOpp ? opportunityColor(s.opportunity, tipAlpha) : s.dominant === "risk" ? riskColor(s.risk, tipAlpha) : rayColor(s.state, tipAlpha);
           return (
             <linearGradient key={`ray-grad-${s.netuid}`} id={`ray-grad-${s.netuid}`}
               x1={String(0.5 - cos * 0.5)} y1={String(0.5 - sin * 0.5)}
@@ -255,7 +195,6 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
             </linearGradient>
           );
         })}
-        {/* Priority pulse animation */}
         <style>{`
           @keyframes priority-pulse {
             0%, 100% { opacity: 0.25; }
@@ -272,7 +211,6 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const tMinusClamped = clamp(s.t_minus_minutes, 0, TIME_SCALE_MAX_MIN);
         const tFraction = 1 - (tMinusClamped / TIME_SCALE_MAX_MIN);
         const len = minLen + tFraction * (maxLen - minLen);
-        const isOverflow = s.t_minus_minutes > TIME_SCALE_MAX_MIN;
 
         const isImm = s.state === "IMMINENT";
         const trembleOffset = isImm ? tremble : 0;
@@ -290,9 +228,12 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const isHovered = hoveredIdx === i;
         const isPriority = i === priorityIdx;
 
-        // ── Dynamic halo intensity based on T-minus ──
         const haloOpacity = s.t_minus_minutes < 60 ? 0.35 :
                             s.t_minus_minutes < 240 ? 0.18 : 0.06;
+
+        // Ray color for halo
+        const isOpp = s.dominant === "opportunity";
+        const dominantColor = isOpp ? opportunityColor(s.opportunity) : s.dominant === "risk" ? riskColor(s.risk) : stateColor(s.state);
 
         // Label positioning
         const labelOffset = isMobileSize ? 20 : 18;
@@ -306,23 +247,28 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         );
         const showLabel = !isHorizontalRay;
         const labelAnchor = angleDeg > -45 && angleDeg < 135 ? "start" : "end";
-        const labelText = `SN${s.netuid}${isOverflow ? "+" : ""}`;
+        const labelText = `SN${s.netuid}`;
         const tMinusText = formatTimeClear(s.t_minus_minutes);
-        const labelFontSize = isMobileSize ? 13 : 15;
-        const tMinusFontSize = isMobileSize ? 11 : 13;
+        const labelFontSize = isMobileSize ? 13 : 16;
+        const tMinusFontSize = isMobileSize ? 11 : 14;
 
-        const tractionPts = isImm ? (() => {
-          const trR = outerR + 2;
-          const spreadDeg = 4;
-          const a1 = (angleDeg - spreadDeg) * (Math.PI / 180);
-          const a2 = (angleDeg + spreadDeg) * (Math.PI / 180);
-          const pull = 4;
+        // Graduated ticks on ray body (3h, 2h, 1h marks)
+        const rayTicks = [60, 120, 180].map(min => {
+          const tickFraction = 1 - (min / TIME_SCALE_MAX_MIN);
+          const tickLen = minLen + tickFraction * (maxLen - minLen);
+          const tickR = r1 + tickLen;
+          if (tickR > r2) return null;
+          const tx = cx + tickR * Math.cos(angle);
+          const ty = cy + tickR * Math.sin(angle);
+          const perpAngle = angle + Math.PI / 2;
+          const tickSize = isMobileSize ? 3 : 5;
           return {
-            p1: { x: cx + trR * Math.cos(a1), y: cy + trR * Math.sin(a1) },
-            p2: { x: cx + (trR + pull) * Math.cos(angle), y: cy + (trR + pull) * Math.sin(angle) },
-            p3: { x: cx + trR * Math.cos(a2), y: cy + trR * Math.sin(a2) },
+            x1: tx + Math.cos(perpAngle) * tickSize,
+            y1: ty + Math.sin(perpAngle) * tickSize,
+            x2: tx - Math.cos(perpAngle) * tickSize,
+            y2: ty - Math.sin(perpAngle) * tickSize,
           };
-        })() : null;
+        }).filter(Boolean);
 
         return (
           <g key={s.netuid}>
@@ -333,39 +279,45 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
               onMouseLeave={() => setHoveredIdx(null)}
               onClick={() => onClickRay(s)}
             />
-            {/* Dynamic halo behind ray */}
+            {/* Dynamic halo */}
             <line x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={rayColor(s.state, haloOpacity)}
+              stroke={dominantColor}
               strokeWidth={thickness + (isPriority ? 16 : 10)} strokeLinecap="round"
               style={{
-                opacity: isPriority ? 1 : 0.6,
+                opacity: haloOpacity * (isPriority ? 1.2 : 0.6),
                 filter: `blur(${isPriority ? 6 : 4}px)`,
                 animation: isPriority ? "priority-pulse 2.5s ease-in-out infinite" : "none",
                 pointerEvents: "none",
               }}
             />
-            {/* Ray body — gradient from dark base to bright tip */}
+            {/* Ray body */}
             <line x1={x1} y1={y1} x2={x2} y2={y2}
               stroke={`url(#ray-grad-${s.netuid})`} strokeWidth={thickness} strokeLinecap="round"
               style={{
                 opacity: isHovered ? 1 : (isPriority ? 0.9 : 0.75),
-                filter: isHovered ? `drop-shadow(0 0 10px ${rayColor(s.state, 0.5)})` :
-                        isPriority ? `drop-shadow(0 0 6px ${rayColor(s.state, 0.3)})` : "none",
+                filter: isHovered ? `drop-shadow(0 0 10px ${dominantColor})` :
+                        isPriority ? `drop-shadow(0 0 6px ${dominantColor})` : "none",
                 transition: "opacity 200ms, filter 300ms",
                 pointerEvents: "none",
               }}
             />
+            {/* Graduated ticks on ray */}
+            {rayTicks.map((tick, ti) => tick && (
+              <line key={ti} x1={tick.x1} y1={tick.y1} x2={tick.x2} y2={tick.y2}
+                stroke="rgba(255,255,255,0.12)" strokeWidth="0.8"
+                style={{ pointerEvents: "none" }}
+              />
+            ))}
             {/* Hover glow */}
             {isHovered && (
               <line x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke={rayColor(s.state, 0.3)} strokeWidth={thickness + 10} strokeLinecap="round"
-                style={{ opacity: 0.4, animation: "ray-breathe 1.8s ease-in-out infinite", pointerEvents: "none" }}
+                stroke={dominantColor} strokeWidth={thickness + 10} strokeLinecap="round"
+                style={{ opacity: 0.3, animation: "ray-breathe 1.8s ease-in-out infinite", pointerEvents: "none" }}
               />
             )}
-            {/* Labels: horizontal text with dark halo */}
+            {/* Labels */}
             {showLabel && (
               <>
-                {/* "PRIORITÉ" label above priority ray */}
                 {isPriority && (
                   <>
                     <rect
@@ -383,38 +335,29 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
                     </text>
                   </>
                 )}
-                {/* Dark halo behind text */}
                 <rect
-                  x={labelAnchor === "start" ? lx - 3 : lx - (isMobileSize ? 65 : 85)}
+                  x={labelAnchor === "start" ? lx - 3 : lx - (isMobileSize ? 70 : 95)}
                   y={ly - (isMobileSize ? 14 : 18)}
-                  width={isMobileSize ? 68 : 88} height={isMobileSize ? 28 : 35}
-                  rx={4} fill="rgba(0,0,0,0.6)"
+                  width={isMobileSize ? 73 : 98} height={isMobileSize ? 28 : 38}
+                  rx={4} fill="rgba(0,0,0,0.7)"
                   style={{ pointerEvents: "none" }}
                 />
-                <text x={lx} y={ly - (isMobileSize ? 3 : 4)} textAnchor={labelAnchor}
-                  fill="rgba(255,255,255,0.85)" fontSize={labelFontSize} fontWeight="700"
+                <text x={lx} y={ly - (isMobileSize ? 1 : 2)} textAnchor={labelAnchor}
+                  fill="rgba(255,255,255,0.92)" fontSize={labelFontSize} fontWeight="700"
                   fontFamily="'JetBrains Mono', monospace" letterSpacing="0.04em"
                   style={{ pointerEvents: "none" }}>
                   {labelText}
                 </text>
-                <text x={lx} y={ly + (isMobileSize ? 9 : 13)} textAnchor={labelAnchor}
-                  fill={stateColor(s.state)} fontSize={tMinusFontSize} fontWeight="600"
+                <text x={lx} y={ly + (isMobileSize ? 11 : 16)} textAnchor={labelAnchor}
+                  fill={dominantColor} fontSize={tMinusFontSize} fontWeight="600"
                   fontFamily="'JetBrains Mono', monospace" letterSpacing="0.06em"
                   style={{ pointerEvents: "none" }}>
                   {tMinusText}
                 </text>
               </>
             )}
-            <RaySparkline data={s.sparkline_7d} x1={x1} y1={y1} x2={x2} y2={y2} state={s.state} />
-            {tractionPts && (
-              <path
-                d={`M ${tractionPts.p1.x} ${tractionPts.p1.y} Q ${tractionPts.p2.x} ${tractionPts.p2.y} ${tractionPts.p3.x} ${tractionPts.p3.y}`}
-                fill="none" stroke={rayColor(s.state, 0.3)} strokeWidth="1.5"
-                style={{ pointerEvents: "none" }}
-              />
-            )}
             {isImm && (
-              <ImminentParticles x1={x1} y1={y1} x2={x2} y2={y2} color={stateColor(s.state)} />
+              <ImminentParticles x1={x1} y1={y1} x2={x2} y2={y2} color={dominantColor} />
             )}
           </g>
         );
@@ -424,7 +367,7 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
 }
 
 /* ═══════════════════════════════════════ */
-/*     PREMIUM TOOLTIP + CONNECTOR         */
+/*     PREMIUM TOOLTIP (GRANDE CARTE)      */
 /* ═══════════════════════════════════════ */
 function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
   signal: SubnetSignal; cx: number; cy: number; outerR: number; index: number; svgSize: number; total: number;
@@ -434,8 +377,7 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
   const angleDeg = (index * angleStep) - 90;
   const angle = angleDeg * (Math.PI / 180);
 
-  // Tooltip dimensions — BIGGER
-  const TW = 340, TH = 190, PAD = 18, BR = 12;
+  const TW = 370, TH = 280, PAD = 20, BR = 14;
 
   const gap = 28;
   const imminenceFactor = clamp(1 - (signal.t_minus_minutes / 240), 0, 1);
@@ -444,182 +386,173 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
   const tipX = cx + rayTipR * Math.cos(angle);
   const tipY = cy + rayTipR * Math.sin(angle);
 
-  const tooltipR = rayTipR + 50;
+  const tooltipR = rayTipR + 60;
   let tx = cx + tooltipR * Math.cos(angle) - TW / 2;
   let ty = cy + tooltipR * Math.sin(angle) - TH / 2;
 
-   // Viewport bounds in SVG coordinates — allow overflow since SVG has overflow:visible
-   const margin = 12;
-   const viewMin = -margin;
-   const viewMax = svgSize - TW + margin;
-   const viewMinY = -margin;
-   const viewMaxY = svgSize - TH + margin;
-   tx = Math.max(viewMin, Math.min(viewMax, tx));
-   ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
+  const margin = 12;
+  const viewMax = svgSize - TW + margin;
+  const viewMaxY = svgSize - TH + margin;
+  tx = Math.max(-margin, Math.min(viewMax, tx));
+  ty = Math.max(-margin, Math.min(viewMaxY, ty));
 
-   // STRICT: never overlap the sacred HUD center (timer + PRESSION/CONFIANCE)
-   // All values in SVG coordinate space.
-   const svgPerPx = svgSize / 800; // 1.5 on desktop
-   const sacredHalfW = 250 * svgPerPx;  // covers PRESSION to CONFIANCE width
-   const sacredTop = 150 * svgPerPx;    // covers timer area
-   const sacredBottom = 210 * svgPerPx; // covers CONFIANCE + margin
+  // Sacred HUD protection
+  const svgPerPx = svgSize / 800;
+  const sacredHalfW = 250 * svgPerPx;
+  const sacredTop = 150 * svgPerPx;
+  const sacredBottom = 210 * svgPerPx;
 
-   const doesOverlap = (ttx: number, tty: number) => {
-     const tRight = ttx + TW, tBottom = tty + TH;
-     return tRight > (cx - sacredHalfW) && ttx < (cx + sacredHalfW) &&
-            tBottom > (cy - sacredTop) && tty < (cy + sacredBottom);
-   };
+  const doesOverlap = (ttx: number, tty: number) => {
+    const tRight = ttx + TW, tBottom = tty + TH;
+    return tRight > (cx - sacredHalfW) && ttx < (cx + sacredHalfW) &&
+           tBottom > (cy - sacredTop) && tty < (cy + sacredBottom);
+  };
 
-   if (doesOverlap(tx, ty)) {
-     const cosA = Math.cos(angle);
-     const sinA = Math.sin(angle);
-     
-     // For lateral rays (pointing mostly left/right), push tooltip outward horizontally
-     if (Math.abs(cosA) > 0.5) {
-       tx = cosA > 0
-         ? (cx + sacredHalfW + 20)           // push right of sacred zone
-         : (cx - sacredHalfW - TW - 20);     // push left of sacred zone
-       // Keep vertical position near the ray tip
-       ty = cy + tooltipR * sinA - TH / 2;
-     } else {
-       // For vertical rays, push above or below
-       const goBelow = sinA >= 0;
-       ty = goBelow ? (cy + sacredBottom + 15) : (cy - sacredTop - TH - 15);
-     }
-   }
-
-   // Final clamp
-   tx = Math.max(viewMin, Math.min(viewMax, tx));
-   ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
+  if (doesOverlap(tx, ty)) {
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    if (Math.abs(cosA) > 0.5) {
+      tx = cosA > 0 ? (cx + sacredHalfW + 20) : (cx - sacredHalfW - TW - 20);
+      ty = cy + tooltipR * sinA - TH / 2;
+    } else {
+      ty = sinA >= 0 ? (cy + sacredBottom + 15) : (cy - sacredTop - TH - 15);
+    }
+  }
+  tx = Math.max(-margin, Math.min(viewMax, tx));
+  ty = Math.max(-margin, Math.min(viewMaxY, ty));
 
   const tooltipCx = tx + TW / 2;
   const tooltipCy = ty + TH / 2;
 
-  const displayName = signal.name.startsWith("SN-") ? signal.name : `SN-${signal.netuid} · ${signal.name}`;
-  const color = stateColor(signal.state);
-  const stateLabel = t(`state.${signal.state.toLowerCase()}` as any);
+  const displayName = `SN-${signal.netuid} · ${signal.name.startsWith("SN-") ? signal.name.slice(signal.name.indexOf(" ") + 1) : signal.name}`;
+  const oppColor = opportunityColor(signal.opportunity);
+  const rskColor = riskColor(signal.risk);
   const phaseLabel = signal.phase !== "NONE" ? t(`phase.${signal.phase.toLowerCase()}` as any) : "—";
-  const asymLabel = t(`asym.${signal.asymmetry.toLowerCase()}` as any);
+
+  // Tags
+  const tags: string[] = [];
+  if (signal.opportunity >= 70) tags.push(t("tag.momentum"));
+  if (signal.confidence >= 70) tags.push(t("tag.consensus"));
+  if (signal.risk >= 60) tags.push(t("tag.high_risk"));
+  if (signal.asymmetry === "HIGH" && signal.opportunity > signal.risk) tags.push(t("tag.low_cap"));
 
   const sparkData = signal.sparkline_7d;
   const sparkW = TW - PAD * 2 - 4;
-  const sparkH = 36;
+  const sparkH = 32;
 
   return (
     <g style={{ pointerEvents: "none" }}>
-      <line
-        x1={tipX} y1={tipY}
-        x2={tooltipCx} y2={tooltipCy}
-        stroke="rgba(255,255,255,0.08)"
-        strokeWidth="1"
-        strokeDasharray="4,4"
-      />
-
-      <rect
-        x={tx} y={ty} width={TW} height={TH} rx={BR}
-        fill="#0E0F12"
-        stroke="#2A2F36"
-        strokeWidth={1}
-        filter="url(#tooltip-shadow)"
-      />
+      {/* Connector line */}
+      <line x1={tipX} y1={tipY} x2={tooltipCx} y2={tooltipCy}
+        stroke="rgba(255,255,255,0.08)" strokeWidth="1" strokeDasharray="4,4" />
 
       <defs>
         <filter id="tooltip-shadow" x="-10%" y="-10%" width="130%" height="130%">
-          <feDropShadow dx="0" dy="4" stdDeviation="10" floodColor="rgba(0,0,0,0.6)" floodOpacity="0.5" />
+          <feDropShadow dx="0" dy="4" stdDeviation="12" floodColor="rgba(0,0,0,0.7)" floodOpacity="0.6" />
         </filter>
       </defs>
 
-      {/* Name */}
-      <text
-        x={tx + PAD} y={ty + PAD + 16}
-        fill="rgba(255,255,255,0.92)"
-        fontSize="16" fontWeight="600"
-        fontFamily="'JetBrains Mono', monospace"
-        letterSpacing="0.02em"
-      >
-        {displayName.length > 28 ? displayName.slice(0, 26) + "…" : displayName}
+      {/* Card background */}
+      <rect x={tx} y={ty} width={TW} height={TH} rx={BR}
+        fill="#0A0B10" stroke="#2A2F36" strokeWidth={1} filter="url(#tooltip-shadow)" />
+
+      {/* Title */}
+      <text x={tx + PAD} y={ty + PAD + 16}
+        fill="rgba(255,255,255,0.95)" fontSize="17" fontWeight="700"
+        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.02em">
+        {displayName.length > 26 ? displayName.slice(0, 24) + "…" : displayName}
       </text>
 
-      {/* State badge */}
-      <rect
-        x={tx + PAD} y={ty + PAD + 26}
-        width={stateLabel.length * 10 + 18} height={24} rx={5}
-        fill={color} fillOpacity={0.14}
-        stroke={color} strokeOpacity={0.3} strokeWidth={0.5}
-      />
-      <text
-        x={tx + PAD + 9} y={ty + PAD + 43}
-        fill={color}
-        fontSize="13" fontWeight="500"
-        fontFamily="'JetBrains Mono', monospace"
-        letterSpacing="0.08em"
-      >
-        {stateLabel}
-      </text>
-      <text
-        x={tx + PAD + stateLabel.length * 10 + 32} y={ty + PAD + 43}
-        fill="rgba(255,255,255,0.4)"
-        fontSize="12"
-        fontFamily="'JetBrains Mono', monospace"
-        letterSpacing="0.04em"
-      >
+      {/* Phase badge + tags */}
+      <rect x={tx + PAD} y={ty + PAD + 26} width={phaseLabel.length * 9 + 16} height={22} rx={5}
+        fill={stateColor(signal.state)} fillOpacity={0.14} stroke={stateColor(signal.state)} strokeOpacity={0.3} strokeWidth={0.5} />
+      <text x={tx + PAD + 8} y={ty + PAD + 42}
+        fill={stateColor(signal.state)} fontSize="12" fontWeight="600"
+        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.08em">
         {phaseLabel}
       </text>
 
-      {/* T-minus */}
-      <text
-        x={tx + PAD} y={ty + PAD + 72}
-        fill={color}
-        fontSize="18" fontWeight="600"
-        fontFamily="'JetBrains Mono', monospace"
-        letterSpacing="0.04em"
-      >
+      {/* Tags */}
+      {tags.slice(0, 3).map((tag, ti) => {
+        const tagX = tx + PAD + phaseLabel.length * 9 + 26 + ti * 85;
+        return tagX + 75 < tx + TW ? (
+          <g key={ti}>
+            <rect x={tagX} y={ty + PAD + 26} width={tag.length * 7 + 12} height={22} rx={4}
+              fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth={0.5} />
+            <text x={tagX + 6} y={ty + PAD + 41} fill="rgba(255,255,255,0.5)" fontSize="10"
+              fontFamily="'JetBrains Mono', monospace">{tag}</text>
+          </g>
+        ) : null;
+      })}
+
+      {/* Opportunity + Risk scores — large and clear */}
+      <text x={tx + PAD} y={ty + PAD + 74} fill="rgba(255,255,255,0.4)" fontSize="11"
+        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em">
+        {t("gauge.opportunity")}
+      </text>
+      <text x={tx + PAD + 130} y={ty + PAD + 74} fill={oppColor} fontSize="22" fontWeight="700"
+        fontFamily="'JetBrains Mono', monospace">
+        {signal.opportunity}
+      </text>
+      <text x={tx + PAD + 160} y={ty + PAD + 74} fill="rgba(255,255,255,0.25)" fontSize="13"
+        fontFamily="'JetBrains Mono', monospace">/100</text>
+
+      <text x={tx + TW / 2 + 20} y={ty + PAD + 74} fill="rgba(255,255,255,0.4)" fontSize="11"
+        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em">
+        {t("gauge.risk")}
+      </text>
+      <text x={tx + TW / 2 + 80} y={ty + PAD + 74} fill={rskColor} fontSize="22" fontWeight="700"
+        fontFamily="'JetBrains Mono', monospace">
+        {signal.risk}
+      </text>
+      <text x={tx + TW / 2 + 110} y={ty + PAD + 74} fill="rgba(255,255,255,0.25)" fontSize="13"
+        fontFamily="'JetBrains Mono', monospace">/100</text>
+
+      {/* Window */}
+      <text x={tx + PAD} y={ty + PAD + 100} fill={stateColor(signal.state)} fontSize="16" fontWeight="700"
+        fontFamily="'JetBrains Mono', monospace">
         {formatTimeClear(signal.t_minus_minutes)}
       </text>
-      <text
-        x={tx + TW - PAD} y={ty + PAD + 72}
-        textAnchor="end"
-        fill="rgba(255,255,255,0.55)"
-        fontSize="13"
-        fontFamily="'JetBrains Mono', monospace"
-      >
-        PSI {signal.psi} · {signal.confidence}%
+      <text x={tx + PAD + 80} y={ty + PAD + 100} fill="rgba(255,255,255,0.35)" fontSize="12"
+        fontFamily="'JetBrains Mono', monospace">
+        {t("tip.window")}
       </text>
 
-      {/* Asymmetry */}
-      <text
-        x={tx + PAD} y={ty + PAD + 92}
-        fill="rgba(255,255,255,0.28)"
-        fontSize="12"
-        fontFamily="'JetBrains Mono', monospace"
-        letterSpacing="0.06em"
-      >
-        {t("tip.asym")}: {asymLabel}
-      </text>
+      {/* Separator */}
+      <line x1={tx + PAD} y1={ty + PAD + 112} x2={tx + TW - PAD} y2={ty + PAD + 112}
+        stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" />
 
-      {/* Sparkline 7d */}
-      <line
-        x1={tx + PAD} y1={ty + PAD + 102}
-        x2={tx + TW - PAD} y2={ty + PAD + 102}
-        stroke="rgba(255,255,255,0.06)" strokeWidth="0.5"
-      />
+      {/* "Pourquoi ?" — reasons */}
+      <text x={tx + PAD} y={ty + PAD + 130} fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600"
+        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.08em">
+        {t("tip.why")}
+      </text>
+      {signal.reasons.slice(0, 3).map((reason, ri) => (
+        <text key={ri} x={tx + PAD + 8} y={ty + PAD + 148 + ri * 18}
+          fill="rgba(255,255,255,0.6)" fontSize="12"
+          fontFamily="'JetBrains Mono', monospace">
+          • {reason}
+        </text>
+      ))}
+
+      {/* Sparkline */}
       {sparkData.length >= 2 && (
-        <g transform={`translate(${tx + PAD + 2}, ${ty + PAD + 110})`}>
-          <svg width={sparkW} height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`}>
-            <TooltipSparkline data={sparkData} width={sparkW} height={sparkH - 2} color={color} />
-          </svg>
-        </g>
+        <>
+          <line x1={tx + PAD} y1={ty + TH - sparkH - 22} x2={tx + TW - PAD} y2={ty + TH - sparkH - 22}
+            stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
+          <g transform={`translate(${tx + PAD + 2}, ${ty + TH - sparkH - 16})`}>
+            <svg width={sparkW} height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`}>
+              <TooltipSparkline data={sparkData} width={sparkW} height={sparkH - 2}
+                color={signal.dominant === "risk" ? rskColor : oppColor} />
+            </svg>
+          </g>
+          <text x={tx + TW - PAD} y={ty + TH - 8} textAnchor="end"
+            fill="rgba(255,255,255,0.2)" fontSize="10"
+            fontFamily="'JetBrains Mono', monospace">
+            {t("tip.price7d")}
+          </text>
+        </>
       )}
-      <text
-        x={tx + TW - PAD} y={ty + TH - 10}
-        textAnchor="end"
-        fill="rgba(255,255,255,0.2)"
-        fontSize="10"
-        fontFamily="'JetBrains Mono', monospace"
-        letterSpacing="0.05em"
-      >
-        {t("tip.price7d")}
-      </text>
     </g>
   );
 }
@@ -643,65 +576,62 @@ function SubnetPanel({ signal, open, onClose }: {
     enabled: open,
   });
 
-  const color = stateColor(signal.state);
-  const phaseLabel = (() => {
-    switch (signal.phase) {
-      case "BUILD": return t("phase.build");
-      case "ARMED": return t("phase.armed");
-      case "TRIGGER": return t("phase.trigger");
-      default: return "—";
-    }
-  })();
+  const oppColor = opportunityColor(signal.opportunity);
+  const rskColor = riskColor(signal.risk);
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-full sm:w-[380px] border-l border-white/5 bg-[#080810] text-white overflow-y-auto">
+      <SheetContent side="right" className="w-full sm:w-[400px] border-l border-white/5 bg-[#080810] text-white overflow-y-auto">
         <SheetHeader>
-          <SheetTitle className="font-mono text-white/90 tracking-wider">
+          <SheetTitle className="font-mono text-white/90 tracking-wider text-lg">
             {t("panel.title")}
           </SheetTitle>
         </SheetHeader>
-
         <div className="mt-6 space-y-6">
           <div className="text-center">
-            <div className="font-mono text-2xl tracking-wider" style={{ color }}>
+            <div className="font-mono text-2xl tracking-wider" style={{ color: stateColor(signal.state) }}>
               SN-{signal.netuid}
             </div>
-            <div className="font-mono text-sm text-white/50 mt-1">{signal.name}</div>
+            <div className="font-mono text-sm text-white/60 mt-1">{signal.name}</div>
           </div>
 
+          {/* Opp / Risk scores */}
           <div className="flex items-center justify-center gap-8">
             <div className="text-center">
-              <div className="font-mono text-3xl font-bold" style={{ color }}>{signal.psi}</div>
-              <div className="font-mono text-[9px] text-white/30 tracking-widest mt-1">PSI</div>
+              <div className="font-mono text-3xl font-bold" style={{ color: oppColor }}>{signal.opportunity}</div>
+              <div className="font-mono text-[10px] text-white/40 tracking-widest mt-1">{t("gauge.opportunity")}</div>
             </div>
+            <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.08)" }} />
             <div className="text-center">
-              <div className="font-mono text-lg text-white/70">{signal.confidence}%</div>
-              <div className="font-mono text-[9px] text-white/30 tracking-widest mt-1">{t("tip.confidence")}</div>
-            </div>
-            <div className="text-center">
-              <div className="font-mono text-lg text-white/70">{formatTimeClear(signal.t_minus_minutes)}</div>
-              <div className="font-mono text-[9px] text-white/30 tracking-widest mt-1">{t("gauge.remaining")}</div>
+              <div className="font-mono text-3xl font-bold" style={{ color: rskColor }}>{signal.risk}</div>
+              <div className="font-mono text-[10px] text-white/40 tracking-widest mt-1">{t("gauge.risk")}</div>
             </div>
           </div>
 
-          <div className="flex justify-between font-mono text-xs px-2">
-            <span className="text-white/40">{t("sub.phase")}: <span style={{ color }}>{phaseLabel}</span></span>
-            <span className="text-white/40">{t("sub.state")}: <span style={{ color }}>{t(`state.${signal.state.toLowerCase()}` as any)}</span></span>
+          <div className="text-center font-mono text-lg" style={{ color: stateColor(signal.state) }}>
+            {formatTimeClear(signal.t_minus_minutes)} <span className="text-white/35 text-sm">{t("tip.window")}</span>
+          </div>
+
+          {/* Reasons */}
+          <div className="bg-white/[0.02] rounded-lg p-4">
+            <div className="font-mono text-[10px] text-white/40 tracking-widest mb-3">{t("tip.why")}</div>
+            {signal.reasons.map((r, i) => (
+              <div key={i} className="font-mono text-sm text-white/65 mb-1.5">• {r}</div>
+            ))}
           </div>
 
           {signal.sparkline_7d.length > 1 && (
             <div className="bg-white/[0.02] rounded-lg p-4">
-              <div className="font-mono text-[9px] text-white/25 tracking-widest mb-2">{t("tip.price7d")}</div>
+              <div className="font-mono text-[10px] text-white/30 tracking-widest mb-2">{t("tip.price7d")}</div>
               <svg width="100%" height="60" viewBox="0 0 300 60" preserveAspectRatio="none">
-                <TooltipSparkline data={signal.sparkline_7d} width={300} height={55} color={color} />
+                <TooltipSparkline data={signal.sparkline_7d} width={300} height={55} color={oppColor} />
               </svg>
             </div>
           )}
 
           {metrics && (
             <div className="space-y-3">
-              <div className="font-mono text-[9px] text-white/25 tracking-widest">{t("panel.metrics")}</div>
+              <div className="font-mono text-[10px] text-white/30 tracking-widest">{t("panel.metrics")}</div>
               {[
                 [t("panel.liquidity"), metrics.liquidity_usd ? `$${Number(metrics.liquidity_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
                 [t("panel.volume"), metrics.vol_24h_usd ? `$${Number(metrics.vol_24h_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
@@ -709,8 +639,8 @@ function SubnetPanel({ signal, open, onClose }: {
                 [t("panel.cap"), metrics.cap_usd ? `$${Number(metrics.cap_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
               ].map(([label, val]) => (
                 <div key={label} className="flex justify-between font-mono text-xs border-b border-white/[0.04] pb-2">
-                  <span className="text-white/35">{label}</span>
-                  <span className="text-white/70">{val}</span>
+                  <span className="text-white/40">{label}</span>
+                  <span className="text-white/75">{val}</span>
                 </div>
               ))}
             </div>
@@ -759,38 +689,37 @@ function PositionBar({ position, isMobile, t, onClose }: {
 
   return (
     <div className="font-mono" style={{
-      width: isMobile ? "min(92vw, 420px)" : 560,
+      width: isMobile ? "min(92vw, 420px)" : 580,
       background: barBg,
       border: `1px solid ${barBorder}`,
-      borderRadius: 10,
+      borderRadius: 12,
       padding: isMobile ? "10px 14px" : "14px 20px",
       backdropFilter: "blur(12px)",
     }}>
-      {/* Header row with close button */}
-      <div className="flex items-center justify-between" style={{ fontSize: isMobile ? 9 : 11 }}>
+      <div className="flex items-center justify-between" style={{ fontSize: isMobile ? 10 : 12 }}>
         <div className="flex flex-col">
-          <span style={{ color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", fontSize: isMobile ? 7 : 8 }}>{t("pos.capital")}</span>
-          <span style={{ color: "rgba(255,255,255,0.6)" }}>${position.capital.toLocaleString()}</span>
+          <span style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 9 }}>{t("pos.capital")}</span>
+          <span style={{ color: "rgba(255,255,255,0.7)" }}>{position.capital.toLocaleString()} τ</span>
         </div>
         <div className="flex flex-col items-center">
-          <span style={{ color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", fontSize: isMobile ? 7 : 8 }}>{t("pos.current")}</span>
-          <span style={{ color: "rgba(255,255,255,0.6)" }}>${Math.round(position.currentValue).toLocaleString()}</span>
+          <span style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 9 }}>{t("pos.current")}</span>
+          <span style={{ color: "rgba(255,255,255,0.7)" }}>{Math.round(position.currentValue).toLocaleString()} τ</span>
         </div>
         <div className="flex flex-col items-center">
-          <span style={{ color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", fontSize: isMobile ? 7 : 8 }}>{t("pos.pnl")}</span>
-          <span style={{ color: barColor, fontWeight: 700 }}>
+          <span style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 9 }}>{t("pos.pnl")}</span>
+          <span style={{ color: barColor, fontWeight: 700, fontSize: isMobile ? 13 : 16 }}>
             {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%
           </span>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span style={{ color: barColor, fontWeight: 600, fontSize: isMobile ? 8 : 10, letterSpacing: "0.1em" }}>
+          <span style={{ color: barColor, fontWeight: 600, fontSize: isMobile ? 9 : 11, letterSpacing: "0.1em" }}>
             {statusLabel}
           </span>
           {onClose && (
             <button
               onClick={onClose}
               className="pointer-events-auto text-white/30 hover:text-red-400 transition-colors"
-              style={{ fontSize: isMobile ? 7 : 9, letterSpacing: "0.08em" }}
+              style={{ fontSize: isMobile ? 8 : 10, letterSpacing: "0.08em" }}
             >
               {t("pos.close")} ✕
             </button>
@@ -798,14 +727,13 @@ function PositionBar({ position, isMobile, t, onClose }: {
         </div>
       </div>
 
-      {/* Progress bar with markers */}
-      <div className="relative mt-2" style={{ height: isMobile ? 18 : 22 }}>
+      <div className="relative mt-2" style={{ height: isMobile ? 20 : 24 }}>
         <div className="absolute inset-x-0 rounded-full" style={{
-          top: isMobile ? 7 : 9, height: isMobile ? 4 : 5,
+          top: isMobile ? 8 : 10, height: isMobile ? 4 : 5,
           background: "rgba(255,255,255,0.06)",
         }} />
         <div className="absolute rounded-full" style={{
-          top: isMobile ? 7 : 9, height: isMobile ? 4 : 5, left: 0,
+          top: isMobile ? 8 : 10, height: isMobile ? 4 : 5, left: 0,
           width: `${currentPos}%`,
           background: `linear-gradient(90deg, rgba(255,255,255,0.05), ${barColor})`,
           transition: "width 800ms ease",
@@ -816,7 +744,7 @@ function PositionBar({ position, isMobile, t, onClose }: {
         }}>
           <div className="absolute font-mono" style={{
             top: -12, left: "50%", transform: "translateX(-50%)",
-            fontSize: 7, color: "hsl(38, 92%, 55%)", whiteSpace: "nowrap", letterSpacing: "0.05em",
+            fontSize: 8, color: "hsl(38, 92%, 55%)", whiteSpace: "nowrap",
           }}>{t("pos.protection")}</div>
         </div>
         <div className="absolute" style={{
@@ -825,12 +753,12 @@ function PositionBar({ position, isMobile, t, onClose }: {
         }}>
           <div className="absolute font-mono" style={{
             top: -12, left: "50%", transform: "translateX(-50%)",
-            fontSize: 7, color: "hsl(0, 72%, 55%)", whiteSpace: "nowrap", letterSpacing: "0.05em",
+            fontSize: 8, color: "hsl(0, 72%, 55%)", whiteSpace: "nowrap",
           }}>{t("pos.exit_rec")}</div>
         </div>
         <div className="absolute" style={{
-          left: `${currentPos}%`, top: isMobile ? 4 : 5,
-          width: isMobile ? 10 : 12, height: isMobile ? 10 : 12,
+          left: `${currentPos}%`, top: isMobile ? 5 : 6,
+          width: isMobile ? 11 : 13, height: isMobile ? 11 : 13,
           borderRadius: "50%", background: barColor,
           border: "2px solid rgba(0,0,0,0.5)",
           transform: "translateX(-50%)",
@@ -843,107 +771,177 @@ function PositionBar({ position, isMobile, t, onClose }: {
 }
 
 /* ═══════════════════════════════════════ */
-/*     OPEN POSITION DIALOG                */
+/*     OPEN POSITION DIALOG (PREMIUM)      */
 /* ═══════════════════════════════════════ */
-function OpenPositionDialog({ open, onClose, signals, t }: {
+type ObjectivePreset = "x2" | "x5" | "x10" | "x20" | "custom";
+type StopMode = "dynamic" | "manual";
+
+function OpenPositionDialog({ open, onClose, signals, t, preselectedNetuid }: {
   open: boolean; onClose: () => void; signals: SubnetSignal[]; t: (key: any) => string;
+  preselectedNetuid?: number;
 }) {
-  const [netuid, setNetuid] = useState(signals[0]?.netuid || 1);
-  const [capital, setCapital] = useState("1000");
-  const [stopLoss, setStopLoss] = useState("-5");
-  const [takeProfit, setTakeProfit] = useState("15");
+  const [netuid, setNetuid] = useState(preselectedNetuid || signals[0]?.netuid || 1);
+  const [capital, setCapital] = useState("100");
+  const [stopLoss, setStopLoss] = useState("-8");
+  const [objective, setObjective] = useState<ObjectivePreset>("x2");
+  const [customTP, setCustomTP] = useState("50");
+  const [stopMode, setStopMode] = useState<StopMode>("dynamic");
   const openPosition = useOpenPosition();
 
-  // Get current price for selected subnet
+  useEffect(() => {
+    if (preselectedNetuid) setNetuid(preselectedNetuid);
+  }, [preselectedNetuid]);
+
   const { data: metrics } = useQuery({
     queryKey: ["subnet-price-for-position", netuid],
     queryFn: async () => {
       const { data } = await supabase.from("subnet_latest_display")
-        .select("price_usd").eq("netuid", netuid).maybeSingle();
+        .select("price_usd, price").eq("netuid", netuid).maybeSingle();
       return data;
     },
     enabled: open,
   });
 
-  const currentPrice = metrics?.price_usd ? Number(metrics.price_usd) : 0;
+  const currentPriceTao = metrics?.price ? Number(metrics.price) : 0;
+  const currentPriceUsd = metrics?.price_usd ? Number(metrics.price_usd) : 0;
+
+  const takeProfit = objective === "x2" ? 100 : objective === "x5" ? 400 : objective === "x10" ? 900 : objective === "x20" ? 1900 : parseFloat(customTP) || 50;
+  const estimatedQty = currentPriceTao > 0 ? (parseFloat(capital) || 0) / currentPriceTao : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPrice) {
-      toast.error("Prix introuvable pour ce subnet");
+    if (!currentPriceUsd) {
+      toast.error("Prix introuvable");
       return;
     }
     try {
       await openPosition.mutateAsync({
         netuid,
         capital: parseFloat(capital),
-        entry_price: currentPrice,
+        entry_price: currentPriceUsd,
         stop_loss_pct: parseFloat(stopLoss),
-        take_profit_pct: parseFloat(takeProfit),
+        take_profit_pct: takeProfit,
       });
-      toast.success("Position ouverte");
+      toast.success("Position ouverte ✓");
       onClose();
     } catch (err: any) {
       toast.error(err.message);
     }
   };
 
-  const inputStyle = "w-full px-3 py-2 rounded-lg text-sm bg-white/[0.04] border border-white/[0.08] text-white/80 focus:border-white/20 focus:outline-none transition-colors font-mono";
+  const inputStyle = "w-full px-3 py-2.5 rounded-lg text-sm bg-white/[0.04] border border-white/[0.1] text-white/85 focus:border-white/25 focus:outline-none transition-colors font-mono";
+  const objectivePresets: ObjectivePreset[] = ["x2", "x5", "x10", "x20", "custom"];
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-[#0a0a0f] border-white/10 text-white max-w-sm">
+      <DialogContent className="bg-[#08080F] border-white/10 text-white max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-mono tracking-wider text-white/80">
+          <DialogTitle className="font-mono tracking-wider text-white/90 text-lg">
             {t("pos.open_title")}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          {/* Subnet */}
           <div>
-            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/30">{t("pos.subnet")}</label>
-            <select
-              value={netuid}
-              onChange={(e) => setNetuid(Number(e.target.value))}
-              className={inputStyle}
-              style={{ appearance: "none" }}
-            >
+            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.subnet")}</label>
+            <select value={netuid} onChange={(e) => setNetuid(Number(e.target.value))}
+              className={inputStyle} style={{ appearance: "none" }}>
               {signals.map(s => (
-                <option key={s.netuid} value={s.netuid} className="bg-[#0a0a0f]">
-                  SN-{s.netuid} · {s.name}
+                <option key={s.netuid} value={s.netuid} className="bg-[#08080F]">
+                  SN-{s.netuid} · {s.name} (Opp: {s.opportunity} | Risk: {s.risk})
                 </option>
               ))}
             </select>
           </div>
-          {currentPrice > 0 && (
-            <div className="text-xs font-mono text-white/40">
-              Prix actuel : <span className="text-white/70">${currentPrice.toFixed(4)}</span>
+
+          {/* Price info */}
+          {currentPriceUsd > 0 && (
+            <div className="flex justify-between text-xs font-mono px-1">
+              <span className="text-white/40">{t("pos.entry_price")}: <span className="text-white/70">${currentPriceUsd.toFixed(4)}</span></span>
+              {estimatedQty > 0 && (
+                <span className="text-white/40">{t("pos.estimated_qty")}: <span className="text-white/70">{estimatedQty.toFixed(2)}</span></span>
+              )}
             </div>
           )}
+
+          {/* Capital */}
           <div>
-            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/30">{t("pos.amount")}</label>
+            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.amount")}</label>
             <input type="number" value={capital} onChange={(e) => setCapital(e.target.value)}
               min="1" step="any" required className={inputStyle} />
           </div>
+
+          {/* Objective */}
+          <div>
+            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.objective")}</label>
+            <div className="flex gap-2">
+              {objectivePresets.map(p => (
+                <button key={p} type="button"
+                  onClick={() => setObjective(p)}
+                  className="flex-1 py-2 rounded-lg font-mono text-xs tracking-wider transition-all"
+                  style={{
+                    background: objective === p ? "rgba(255,215,0,0.12)" : "rgba(255,255,255,0.03)",
+                    color: objective === p ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.35)",
+                    border: `1px solid ${objective === p ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.06)"}`,
+                    fontWeight: objective === p ? 700 : 400,
+                  }}>
+                  {t(`pos.obj_${p}` as any)}
+                </button>
+              ))}
+            </div>
+            {objective === "custom" && (
+              <input type="number" value={customTP} onChange={(e) => setCustomTP(e.target.value)}
+                min="1" step="any" placeholder="%" className={`${inputStyle} mt-2`} />
+            )}
+          </div>
+
+          {/* Stop mode + Stop loss */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/30">{t("pos.stop_loss")}</label>
+              <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.stop_mode")}</label>
+              <div className="flex gap-1">
+                {(["dynamic", "manual"] as StopMode[]).map(m => (
+                  <button key={m} type="button" onClick={() => setStopMode(m)}
+                    className="flex-1 py-2 rounded-lg font-mono text-[10px] tracking-wider transition-all"
+                    style={{
+                      background: stopMode === m ? "rgba(229,57,53,0.1)" : "rgba(255,255,255,0.02)",
+                      color: stopMode === m ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.3)",
+                      border: `1px solid ${stopMode === m ? "rgba(229,57,53,0.2)" : "rgba(255,255,255,0.06)"}`,
+                    }}>
+                    {t(`pos.stop_${m}` as any)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.stop_loss")}</label>
               <input type="number" value={stopLoss} onChange={(e) => setStopLoss(e.target.value)}
                 step="any" required className={inputStyle} />
             </div>
-            <div>
-              <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/30">{t("pos.take_profit")}</label>
-              <input type="number" value={takeProfit} onChange={(e) => setTakeProfit(e.target.value)}
-                step="any" required className={inputStyle} />
-            </div>
           </div>
+
+          {/* Partial TP info */}
+          <div className="bg-white/[0.02] rounded-lg px-3 py-2.5 font-mono text-[10px] text-white/35 space-y-1">
+            <div className="text-white/50 tracking-widest uppercase mb-1">{t("pos.partial_tp")}</div>
+            <div>{t("pos.partial_25_x2")}</div>
+            <div>{t("pos.partial_25_x5")}</div>
+            <div>{t("pos.partial_50_x10")}</div>
+          </div>
+
+          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2 rounded-lg font-mono text-xs tracking-wider text-white/40 border border-white/10 hover:border-white/20 transition-colors">
+              className="flex-1 py-2.5 rounded-lg font-mono text-xs tracking-wider text-white/45 border border-white/10 hover:border-white/20 transition-colors">
               {t("pos.cancel")}
             </button>
-            <button type="submit" disabled={openPosition.isPending || !currentPrice}
-              className="flex-1 py-2 rounded-lg font-mono text-xs tracking-wider font-semibold transition-all disabled:opacity-50"
-              style={{ background: "rgba(76,175,80,0.15)", color: "rgba(76,175,80,0.9)", border: "1px solid rgba(76,175,80,0.3)" }}>
+            <button type="submit" disabled={openPosition.isPending || !currentPriceUsd}
+              className="flex-1 py-2.5 rounded-lg font-mono text-xs tracking-wider font-bold transition-all disabled:opacity-50"
+              style={{
+                background: "linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,215,0,0.08))",
+                color: "rgba(255,215,0,0.9)",
+                border: "1px solid rgba(255,215,0,0.3)",
+                boxShadow: "0 0 20px rgba(255,215,0,0.06)",
+              }}>
               {openPosition.isPending ? "..." : t("pos.confirm")}
             </button>
           </div>
@@ -993,14 +991,13 @@ export default function AlienGauge() {
   const [demoMode, setDemoMode] = useState(false);
 
   const demoSignals: SubnetSignal[] = useMemo(() => [
-    { netuid: 1, name: "Alpha (Top)", psi: 72, t_minus_minutes: 45, confidence: 85, state: "IMMINENT" as GaugeState, phase: "TRIGGER" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [10,15,12,18,22,20,25], liquidity: 1200, momentum: 0.8 },
-    { netuid: 2, name: "Beta (Top-Right)", psi: 55, t_minus_minutes: 120, confidence: 65, state: "ALERT" as GaugeState, phase: "ARMED" as GaugePhase, asymmetry: "MED" as Asymmetry, sparkline_7d: [5,8,6,9,11,10,12], liquidity: 800, momentum: 0.5 },
-    { netuid: 3, name: "Gamma (Right)", psi: 60, t_minus_minutes: 90, confidence: 70, state: "ALERT" as GaugeState, phase: "ARMED" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [20,18,22,25,23,28,30], liquidity: 2000, momentum: 0.65 },
-    { netuid: 4, name: "Delta (Bottom-Right)", psi: 45, t_minus_minutes: 180, confidence: 55, state: "ALERT" as GaugeState, phase: "BUILD" as GaugePhase, asymmetry: "LOW" as Asymmetry, sparkline_7d: [3,4,3,5,4,6,5], liquidity: 500, momentum: 0.3 },
-    { netuid: 5, name: "Epsilon (Bottom)", psi: 88, t_minus_minutes: 15, confidence: 92, state: "IMMINENT" as GaugeState, phase: "TRIGGER" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [30,35,40,38,45,50,55], liquidity: 3000, momentum: 0.95 },
-    { netuid: 6, name: "Zeta (Bottom-Left)", psi: 40, t_minus_minutes: 200, confidence: 50, state: "ALERT" as GaugeState, phase: "BUILD" as GaugePhase, asymmetry: "MED" as Asymmetry, sparkline_7d: [7,6,8,7,9,8,10], liquidity: 600, momentum: 0.25 },
-    { netuid: 7, name: "Eta (Left)", psi: 65, t_minus_minutes: 60, confidence: 75, state: "ALERT" as GaugeState, phase: "ARMED" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [15,18,16,20,22,21,24], liquidity: 1500, momentum: 0.7 },
-    { netuid: 8, name: "Theta (Top-Left)", psi: 50, t_minus_minutes: 150, confidence: 60, state: "ALERT" as GaugeState, phase: "BUILD" as GaugePhase, asymmetry: "MED" as Asymmetry, sparkline_7d: [8,10,9,12,11,14,13], liquidity: 900, momentum: 0.4 },
+    { netuid: 1, name: "Alpha", psi: 72, opportunity: 78, risk: 22, t_minus_minutes: 45, confidence: 85, state: "IMMINENT" as GaugeState, phase: "TRIGGER" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [10,15,12,18,22,20,25], liquidity: 1200, momentum: 0.8, reasons: ["Momentum fort ↑", "Consensus élevé ✓", "Signal d'entrée actif"], dominant: "opportunity" as const },
+    { netuid: 2, name: "Beta", psi: 55, opportunity: 52, risk: 35, t_minus_minutes: 120, confidence: 65, state: "ALERT" as GaugeState, phase: "ARMED" as GaugePhase, asymmetry: "MED" as Asymmetry, sparkline_7d: [5,8,6,9,11,10,12], liquidity: 800, momentum: 0.5, reasons: ["Momentum modéré →", "Consensus élevé ✓"], dominant: "opportunity" as const },
+    { netuid: 3, name: "Gamma", psi: 60, opportunity: 65, risk: 30, t_minus_minutes: 90, confidence: 70, state: "ALERT" as GaugeState, phase: "ARMED" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [20,18,22,25,23,28,30], liquidity: 2000, momentum: 0.65, reasons: ["Momentum modéré →", "Adoption réelle détectée"], dominant: "opportunity" as const },
+    { netuid: 4, name: "Delta", psi: 45, opportunity: 40, risk: 55, t_minus_minutes: 180, confidence: 55, state: "ALERT" as GaugeState, phase: "BUILD" as GaugePhase, asymmetry: "LOW" as Asymmetry, sparkline_7d: [3,4,3,5,4,6,5], liquidity: 500, momentum: 0.3, reasons: ["Momentum modéré →", "Consensus faible ⚠", "Hype > Adoption"], dominant: "risk" as const },
+    { netuid: 5, name: "Epsilon", psi: 88, opportunity: 85, risk: 40, t_minus_minutes: 15, confidence: 92, state: "IMMINENT" as GaugeState, phase: "TRIGGER" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [30,35,40,38,45,50,55], liquidity: 3000, momentum: 0.95, reasons: ["Momentum fort ↑", "Consensus élevé ✓", "Adoption réelle détectée"], dominant: "opportunity" as const },
+    { netuid: 6, name: "Zeta", psi: 40, opportunity: 25, risk: 65, t_minus_minutes: 200, confidence: 50, state: "ALERT" as GaugeState, phase: "BUILD" as GaugePhase, asymmetry: "MED" as Asymmetry, sparkline_7d: [7,6,8,7,9,8,10], liquidity: 600, momentum: 0.25, reasons: ["Consensus faible ⚠", "Hype > Adoption"], dominant: "risk" as const },
+    { netuid: 7, name: "Eta", psi: 65, opportunity: 60, risk: 32, t_minus_minutes: 60, confidence: 75, state: "ALERT" as GaugeState, phase: "ARMED" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [15,18,16,20,22,21,24], liquidity: 1500, momentum: 0.7, reasons: ["Momentum modéré →", "Consensus élevé ✓", "Spéculatif · cap faible"], dominant: "opportunity" as const },
   ], []);
 
   /* ─── signals ─── */
@@ -1008,8 +1005,13 @@ export default function AlienGauge() {
   const signals = demoMode ? demoSignals : realSignals;
   const realPsi = useMemo(() => computeGlobalPsi(rawSignals ?? []), [rawSignals]);
   const realConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
+  const realOpp = useMemo(() => computeGlobalOpportunity(rawSignals ?? []), [rawSignals]);
+  const realRisk = useMemo(() => computeGlobalRisk(rawSignals ?? []), [rawSignals]);
+
   const globalPsi = demoMode ? 62 : realPsi;
   const globalConf = demoMode ? 71 : realConf;
+  const globalOpp = demoMode ? 68 : realOpp;
+  const globalRisk = demoMode ? 32 : realRisk;
   const globalState = deriveGaugeState(globalPsi, globalConf);
   const globalPhase = derivePhase(globalPsi);
   const globalTMinus = deriveTMinus(globalPsi);
@@ -1019,8 +1021,8 @@ export default function AlienGauge() {
   const { data: dbPositions } = usePositions();
   const closePosition = useClosePosition();
   const [openPosDialog, setOpenPosDialog] = useState(false);
+  const [preselectedNetuid, setPreselectedNetuid] = useState<number | undefined>();
 
-  // Compute live position from DB + current prices
   const { data: latestPrices } = useQuery({
     queryKey: ["position-prices", dbPositions?.map(p => p.netuid)],
     queryFn: async () => {
@@ -1041,9 +1043,9 @@ export default function AlienGauge() {
   });
 
   const activePosition: Position | null = useMemo(() => {
-    if (demoMode) return { capital: 5000, currentValue: 5420, protectionThreshold: -5, exitRecommended: 15 };
+    if (demoMode) return { capital: 5000, currentValue: 5420, protectionThreshold: -8, exitRecommended: 100, netuid: 1 };
     if (!dbPositions?.length || !latestPrices) return null;
-    const pos = dbPositions[0]; // Show first open position
+    const pos = dbPositions[0];
     const currentPrice = latestPrices[pos.netuid] || Number(pos.entry_price);
     const currentValue = Number(pos.quantity) * currentPrice;
     return {
@@ -1063,7 +1065,7 @@ export default function AlienGauge() {
     const price = latestPrices[activePosition.netuid!] || 0;
     try {
       await closePosition.mutateAsync({ id: activePosition.id, closed_price: price });
-      toast.success("Position fermée");
+      toast.success("Position fermée ✓");
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -1080,7 +1082,7 @@ export default function AlienGauge() {
         const sig = signals.find(s => s.netuid === netuid);
         if (sig) {
           new Notification(`⚠ IMMINENT — SN-${sig.netuid}`, {
-            body: `${sig.name} · PSI ${sig.psi} · ${formatTimeClear(sig.t_minus_minutes)}`,
+            body: `${sig.name} · Opp ${sig.opportunity} · Risk ${sig.risk} · ${formatTimeClear(sig.t_minus_minutes)}`,
             icon: "/pwa-192x192.png",
             tag: `imminent-${netuid}`,
           });
@@ -1090,31 +1092,24 @@ export default function AlienGauge() {
     prevImminentRef.current = currentImminent;
   }, [signals]);
 
-  /* ─── P&L threshold alerts (SL/TP) ─── */
+  /* ─── P&L threshold alerts ─── */
   const prevAlertRef = useRef<{ sl: boolean; tp: boolean }>({ sl: false, tp: false });
   useEffect(() => {
     if (!activePosition || demoMode) return;
     const pnlPct = ((activePosition.currentValue - activePosition.capital) / activePosition.capital) * 100;
     const slHit = pnlPct <= activePosition.protectionThreshold;
     const tpHit = pnlPct >= activePosition.exitRecommended;
-
-    // Stop-loss alert
     if (slHit && !prevAlertRef.current.sl) {
       const title = t("pos.alert_sl" as any);
-      const body = `SN-${activePosition.netuid} · P&L ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}% · Seuil ${activePosition.protectionThreshold}%`;
+      const body = `SN-${activePosition.netuid} · P&L ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%`;
       toast.error(title, { description: body, duration: 10000 });
-      if (Notification.permission === "granted") {
-        new Notification(title, { body, icon: "/pwa-192x192.png", tag: "pos-sl" });
-      }
+      if (Notification.permission === "granted") new Notification(title, { body, icon: "/pwa-192x192.png", tag: "pos-sl" });
     }
-    // Take-profit alert
     if (tpHit && !prevAlertRef.current.tp) {
       const title = t("pos.alert_tp" as any);
-      const body = `SN-${activePosition.netuid} · P&L +${pnlPct.toFixed(1)}% · Objectif ${activePosition.exitRecommended}%`;
+      const body = `SN-${activePosition.netuid} · P&L +${pnlPct.toFixed(1)}%`;
       toast.success(title, { description: body, duration: 10000 });
-      if (Notification.permission === "granted") {
-        new Notification(title, { body, icon: "/pwa-192x192.png", tag: "pos-tp" });
-      }
+      if (Notification.permission === "granted") new Notification(title, { body, icon: "/pwa-192x192.png", tag: "pos-tp" });
     }
     prevAlertRef.current = { sl: slHit, tp: tpHit };
   }, [activePosition, demoMode, t]);
@@ -1144,21 +1139,16 @@ export default function AlienGauge() {
   useEffect(() => {
     if (prevStateRef.current !== null && prevStateRef.current !== globalState) {
       playClick();
-      // Start transition animation
       const from = prevStateRef.current;
       const to = globalState;
       const startTime = performance.now();
-      const duration = 1200; // 1.2s transition
-
+      const duration = 1200;
       const animate = (now: number) => {
         const elapsed = now - startTime;
         const progress = Math.min(elapsed / duration, 1);
         setStateTransition({ from, to, progress });
-        if (progress < 1) {
-          transitionRaf.current = requestAnimationFrame(animate);
-        } else {
-          setStateTransition(null);
-        }
+        if (progress < 1) transitionRaf.current = requestAnimationFrame(animate);
+        else setStateTransition(null);
       };
       if (transitionRaf.current) cancelAnimationFrame(transitionRaf.current);
       transitionRaf.current = requestAnimationFrame(animate);
@@ -1178,10 +1168,10 @@ export default function AlienGauge() {
     return () => cancelAnimationFrame(raf);
   }, [globalState]);
 
-  /* ─── flash (on IMMINENT + on any state change) ─── */
+  /* ─── flash ─── */
   const [flashActive, setFlashActive] = useState(false);
   useEffect(() => {
-    if (prevStateRef.current !== globalState || (globalState === "IMMINENT")) {
+    if (prevStateRef.current !== globalState || globalState === "IMMINENT") {
       setFlashActive(true);
       const timeout = setTimeout(() => setFlashActive(false), 400);
       return () => clearTimeout(timeout);
@@ -1193,25 +1183,26 @@ export default function AlienGauge() {
   const [panelSignal, setPanelSignal] = useState<SubnetSignal | null>(null);
 
   const handleClickRay = useCallback((s: SubnetSignal) => {
-    window.open(`https://taostats.io/subnets/${s.netuid}`, "_blank");
     setPanelSignal(s);
   }, []);
 
-  /* ─── geometry (responsive) — mobile-first breakpoints ─── */
+  /* ─── geometry — LARGER (+30%) ─── */
   const isMobile = useIsMobile();
-  const isSmall = typeof window !== "undefined" && window.innerWidth <= 768 && window.innerWidth > 420;
-  const SIZE = isMobile ? 380 : 800; // +12% on mobile (was 340)
-  const SVG_SIZE = isMobile ? 560 : 1200; // scaled up for larger mobile gauge
+  const SIZE = isMobile ? 420 : 1000;
+  const SVG_SIZE = isMobile ? 620 : 1500;
   const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
-  const R_OUTER = isMobile ? 155 : 360; // +12% (was 138)
-  const R_INNER = isMobile ? 132 : 310; // +12% (was 118)
-  const R_TRIGGER = isMobile ? 112 : 268; // +12% (was 100)
-  const CENTER_RADIUS = isMobile ? 101 : 240; // sacred center zone — no tooltip allowed
+  const R_OUTER = isMobile ? 170 : 430;      // Opportunity ring (outer)
+  const R_INNER = isMobile ? 140 : 360;      // Risk ring (inner)
+  const R_TRIGGER = isMobile ? 115 : 300;
 
+  // Opportunity ring = golden, Risk ring = red
+  const oppGlobal = opportunityColor(globalOpp);
+  const rskGlobal = riskColor(globalRisk);
   const color = stateColor(globalState);
   const glow = stateGlow(globalState);
-  const tensionAngle = (globalPsi / 100) * 270;
-  const innerAngle = (globalConf / 100) * 270;
+
+  const oppAngle = (globalOpp / 100) * 270;
+  const riskAngle = (globalRisk / 100) * 270;
   const innerOpacity = globalState === "IMMINENT" ? 0.9 : 0.55 + breathe * 0.35;
   const showHalo = globalConf >= 70;
 
@@ -1220,15 +1211,6 @@ export default function AlienGauge() {
     const count = globalState === "IMMINENT" ? 24 : 12;
     return Array.from({ length: count }, (_, i) => ({ angle: -135 + (i / count) * 270 }));
   }, [globalPhase, globalState]);
-
-  const stateLabel = (() => {
-    switch (globalState) {
-      case "CALM": return t("state.calm");
-      case "ALERT": return t("state.alert");
-      case "IMMINENT": return t("state.imminent");
-      case "EXIT": return t("state.exit");
-    }
-  })();
 
   const phaseLabel = (() => {
     switch (globalPhase) {
@@ -1246,18 +1228,18 @@ export default function AlienGauge() {
         background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)",
       }} />
 
-      {/* Ambient radial halo behind gauge */}
+      {/* Ambient halo */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: 0 }}>
         <div style={{
-          width: isMobile ? 500 : 1100,
-          height: isMobile ? 500 : 1100,
+          width: isMobile ? 550 : 1300,
+          height: isMobile ? 550 : 1300,
           borderRadius: "50%",
-          background: `radial-gradient(circle, ${color}0A 0%, ${color}05 35%, transparent 65%)`,
+          background: `radial-gradient(circle, ${oppGlobal}0A 0%, ${oppGlobal}05 35%, transparent 65%)`,
           transition: "background 1.2s ease",
         }} />
       </div>
 
-      {/* State transition flash */}
+      {/* Flash */}
       {flashActive && (
         <div className="absolute inset-0 pointer-events-none z-50" style={{
           background: `radial-gradient(circle, ${color}40 0%, ${color}15 30%, transparent 65%)`,
@@ -1269,21 +1251,25 @@ export default function AlienGauge() {
           0% { opacity: 1; transform: scale(0.95); }
           100% { opacity: 0; transform: scale(1.1); }
         }
+        @keyframes opp-sweep {
+          0% { opacity: 0.3; }
+          50% { opacity: 0.55; }
+          100% { opacity: 0.3; }
+        }
       `}</style>
 
-      {/* Phase indicator (top) — large and clear */}
-      <div className="absolute top-4 sm:top-10 left-0 right-0 flex flex-col items-center z-10" style={{ paddingLeft: isMobile ? 60 : 0, paddingRight: isMobile ? 60 : 0 }}>
-        <span className="font-mono tracking-[0.3em] sm:tracking-[0.5em] uppercase" style={{
-          color: "rgba(255,255,255,0.35)",
-          fontSize: isMobile ? 11 : 14,
-          letterSpacing: isMobile ? "0.3em" : "0.5em",
+      {/* Phase indicator (top) */}
+      <div className="absolute top-5 sm:top-10 left-0 right-0 flex flex-col items-center z-10" style={{ paddingLeft: isMobile ? 60 : 0, paddingRight: isMobile ? 60 : 0 }}>
+        <span className="font-mono tracking-[0.35em] sm:tracking-[0.5em] uppercase" style={{
+          color: "rgba(255,255,255,0.45)",
+          fontSize: isMobile ? 12 : 16,
         }}>
           {t("gauge.phase")}
         </span>
-        <span className="font-mono font-bold uppercase mt-1 text-center max-w-[calc(100%-120px)] sm:max-w-none" style={{
+        <span className="font-mono font-bold uppercase mt-1 text-center" style={{
           color,
-          fontSize: "clamp(14px, 3.8vw, 26px)",
-          letterSpacing: isMobile ? "0.1em" : "0.3em",
+          fontSize: "clamp(16px, 4vw, 30px)",
+          letterSpacing: isMobile ? "0.15em" : "0.35em",
           transition: "color 800ms ease",
           textShadow: `0 0 30px ${color}20`,
         }}>
@@ -1291,46 +1277,36 @@ export default function AlienGauge() {
         </span>
       </div>
 
-      {/* Notification permission button */}
+      {/* Notification permission */}
       {typeof Notification !== "undefined" && Notification.permission !== "granted" && (
-        <button
-          onClick={() => Notification.requestPermission()}
-          className="absolute bottom-4 left-4 z-20 font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-md transition-all"
-          style={{
-            background: "rgba(255,255,255,0.03)",
-            color: "rgba(255,255,255,0.25)",
-            border: "1px solid rgba(255,255,255,0.06)",
-          }}
-        >
+        <button onClick={() => Notification.requestPermission()}
+          className="absolute bottom-4 left-4 z-20 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all"
+          style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.08)" }}>
           🔔 {t("gauge.notif")}
         </button>
       )}
 
-      {/* Demo mode toggle */}
-      <button
-        onClick={() => setDemoMode(d => !d)}
-        className="absolute bottom-4 right-4 z-20 font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-md transition-all"
+      {/* Demo toggle */}
+      <button onClick={() => setDemoMode(d => !d)}
+        className="absolute bottom-4 right-4 z-20 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all"
         style={{
           background: demoMode ? "rgba(0,255,200,0.12)" : "rgba(255,255,255,0.03)",
           color: demoMode ? "rgba(0,255,200,0.8)" : "rgba(255,255,255,0.25)",
           border: `1px solid ${demoMode ? "rgba(0,255,200,0.3)" : "rgba(255,255,255,0.06)"}`,
-        }}
-      >
+        }}>
         {demoMode ? "⬤ DEMO ON" : "◯ DEMO"}
       </button>
 
-
-      {/* GAUGE — arcs are purely decorative, center HUD is an independent layer */}
+      {/* GAUGE */}
       <div className="absolute z-10" style={{
-        width: isMobile ? "min(92vw, 520px)" : SIZE,
-        height: isMobile ? "min(92vw, 520px)" : SIZE,
+        width: isMobile ? "min(95vw, 560px)" : SIZE,
+        height: isMobile ? "min(95vw, 560px)" : SIZE,
         aspectRatio: "1 / 1",
         top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-        margin: "auto",
       }}>
         {showHalo && (
           <div className="absolute inset-0 rounded-full pointer-events-none" style={{
-            background: `radial-gradient(circle, rgba(100,180,255,0.06) 0%, transparent 70%)`,
+            background: `radial-gradient(circle, rgba(255,215,0,0.06) 0%, transparent 70%)`,
             transform: "scale(1.4)",
           }} />
         )}
@@ -1364,31 +1340,40 @@ export default function AlienGauge() {
                 50% { opacity: 0.4; transform: translate(-1px, -6px) scale(0.9); }
                 80% { opacity: 0.6; transform: translate(3px, -2px) scale(1.1); }
               }
-              @keyframes phase-pulse {
-                0% { opacity: 0.6; transform: scale(1); }
-                50% { opacity: 1; transform: scale(1.02); }
-                100% { opacity: 0.6; transform: scale(1); }
-              }
             `}</style>
           </defs>
 
-          {/* Outer ring track */}
-          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 6 : 8} />
-          {tensionAngle > 0 && (
-            <path d={describeArc(CX, CY, R_OUTER, -135, -135 + tensionAngle)} fill="none"
-              stroke={color} strokeWidth={isMobile ? 6 : 8} strokeLinecap="round"
-              style={{ opacity: 0.4, transition: "d 600ms ease, stroke 500ms ease" }} />
+          {/* OUTER RING = OPPORTUNITY (golden) */}
+          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,215,0,0.04)" strokeWidth={isMobile ? 8 : 12} />
+          {oppAngle > 0 && (
+            <path d={describeArc(CX, CY, R_OUTER, -135, -135 + oppAngle)} fill="none"
+              stroke={oppGlobal} strokeWidth={isMobile ? 8 : 12} strokeLinecap="round"
+              style={{ opacity: 0.55, transition: "d 600ms ease", animation: "opp-sweep 4s ease-in-out infinite" }} />
           )}
+          {/* OUTER label */}
+          <text x={CX + R_OUTER + (isMobile ? 14 : 22)} y={CY - R_OUTER + (isMobile ? 30 : 45)}
+            fill="rgba(255,215,0,0.35)" fontSize={isMobile ? 8 : 11}
+            fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em"
+            textAnchor="start" transform={`rotate(0)`}>
+            {t("gauge.opportunity")}
+          </text>
 
-          {/* Inner ring */}
-          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 8 : 12} />
-          {innerAngle > 0 && (
-            <path d={describeArc(CX, CY, R_INNER, -135, -135 + innerAngle)} fill="none"
-              stroke={color} strokeWidth={isMobile ? 8 : 12} strokeLinecap="round"
-              style={{ opacity: innerOpacity, transition: "d 600ms ease, stroke 500ms ease, opacity 400ms ease" }} />
+          {/* INNER RING = RISK (red) */}
+          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(229,57,53,0.04)" strokeWidth={isMobile ? 10 : 14} />
+          {riskAngle > 0 && (
+            <path d={describeArc(CX, CY, R_INNER, -135, -135 + riskAngle)} fill="none"
+              stroke={rskGlobal} strokeWidth={isMobile ? 10 : 14} strokeLinecap="round"
+              style={{ opacity: innerOpacity, transition: "d 600ms ease, opacity 400ms ease" }} />
           )}
+          {/* INNER label */}
+          <text x={CX + R_INNER + (isMobile ? 14 : 22)} y={CY - R_INNER + (isMobile ? 30 : 45)}
+            fill="rgba(229,57,53,0.3)" fontSize={isMobile ? 8 : 11}
+            fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em"
+            textAnchor="start">
+            {t("gauge.risk")}
+          </text>
 
-          {/* Trigger ticks ring */}
+          {/* Trigger ticks */}
           <circle cx={CX} cy={CY} r={R_TRIGGER} fill="none" stroke="rgba(255,255,255,0.015)" strokeWidth="2" />
           {triggerTicks.map((tick, i) => {
             const rad = ((tick.angle - 90) * Math.PI) / 180;
@@ -1408,59 +1393,33 @@ export default function AlienGauge() {
             const eased = 1 - Math.pow(1 - stateTransition.progress, 3);
             const sweepAngle = eased * 270;
             const fadeOpacity = stateTransition.progress < 0.7 ? 0.5 : 0.5 * (1 - (stateTransition.progress - 0.7) / 0.3);
-            const glowSize = 16 + eased * 8;
-            const edgeAngleDeg = -135 + sweepAngle;
-            const edgeAngle = (edgeAngleDeg - 90) * Math.PI / 180;
             return (
               <g style={{ pointerEvents: "none" }}>
-                <path d={describeArc(CX, CY, R_OUTER, -135, edgeAngleDeg)}
-                  fill="none" stroke={toColor} strokeWidth={glowSize} strokeLinecap="round"
+                <path d={describeArc(CX, CY, R_OUTER, -135, -135 + sweepAngle)}
+                  fill="none" stroke={toColor} strokeWidth={16 + eased * 8} strokeLinecap="round"
                   style={{ opacity: fadeOpacity * 0.6, filter: "blur(6px)" }} />
-                <path d={describeArc(CX, CY, R_INNER, -135, -135 + sweepAngle * 0.85)}
-                  fill="none" stroke={toColor} strokeWidth={glowSize * 0.8} strokeLinecap="round"
-                  style={{ opacity: fadeOpacity * 0.4, filter: "blur(4px)" }} />
-                <path d={describeArc(CX, CY, R_TRIGGER, -135, -135 + sweepAngle * 0.7)}
-                  fill="none" stroke={toColor} strokeWidth={glowSize * 0.5} strokeLinecap="round"
-                  style={{ opacity: fadeOpacity * 0.3, filter: "blur(3px)" }} />
-                {sweepAngle < 268 && (
-                  <circle cx={CX + R_OUTER * Math.cos(edgeAngle)} cy={CY + R_OUTER * Math.sin(edgeAngle)}
-                    r={4 + eased * 3} fill={toColor}
-                    style={{ opacity: fadeOpacity, filter: "blur(2px)" }} />
-                )}
               </g>
             );
           })()}
 
-          {/* Micro-pulse on ring toward hovered ray */}
+          {/* Micro-pulse on ring for hovered ray */}
           {hoveredIdx !== null && signals[hoveredIdx] && (() => {
             const hAngleDeg = (hoveredIdx * (360 / Math.max(signals.length, 1))) - 90;
             const spread = 14;
-            const hColor = stateColor(signals[hoveredIdx].state);
+            const hColor = signals[hoveredIdx].dominant === "opportunity" ? opportunityColor(signals[hoveredIdx].opportunity) : riskColor(signals[hoveredIdx].risk);
             return (
-              <g>
-                <path
-                  d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
-                  fill="none" stroke={hColor} strokeWidth="14" strokeLinecap="round"
-                  style={{ opacity: 0.12, filter: `blur(4px)` }}
-                />
-                <path
-                  d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread * 0.5, hAngleDeg + spread * 0.5)}
-                  fill="none" stroke={hColor} strokeWidth="9" strokeLinecap="round"
-                  style={{ opacity: 0.5, transition: "opacity 200ms ease" }}
-                />
-                <path
-                  d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
-                  fill="none" stroke={hColor} strokeWidth="10" strokeLinecap="round"
-                  style={{ opacity: 0.25, animation: "ring-pulse 2s ease-in-out infinite" }}
-                />
-              </g>
+              <path
+                d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
+                fill="none" stroke={hColor} strokeWidth="12" strokeLinecap="round"
+                style={{ opacity: 0.35, transition: "opacity 200ms ease" }}
+              />
             );
           })()}
 
-          {/* Time Ring (scale) */}
+          {/* Time Ring */}
           <TimeRing cx={CX} cy={CY} outerR={R_OUTER} isMobile={isMobile} />
 
-          {/* Sacred Rays — limit to 5 on mobile */}
+          {/* Sacred Rays */}
           {(() => {
             const displaySignals = isMobile ? signals.slice(0, 5) : signals;
             return (
@@ -1477,128 +1436,119 @@ export default function AlienGauge() {
       </div>
 
       {/* ═══════════════════════════════════════ */}
-      {/* CENTER HUD — SIGNAL MARCHÉ              */}
+      {/* CENTER HUD — FENÊTRE D'OPPORTUNITÉ      */}
       {/* ═══════════════════════════════════════ */}
-      <div
-        className="fixed inset-0 pointer-events-none z-20"
-        style={{ display: "grid", placeItems: "center" }}
-      >
-        <div
-          style={{
-            maxWidth: isMobile ? "min(65vw, 260px)" : 440,
-            width: "100%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            textAlign: "center",
-            animation: "phase-pulse 3s ease-in-out infinite",
-            lineHeight: 0.95,
-          }}
-        >
-        {/* Title: SIGNAL MARCHÉ */}
-        <span className="font-mono tracking-[0.35em] uppercase text-center" style={{
-          fontSize: isMobile ? 8 : 12,
-          color: "rgba(255,255,255,0.3)",
-          letterSpacing: isMobile ? "0.2em" : "0.4em",
-          lineHeight: 1.2,
+      <div className="fixed inset-0 pointer-events-none z-20" style={{ display: "grid", placeItems: "center" }}>
+        <div style={{
+          maxWidth: isMobile ? "min(70vw, 280px)" : 480,
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          textAlign: "center",
+          lineHeight: 0.95,
         }}>
-          {t("gauge.window")}
-        </span>
+          {/* Line 1: FENÊTRE D'OPPORTUNITÉ */}
+          <span className="font-mono tracking-[0.3em] sm:tracking-[0.4em] uppercase" style={{
+            fontSize: isMobile ? 9 : 14,
+            color: "rgba(255,215,0,0.5)",
+            letterSpacing: isMobile ? "0.2em" : "0.35em",
+          }}>
+            {t("gauge.window")}
+          </span>
 
-        {/* Sous-titre: Fenêtre d'opportunité restante */}
-        <span className="font-mono tracking-[0.12em] uppercase mt-1" style={{
-          fontSize: isMobile ? 7 : 9,
-          color: "rgba(255,255,255,0.18)",
-        }}>
-          {t("gauge.remaining")}
-        </span>
+          {/* Line 2: TIMER (very large, high contrast) */}
+          <span className="font-mono font-bold leading-none mt-2 sm:mt-4" style={{
+            fontSize: "clamp(50px, 14vw, 100px)",
+            color: "rgba(255,248,220,0.95)",
+            transition: "color 800ms ease",
+            letterSpacing: "0.04em",
+            textShadow: `0 0 60px ${oppGlobal}40, 0 0 120px ${oppGlobal}15`,
+          }}>
+            {formatTimeClear(globalTMinus)}
+          </span>
 
-        {/* Timer principal — human readable */}
-        <span className="font-mono font-bold leading-none mt-1 sm:mt-3" style={{
-          fontSize: "clamp(44px, 12vw, 92px)",
-          color,
-          transition: "color 800ms ease",
-          letterSpacing: "0.04em",
-          textShadow: `0 0 60px ${color}30, 0 0 120px ${color}12`,
-          maxWidth: "100%",
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-        }}>
-          {formatTimeClear(globalTMinus)}
-        </span>
+          {/* Line 3: "avant zone de bascule" */}
+          <span className="font-mono tracking-[0.15em] sm:tracking-[0.2em] uppercase mt-1 sm:mt-3" style={{
+            fontSize: isMobile ? 9 : 13,
+            color: "rgba(255,255,255,0.35)",
+          }}>
+            {t("gauge.before")}
+          </span>
 
-        {/* Clear language: "avant zone de bascule" */}
-        <span className="font-mono tracking-[0.15em] uppercase mt-1 sm:mt-2 text-center" style={{
-          fontSize: isMobile ? 8 : 11,
-          color: "rgba(255,255,255,0.25)",
-        }}>
-          {t("gauge.before")}
-        </span>
+          {/* Phase */}
+          <span className="font-mono font-bold uppercase" style={{
+            fontSize: isMobile ? 14 : 20,
+            letterSpacing: isMobile ? "0.3em" : "0.5em",
+            marginTop: isMobile ? 8 : 22,
+            color,
+            opacity: 0.9,
+            transition: "color 800ms ease",
+          }}>
+            {phaseLabel}
+          </span>
 
-        {/* Phase label */}
-        <span className="font-mono uppercase" style={{
-          fontSize: isMobile ? 12 : 16,
-          letterSpacing: isMobile ? "0.3em" : "0.5em",
-          marginTop: isMobile ? 6 : 18,
-          color,
-          opacity: 0.85,
-          transition: "color 800ms ease",
-        }}>
-          {phaseLabel}
-        </span>
-
-        {/* Metrics row: PSI + Confidence */}
-        <div className="flex items-center mt-2 sm:mt-5" style={{ gap: isMobile ? 16 : 40 }}>
-          <div className="flex flex-col items-center">
-            <span className="font-mono tracking-[0.2em] uppercase" style={{
-              color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 8 : 10,
-            }}>
-              {t("gauge.pressure")}
-            </span>
-            <span className="font-mono font-bold mt-0.5" style={{
-              color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 15 : 22,
-            }}>
-              {globalPsi}
-            </span>
-          </div>
-          <div style={{ width: 1, height: isMobile ? 20 : 32, background: "rgba(255,255,255,0.08)" }} />
-          <div className="flex flex-col items-center">
-            <span className="font-mono tracking-[0.2em] uppercase" style={{
-              color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 8 : 10,
-            }}>
-              {t("gauge.confidence")}
-            </span>
-            <span className="font-mono font-bold mt-0.5" style={{
-              color: "rgba(255,255,255,0.55)", fontSize: isMobile ? 15 : 22,
-            }}>
-              {globalConf}%
-            </span>
+          {/* Opportunity + Risk scores */}
+          <div className="flex items-center mt-3 sm:mt-6" style={{ gap: isMobile ? 20 : 50 }}>
+            <div className="flex flex-col items-center">
+              <span className="font-mono tracking-[0.2em] uppercase" style={{
+                color: "rgba(255,215,0,0.4)", fontSize: isMobile ? 9 : 12,
+              }}>
+                {t("gauge.opportunity")}
+              </span>
+              <span className="font-mono font-bold mt-0.5" style={{
+                color: oppGlobal, fontSize: isMobile ? 20 : 28,
+              }}>
+                {globalOpp}
+              </span>
+            </div>
+            <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.1)" }} />
+            <div className="flex flex-col items-center">
+              <span className="font-mono tracking-[0.2em] uppercase" style={{
+                color: "rgba(229,57,53,0.35)", fontSize: isMobile ? 9 : 12,
+              }}>
+                {t("gauge.risk")}
+              </span>
+              <span className="font-mono font-bold mt-0.5" style={{
+                color: rskGlobal, fontSize: isMobile ? 20 : 28,
+              }}>
+                {globalRisk}
+              </span>
+            </div>
+            <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.1)" }} />
+            <div className="flex flex-col items-center">
+              <span className="font-mono tracking-[0.2em] uppercase" style={{
+                color: "rgba(255,255,255,0.25)", fontSize: isMobile ? 9 : 12,
+              }}>
+                {t("gauge.confidence")}
+              </span>
+              <span className="font-mono font-bold mt-0.5" style={{
+                color: "rgba(255,255,255,0.6)", fontSize: isMobile ? 18 : 24,
+              }}>
+                {globalConf}%
+              </span>
+            </div>
           </div>
         </div>
       </div>
-      </div>
 
-      {/* ═══════════════════════════════════════ */}
-      {/* PRIORITY FOOTER — clear language          */}
-      {/* ═══════════════════════════════════════ */}
+      {/* PRIORITY FOOTER */}
       {signals.length > 0 && (() => {
         const priority = signals.reduce((best, s) =>
           s.t_minus_minutes < best.t_minus_minutes ? s : best, signals[0]);
-        const prioColor = stateColor(deriveGaugeState(priority.psi, priority.confidence));
+        const prioColor = priority.dominant === "opportunity" ? opportunityColor(priority.opportunity) : riskColor(priority.risk);
         return (
           <div className="fixed left-0 right-0 z-20 flex justify-center pointer-events-none"
-            style={{ bottom: isMobile ? (hasPosition ? 110 : 50) : (hasPosition ? 130 : 60) }}>
-            <div className="font-mono text-center px-4 py-1.5 rounded-md" style={{
-              background: "rgba(0,0,0,0.4)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              fontSize: isMobile ? 10 : 12,
-              letterSpacing: "0.12em",
+            style={{ bottom: isMobile ? (hasPosition ? 110 : 55) : (hasPosition ? 130 : 65) }}>
+            <div className="font-mono text-center px-5 py-2 rounded-lg" style={{
+              background: "rgba(0,0,0,0.5)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              fontSize: isMobile ? 11 : 13,
+              letterSpacing: "0.1em",
             }}>
-              <span style={{ color: "rgba(255,255,255,0.35)" }}>{t("priority.current")} : </span>
-              <span style={{ color: prioColor, fontWeight: 700 }}>
-                SN-{priority.netuid}
-              </span>
-              <span style={{ color: "rgba(255,255,255,0.5)", marginLeft: 8 }}>
+              <span style={{ color: "rgba(255,255,255,0.4)" }}>{t("priority.current")} : </span>
+              <span style={{ color: prioColor, fontWeight: 700 }}>SN-{priority.netuid}</span>
+              <span style={{ color: "rgba(255,255,255,0.55)", marginLeft: 8 }}>
                 ({formatTimeClear(priority.t_minus_minutes)} {t("priority.before")})
               </span>
             </div>
@@ -1606,9 +1556,7 @@ export default function AlienGauge() {
         );
       })()}
 
-      {/* ═══════════════════════════════════════ */}
-      {/* POSITION BAR — risk management           */}
-      {/* ═══════════════════════════════════════ */}
+      {/* POSITION BAR or OPEN BUTTON */}
       {hasPosition ? (
         <div className="fixed left-0 right-0 z-20 flex justify-center"
           style={{ bottom: isMobile ? 12 : 20 }}>
@@ -1617,36 +1565,35 @@ export default function AlienGauge() {
         </div>
       ) : (
         <div className="fixed z-20 flex justify-center"
-          style={{ bottom: isMobile ? 12 : 20, left: 0, right: 0 }}>
+          style={{ bottom: isMobile ? 14 : 22, left: 0, right: 0 }}>
           {user ? (
             <button
-              onClick={() => setOpenPosDialog(true)}
-              className="font-mono tracking-wider px-5 py-2.5 rounded-xl transition-all pointer-events-auto flex items-center gap-2"
+              onClick={() => { setPreselectedNetuid(undefined); setOpenPosDialog(true); }}
+              className="font-mono tracking-wider px-6 py-3 rounded-xl transition-all pointer-events-auto flex items-center gap-2"
               style={{
-                background: "linear-gradient(135deg, rgba(76,175,80,0.12), rgba(76,175,80,0.06))",
-                color: "rgba(76,175,80,0.85)",
-                border: "1px solid rgba(76,175,80,0.25)",
-                fontSize: isMobile ? 11 : 13,
-                fontWeight: 600,
-                boxShadow: "0 0 20px rgba(76,175,80,0.08)",
+                background: "linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,215,0,0.06))",
+                color: "rgba(255,215,0,0.9)",
+                border: "1px solid rgba(255,215,0,0.3)",
+                fontSize: isMobile ? 12 : 15,
+                fontWeight: 700,
+                boxShadow: "0 0 25px rgba(255,215,0,0.08)",
                 letterSpacing: "0.08em",
               }}
             >
-              <span style={{ fontSize: isMobile ? 14 : 16 }}>➕</span> {t("pos.open")}
+              <span style={{ fontSize: isMobile ? 16 : 18 }}>➕</span> {t("pos.open")}
             </button>
           ) : (
-            <span className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-md"
-              style={{ color: "rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
+            <span className="font-mono text-[10px] tracking-wider px-3 py-2 rounded-md pointer-events-auto"
+              style={{ color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
               {t("pos.login_required")}
             </span>
           )}
         </div>
       )}
 
-      {/* Open Position Dialog */}
-      <OpenPositionDialog open={openPosDialog} onClose={() => setOpenPosDialog(false)} signals={signals} t={t} />
-
-      {/* Subnet Panel */}
+      {/* Dialogs */}
+      <OpenPositionDialog open={openPosDialog} onClose={() => setOpenPosDialog(false)}
+        signals={signals} t={t} preselectedNetuid={preselectedNetuid} />
       <SubnetPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} />
     </div>
   );
