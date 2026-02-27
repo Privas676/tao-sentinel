@@ -126,6 +126,8 @@ const translations = {
   "pos.login_required": { fr: "Connectez-vous pour gérer vos positions", en: "Sign in to manage positions" },
   "pos.alert_sl": { fr: "⛔ STOP-LOSS ATTEINT", en: "⛔ STOP-LOSS HIT" },
   "pos.alert_tp": { fr: "🎯 TAKE-PROFIT ATTEINT", en: "🎯 TAKE-PROFIT HIT" },
+  "pos.exit_warn_sc": { fr: "⚠ Smart Capital en Distribution — sortie recommandée", en: "⚠ Smart Capital Distribution — exit recommended" },
+  "pos.exit_warn_risk": { fr: "⚠ Risque élevé (>70) — sortie recommandée", en: "⚠ High risk (>70) — exit recommended" },
   "pos.partial_tp": { fr: "Prise de profit partielle", en: "Partial take-profit" },
   "pos.partial_25_x2": { fr: "25% à ×2", en: "25% at ×2" },
   "pos.partial_25_x5": { fr: "25% à ×5", en: "25% at ×5" },

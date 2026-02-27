@@ -664,8 +664,8 @@ type Position = {
   exitRecommended: number;
 };
 
-function PositionBar({ position, isMobile, t, onClose, onTakeProfit }: {
-  position: Position; isMobile: boolean; t: (key: any) => string; onClose?: () => void; onTakeProfit?: () => void;
+function PositionBar({ position, isMobile, t, onClose, onTakeProfit, exitWarning }: {
+  position: Position; isMobile: boolean; t: (key: any) => string; onClose?: () => void; onTakeProfit?: () => void; exitWarning?: string | null;
 }) {
   const pnl = position.currentValue - position.capital;
   const pnlPct = ((pnl / position.capital) * 100);
@@ -746,8 +746,21 @@ function PositionBar({ position, isMobile, t, onClose, onTakeProfit }: {
         }} />
       </div>
 
+      {/* Exit warning banner */}
+      {exitWarning && (
+        <div className="mt-3 px-3 py-2 rounded-lg flex items-center gap-2" style={{
+          background: "rgba(229,57,53,0.08)",
+          border: "1px solid rgba(229,57,53,0.2)",
+          animation: "priority-pulse 2.5s ease-in-out infinite",
+        }}>
+          <span style={{ color: "rgba(229,57,53,0.9)", fontSize: isMobile ? 10 : 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em" }}>
+            {exitWarning}
+          </span>
+        </div>
+      )}
+
       {/* Action buttons */}
-      <div className="flex items-center gap-3 mt-4">
+      <div className="flex items-center gap-3 mt-3">
         {onClose && (
           <button onClick={onClose}
             className="pointer-events-auto font-mono tracking-wider px-5 py-2.5 rounded-lg transition-all flex items-center gap-2"
@@ -1143,6 +1156,21 @@ export default function AlienGauge() {
     }
     prevAlertRef.current = { sl: slHit, tp: tpHit };
   }, [activePosition, demoMode, t]);
+
+  /* ─── Smart exit recommendation alert ─── */
+  const prevExitWarnRef = useRef(false);
+  useEffect(() => {
+    if (!activePosition || demoMode) return;
+    const shouldWarn = smartCapital.state === "DISTRIBUTION" || globalRisk > 70;
+    if (shouldWarn && !prevExitWarnRef.current) {
+      const msg = smartCapital.state === "DISTRIBUTION" ? t("pos.exit_warn_sc" as any) : t("pos.exit_warn_risk" as any);
+      toast.warning(msg, { duration: 15000 });
+      if (Notification.permission === "granted") {
+        new Notification(msg, { icon: "/pwa-192x192.png", tag: "pos-exit-warn" });
+      }
+    }
+    prevExitWarnRef.current = shouldWarn;
+  }, [activePosition, smartCapital.state, globalRisk, demoMode, t]);
 
   /* ─── mechanical click ─── */
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -1681,7 +1709,11 @@ export default function AlienGauge() {
         {hasPosition ? (
           <PositionBar position={activePosition!} isMobile={isMobile} t={t}
             onClose={activePosition?.id ? handleClosePosition : undefined}
-            onTakeProfit={() => toast.info("Prise de profit partielle — à implémenter")} />
+            onTakeProfit={() => toast.info("Prise de profit partielle — à implémenter")}
+            exitWarning={
+              smartCapital.state === "DISTRIBUTION" ? t("pos.exit_warn_sc") :
+              globalRisk > 70 ? t("pos.exit_warn_risk") : null
+            } />
         ) : (
           user ? (
             <button
