@@ -278,23 +278,21 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
   let tx = cx + tooltipR * Math.cos(angle) - TW / 2;
   let ty = cy + tooltipR * Math.sin(angle) - TH / 2;
 
-  // Ensure tooltip never overlaps the center area
-  const margin = 12;
-  const halfSvg = svgSize / 2;
-  const viewMin = -(halfSvg - (svgSize * 0.35)) + margin;
-  const viewMax = svgSize - (halfSvg - (svgSize * 0.35)) - TW - margin;
-  const viewMinY = -(halfSvg - (svgSize * 0.35)) + margin;
-  const viewMaxY = svgSize - (halfSvg - (svgSize * 0.35)) - TH - margin;
-  tx = Math.max(viewMin, Math.min(viewMax, tx));
-  ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
+   // Viewport bounds in SVG coordinates — allow overflow since SVG has overflow:visible
+   const margin = 12;
+   const viewMin = -margin;
+   const viewMax = svgSize - TW + margin;
+   const viewMinY = -margin;
+   const viewMaxY = svgSize - TH + margin;
+   tx = Math.max(viewMin, Math.min(viewMax, tx));
+   ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
 
    // STRICT: never overlap the sacred HUD center (timer + PRESSION/CONFIANCE)
-   // In SVG coords (svgSize=1200, center=600): HUD is ~440px screen = ~660 SVG units wide
-   // PRESSION/CONFIANCE sits ~130px below center in screen = ~195 SVG units
-   const scale = svgSize / 800; // SVG-to-screen ratio (1200/800 = 1.5 on desktop)
-   const sacredHalfW = 240 * scale;  // ~360 SVG units
-   const sacredTop = 120 * scale;    // ~180 SVG units above center
-   const sacredBottom = 180 * scale; // ~270 SVG units below center (covers CONFIANCE)
+   // All values in SVG coordinate space.
+   const svgPerPx = svgSize / 800; // 1.5 on desktop
+   const sacredHalfW = 250 * svgPerPx;  // covers PRESSION to CONFIANCE width
+   const sacredTop = 150 * svgPerPx;    // covers timer area
+   const sacredBottom = 210 * svgPerPx; // covers CONFIANCE + margin
 
    const doesOverlap = (ttx: number, tty: number) => {
      const tRight = ttx + TW, tBottom = tty + TH;
@@ -303,13 +301,15 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
    };
 
    if (doesOverlap(tx, ty)) {
-     // For lateral rays: shift tooltip below the sacred zone
      const tooltipMidY = ty + TH / 2;
      const goBelow = tooltipMidY >= cy;
-     ty = goBelow ? (cy + sacredBottom + 12) : (cy - sacredTop - TH - 12);
+     ty = goBelow ? (cy + sacredBottom + 15) : (cy - sacredTop - TH - 15);
+     if (doesOverlap(tx, ty)) {
+       tx = angle >= 0 ? (cx + sacredHalfW + 15) : (cx - sacredHalfW - TW - 15);
+     }
    }
 
-   // Reclamp to viewport
+   // Final clamp
    tx = Math.max(viewMin, Math.min(viewMax, tx));
    ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
 
