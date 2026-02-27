@@ -164,13 +164,18 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const isHovered = hoveredIdx === i;
 
         // Label position: push further out on mobile to avoid center overlap
-        const labelOffset = isMobileSize ? 24 : 16;
+        const labelOffset = isMobileSize ? 28 : 16;
         const labelR = r2 + labelOffset;
-        // Ensure labels stay far enough from center on mobile
-        const minLabelR = isMobileSize ? outerR + 90 : 0;
-        const effectiveLabelR = Math.max(labelR, minLabelR);
-        const lx = cx + effectiveLabelR * Math.cos(angle);
-        const ly = cy + effectiveLabelR * Math.sin(angle);
+        const lx = cx + labelR * Math.cos(angle);
+        const ly = cy + labelR * Math.sin(angle);
+        // On mobile, hide labels that would overlap with the central T-minus text
+        // The danger zone is rays pointing roughly left or right (within ±30° of horizontal)
+        const normalizedAngle = ((angleDeg % 360) + 360) % 360;
+        const isHorizontalRay = isMobileSize && (
+          (normalizedAngle > 140 && normalizedAngle < 220) || // pointing left
+          (normalizedAngle > 310 || normalizedAngle < 50)     // pointing right / upper-right
+        );
+        const showLabel = !isHorizontalRay;
         const labelAnchor = angleDeg > -45 && angleDeg < 135 ? "start" : "end";
         const labelText = `SN${s.netuid}`;
         const tMinusText = formatTMinus(s.t_minus_minutes);
@@ -213,19 +218,23 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
                 style={{ opacity: 0.4, animation: "ray-breathe 1.8s ease-in-out infinite", pointerEvents: "none" }}
               />
             )}
-            {/* Always-visible label: SN + T-minus */}
-            <text x={lx} y={ly - 7} textAnchor={labelAnchor}
-              fill="rgba(255,255,255,0.7)" fontSize={labelFontSize} fontWeight="600"
-              fontFamily="'JetBrains Mono', monospace" letterSpacing="0.04em"
-              style={{ pointerEvents: "none" }}>
-              {labelText}
-            </text>
-            <text x={lx} y={ly + (isMobileSize ? 7 : 10)} textAnchor={labelAnchor}
-              fill={stateColor(s.state)} fontSize={tMinusFontSize} fontWeight="500"
-              fontFamily="'JetBrains Mono', monospace" letterSpacing="0.06em"
-              style={{ pointerEvents: "none", opacity: 0.75 }}>
-              {tMinusText}
-            </text>
+            {/* Always-visible label: SN + T-minus (hidden on mobile if overlapping center) */}
+            {showLabel && (
+              <>
+                <text x={lx} y={ly - 7} textAnchor={labelAnchor}
+                  fill="rgba(255,255,255,0.7)" fontSize={labelFontSize} fontWeight="600"
+                  fontFamily="'JetBrains Mono', monospace" letterSpacing="0.04em"
+                  style={{ pointerEvents: "none" }}>
+                  {labelText}
+                </text>
+                <text x={lx} y={ly + (isMobileSize ? 7 : 10)} textAnchor={labelAnchor}
+                  fill={stateColor(s.state)} fontSize={tMinusFontSize} fontWeight="500"
+                  fontFamily="'JetBrains Mono', monospace" letterSpacing="0.06em"
+                  style={{ pointerEvents: "none", opacity: 0.75 }}>
+                  {tMinusText}
+                </text>
+              </>
+            )}
             <RaySparkline data={s.sparkline_7d} x1={x1} y1={y1} x2={x2} y2={y2} state={s.state} />
             {tractionPts && (
               <path
