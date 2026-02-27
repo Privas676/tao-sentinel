@@ -144,8 +144,8 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const angleDeg = (i * angleStep) - 90;
         const angle = angleDeg * (Math.PI / 180);
         const r1 = outerR + gap;
-        const maxLen = 130;
-        const minLen = 25;
+        const maxLen = outerR > 200 ? 130 : 70;
+        const minLen = outerR > 200 ? 25 : 15;
         const imminenceFactor = clamp(1 - (s.t_minus_minutes / 240), 0, 1);
         const len = minLen + imminenceFactor * (maxLen - minLen);
         const isImm = s.state === "IMMINENT";
@@ -627,12 +627,12 @@ export default function AlienGauge() {
 
   /* ─── geometry (responsive) ─── */
   const isMobile = useIsMobile();
-  const SIZE = isMobile ? 340 : 720;
-  const SVG_SIZE = isMobile ? 480 : 960;
+  const SIZE = isMobile ? 300 : 720;
+  const SVG_SIZE = isMobile ? 420 : 960;
   const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
-  const R_OUTER = isMobile ? 150 : 320;
-  const R_INNER = isMobile ? 128 : 275;
-  const R_TRIGGER = isMobile ? 110 : 238;
+  const R_OUTER = isMobile ? 125 : 320;
+  const R_INNER = isMobile ? 107 : 275;
+  const R_TRIGGER = isMobile ? 92 : 238;
 
   const color = stateColor(globalState);
   const glow = stateGlow(globalState);
@@ -681,13 +681,13 @@ export default function AlienGauge() {
       )}
 
       {/* Phase indicator (top) */}
-      <div className="absolute top-3 sm:top-5 left-0 right-0 text-center z-10">
-        <span className="font-mono tracking-[0.35em] uppercase" style={{ color: "rgba(255,255,255,0.12)", fontSize: isMobile ? 8 : 9 }}>
+      <div className="absolute top-2 sm:top-5 left-0 right-0 text-center z-10">
+        <span className="font-mono tracking-[0.35em] uppercase" style={{ color: "rgba(255,255,255,0.12)", fontSize: isMobile ? 7 : 9 }}>
           {t("gauge.phase")} : {phaseLabel}
         </span>
       </div>
-      <div className="absolute top-8 sm:top-12 left-0 right-0 text-center z-10">
-        <span className="font-mono tracking-[0.3em] uppercase" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 9 : 10 }}>
+      <div className="absolute top-6 sm:top-12 left-0 right-0 text-center z-10">
+        <span className="font-mono tracking-[0.3em] uppercase" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 8 : 10 }}>
           {t("gauge.confidence")} {globalConf}%
         </span>
       </div>
@@ -751,19 +751,19 @@ export default function AlienGauge() {
             `}</style>
           </defs>
 
-          {/* Outer ring track (+35% thickness = ~7) */}
-          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="7" />
+          {/* Outer ring track */}
+          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 4 : 7} />
           {tensionAngle > 0 && (
             <path d={describeArc(CX, CY, R_OUTER, -135, -135 + tensionAngle)} fill="none"
-              stroke={color} strokeWidth="7" strokeLinecap="round"
+              stroke={color} strokeWidth={isMobile ? 4 : 7} strokeLinecap="round"
               style={{ opacity: 0.4, transition: "d 600ms ease, stroke 500ms ease" }} />
           )}
 
-          {/* Inner ring (+20% = ~11) */}
-          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="11" />
+          {/* Inner ring */}
+          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 6 : 11} />
           {innerAngle > 0 && (
             <path d={describeArc(CX, CY, R_INNER, -135, -135 + innerAngle)} fill="none"
-              stroke={color} strokeWidth="11" strokeLinecap="round"
+              stroke={color} strokeWidth={isMobile ? 6 : 11} strokeLinecap="round"
               style={{ opacity: innerOpacity, transition: "d 600ms ease, stroke 500ms ease, opacity 400ms ease" }} />
           )}
 
@@ -824,25 +824,25 @@ export default function AlienGauge() {
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           {/* T-minus */}
           <span className="font-mono font-light leading-none" style={{
-            fontSize: isMobile ? 48 : 104, color, transition: "color 500ms ease", letterSpacing: "0.05em",
+            fontSize: isMobile ? 36 : 104, color, transition: "color 500ms ease", letterSpacing: "0.05em",
           }}>
             {formatTMinus(globalTMinus)}
           </span>
 
           {/* State */}
-          <span className="font-mono tracking-[0.5em] mt-2 sm:mt-3" style={{
-            fontSize: isMobile ? 11 : 18, color, opacity: 0.85, transition: "color 500ms ease",
+          <span className="font-mono tracking-[0.5em] mt-1 sm:mt-3" style={{
+            fontSize: isMobile ? 9 : 18, color, opacity: 0.85, transition: "color 500ms ease",
           }}>
             {stateLabel}
           </span>
 
           {/* PSI GLOBAL */}
-          <span className="font-mono mt-3 sm:mt-6 tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 9 : 11 }}>
+          <span className="font-mono mt-2 sm:mt-6 tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 7 : 11 }}>
             {t("gauge.global")}
           </span>
 
           {/* PSI value */}
-          <span className="font-mono mt-1 tracking-[0.15em]" style={{ color: "rgba(255,255,255,0.35)", fontSize: isMobile ? 12 : 14, fontWeight: 600 }}>
+          <span className="font-mono mt-0.5 tracking-[0.15em]" style={{ color: "rgba(255,255,255,0.35)", fontSize: isMobile ? 10 : 14, fontWeight: 600 }}>
             {globalPsi}
           </span>
         </div>
