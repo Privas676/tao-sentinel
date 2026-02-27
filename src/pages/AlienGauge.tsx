@@ -997,8 +997,9 @@ export default function AlienGauge() {
     refetchInterval: 300_000,
   });
 
-  /* ─── demo mode ─── */
+  /* ─── demo mode + view mode ─── */
   const [demoMode, setDemoMode] = useState(false);
+  const [viewMode, setViewMode] = useState<"hunter" | "defensive">("hunter");
 
   const demoSignals: SubnetSignal[] = useMemo(() => [
     { netuid: 1, name: "Alpha", psi: 72, opportunity: 78, risk: 22, t_minus_minutes: 45, confidence: 85, state: "IMMINENT" as GaugeState, phase: "TRIGGER" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [10,15,12,18,22,20,25], liquidity: 1200, momentum: 0.8, reasons: ["Momentum fort ↑", "Consensus élevé ✓", "Signal d'entrée actif"], dominant: "opportunity" as const },
@@ -1012,7 +1013,15 @@ export default function AlienGauge() {
 
   /* ─── signals ─── */
   const realSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
-  const signals = demoMode ? demoSignals : realSignals;
+  const allSignals = demoMode ? demoSignals : realSignals;
+
+  // Filter top 7 by mode: hunter = top opportunity, defensive = top risk
+  const signals = useMemo(() => {
+    const sorted = [...allSignals].sort((a, b) =>
+      viewMode === "hunter" ? b.opportunity - a.opportunity : b.risk - a.risk
+    );
+    return sorted.slice(0, 7);
+  }, [allSignals, viewMode]);
   const realPsi = useMemo(() => computeGlobalPsi(rawSignals ?? []), [rawSignals]);
   const realConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
   const realOpp = useMemo(() => computeGlobalOpportunity(rawSignals ?? []), [rawSignals]);
@@ -1231,8 +1240,6 @@ export default function AlienGauge() {
     }
   })();
 
-  /* ─── mode state ─── */
-  const [viewMode, setViewMode] = useState<"hunter" | "defensive">("hunter");
 
   return (
     <div className="fixed inset-0 select-none" style={{ background: "#000", overflow: "hidden" }}>
