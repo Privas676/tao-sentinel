@@ -289,10 +289,12 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
   ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
 
    // STRICT: never overlap the sacred HUD center (timer + PRESSION/CONFIANCE)
-   // HUD is ~220px wide, extends ~100px above center to ~170px below (CONFIANCE bottom)
-   const sacredHalfW = 220;
-   const sacredTop = 100;   // above cy
-   const sacredBottom = 170; // below cy
+   // In SVG coords (svgSize=1200, center=600): HUD is ~440px screen = ~660 SVG units wide
+   // PRESSION/CONFIANCE sits ~130px below center in screen = ~195 SVG units
+   const scale = svgSize / 800; // SVG-to-screen ratio (1200/800 = 1.5 on desktop)
+   const sacredHalfW = 240 * scale;  // ~360 SVG units
+   const sacredTop = 120 * scale;    // ~180 SVG units above center
+   const sacredBottom = 180 * scale; // ~270 SVG units below center (covers CONFIANCE)
 
    const doesOverlap = (ttx: number, tty: number) => {
      const tRight = ttx + TW, tBottom = tty + TH;
@@ -301,13 +303,10 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
    };
 
    if (doesOverlap(tx, ty)) {
-     // Determine which side of center the tooltip naturally falls
+     // For lateral rays: shift tooltip below the sacred zone
      const tooltipMidY = ty + TH / 2;
      const goBelow = tooltipMidY >= cy;
-     // Shift vertically just outside the sacred zone, keep X near the ray tip
-     ty = goBelow ? (cy + sacredBottom + 8) : (cy - sacredTop - TH - 8);
-     // Keep tx anchored to the ray direction but don't overshoot
-     tx = Math.max(viewMin, Math.min(viewMax, cx + tooltipR * Math.cos(angle) - TW / 2));
+     ty = goBelow ? (cy + sacredBottom + 12) : (cy - sacredTop - TH - 12);
    }
 
    // Reclamp to viewport
