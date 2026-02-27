@@ -114,6 +114,90 @@ function ImminentParticles({ x1, y1, x2, y2, color }: {
 }
 
 /* ═══════════════════════════════════════ */
+/*       TIME RING (scale ring)            */
+/* ═══════════════════════════════════════ */
+const TIME_SCALE_MAX_MIN = 480; // 8h max
+const TIME_GRADUATIONS = [
+  { min: 0, label: "0m" },
+  { min: 30, label: "30m" },
+  { min: 60, label: "1h" },
+  { min: 120, label: "2h" },
+  { min: 240, label: "4h" },
+  { min: 480, label: "8h" },
+];
+
+function TimeRing({ cx, cy, outerR, isMobile }: {
+  cx: number; cy: number; outerR: number; isMobile: boolean;
+}) {
+  const gap = 35;
+  const maxLen = isMobile ? 85 : 180;
+  const ringR = outerR + gap; // ring at start of rays
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      {/* Subtle scale ring */}
+      <circle cx={cx} cy={cy} r={ringR} fill="none"
+        stroke="rgba(255,255,255,0.04)" strokeWidth="1" strokeDasharray="4 6" />
+
+      {/* Graduation ticks + labels */}
+      {TIME_GRADUATIONS.map((grad) => {
+        const fraction = grad.min / TIME_SCALE_MAX_MIN;
+        const tickR = ringR + fraction * maxLen;
+        const tickLen = isMobile ? 4 : 6;
+        const labelSize = isMobile ? 7 : 9;
+
+        // Draw ticks at 12 o'clock position (top) and label
+        const tickAngle = -Math.PI / 2; // 12 o'clock
+        const tx1 = cx + tickR * Math.cos(tickAngle);
+        const ty1 = cy + tickR * Math.sin(tickAngle) - tickLen;
+        const tx2 = cx + tickR * Math.cos(tickAngle);
+        const ty2 = cy + tickR * Math.sin(tickAngle) + tickLen;
+
+        // Also draw a subtle concentric arc for major graduations
+        const showArc = grad.min === 60 || grad.min === 240 || grad.min === 480;
+
+        return (
+          <g key={grad.min}>
+            {/* Concentric scale arcs for key graduations */}
+            {showArc && (
+              <circle cx={cx} cy={cy} r={tickR} fill="none"
+                stroke="rgba(255,255,255,0.02)" strokeWidth="0.5" strokeDasharray="2 8" />
+            )}
+            {/* Tick mark at 12 o'clock */}
+            <line x1={tx1} y1={ty1} x2={tx2} y2={ty2}
+              stroke="rgba(255,255,255,0.15)" strokeWidth={grad.min === 0 ? 1.5 : 0.8} />
+            {/* Label */}
+            <text x={tx2 + (isMobile ? 6 : 8)} y={ty2 + 1}
+              fill="rgba(255,255,255,0.2)" fontSize={labelSize}
+              fontFamily="'JetBrains Mono', monospace" letterSpacing="0.05em"
+              textAnchor="start" dominantBaseline="middle"
+              style={{ pointerEvents: "none" }}>
+              {grad.label}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Hover zone for "ÉCHELLE T-MINUS" label */}
+      <circle cx={cx} cy={cy} r={ringR} fill="transparent"
+        strokeWidth={maxLen} stroke="transparent"
+        style={{ pointerEvents: "stroke", cursor: "default" }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)} />
+      {hovered && (
+        <text x={cx} y={cy - outerR - (isMobile ? 10 : 20)}
+          fill="rgba(255,255,255,0.3)" fontSize={isMobile ? 8 : 10}
+          fontFamily="'JetBrains Mono', monospace" letterSpacing="0.2em"
+          textAnchor="middle" dominantBaseline="auto">
+          ÉCHELLE T-MINUS
+        </text>
+      )}
+    </g>
+  );
+}
+
+/* ═══════════════════════════════════════ */
 /*          SACRED RAYS                    */
 /* ═══════════════════════════════════════ */
 function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClickRay }: {
@@ -141,46 +225,55 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
 
   if (!signals.length) return null;
 
+  const isMobileSize = outerR <= 250;
+  const maxLen = isMobileSize ? 85 : 180;
+  const minLen = isMobileSize ? 12 : 20; // minimum visible length even for 8h+
+
   return (
     <>
       {signals.map((s, i) => {
         const angleDeg = (i * angleStep) - 90;
         const angle = angleDeg * (Math.PI / 180);
         const r1 = outerR + gap;
-        const isMobileSize = outerR <= 250;
-        const maxLen = isMobileSize ? 85 : 170;
-        const minLen = isMobileSize ? 22 : 40;
-        const asymFactor = s.asymmetry === "HIGH" ? 1.0 : s.asymmetry === "MED" ? 0.65 : 0.35;
-        const len = minLen + asymFactor * (maxLen - minLen);
+
+        // LENGTH = T-minus mapping (shorter T-minus = LONGER ray = closer to triggering)
+        const tMinusClamped = clamp(s.t_minus_minutes, 0, TIME_SCALE_MAX_MIN);
+        const tFraction = 1 - (tMinusClamped / TIME_SCALE_MAX_MIN); // invert: short T = long ray
+        const len = minLen + tFraction * (maxLen - minLen);
+        const isOverflow = s.t_minus_minutes > TIME_SCALE_MAX_MIN;
+
         const isImm = s.state === "IMMINENT";
         const trembleOffset = isImm ? tremble : 0;
         const breatheLen = len * (1 + rayBreathe * 0.04);
         const r2 = r1 + breatheLen + trembleOffset;
-        const thickness = (3 + (s.confidence / 100) * 5) * 1.8;
+
+        // THICKNESS = confidence encoding (min 3, max 12)
+        const baseThickness = isMobileSize ? 2.5 : 3.5;
+        const maxThickness = isMobileSize ? 8 : 12;
+        const thickness = baseThickness + (s.confidence / 100) * (maxThickness - baseThickness);
+
         const x1 = cx + r1 * Math.cos(angle);
         const y1 = cy + r1 * Math.sin(angle);
         const x2 = cx + r2 * Math.cos(angle);
         const y2 = cy + r2 * Math.sin(angle);
         const isHovered = hoveredIdx === i;
 
-        // Label position: push further out on mobile to avoid center overlap
-        const labelOffset = isMobileSize ? 28 : 16;
+        // Label: always horizontal, with dark halo
+        const labelOffset = isMobileSize ? 20 : 18;
         const labelR = r2 + labelOffset;
         const lx = cx + labelR * Math.cos(angle);
         const ly = cy + labelR * Math.sin(angle);
-        // On mobile, hide labels that would overlap with the central T-minus text
-        // The danger zone is rays pointing roughly left or right (within ±30° of horizontal)
         const normalizedAngle = ((angleDeg % 360) + 360) % 360;
         const isHorizontalRay = isMobileSize && (
-          (normalizedAngle > 140 && normalizedAngle < 220) || // pointing left
-          (normalizedAngle > 310 || normalizedAngle < 50)     // pointing right / upper-right
+          (normalizedAngle > 140 && normalizedAngle < 220) ||
+          (normalizedAngle > 310 || normalizedAngle < 50)
         );
         const showLabel = !isHorizontalRay;
         const labelAnchor = angleDeg > -45 && angleDeg < 135 ? "start" : "end";
-        const labelText = `SN${s.netuid}`;
+        const labelText = `SN${s.netuid}${isOverflow ? "+" : ""}`;
         const tMinusText = formatTMinus(s.t_minus_minutes);
-        const labelFontSize = isMobileSize ? 11 : 14;
-        const tMinusFontSize = isMobileSize ? 9 : 12;
+        const labelFontSize = isMobileSize ? 11 : 15;
+        const tMinusFontSize = isMobileSize ? 9 : 13;
 
         const tractionPts = isImm ? (() => {
           const trR = outerR + 2;
@@ -197,12 +290,14 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
 
         return (
           <g key={s.netuid}>
+            {/* Hit area */}
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={28}
               style={{ cursor: "pointer" }}
               onMouseEnter={() => setHoveredIdx(i)}
               onMouseLeave={() => setHoveredIdx(null)}
               onClick={() => onClickRay(s)}
             />
+            {/* Ray body */}
             <line x1={x1} y1={y1} x2={x2} y2={y2}
               stroke={rayColor(s.state)} strokeWidth={thickness} strokeLinecap="round"
               style={{
@@ -212,25 +307,34 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
                 pointerEvents: "none",
               }}
             />
+            {/* Hover glow */}
             {isHovered && (
               <line x1={x1} y1={y1} x2={x2} y2={y2}
                 stroke={rayColor(s.state, 0.3)} strokeWidth={thickness + 10} strokeLinecap="round"
                 style={{ opacity: 0.4, animation: "ray-breathe 1.8s ease-in-out infinite", pointerEvents: "none" }}
               />
             )}
-            {/* Always-visible label: SN + T-minus (hidden on mobile if overlapping center) */}
+            {/* Labels: horizontal text with dark halo */}
             {showLabel && (
               <>
-                <text x={lx} y={ly - 7} textAnchor={labelAnchor}
-                  fill="rgba(255,255,255,0.7)" fontSize={labelFontSize} fontWeight="600"
+                {/* Dark halo behind text */}
+                <rect
+                  x={labelAnchor === "start" ? lx - 3 : lx - (isMobileSize ? 65 : 85)}
+                  y={ly - (isMobileSize ? 14 : 18)}
+                  width={isMobileSize ? 68 : 88} height={isMobileSize ? 28 : 35}
+                  rx={4} fill="rgba(0,0,0,0.6)"
+                  style={{ pointerEvents: "none" }}
+                />
+                <text x={lx} y={ly - (isMobileSize ? 3 : 4)} textAnchor={labelAnchor}
+                  fill="rgba(255,255,255,0.85)" fontSize={labelFontSize} fontWeight="700"
                   fontFamily="'JetBrains Mono', monospace" letterSpacing="0.04em"
                   style={{ pointerEvents: "none" }}>
                   {labelText}
                 </text>
-                <text x={lx} y={ly + (isMobileSize ? 7 : 10)} textAnchor={labelAnchor}
-                  fill={stateColor(s.state)} fontSize={tMinusFontSize} fontWeight="500"
+                <text x={lx} y={ly + (isMobileSize ? 9 : 13)} textAnchor={labelAnchor}
+                  fill={stateColor(s.state)} fontSize={tMinusFontSize} fontWeight="600"
                   fontFamily="'JetBrains Mono', monospace" letterSpacing="0.06em"
-                  style={{ pointerEvents: "none", opacity: 0.75 }}>
+                  style={{ pointerEvents: "none" }}>
                   {tMinusText}
                 </text>
               </>
@@ -946,7 +1050,7 @@ export default function AlienGauge() {
 
           {/* Micro-pulse on ring toward hovered ray */}
           {hoveredIdx !== null && signals[hoveredIdx] && (() => {
-            const hAngleDeg = (hoveredIdx * (360 / 7)) - 90;
+            const hAngleDeg = (hoveredIdx * (360 / Math.max(signals.length, 1))) - 90;
             const spread = 14;
             const hColor = stateColor(signals[hoveredIdx].state);
             return (
@@ -969,6 +1073,9 @@ export default function AlienGauge() {
               </g>
             );
           })()}
+
+          {/* Time Ring (scale) */}
+          <TimeRing cx={CX} cy={CY} outerR={R_OUTER} isMobile={isMobile} />
 
           {/* Sacred Rays */}
           <SacredRays signals={signals} cx={CX} cy={CY} outerR={R_OUTER}
