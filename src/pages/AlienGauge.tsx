@@ -147,8 +147,9 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const angleDeg = (i * angleStep) - 90;
         const angle = angleDeg * (Math.PI / 180);
         const r1 = outerR + gap;
-        const maxLen = outerR > 250 ? 170 : 85;
-        const minLen = outerR > 250 ? 40 : 22;
+        const isMobileSize = outerR <= 250;
+        const maxLen = isMobileSize ? 85 : 170;
+        const minLen = isMobileSize ? 22 : 40;
         const asymFactor = s.asymmetry === "HIGH" ? 1.0 : s.asymmetry === "MED" ? 0.65 : 0.35;
         const len = minLen + asymFactor * (maxLen - minLen);
         const isImm = s.state === "IMMINENT";
@@ -162,13 +163,19 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const y2 = cy + r2 * Math.sin(angle);
         const isHovered = hoveredIdx === i;
 
-        // Label position: at ray tip + offset
-        const labelR = r2 + 16;
-        const lx = cx + labelR * Math.cos(angle);
-        const ly = cy + labelR * Math.sin(angle);
+        // Label position: push further out on mobile to avoid center overlap
+        const labelOffset = isMobileSize ? 24 : 16;
+        const labelR = r2 + labelOffset;
+        // Ensure labels stay far enough from center on mobile
+        const minLabelR = isMobileSize ? outerR + 90 : 0;
+        const effectiveLabelR = Math.max(labelR, minLabelR);
+        const lx = cx + effectiveLabelR * Math.cos(angle);
+        const ly = cy + effectiveLabelR * Math.sin(angle);
         const labelAnchor = angleDeg > -45 && angleDeg < 135 ? "start" : "end";
         const labelText = `SN${s.netuid}`;
         const tMinusText = formatTMinus(s.t_minus_minutes);
+        const labelFontSize = isMobileSize ? 11 : 14;
+        const tMinusFontSize = isMobileSize ? 9 : 12;
 
         const tractionPts = isImm ? (() => {
           const trR = outerR + 2;
@@ -208,13 +215,13 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
             )}
             {/* Always-visible label: SN + T-minus */}
             <text x={lx} y={ly - 7} textAnchor={labelAnchor}
-              fill="rgba(255,255,255,0.7)" fontSize="14" fontWeight="600"
+              fill="rgba(255,255,255,0.7)" fontSize={labelFontSize} fontWeight="600"
               fontFamily="'JetBrains Mono', monospace" letterSpacing="0.04em"
               style={{ pointerEvents: "none" }}>
               {labelText}
             </text>
-            <text x={lx} y={ly + 10} textAnchor={labelAnchor}
-              fill={stateColor(s.state)} fontSize="12" fontWeight="500"
+            <text x={lx} y={ly + (isMobileSize ? 7 : 10)} textAnchor={labelAnchor}
+              fill={stateColor(s.state)} fontSize={tMinusFontSize} fontWeight="500"
               fontFamily="'JetBrains Mono', monospace" letterSpacing="0.06em"
               style={{ pointerEvents: "none", opacity: 0.75 }}>
               {tMinusText}
