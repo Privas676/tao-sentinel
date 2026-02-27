@@ -290,38 +290,58 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
 
    // STRICT: minimum 120px from gauge outer edge, and NEVER overlap sacred center
    const minDistFromEdge = 120;
-   const tooltipCenterX = tx + TW / 2;
-   const tooltipCenterY = ty + TH / 2;
-   const distFromCenter = Math.sqrt((tooltipCenterX - cx) ** 2 + (tooltipCenterY - cy) ** 2);
-   const sacredZone = outerR * 0.85; // enlarged sacred center radius to cover PSI/CONFIANCE metrics
 
-   // Vertical exclusion: HUD extends ~240px above/below center (timer + metrics)
-   const verticalExclusion = 240;
-   const isInVerticalBand = Math.abs(tooltipCenterY - cy) < verticalExclusion;
-   const isInHorizontalBand = Math.abs(tooltipCenterX - cx) < TW * 1.2;
+   // Sacred zone covers the entire HUD area (timer + PRESSION/CONFIANCE)
+   const sacredHalfW = 280; // horizontal half-width of HUD
+   const sacredHalfH = 300; // vertical half-height of HUD (timer top to CONFIANCE bottom)
 
-   // If tooltip center is inside sacred zone OR overlaps the vertical HUD band, push outward
-   if (distFromCenter < sacredZone + TH / 2 || (isInVerticalBand && isInHorizontalBand)) {
-     const pushAngle = Math.atan2(tooltipCenterY - cy, tooltipCenterX - cx);
-     const targetDist = Math.max(sacredZone + TH / 2 + 30, distFromCenter);
-     tx = cx + targetDist * Math.cos(pushAngle) - TW / 2;
-     ty = cy + targetDist * Math.sin(pushAngle) - TH / 2;
+   // Check if tooltip rectangle overlaps the sacred HUD rectangle
+   const doesOverlap = (ttx: number, tty: number) => {
+     const tRight = ttx + TW, tBottom = tty + TH;
+     const sLeft = cx - sacredHalfW, sRight = cx + sacredHalfW;
+     const sTop = cy - sacredHalfH, sBottom = cy + sacredHalfH;
+     return ttx < sRight && tRight > sLeft && tty < sBottom && tBottom > sTop;
+   };
+
+   // If overlapping, push tooltip outward along its angle AND vertically away from center
+   if (doesOverlap(tx, ty)) {
+     const pushAngle = Math.atan2(ty + TH / 2 - cy, tx + TW / 2 - cx);
+     // For near-horizontal rays (±40° from horizontal), shift tooltip above or below the HUD
+     const absCos = Math.abs(Math.cos(pushAngle));
+     if (absCos > 0.6) {
+       // Lateral ray: place tooltip above or below the sacred zone
+       const goUp = Math.sin(pushAngle) < 0;
+       ty = goUp ? (cy - sacredHalfH - TH - 10) : (cy + sacredHalfH + 10);
+       // Keep horizontal position pushed outward
+       const edgePush = outerR + minDistFromEdge;
+       tx = cx + edgePush * Math.cos(pushAngle) - TW / 2;
+     } else {
+       // Non-lateral: push radially outward
+       const targetDist = Math.sqrt(sacredHalfW ** 2 + sacredHalfH ** 2) + TH / 2 + 30;
+       tx = cx + targetDist * Math.cos(pushAngle) - TW / 2;
+       ty = cy + targetDist * Math.sin(pushAngle) - TH / 2;
+     }
    }
 
-  // Also enforce minimum distance from outer ring edge
-  const edgeDist = outerR + minDistFromEdge;
-  const finalCx = tx + TW / 2;
-  const finalCy = ty + TH / 2;
-  const finalDist = Math.sqrt((finalCx - cx) ** 2 + (finalCy - cy) ** 2);
-  if (finalDist < edgeDist) {
-    const pushAngle = Math.atan2(finalCy - cy, finalCx - cx);
-    tx = cx + edgeDist * Math.cos(pushAngle) - TW / 2;
-    ty = cy + edgeDist * Math.sin(pushAngle) - TH / 2;
-  }
+   // Also enforce minimum distance from outer ring edge
+   const edgeDist = outerR + minDistFromEdge;
+   const finalCx = tx + TW / 2;
+   const finalCy = ty + TH / 2;
+   const finalDist = Math.sqrt((finalCx - cx) ** 2 + (finalCy - cy) ** 2);
+   if (finalDist < edgeDist && !doesOverlap(tx, ty)) {
+     // Only push if it won't cause an overlap
+     const pushAngle = Math.atan2(finalCy - cy, finalCx - cx);
+     const newTx = cx + edgeDist * Math.cos(pushAngle) - TW / 2;
+     const newTy = cy + edgeDist * Math.sin(pushAngle) - TH / 2;
+     if (!doesOverlap(newTx, newTy)) {
+       tx = newTx;
+       ty = newTy;
+     }
+   }
 
-  // Reclamp to viewport
-  tx = Math.max(viewMin, Math.min(viewMax, tx));
-  ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
+   // Reclamp to viewport
+   tx = Math.max(viewMin, Math.min(viewMax, tx));
+   ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
 
   const tooltipCx = tx + TW / 2;
   const tooltipCy = ty + TH / 2;
