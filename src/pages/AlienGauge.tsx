@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import {
   SubnetSignal, RawSignal, GaugeState, GaugePhase,
@@ -428,7 +429,7 @@ function SubnetPanel({ signal, open, onClose }: {
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-[380px] border-l border-white/5 bg-[#080810] text-white overflow-y-auto">
+      <SheetContent side="right" className="w-full sm:w-[380px] border-l border-white/5 bg-[#080810] text-white overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="font-mono text-white/90 tracking-wider">
             {t("panel.title")}
@@ -603,13 +604,14 @@ export default function AlienGauge() {
     setPanelSignal(s);
   }, []);
 
-  /* ─── geometry ─── */
-  const SIZE = 720;
-  const SVG_SIZE = 960;
+  /* ─── geometry (responsive) ─── */
+  const isMobile = useIsMobile();
+  const SIZE = isMobile ? 340 : 720;
+  const SVG_SIZE = isMobile ? 480 : 960;
   const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
-  const R_OUTER = 320;
-  const R_INNER = 275;
-  const R_TRIGGER = 238;
+  const R_OUTER = isMobile ? 150 : 320;
+  const R_INNER = isMobile ? 128 : 275;
+  const R_TRIGGER = isMobile ? 110 : 238;
 
   const color = stateColor(globalState);
   const glow = stateGlow(globalState);
@@ -658,13 +660,13 @@ export default function AlienGauge() {
       )}
 
       {/* Phase indicator (top) */}
-      <div className="absolute top-5 left-0 right-0 text-center z-10">
-        <span className="font-mono tracking-[0.35em] uppercase" style={{ color: "rgba(255,255,255,0.12)", fontSize: 9 }}>
+      <div className="absolute top-3 sm:top-5 left-0 right-0 text-center z-10">
+        <span className="font-mono tracking-[0.35em] uppercase" style={{ color: "rgba(255,255,255,0.12)", fontSize: isMobile ? 8 : 9 }}>
           {t("gauge.phase")} : {phaseLabel}
         </span>
       </div>
-      <div className="absolute top-12 left-0 right-0 text-center z-10">
-        <span className="font-mono tracking-[0.3em] uppercase" style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}>
+      <div className="absolute top-8 sm:top-12 left-0 right-0 text-center z-10">
+        <span className="font-mono tracking-[0.3em] uppercase" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 9 : 10 }}>
           {t("gauge.confidence")} {globalConf}%
         </span>
       </div>
@@ -786,25 +788,25 @@ export default function AlienGauge() {
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           {/* T-minus */}
           <span className="font-mono font-light leading-none" style={{
-            fontSize: 104, color, transition: "color 500ms ease", letterSpacing: "0.05em",
+            fontSize: isMobile ? 48 : 104, color, transition: "color 500ms ease", letterSpacing: "0.05em",
           }}>
             {formatTMinus(globalTMinus)}
           </span>
 
           {/* State */}
-          <span className="font-mono tracking-[0.5em] mt-3" style={{
-            fontSize: 18, color, opacity: 0.85, transition: "color 500ms ease",
+          <span className="font-mono tracking-[0.5em] mt-2 sm:mt-3" style={{
+            fontSize: isMobile ? 11 : 18, color, opacity: 0.85, transition: "color 500ms ease",
           }}>
             {stateLabel}
           </span>
 
           {/* PSI GLOBAL */}
-          <span className="font-mono mt-6 tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
+          <span className="font-mono mt-3 sm:mt-6 tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 9 : 11 }}>
             {t("gauge.global")}
           </span>
 
           {/* PSI value */}
-          <span className="font-mono mt-1 tracking-[0.15em]" style={{ color: "rgba(255,255,255,0.35)", fontSize: 14, fontWeight: 600 }}>
+          <span className="font-mono mt-1 tracking-[0.15em]" style={{ color: "rgba(255,255,255,0.35)", fontSize: isMobile ? 12 : 14, fontWeight: 600 }}>
             {globalPsi}
           </span>
         </div>
