@@ -5,7 +5,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import {
   SubnetSignal, RawSignal, GaugeState, GaugePhase, Asymmetry,
-  clamp, deriveGaugeState, derivePhase, deriveTMinus, formatTMinus,
+  clamp, deriveGaugeState, derivePhase, deriveTMinus, formatTMinus, formatTimeClear,
   stateColor, stateGlow, rayColor, processSignals,
   computeGlobalPsi, computeGlobalConfidence,
 } from "@/lib/gauge-engine";
@@ -726,6 +726,122 @@ function SubnetPanel({ signal, open, onClose }: {
 }
 
 /* ═══════════════════════════════════════ */
+/*     POSITION BAR COMPONENT              */
+/* ═══════════════════════════════════════ */
+type Position = {
+  capital: number;
+  currentValue: number;
+  protectionThreshold: number; // % from entry where stop-loss sits
+  exitRecommended: number;     // % from entry where exit is recommended
+};
+
+function PositionBar({ position, isMobile, t }: {
+  position: Position; isMobile: boolean; t: (key: any) => string;
+}) {
+  const pnl = position.currentValue - position.capital;
+  const pnlPct = ((pnl / position.capital) * 100);
+  
+  // Color logic: green=profit, amber=vigilance, red=danger
+  const barColor = pnlPct >= 5 ? "hsl(145, 65%, 48%)" : pnlPct >= 0 ? "hsl(38, 92%, 55%)" : "hsl(0, 72%, 55%)";
+  const statusLabel = pnlPct >= 5 ? t("pos.profit") : pnlPct >= 0 ? t("pos.caution") : t("pos.danger");
+  const barBg = pnlPct >= 5 ? "rgba(76,175,80,0.08)" : pnlPct >= 0 ? "rgba(255,193,7,0.08)" : "rgba(244,67,54,0.08)";
+  const barBorder = pnlPct >= 5 ? "rgba(76,175,80,0.2)" : pnlPct >= 0 ? "rgba(255,193,7,0.2)" : "rgba(244,67,54,0.2)";
+
+  // Normalize current position on the bar (0% = -20%, 100% = +30%)
+  const barMin = -20, barMax = 30;
+  const barRange = barMax - barMin;
+  const currentPos = clamp((pnlPct - barMin) / barRange * 100, 2, 98);
+  const protectionPos = clamp((position.protectionThreshold - barMin) / barRange * 100, 0, 100);
+  const exitPos = clamp((position.exitRecommended - barMin) / barRange * 100, 0, 100);
+
+  return (
+    <div className="font-mono" style={{
+      width: isMobile ? "min(92vw, 420px)" : 560,
+      background: barBg,
+      border: `1px solid ${barBorder}`,
+      borderRadius: 10,
+      padding: isMobile ? "10px 14px" : "14px 20px",
+      backdropFilter: "blur(12px)",
+    }}>
+      {/* Top row: Capital | Current | P&L | Status */}
+      <div className="flex items-center justify-between" style={{ fontSize: isMobile ? 9 : 11 }}>
+        <div className="flex flex-col">
+          <span style={{ color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", fontSize: isMobile ? 7 : 8 }}>{t("pos.capital")}</span>
+          <span style={{ color: "rgba(255,255,255,0.6)" }}>${position.capital.toLocaleString()}</span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span style={{ color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", fontSize: isMobile ? 7 : 8 }}>{t("pos.current")}</span>
+          <span style={{ color: "rgba(255,255,255,0.6)" }}>${position.currentValue.toLocaleString()}</span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span style={{ color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", fontSize: isMobile ? 7 : 8 }}>{t("pos.pnl")}</span>
+          <span style={{ color: barColor, fontWeight: 700 }}>
+            {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%
+          </span>
+        </div>
+        <div className="flex flex-col items-end">
+          <span style={{ color: barColor, fontWeight: 600, fontSize: isMobile ? 8 : 10, letterSpacing: "0.1em" }}>
+            {statusLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Progress bar with markers */}
+      <div className="relative mt-2" style={{ height: isMobile ? 18 : 22 }}>
+        {/* Track */}
+        <div className="absolute inset-x-0 rounded-full" style={{
+          top: isMobile ? 7 : 9, height: isMobile ? 4 : 5,
+          background: "rgba(255,255,255,0.06)",
+        }} />
+        {/* Fill */}
+        <div className="absolute rounded-full" style={{
+          top: isMobile ? 7 : 9, height: isMobile ? 4 : 5, left: 0,
+          width: `${currentPos}%`,
+          background: `linear-gradient(90deg, rgba(255,255,255,0.05), ${barColor})`,
+          transition: "width 800ms ease",
+        }} />
+        {/* Protection threshold marker */}
+        <div className="absolute" style={{
+          left: `${protectionPos}%`, top: 0, bottom: 0,
+          width: 2, background: "hsl(38, 92%, 55%)", opacity: 0.6,
+          borderRadius: 1,
+        }}>
+          <div className="absolute font-mono" style={{
+            top: -12, left: "50%", transform: "translateX(-50%)",
+            fontSize: 7, color: "hsl(38, 92%, 55%)", whiteSpace: "nowrap", letterSpacing: "0.05em",
+          }}>
+            {t("pos.protection")}
+          </div>
+        </div>
+        {/* Exit recommended marker */}
+        <div className="absolute" style={{
+          left: `${exitPos}%`, top: 0, bottom: 0,
+          width: 2, background: "hsl(0, 72%, 55%)", opacity: 0.7,
+          borderRadius: 1,
+        }}>
+          <div className="absolute font-mono" style={{
+            top: -12, left: "50%", transform: "translateX(-50%)",
+            fontSize: 7, color: "hsl(0, 72%, 55%)", whiteSpace: "nowrap", letterSpacing: "0.05em",
+          }}>
+            {t("pos.exit_rec")}
+          </div>
+        </div>
+        {/* Current position dot */}
+        <div className="absolute" style={{
+          left: `${currentPos}%`, top: isMobile ? 4 : 5,
+          width: isMobile ? 10 : 12, height: isMobile ? 10 : 12,
+          borderRadius: "50%", background: barColor,
+          border: "2px solid rgba(0,0,0,0.5)",
+          transform: "translateX(-50%)",
+          boxShadow: `0 0 8px ${barColor}60`,
+          transition: "left 800ms ease",
+        }} />
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════ */
 /*    ALIEN GAUGE — MAIN PAGE              */
 /* ═══════════════════════════════════════ */
 export default function AlienGauge() {
@@ -785,6 +901,14 @@ export default function AlienGauge() {
   const globalState = deriveGaugeState(globalPsi, globalConf);
   const globalPhase = derivePhase(globalPsi);
   const globalTMinus = deriveTMinus(globalPsi);
+
+  /* ─── position management (demo: simulated open position) ─── */
+  const [position] = useState<Position | null>(null);
+  const demoPosition: Position = useMemo(() => ({
+    capital: 5000, currentValue: 5420, protectionThreshold: -5, exitRecommended: 15,
+  }), []);
+  const activePosition = demoMode ? demoPosition : position;
+  const hasPosition = activePosition !== null;
 
   /* ─── IMMINENT notifications ─── */
   const prevImminentRef = useRef<Set<number>>(new Set());
@@ -1165,10 +1289,7 @@ export default function AlienGauge() {
       </div>
 
       {/* ═══════════════════════════════════════ */}
-      {/* CENTER HUD — fully independent layer    */}
-      {/* Positioned relative to VIEWPORT, not    */}
-      {/* to the gauge div or SVG, ensuring       */}
-      {/* perfect mathematical centering.          */}
+      {/* CENTER HUD — SIGNAL MARCHÉ              */}
       {/* ═══════════════════════════════════════ */}
       <div
         className="fixed inset-0 pointer-events-none z-20"
@@ -1186,7 +1307,7 @@ export default function AlienGauge() {
             lineHeight: 0.95,
           }}
         >
-        {/* Title: FENÊTRE D'OPPORTUNITÉ */}
+        {/* Title: SIGNAL MARCHÉ */}
         <span className="font-mono tracking-[0.35em] uppercase text-center" style={{
           fontSize: isMobile ? 8 : 12,
           color: "rgba(255,255,255,0.3)",
@@ -1196,7 +1317,15 @@ export default function AlienGauge() {
           {t("gauge.window")}
         </span>
 
-        {/* Timer principal — fluid sizing, never overflows */}
+        {/* Sous-titre: Fenêtre d'opportunité restante */}
+        <span className="font-mono tracking-[0.12em] uppercase mt-1" style={{
+          fontSize: isMobile ? 7 : 9,
+          color: "rgba(255,255,255,0.18)",
+        }}>
+          {t("gauge.remaining")}
+        </span>
+
+        {/* Timer principal — human readable */}
         <span className="font-mono font-bold leading-none mt-1 sm:mt-3" style={{
           fontSize: "clamp(44px, 12vw, 92px)",
           color,
@@ -1207,40 +1336,31 @@ export default function AlienGauge() {
           overflow: "hidden",
           whiteSpace: "nowrap",
         }}>
-          {(() => {
-            const h = Math.floor(globalTMinus / 60);
-            const m = globalTMinus % 60;
-            if (h > 0) {
-              return <>{h}<span style={{ fontSize: "0.65em" }}>h</span>{String(m).padStart(2, '0')}</>;
-            }
-            return <>{m}<span style={{ fontSize: "0.65em" }}>m</span></>;
-          })()}
+          {formatTimeClear(globalTMinus)}
         </span>
 
-        {/* Sous-texte — hidden on mobile if too dense */}
-        {!isMobile && (
-          <span className="font-mono tracking-[0.25em] uppercase mt-1 sm:mt-2 text-center" style={{
-            fontSize: 10,
-            color: "rgba(255,255,255,0.2)",
-          }}>
-            {t("gauge.before")}
-          </span>
-        )}
+        {/* Clear language: "avant zone de bascule" */}
+        <span className="font-mono tracking-[0.15em] uppercase mt-1 sm:mt-2 text-center" style={{
+          fontSize: isMobile ? 8 : 11,
+          color: "rgba(255,255,255,0.25)",
+        }}>
+          {t("gauge.before")}
+        </span>
 
-        {/* State label */}
+        {/* Phase label */}
         <span className="font-mono uppercase" style={{
           fontSize: isMobile ? 12 : 16,
           letterSpacing: isMobile ? "0.3em" : "0.5em",
-          marginTop: isMobile ? 6 : 24,
+          marginTop: isMobile ? 6 : 18,
           color,
           opacity: 0.85,
           transition: "color 800ms ease",
         }}>
-          {stateLabel}
+          {phaseLabel}
         </span>
 
         {/* Metrics row: PSI + Confidence */}
-        <div className="flex items-center mt-2 sm:mt-6" style={{ gap: isMobile ? 16 : 40 }}>
+        <div className="flex items-center mt-2 sm:mt-5" style={{ gap: isMobile ? 16 : 40 }}>
           <div className="flex flex-col items-center">
             <span className="font-mono tracking-[0.2em] uppercase" style={{
               color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 8 : 10,
@@ -1271,31 +1391,42 @@ export default function AlienGauge() {
       </div>
 
       {/* ═══════════════════════════════════════ */}
-      {/* PRIORITY FOOTER LINE                     */}
+      {/* PRIORITY FOOTER — clear language          */}
       {/* ═══════════════════════════════════════ */}
       {signals.length > 0 && (() => {
         const priority = signals.reduce((best, s) =>
           s.t_minus_minutes < best.t_minus_minutes ? s : best, signals[0]);
+        const prioColor = stateColor(deriveGaugeState(priority.psi, priority.confidence));
         return (
           <div className="fixed left-0 right-0 z-20 flex justify-center pointer-events-none"
-            style={{ bottom: isMobile ? 50 : 60 }}>
+            style={{ bottom: isMobile ? (hasPosition ? 110 : 50) : (hasPosition ? 130 : 60) }}>
             <div className="font-mono text-center px-4 py-1.5 rounded-md" style={{
               background: "rgba(0,0,0,0.4)",
               border: "1px solid rgba(255,255,255,0.06)",
               fontSize: isMobile ? 10 : 12,
               letterSpacing: "0.12em",
             }}>
-              <span style={{ color: "rgba(255,255,255,0.35)" }}>PRIORITÉ ACTUELLE : </span>
-              <span style={{ color: stateColor(deriveGaugeState(priority.psi, priority.confidence)), fontWeight: 700 }}>
+              <span style={{ color: "rgba(255,255,255,0.35)" }}>{t("priority.current")} : </span>
+              <span style={{ color: prioColor, fontWeight: 700 }}>
                 SN-{priority.netuid}
               </span>
               <span style={{ color: "rgba(255,255,255,0.5)", marginLeft: 8 }}>
-                ({formatTMinus(priority.t_minus_minutes)})
+                ({formatTimeClear(priority.t_minus_minutes)} {t("priority.before")})
               </span>
             </div>
           </div>
         );
       })()}
+
+      {/* ═══════════════════════════════════════ */}
+      {/* POSITION BAR — risk management           */}
+      {/* ═══════════════════════════════════════ */}
+      {hasPosition && (
+        <div className="fixed left-0 right-0 z-20 flex justify-center"
+          style={{ bottom: isMobile ? 12 : 20 }}>
+          <PositionBar position={activePosition!} isMobile={isMobile} t={t} />
+        </div>
+      )}
 
       {/* Subnet Panel */}
       <SubnetPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} />
