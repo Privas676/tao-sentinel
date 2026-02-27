@@ -24,6 +24,7 @@ const translations = {
   "gauge.global": { fr: "PSI GLOBAL", en: "GLOBAL PSI" },
   "gauge.confidence": { fr: "CONFIANCE", en: "CONFIDENCE" },
   "gauge.phase": { fr: "PHASE", en: "PHASE" },
+  "gauge.notif": { fr: "Activer les notifications", en: "Enable notifications" },
 
   // Tooltip
   "tip.psi": { fr: "PSI", en: "PSI" },
