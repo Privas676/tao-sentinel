@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
+import { useAuth } from "@/hooks/use-auth";
+import { usePositions, useOpenPosition, useClosePosition, type DbPosition } from "@/hooks/use-positions";
 import {
   SubnetSignal, RawSignal, GaugeState, GaugePhase, Asymmetry,
   clamp, deriveGaugeState, derivePhase, deriveTMinus, formatTimeClear,
@@ -10,7 +12,8 @@ import {
   computeGlobalPsi, computeGlobalConfidence,
 } from "@/lib/gauge-engine";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 /* ═══════════════════════════════════════ */
 /*          VISUAL HELPERS                 */
 /* ═══════════════════════════════════════ */
@@ -729,25 +732,25 @@ function SubnetPanel({ signal, open, onClose }: {
 /*     POSITION BAR COMPONENT              */
 /* ═══════════════════════════════════════ */
 type Position = {
+  id?: string;
+  netuid?: number;
   capital: number;
   currentValue: number;
-  protectionThreshold: number; // % from entry where stop-loss sits
-  exitRecommended: number;     // % from entry where exit is recommended
+  protectionThreshold: number;
+  exitRecommended: number;
 };
 
-function PositionBar({ position, isMobile, t }: {
-  position: Position; isMobile: boolean; t: (key: any) => string;
+function PositionBar({ position, isMobile, t, onClose }: {
+  position: Position; isMobile: boolean; t: (key: any) => string; onClose?: () => void;
 }) {
   const pnl = position.currentValue - position.capital;
   const pnlPct = ((pnl / position.capital) * 100);
   
-  // Color logic: green=profit, amber=vigilance, red=danger
   const barColor = pnlPct >= 5 ? "hsl(145, 65%, 48%)" : pnlPct >= 0 ? "hsl(38, 92%, 55%)" : "hsl(0, 72%, 55%)";
   const statusLabel = pnlPct >= 5 ? t("pos.profit") : pnlPct >= 0 ? t("pos.caution") : t("pos.danger");
   const barBg = pnlPct >= 5 ? "rgba(76,175,80,0.08)" : pnlPct >= 0 ? "rgba(255,193,7,0.08)" : "rgba(244,67,54,0.08)";
   const barBorder = pnlPct >= 5 ? "rgba(76,175,80,0.2)" : pnlPct >= 0 ? "rgba(255,193,7,0.2)" : "rgba(244,67,54,0.2)";
 
-  // Normalize current position on the bar (0% = -20%, 100% = +30%)
   const barMin = -20, barMax = 30;
   const barRange = barMax - barMin;
   const currentPos = clamp((pnlPct - barMin) / barRange * 100, 2, 98);
@@ -763,7 +766,7 @@ function PositionBar({ position, isMobile, t }: {
       padding: isMobile ? "10px 14px" : "14px 20px",
       backdropFilter: "blur(12px)",
     }}>
-      {/* Top row: Capital | Current | P&L | Status */}
+      {/* Header row with close button */}
       <div className="flex items-center justify-between" style={{ fontSize: isMobile ? 9 : 11 }}>
         <div className="flex flex-col">
           <span style={{ color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", fontSize: isMobile ? 7 : 8 }}>{t("pos.capital")}</span>
@@ -771,7 +774,7 @@ function PositionBar({ position, isMobile, t }: {
         </div>
         <div className="flex flex-col items-center">
           <span style={{ color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", fontSize: isMobile ? 7 : 8 }}>{t("pos.current")}</span>
-          <span style={{ color: "rgba(255,255,255,0.6)" }}>${position.currentValue.toLocaleString()}</span>
+          <span style={{ color: "rgba(255,255,255,0.6)" }}>${Math.round(position.currentValue).toLocaleString()}</span>
         </div>
         <div className="flex flex-col items-center">
           <span style={{ color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", fontSize: isMobile ? 7 : 8 }}>{t("pos.pnl")}</span>
@@ -779,54 +782,52 @@ function PositionBar({ position, isMobile, t }: {
             {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%
           </span>
         </div>
-        <div className="flex flex-col items-end">
+        <div className="flex flex-col items-end gap-1">
           <span style={{ color: barColor, fontWeight: 600, fontSize: isMobile ? 8 : 10, letterSpacing: "0.1em" }}>
             {statusLabel}
           </span>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="pointer-events-auto text-white/30 hover:text-red-400 transition-colors"
+              style={{ fontSize: isMobile ? 7 : 9, letterSpacing: "0.08em" }}
+            >
+              {t("pos.close")} ✕
+            </button>
+          )}
         </div>
       </div>
 
       {/* Progress bar with markers */}
       <div className="relative mt-2" style={{ height: isMobile ? 18 : 22 }}>
-        {/* Track */}
         <div className="absolute inset-x-0 rounded-full" style={{
           top: isMobile ? 7 : 9, height: isMobile ? 4 : 5,
           background: "rgba(255,255,255,0.06)",
         }} />
-        {/* Fill */}
         <div className="absolute rounded-full" style={{
           top: isMobile ? 7 : 9, height: isMobile ? 4 : 5, left: 0,
           width: `${currentPos}%`,
           background: `linear-gradient(90deg, rgba(255,255,255,0.05), ${barColor})`,
           transition: "width 800ms ease",
         }} />
-        {/* Protection threshold marker */}
         <div className="absolute" style={{
           left: `${protectionPos}%`, top: 0, bottom: 0,
-          width: 2, background: "hsl(38, 92%, 55%)", opacity: 0.6,
-          borderRadius: 1,
+          width: 2, background: "hsl(38, 92%, 55%)", opacity: 0.6, borderRadius: 1,
         }}>
           <div className="absolute font-mono" style={{
             top: -12, left: "50%", transform: "translateX(-50%)",
             fontSize: 7, color: "hsl(38, 92%, 55%)", whiteSpace: "nowrap", letterSpacing: "0.05em",
-          }}>
-            {t("pos.protection")}
-          </div>
+          }}>{t("pos.protection")}</div>
         </div>
-        {/* Exit recommended marker */}
         <div className="absolute" style={{
           left: `${exitPos}%`, top: 0, bottom: 0,
-          width: 2, background: "hsl(0, 72%, 55%)", opacity: 0.7,
-          borderRadius: 1,
+          width: 2, background: "hsl(0, 72%, 55%)", opacity: 0.7, borderRadius: 1,
         }}>
           <div className="absolute font-mono" style={{
             top: -12, left: "50%", transform: "translateX(-50%)",
             fontSize: 7, color: "hsl(0, 72%, 55%)", whiteSpace: "nowrap", letterSpacing: "0.05em",
-          }}>
-            {t("pos.exit_rec")}
-          </div>
+          }}>{t("pos.exit_rec")}</div>
         </div>
-        {/* Current position dot */}
         <div className="absolute" style={{
           left: `${currentPos}%`, top: isMobile ? 4 : 5,
           width: isMobile ? 10 : 12, height: isMobile ? 10 : 12,
@@ -838,6 +839,117 @@ function PositionBar({ position, isMobile, t }: {
         }} />
       </div>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════ */
+/*     OPEN POSITION DIALOG                */
+/* ═══════════════════════════════════════ */
+function OpenPositionDialog({ open, onClose, signals, t }: {
+  open: boolean; onClose: () => void; signals: SubnetSignal[]; t: (key: any) => string;
+}) {
+  const [netuid, setNetuid] = useState(signals[0]?.netuid || 1);
+  const [capital, setCapital] = useState("1000");
+  const [stopLoss, setStopLoss] = useState("-5");
+  const [takeProfit, setTakeProfit] = useState("15");
+  const openPosition = useOpenPosition();
+
+  // Get current price for selected subnet
+  const { data: metrics } = useQuery({
+    queryKey: ["subnet-price-for-position", netuid],
+    queryFn: async () => {
+      const { data } = await supabase.from("subnet_latest_display")
+        .select("price_usd").eq("netuid", netuid).maybeSingle();
+      return data;
+    },
+    enabled: open,
+  });
+
+  const currentPrice = metrics?.price_usd ? Number(metrics.price_usd) : 0;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPrice) {
+      toast.error("Prix introuvable pour ce subnet");
+      return;
+    }
+    try {
+      await openPosition.mutateAsync({
+        netuid,
+        capital: parseFloat(capital),
+        entry_price: currentPrice,
+        stop_loss_pct: parseFloat(stopLoss),
+        take_profit_pct: parseFloat(takeProfit),
+      });
+      toast.success("Position ouverte");
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const inputStyle = "w-full px-3 py-2 rounded-lg text-sm bg-white/[0.04] border border-white/[0.08] text-white/80 focus:border-white/20 focus:outline-none transition-colors font-mono";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="bg-[#0a0a0f] border-white/10 text-white max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="font-mono tracking-wider text-white/80">
+            {t("pos.open_title")}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          <div>
+            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/30">{t("pos.subnet")}</label>
+            <select
+              value={netuid}
+              onChange={(e) => setNetuid(Number(e.target.value))}
+              className={inputStyle}
+              style={{ appearance: "none" }}
+            >
+              {signals.map(s => (
+                <option key={s.netuid} value={s.netuid} className="bg-[#0a0a0f]">
+                  SN-{s.netuid} · {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {currentPrice > 0 && (
+            <div className="text-xs font-mono text-white/40">
+              Prix actuel : <span className="text-white/70">${currentPrice.toFixed(4)}</span>
+            </div>
+          )}
+          <div>
+            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/30">{t("pos.amount")}</label>
+            <input type="number" value={capital} onChange={(e) => setCapital(e.target.value)}
+              min="1" step="any" required className={inputStyle} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/30">{t("pos.stop_loss")}</label>
+              <input type="number" value={stopLoss} onChange={(e) => setStopLoss(e.target.value)}
+                step="any" required className={inputStyle} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/30">{t("pos.take_profit")}</label>
+              <input type="number" value={takeProfit} onChange={(e) => setTakeProfit(e.target.value)}
+                step="any" required className={inputStyle} />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2 rounded-lg font-mono text-xs tracking-wider text-white/40 border border-white/10 hover:border-white/20 transition-colors">
+              {t("pos.cancel")}
+            </button>
+            <button type="submit" disabled={openPosition.isPending || !currentPrice}
+              className="flex-1 py-2 rounded-lg font-mono text-xs tracking-wider font-semibold transition-all disabled:opacity-50"
+              style={{ background: "rgba(76,175,80,0.15)", color: "rgba(76,175,80,0.9)", border: "1px solid rgba(76,175,80,0.3)" }}>
+              {openPosition.isPending ? "..." : t("pos.confirm")}
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -902,13 +1014,60 @@ export default function AlienGauge() {
   const globalPhase = derivePhase(globalPsi);
   const globalTMinus = deriveTMinus(globalPsi);
 
-  /* ─── position management (demo: simulated open position) ─── */
-  const [position] = useState<Position | null>(null);
-  const demoPosition: Position = useMemo(() => ({
-    capital: 5000, currentValue: 5420, protectionThreshold: -5, exitRecommended: 15,
-  }), []);
-  const activePosition = demoMode ? demoPosition : position;
+  /* ─── position management ─── */
+  const { user } = useAuth();
+  const { data: dbPositions } = usePositions();
+  const closePosition = useClosePosition();
+  const [openPosDialog, setOpenPosDialog] = useState(false);
+
+  // Compute live position from DB + current prices
+  const { data: latestPrices } = useQuery({
+    queryKey: ["position-prices", dbPositions?.map(p => p.netuid)],
+    queryFn: async () => {
+      if (!dbPositions?.length) return {};
+      const netuids = [...new Set(dbPositions.map(p => p.netuid))];
+      const { data } = await supabase
+        .from("subnet_latest_display")
+        .select("netuid, price_usd")
+        .in("netuid", netuids);
+      const map: Record<number, number> = {};
+      for (const r of data || []) {
+        map[r.netuid!] = Number(r.price_usd) || 0;
+      }
+      return map;
+    },
+    enabled: !!dbPositions?.length,
+    refetchInterval: 60_000,
+  });
+
+  const activePosition: Position | null = useMemo(() => {
+    if (demoMode) return { capital: 5000, currentValue: 5420, protectionThreshold: -5, exitRecommended: 15 };
+    if (!dbPositions?.length || !latestPrices) return null;
+    const pos = dbPositions[0]; // Show first open position
+    const currentPrice = latestPrices[pos.netuid] || Number(pos.entry_price);
+    const currentValue = Number(pos.quantity) * currentPrice;
+    return {
+      id: pos.id,
+      netuid: pos.netuid,
+      capital: Number(pos.capital),
+      currentValue,
+      protectionThreshold: Number(pos.stop_loss_pct),
+      exitRecommended: Number(pos.take_profit_pct),
+    };
+  }, [demoMode, dbPositions, latestPrices]);
+
   const hasPosition = activePosition !== null;
+
+  const handleClosePosition = useCallback(async () => {
+    if (!activePosition?.id || !latestPrices) return;
+    const price = latestPrices[activePosition.netuid!] || 0;
+    try {
+      await closePosition.mutateAsync({ id: activePosition.id, closed_price: price });
+      toast.success("Position fermée");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }, [activePosition, latestPrices, closePosition]);
 
   /* ─── IMMINENT notifications ─── */
   const prevImminentRef = useRef<Set<number>>(new Set());
@@ -1421,12 +1580,38 @@ export default function AlienGauge() {
       {/* ═══════════════════════════════════════ */}
       {/* POSITION BAR — risk management           */}
       {/* ═══════════════════════════════════════ */}
-      {hasPosition && (
+      {hasPosition ? (
         <div className="fixed left-0 right-0 z-20 flex justify-center"
           style={{ bottom: isMobile ? 12 : 20 }}>
-          <PositionBar position={activePosition!} isMobile={isMobile} t={t} />
+          <PositionBar position={activePosition!} isMobile={isMobile} t={t}
+            onClose={activePosition?.id ? handleClosePosition : undefined} />
+        </div>
+      ) : (
+        <div className="fixed z-20 flex justify-center"
+          style={{ bottom: isMobile ? 12 : 20, left: 0, right: 0 }}>
+          {user ? (
+            <button
+              onClick={() => setOpenPosDialog(true)}
+              className="font-mono text-[10px] tracking-wider px-4 py-2 rounded-lg transition-all pointer-events-auto"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                color: "rgba(255,255,255,0.3)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              + {t("pos.open")}
+            </button>
+          ) : (
+            <span className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-md"
+              style={{ color: "rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
+              {t("pos.login_required")}
+            </span>
+          )}
         </div>
       )}
+
+      {/* Open Position Dialog */}
+      <OpenPositionDialog open={openPosDialog} onClose={() => setOpenPosDialog(false)} signals={signals} t={t} />
 
       {/* Subnet Panel */}
       <SubnetPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} />

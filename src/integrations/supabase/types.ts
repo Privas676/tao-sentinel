@@ -56,6 +56,62 @@ export type Database = {
         }
         Relationships: []
       }
+      positions: {
+        Row: {
+          capital: number
+          closed_at: string | null
+          closed_price: number | null
+          created_at: string
+          entry_price: number
+          id: string
+          netuid: number
+          quantity: number
+          status: string
+          stop_loss_pct: number
+          take_profit_pct: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          capital: number
+          closed_at?: string | null
+          closed_price?: number | null
+          created_at?: string
+          entry_price: number
+          id?: string
+          netuid: number
+          quantity: number
+          status?: string
+          stop_loss_pct?: number
+          take_profit_pct?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          capital?: number
+          closed_at?: string | null
+          closed_price?: number | null
+          created_at?: string
+          entry_price?: number
+          id?: string
+          netuid?: number
+          quantity?: number
+          status?: string
+          stop_loss_pct?: number
+          take_profit_pct?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "positions_netuid_fkey"
+            columns: ["netuid"]
+            isOneToOne: false
+            referencedRelation: "subnets"
+            referencedColumns: ["netuid"]
+          },
+        ]
+      }
       signals: {
         Row: {
           confidence_pct: number | null

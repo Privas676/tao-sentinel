@@ -4,10 +4,12 @@ import { I18nProvider, useI18n } from "@/lib/i18n";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import AlienGauge from "./pages/AlienGauge";
 import SubnetsPage from "./pages/SubnetsPage";
 import AlertsPage from "./pages/AlertsPage";
 import SettingsPage from "./pages/SettingsPage";
+import AuthPage from "./pages/AuthPage";
 import { Toaster } from "@/components/ui/sonner";
 
 const queryClient = new QueryClient();
@@ -15,6 +17,7 @@ const queryClient = new QueryClient();
 function AppLayout() {
   const location = useLocation();
   const { t } = useI18n();
+  const { user, loading, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Unread events count for badge
@@ -32,7 +35,6 @@ function AppLayout() {
     refetchInterval: 60_000,
   });
 
-
   const navItems = [
     { path: "/", label: t("nav.gauge"), icon: "◎" },
     { path: "/subnets", label: t("nav.subnets"), icon: "⊞" },
@@ -42,7 +44,7 @@ function AppLayout() {
 
   return (
     <div className="h-screen w-screen flex bg-black overflow-hidden">
-      {/* Sidebar toggle — larger, with label and hover animation */}
+      {/* Sidebar toggle */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className="fixed top-4 left-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
@@ -56,8 +58,6 @@ function AppLayout() {
         <span className="font-mono text-sm">{sidebarOpen ? "✕" : "☰"}</span>
         <span className="font-mono text-[11px] tracking-wider uppercase" style={{ opacity: 0.7 }}>Menu</span>
       </button>
-
-      {/* Notification badge removed — accessible via sidebar */}
 
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -94,6 +94,29 @@ function AppLayout() {
               </Link>
             );
           })}
+
+          {/* Auth section at bottom */}
+          <div className="mt-auto mb-4 px-3">
+            {user ? (
+              <div className="space-y-2">
+                <div className="font-mono text-[9px] text-white/25 truncate">{user.email}</div>
+                <button
+                  onClick={() => { signOut(); setSidebarOpen(false); }}
+                  className="font-mono text-[10px] tracking-wider text-white/30 hover:text-white/60 transition-colors"
+                >
+                  {t("auth.logout")}
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/auth"
+                onClick={() => setSidebarOpen(false)}
+                className="font-mono text-[10px] tracking-wider text-white/30 hover:text-white/60 transition-colors"
+              >
+                Connexion
+              </Link>
+            )}
+          </div>
         </nav>
       </div>
 
@@ -104,6 +127,7 @@ function AppLayout() {
           <Route path="/subnets" element={<SubnetsPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/auth" element={user ? <AlienGauge /> : <AuthPage />} />
         </Routes>
       </div>
     </div>
@@ -112,12 +136,14 @@ function AppLayout() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <I18nProvider>
-      <BrowserRouter>
-        <AppLayout />
-      </BrowserRouter>
-      <Toaster />
-    </I18nProvider>
+    <AuthProvider>
+      <I18nProvider>
+        <BrowserRouter>
+          <AppLayout />
+        </BrowserRouter>
+        <Toaster />
+      </I18nProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 
