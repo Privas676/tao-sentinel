@@ -55,22 +55,7 @@ function AppLayout() {
         <span className="font-mono text-xs">{sidebarOpen ? "✕" : "☰"}</span>
       </button>
 
-      {/* Notification badge (top-right) */}
-      {(unreadCount ?? 0) > 0 && (
-        <Link to="/alerts"
-          className="fixed top-4 right-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all hover:bg-white/[0.06]"
-          style={{
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.06)",
-          }}
-          onClick={() => setSidebarOpen(false)}
-        >
-          <span className="font-mono text-[10px] text-white/40">⚡</span>
-          <span className="font-mono text-[10px] font-bold" style={{ color: "rgba(229,57,53,0.8)" }}>
-            {unreadCount}
-          </span>
-        </Link>
-      )}
+      {/* Notification badge removed — accessible via sidebar */}
 
       {/* Mobile overlay */}
       {sidebarOpen && (

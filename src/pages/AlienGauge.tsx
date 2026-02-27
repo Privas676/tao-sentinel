@@ -124,12 +124,15 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
   const angleStep = 360 / 7;
   const gap = 24;
   const [tremble, setTremble] = useState(0);
+  const [rayBreathe, setRayBreathe] = useState(0);
 
   useEffect(() => {
     let raf: number;
     const start = performance.now();
     const tick = (now: number) => {
-      setTremble(Math.sin((now - start) / 80) * 2);
+      const elapsed = now - start;
+      setTremble(Math.sin(elapsed / 80) * 2);
+      setRayBreathe(Math.sin(elapsed / 1200) * 0.5 + 0.5); // 0→1 breathing cycle ~2.4s
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -144,20 +147,22 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const angleDeg = (i * angleStep) - 90;
         const angle = angleDeg * (Math.PI / 180);
         const r1 = outerR + gap;
-        const maxLen = outerR > 200 ? 130 : 70;
-        const minLen = outerR > 200 ? 25 : 15;
-        const imminenceFactor = clamp(1 - (s.t_minus_minutes / 240), 0, 1);
-        const len = minLen + imminenceFactor * (maxLen - minLen);
+        const maxLen = outerR > 200 ? 140 : 75;
+        const minLen = outerR > 200 ? 30 : 18;
+        // Length proportional to asymmetry
+        const asymFactor = s.asymmetry === "HIGH" ? 1.0 : s.asymmetry === "MED" ? 0.65 : 0.35;
+        const len = minLen + asymFactor * (maxLen - minLen);
         const isImm = s.state === "IMMINENT";
         const trembleOffset = isImm ? tremble : 0;
-        const r2 = r1 + len + trembleOffset;
-        const thickness = 1.5 + (s.confidence / 100) * 3;
+        // Micro breathing on ray length
+        const breatheLen = len * (1 + rayBreathe * 0.04);
+        const r2 = r1 + breatheLen + trembleOffset;
+        const thickness = 2.5 + (s.confidence / 100) * 4; // Thicker rays
         const x1 = cx + r1 * Math.cos(angle);
         const y1 = cy + r1 * Math.sin(angle);
         const x2 = cx + r2 * Math.cos(angle);
         const y2 = cy + r2 * Math.sin(angle);
         const isHovered = hoveredIdx === i;
-        const breatheScale = isHovered ? 1 : 0;
 
         // Ring traction effect for IMMINENT rays
         const tractionPts = isImm ? (() => {
@@ -673,6 +678,17 @@ export default function AlienGauge() {
         background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)",
       }} />
 
+      {/* Ambient radial halo behind gauge — always present, ultra subtle */}
+      <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: 0 }}>
+        <div style={{
+          width: isMobile ? 400 : 900,
+          height: isMobile ? 400 : 900,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${color}08 0%, ${color}04 30%, transparent 65%)`,
+          transition: "background 1.2s ease",
+        }} />
+      </div>
+
       {/* Flash */}
       {flashActive && (
         <div className="absolute inset-0 pointer-events-none z-50" style={{
@@ -681,13 +697,13 @@ export default function AlienGauge() {
       )}
 
       {/* Phase indicator (top) */}
-      <div className="absolute top-2 sm:top-5 left-0 right-0 text-center z-10">
-        <span className="font-mono tracking-[0.35em] uppercase" style={{ color: "rgba(255,255,255,0.12)", fontSize: isMobile ? 7 : 9 }}>
+      <div className="absolute top-3 sm:top-6 left-0 right-0 text-center z-10">
+        <span className="font-mono tracking-[0.45em] uppercase" style={{ color: `${color}88`, fontSize: isMobile ? 9 : 14, transition: "color 800ms ease" }}>
           {t("gauge.phase")} : {phaseLabel}
         </span>
       </div>
-      <div className="absolute top-6 sm:top-12 left-0 right-0 text-center z-10">
-        <span className="font-mono tracking-[0.3em] uppercase" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 8 : 10 }}>
+      <div className="absolute top-8 sm:top-14 left-0 right-0 text-center z-10">
+        <span className="font-mono tracking-[0.3em] uppercase" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 8 : 11 }}>
           {t("gauge.confidence")} {globalConf}%
         </span>
       </div>
@@ -747,6 +763,11 @@ export default function AlienGauge() {
                 20% { opacity: 0.7; transform: translate(2px, -3px) scale(1); }
                 50% { opacity: 0.4; transform: translate(-1px, -6px) scale(0.9); }
                 80% { opacity: 0.6; transform: translate(3px, -2px) scale(1.1); }
+              }
+              @keyframes phase-pulse {
+                0% { opacity: 0.6; transform: scale(1); }
+                50% { opacity: 1; transform: scale(1.02); }
+                100% { opacity: 0.6; transform: scale(1); }
               }
             `}</style>
           </defs>
@@ -821,28 +842,36 @@ export default function AlienGauge() {
         </svg>
 
         {/* Center text */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          {/* T-minus */}
-          <span className="font-mono font-light leading-none" style={{
-            fontSize: isMobile ? 36 : 104, color, transition: "color 500ms ease", letterSpacing: "0.05em",
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
+          style={{ animation: "phase-pulse 3s ease-in-out infinite" }}>
+          {/* T-minus — dominant */}
+          <span className="font-mono font-extralight leading-none" style={{
+            fontSize: isMobile ? 48 : 72, color, transition: "color 800ms ease",
+            letterSpacing: "0.08em",
+            textShadow: `0 0 40px ${color}33`,
           }}>
             {formatTMinus(globalTMinus)}
           </span>
 
-          {/* State */}
-          <span className="font-mono tracking-[0.5em] mt-1 sm:mt-3" style={{
-            fontSize: isMobile ? 9 : 18, color, opacity: 0.85, transition: "color 500ms ease",
+          {/* Phase : State — prominent */}
+          <span className="font-mono tracking-[0.5em] mt-2 sm:mt-4 uppercase" style={{
+            fontSize: isMobile ? 10 : 14, color, opacity: 0.85, transition: "color 800ms ease",
+            letterSpacing: "0.4em",
           }}>
             {stateLabel}
           </span>
 
-          {/* PSI GLOBAL */}
-          <span className="font-mono mt-2 sm:mt-6 tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 7 : 11 }}>
+          {/* PSI GLOBAL label */}
+          <span className="font-mono mt-3 sm:mt-8 tracking-[0.25em] uppercase" style={{
+            color: "rgba(255,255,255,0.18)", fontSize: isMobile ? 8 : 11,
+          }}>
             {t("gauge.global")}
           </span>
 
-          {/* PSI value */}
-          <span className="font-mono mt-0.5 tracking-[0.15em]" style={{ color: "rgba(255,255,255,0.35)", fontSize: isMobile ? 10 : 14, fontWeight: 600 }}>
+          {/* PSI value — better hierarchy */}
+          <span className="font-mono mt-1 tracking-[0.15em]" style={{
+            color: "rgba(255,255,255,0.4)", fontSize: isMobile ? 12 : 16, fontWeight: 600,
+          }}>
             {globalPsi}
           </span>
         </div>
