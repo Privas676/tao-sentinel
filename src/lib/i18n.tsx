@@ -135,6 +135,15 @@ const translations = {
   "priority.current": { fr: "PRIORITÉ ACTUELLE", en: "CURRENT PRIORITY" },
   "priority.before": { fr: "avant risque potentiel", en: "before potential risk" },
 
+  // Header
+  "header.title": { fr: "TAO SENTINEL", en: "TAO SENTINEL" },
+  "mode.hunter": { fr: "CHASSEUR", en: "HUNTER" },
+  "mode.defensive": { fr: "DÉFENSIF", en: "DEFENSIVE" },
+
+  // Position actions
+  "pos.close_position": { fr: "Fermer position", en: "Close position" },
+  "pos.take_profit_btn": { fr: "Prendre profit", en: "Take Profit" },
+
   // Auth
   "auth.logout": { fr: "Déconnexion", en: "Sign out" },
 } as const;

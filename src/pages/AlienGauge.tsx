@@ -670,16 +670,13 @@ type Position = {
   exitRecommended: number;
 };
 
-function PositionBar({ position, isMobile, t, onClose }: {
-  position: Position; isMobile: boolean; t: (key: any) => string; onClose?: () => void;
+function PositionBar({ position, isMobile, t, onClose, onTakeProfit }: {
+  position: Position; isMobile: boolean; t: (key: any) => string; onClose?: () => void; onTakeProfit?: () => void;
 }) {
   const pnl = position.currentValue - position.capital;
   const pnlPct = ((pnl / position.capital) * 100);
   
   const barColor = pnlPct >= 5 ? "hsl(145, 65%, 48%)" : pnlPct >= 0 ? "hsl(38, 92%, 55%)" : "hsl(0, 72%, 55%)";
-  const statusLabel = pnlPct >= 5 ? t("pos.profit") : pnlPct >= 0 ? t("pos.caution") : t("pos.danger");
-  const barBg = pnlPct >= 5 ? "rgba(76,175,80,0.08)" : pnlPct >= 0 ? "rgba(255,193,7,0.08)" : "rgba(244,67,54,0.08)";
-  const barBorder = pnlPct >= 5 ? "rgba(76,175,80,0.2)" : pnlPct >= 0 ? "rgba(255,193,7,0.2)" : "rgba(244,67,54,0.2)";
 
   const barMin = -20, barMax = 30;
   const barRange = barMax - barMin;
@@ -689,82 +686,95 @@ function PositionBar({ position, isMobile, t, onClose }: {
 
   return (
     <div className="font-mono" style={{
-      width: isMobile ? "min(92vw, 420px)" : 580,
-      background: barBg,
-      border: `1px solid ${barBorder}`,
-      borderRadius: 12,
-      padding: isMobile ? "10px 14px" : "14px 20px",
-      backdropFilter: "blur(12px)",
+      width: isMobile ? "min(95vw, 440px)" : 680,
+      background: "rgba(10,8,5,0.85)",
+      border: "1px solid rgba(255,215,0,0.12)",
+      borderRadius: 14,
+      padding: isMobile ? "12px 14px 14px" : "16px 24px 18px",
+      backdropFilter: "blur(16px)",
+      boxShadow: "0 4px 40px rgba(0,0,0,0.6), 0 0 30px rgba(255,215,0,0.03)",
     }}>
-      <div className="flex items-center justify-between" style={{ fontSize: isMobile ? 10 : 12 }}>
+      {/* Top row: Capital / Valeur / P&L */}
+      <div className="flex items-center justify-between" style={{ fontSize: isMobile ? 11 : 13 }}>
         <div className="flex flex-col">
-          <span style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 9 }}>{t("pos.capital")}</span>
-          <span style={{ color: "rgba(255,255,255,0.7)" }}>{position.capital.toLocaleString()} τ</span>
+          <span style={{ color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 10 }}>{t("pos.capital")}</span>
+          <span style={{ color: "rgba(255,248,220,0.8)", fontWeight: 700, fontSize: isMobile ? 14 : 17 }}>{position.capital.toLocaleString()} <span style={{ color: "rgba(255,215,0,0.5)", fontSize: isMobile ? 10 : 12 }}>TAO</span></span>
         </div>
+        <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.06)" }} />
         <div className="flex flex-col items-center">
-          <span style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 9 }}>{t("pos.current")}</span>
-          <span style={{ color: "rgba(255,255,255,0.7)" }}>{Math.round(position.currentValue).toLocaleString()} τ</span>
+          <span style={{ color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 10 }}>{t("pos.current")}</span>
+          <span style={{ color: "rgba(255,248,220,0.8)", fontWeight: 700, fontSize: isMobile ? 14 : 17 }}>{position.currentValue.toFixed(2)} <span style={{ color: "rgba(255,215,0,0.5)", fontSize: isMobile ? 10 : 12 }}>TAO</span></span>
         </div>
+        <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.06)" }} />
         <div className="flex flex-col items-center">
-          <span style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 9 }}>{t("pos.pnl")}</span>
-          <span style={{ color: barColor, fontWeight: 700, fontSize: isMobile ? 13 : 16 }}>
+          <span style={{ color: barColor, fontWeight: 800, fontSize: isMobile ? 18 : 22 }}>
             {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%
           </span>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <span style={{ color: barColor, fontWeight: 600, fontSize: isMobile ? 9 : 11, letterSpacing: "0.1em" }}>
-            {statusLabel}
-          </span>
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="pointer-events-auto text-white/30 hover:text-red-400 transition-colors"
-              style={{ fontSize: isMobile ? 8 : 10, letterSpacing: "0.08em" }}
-            >
-              {t("pos.close")} ✕
-            </button>
-          )}
-        </div>
       </div>
 
-      <div className="relative mt-2" style={{ height: isMobile ? 20 : 24 }}>
-        <div className="absolute inset-x-0 rounded-full" style={{
-          top: isMobile ? 8 : 10, height: isMobile ? 4 : 5,
-          background: "rgba(255,255,255,0.06)",
+      {/* Progress bar */}
+      <div className="relative mt-3" style={{ height: isMobile ? 22 : 26 }}>
+        <div className="absolute inset-x-0 rounded" style={{
+          top: isMobile ? 8 : 10, height: isMobile ? 5 : 6,
+          background: "linear-gradient(90deg, rgba(229,57,53,0.15), rgba(255,193,7,0.15), rgba(76,175,80,0.25))",
         }} />
-        <div className="absolute rounded-full" style={{
-          top: isMobile ? 8 : 10, height: isMobile ? 4 : 5, left: 0,
+        <div className="absolute rounded" style={{
+          top: isMobile ? 8 : 10, height: isMobile ? 5 : 6, left: 0,
           width: `${currentPos}%`,
-          background: `linear-gradient(90deg, rgba(255,255,255,0.05), ${barColor})`,
+          background: `linear-gradient(90deg, rgba(255,255,255,0.03), ${barColor})`,
           transition: "width 800ms ease",
         }} />
         <div className="absolute" style={{
-          left: `${protectionPos}%`, top: 0, bottom: 0,
-          width: 2, background: "hsl(38, 92%, 55%)", opacity: 0.6, borderRadius: 1,
+          left: `${protectionPos}%`, top: 2, bottom: 0,
+          width: 2, background: "hsl(38, 92%, 55%)", opacity: 0.7, borderRadius: 1,
         }}>
           <div className="absolute font-mono" style={{
-            top: -12, left: "50%", transform: "translateX(-50%)",
-            fontSize: 8, color: "hsl(38, 92%, 55%)", whiteSpace: "nowrap",
+            bottom: -14, left: "50%", transform: "translateX(-50%)",
+            fontSize: 7, color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap",
           }}>{t("pos.protection")}</div>
         </div>
         <div className="absolute" style={{
-          left: `${exitPos}%`, top: 0, bottom: 0,
-          width: 2, background: "hsl(0, 72%, 55%)", opacity: 0.7, borderRadius: 1,
+          left: `${exitPos}%`, top: 2, bottom: 0,
+          width: 2, background: "hsl(0, 72%, 55%)", opacity: 0.6, borderRadius: 1,
         }}>
           <div className="absolute font-mono" style={{
-            top: -12, left: "50%", transform: "translateX(-50%)",
-            fontSize: 8, color: "hsl(0, 72%, 55%)", whiteSpace: "nowrap",
+            bottom: -14, left: "50%", transform: "translateX(-50%)",
+            fontSize: 7, color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap",
           }}>{t("pos.exit_rec")}</div>
         </div>
         <div className="absolute" style={{
-          left: `${currentPos}%`, top: isMobile ? 5 : 6,
-          width: isMobile ? 11 : 13, height: isMobile ? 11 : 13,
-          borderRadius: "50%", background: barColor,
-          border: "2px solid rgba(0,0,0,0.5)",
-          transform: "translateX(-50%)",
-          boxShadow: `0 0 8px ${barColor}60`,
+          left: `${currentPos}%`, top: isMobile ? 4 : 5,
+          width: 3, height: isMobile ? 14 : 16,
+          background: barColor, transform: "translateX(-50%)",
+          boxShadow: `0 0 10px ${barColor}80`, borderRadius: 2,
           transition: "left 800ms ease",
         }} />
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-3 mt-4">
+        {onClose && (
+          <button onClick={onClose}
+            className="pointer-events-auto font-mono tracking-wider px-5 py-2.5 rounded-lg transition-all flex items-center gap-2"
+            style={{
+              background: "rgba(229,57,53,0.08)", color: "rgba(229,57,53,0.7)",
+              border: "1px solid rgba(229,57,53,0.15)", fontSize: isMobile ? 10 : 12, fontWeight: 600,
+            }}>
+            <span>✦</span> {t("pos.close_position")}
+          </button>
+        )}
+        {onTakeProfit && (
+          <button onClick={onTakeProfit}
+            className="pointer-events-auto flex-1 font-mono tracking-wider px-5 py-2.5 rounded-lg transition-all"
+            style={{
+              background: "linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,215,0,0.04))",
+              color: "rgba(255,248,220,0.85)", border: "1px solid rgba(255,215,0,0.2)",
+              fontSize: isMobile ? 11 : 13, fontWeight: 700,
+            }}>
+            {t("pos.take_profit_btn")}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1221,20 +1231,23 @@ export default function AlienGauge() {
     }
   })();
 
+  /* ─── mode state ─── */
+  const [viewMode, setViewMode] = useState<"hunter" | "defensive">("hunter");
+
   return (
     <div className="fixed inset-0 select-none" style={{ background: "#000", overflow: "hidden" }}>
       {/* Vignette */}
       <div className="absolute inset-0 pointer-events-none" style={{
-        background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)",
+        background: "radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.75) 100%)",
       }} />
 
-      {/* Ambient halo */}
+      {/* Ambient halo — warmer */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: 0 }}>
         <div style={{
           width: isMobile ? 550 : 1300,
           height: isMobile ? 550 : 1300,
           borderRadius: "50%",
-          background: `radial-gradient(circle, ${oppGlobal}0A 0%, ${oppGlobal}05 35%, transparent 65%)`,
+          background: `radial-gradient(circle, rgba(255,180,50,0.06) 0%, rgba(255,215,0,0.02) 35%, transparent 65%)`,
           transition: "background 1.2s ease",
         }} />
       </div>
@@ -1253,28 +1266,66 @@ export default function AlienGauge() {
         }
         @keyframes opp-sweep {
           0% { opacity: 0.3; }
-          50% { opacity: 0.55; }
+          50% { opacity: 0.6; }
           100% { opacity: 0.3; }
+        }
+        @keyframes tick-glow {
+          0%, 100% { opacity: 0.15; }
+          50% { opacity: 0.4; }
         }
       `}</style>
 
-      {/* Phase indicator (top) */}
-      <div className="absolute top-5 sm:top-10 left-0 right-0 flex flex-col items-center z-10" style={{ paddingLeft: isMobile ? 60 : 0, paddingRight: isMobile ? 60 : 0 }}>
-        <span className="font-mono tracking-[0.35em] sm:tracking-[0.5em] uppercase" style={{
-          color: "rgba(255,255,255,0.45)",
-          fontSize: isMobile ? 12 : 16,
-        }}>
-          {t("gauge.phase")}
-        </span>
-        <span className="font-mono font-bold uppercase mt-1 text-center" style={{
-          color,
-          fontSize: "clamp(16px, 4vw, 30px)",
-          letterSpacing: isMobile ? "0.15em" : "0.35em",
-          transition: "color 800ms ease",
-          textShadow: `0 0 30px ${color}20`,
-        }}>
-          {phaseLabel}
-        </span>
+      {/* ═══════════════════════════════════════ */}
+      {/* HEADER — TAO SENTINEL                   */}
+      {/* ═══════════════════════════════════════ */}
+      <div className="absolute top-0 left-0 right-0 z-30 flex items-start justify-between px-4 sm:px-8 pt-4 sm:pt-6 pointer-events-none">
+        {/* Spacer for menu button */}
+        <div style={{ width: 100 }} />
+
+        {/* Center: Title */}
+        <div className="flex flex-col items-center pointer-events-none">
+          {/* Ornamental dot */}
+          <div style={{
+            width: 6, height: 6, borderRadius: "50%",
+            background: "rgba(255,215,0,0.6)",
+            boxShadow: "0 0 12px rgba(255,215,0,0.3)",
+            marginBottom: 8,
+          }} />
+          <span className="font-mono font-bold tracking-[0.4em] sm:tracking-[0.6em]" style={{
+            fontSize: isMobile ? 14 : 20,
+            color: "rgba(255,248,220,0.85)",
+            textShadow: "0 0 30px rgba(255,215,0,0.15)",
+          }}>
+            {t("header.title")}
+          </span>
+        </div>
+
+        {/* Right: Mode badges */}
+        <div className="flex items-center gap-2 pointer-events-auto" style={{ paddingTop: isMobile ? 2 : 6 }}>
+          <button onClick={() => setViewMode("hunter")}
+            className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+            style={{
+              fontSize: isMobile ? 9 : 11,
+              fontWeight: 700,
+              background: viewMode === "hunter" ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.03)",
+              color: viewMode === "hunter" ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)",
+              border: `1px solid ${viewMode === "hunter" ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.06)"}`,
+              boxShadow: viewMode === "hunter" ? "0 0 15px rgba(255,215,0,0.08)" : "none",
+            }}>
+            <span>🔥</span> {t("mode.hunter")} ×10
+          </button>
+          <button onClick={() => setViewMode("defensive")}
+            className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+            style={{
+              fontSize: isMobile ? 9 : 11,
+              fontWeight: 700,
+              background: viewMode === "defensive" ? "rgba(229,57,53,0.1)" : "rgba(255,255,255,0.03)",
+              color: viewMode === "defensive" ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.3)",
+              border: `1px solid ${viewMode === "defensive" ? "rgba(229,57,53,0.25)" : "rgba(255,255,255,0.06)"}`,
+            }}>
+            <span>🛡</span> {t("mode.defensive")}
+          </button>
+        </div>
       </div>
 
       {/* Notification permission */}
@@ -1343,6 +1394,42 @@ export default function AlienGauge() {
             `}</style>
           </defs>
 
+          {/* Fine ornamental ticks around outer ring */}
+          {Array.from({ length: 72 }, (_, i) => {
+            const angleDeg = (i * 5) - 135;
+            if (angleDeg > 135) return null;
+            const rad = ((angleDeg - 90) * Math.PI) / 180;
+            const isMajor = i % 9 === 0;
+            const r1 = R_OUTER + (isMobile ? 5 : 8);
+            const r2 = R_OUTER + (isMobile ? (isMajor ? 16 : 10) : (isMajor ? 24 : 14));
+            return (
+              <line key={`otick-${i}`}
+                x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)}
+                x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)}
+                stroke={isMajor ? "rgba(255,215,0,0.25)" : "rgba(255,215,0,0.08)"}
+                strokeWidth={isMajor ? 1.5 : 0.7} strokeLinecap="round"
+              />
+            );
+          })}
+
+          {/* Fine ticks around inner ring */}
+          {Array.from({ length: 54 }, (_, i) => {
+            const angleDeg = (i * 5) - 135;
+            if (angleDeg > 135) return null;
+            const rad = ((angleDeg - 90) * Math.PI) / 180;
+            const r1 = R_INNER - (isMobile ? 5 : 8);
+            const r2 = R_INNER - (isMobile ? 12 : 18);
+            const isMajor = i % 9 === 0;
+            return (
+              <line key={`itick-${i}`}
+                x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)}
+                x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)}
+                stroke={isMajor ? "rgba(229,57,53,0.2)" : "rgba(229,57,53,0.06)"}
+                strokeWidth={isMajor ? 1.2 : 0.5} strokeLinecap="round"
+              />
+            );
+          })}
+
           {/* OUTER RING = OPPORTUNITY (golden) */}
           <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,215,0,0.04)" strokeWidth={isMobile ? 8 : 12} />
           {oppAngle > 0 && (
@@ -1350,26 +1437,22 @@ export default function AlienGauge() {
               stroke={oppGlobal} strokeWidth={isMobile ? 8 : 12} strokeLinecap="round"
               style={{ opacity: 0.55, transition: "d 600ms ease", animation: "opp-sweep 4s ease-in-out infinite" }} />
           )}
-          {/* OUTER label */}
-          <text x={CX + R_OUTER + (isMobile ? 14 : 22)} y={CY - R_OUTER + (isMobile ? 30 : 45)}
-            fill="rgba(255,215,0,0.35)" fontSize={isMobile ? 8 : 11}
-            fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em"
-            textAnchor="start" transform={`rotate(0)`}>
+          <text x={CX + R_OUTER + (isMobile ? 14 : 30)} y={CY - R_OUTER + (isMobile ? 30 : 50)}
+            fill="rgba(255,215,0,0.3)" fontSize={isMobile ? 8 : 11}
+            fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em" textAnchor="start">
             {t("gauge.opportunity")}
           </text>
 
-          {/* INNER RING = RISK (red) */}
+          {/* INNER RING = RISK (red/amber) */}
           <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(229,57,53,0.04)" strokeWidth={isMobile ? 10 : 14} />
           {riskAngle > 0 && (
             <path d={describeArc(CX, CY, R_INNER, -135, -135 + riskAngle)} fill="none"
               stroke={rskGlobal} strokeWidth={isMobile ? 10 : 14} strokeLinecap="round"
               style={{ opacity: innerOpacity, transition: "d 600ms ease, opacity 400ms ease" }} />
           )}
-          {/* INNER label */}
-          <text x={CX + R_INNER + (isMobile ? 14 : 22)} y={CY - R_INNER + (isMobile ? 30 : 45)}
-            fill="rgba(229,57,53,0.3)" fontSize={isMobile ? 8 : 11}
-            fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em"
-            textAnchor="start">
+          <text x={CX + R_INNER + (isMobile ? 14 : 30)} y={CY - R_INNER + (isMobile ? 30 : 50)}
+            fill="rgba(229,57,53,0.25)" fontSize={isMobile ? 8 : 11}
+            fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em" textAnchor="start">
             {t("gauge.risk")}
           </text>
 
@@ -1451,7 +1534,7 @@ export default function AlienGauge() {
           {/* Line 1: FENÊTRE D'OPPORTUNITÉ */}
           <span className="font-mono tracking-[0.3em] sm:tracking-[0.4em] uppercase" style={{
             fontSize: isMobile ? 9 : 14,
-            color: "rgba(255,215,0,0.5)",
+            color: "rgba(255,215,0,0.55)",
             letterSpacing: isMobile ? "0.2em" : "0.35em",
           }}>
             {t("gauge.window")}
@@ -1459,71 +1542,73 @@ export default function AlienGauge() {
 
           {/* Line 2: TIMER (very large, high contrast) */}
           <span className="font-mono font-bold leading-none mt-2 sm:mt-4" style={{
-            fontSize: "clamp(50px, 14vw, 100px)",
+            fontSize: "clamp(50px, 14vw, 110px)",
             color: "rgba(255,248,220,0.95)",
             transition: "color 800ms ease",
             letterSpacing: "0.04em",
-            textShadow: `0 0 60px ${oppGlobal}40, 0 0 120px ${oppGlobal}15`,
+            textShadow: `0 0 60px rgba(255,215,0,0.25), 0 0 120px rgba(255,215,0,0.08)`,
           }}>
             {formatTimeClear(globalTMinus)}
           </span>
 
           {/* Line 3: "avant zone de bascule" */}
-          <span className="font-mono tracking-[0.15em] sm:tracking-[0.2em] uppercase mt-1 sm:mt-3" style={{
-            fontSize: isMobile ? 9 : 13,
-            color: "rgba(255,255,255,0.35)",
+          <span className="font-mono tracking-[0.15em] sm:tracking-[0.2em] mt-1 sm:mt-3" style={{
+            fontSize: isMobile ? 9 : 14,
+            color: "rgba(255,248,220,0.4)",
+            fontStyle: "italic",
           }}>
             {t("gauge.before")}
           </span>
 
-          {/* Phase */}
-          <span className="font-mono font-bold uppercase" style={{
-            fontSize: isMobile ? 14 : 20,
-            letterSpacing: isMobile ? "0.3em" : "0.5em",
-            marginTop: isMobile ? 8 : 22,
-            color,
-            opacity: 0.9,
-            transition: "color 800ms ease",
-          }}>
-            {phaseLabel}
-          </span>
+          {/* Decorative separator */}
+          <div className="flex items-center gap-3 mt-4 sm:mt-8" style={{ opacity: 0.25 }}>
+            <div style={{ width: 20, height: 1, background: "rgba(255,215,0,0.5)" }} />
+            <div style={{ width: 5, height: 5, borderRadius: "50%", border: "1px solid rgba(255,215,0,0.4)" }} />
+            <div style={{ width: 8, height: 1, background: "rgba(255,215,0,0.5)" }} />
+            <div style={{ width: 20, height: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontSize: 10, color: "rgba(255,215,0,0.6)" }}>◈</span>
+            </div>
+            <div style={{ width: 8, height: 1, background: "rgba(255,215,0,0.5)" }} />
+            <div style={{ width: 5, height: 5, borderRadius: "50%", border: "1px solid rgba(255,215,0,0.4)" }} />
+            <div style={{ width: 20, height: 1, background: "rgba(255,215,0,0.5)" }} />
+          </div>
 
-          {/* Opportunity + Risk scores */}
-          <div className="flex items-center mt-3 sm:mt-6" style={{ gap: isMobile ? 20 : 50 }}>
+          {/* Opportunity + Risk scores below separator */}
+          <div className="flex items-center mt-3 sm:mt-5" style={{ gap: isMobile ? 20 : 50 }}>
             <div className="flex flex-col items-center">
               <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(255,215,0,0.4)", fontSize: isMobile ? 9 : 12,
+                color: "rgba(255,215,0,0.35)", fontSize: isMobile ? 9 : 12,
               }}>
                 {t("gauge.opportunity")}
               </span>
               <span className="font-mono font-bold mt-0.5" style={{
-                color: oppGlobal, fontSize: isMobile ? 20 : 28,
+                color: oppGlobal, fontSize: isMobile ? 22 : 30,
               }}>
                 {globalOpp}
               </span>
             </div>
-            <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.1)" }} />
+            <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.08)" }} />
             <div className="flex flex-col items-center">
               <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(229,57,53,0.35)", fontSize: isMobile ? 9 : 12,
+                color: "rgba(229,57,53,0.3)", fontSize: isMobile ? 9 : 12,
               }}>
                 {t("gauge.risk")}
               </span>
               <span className="font-mono font-bold mt-0.5" style={{
-                color: rskGlobal, fontSize: isMobile ? 20 : 28,
+                color: rskGlobal, fontSize: isMobile ? 22 : 30,
               }}>
                 {globalRisk}
               </span>
             </div>
-            <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.1)" }} />
+            <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.08)" }} />
             <div className="flex flex-col items-center">
               <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(255,255,255,0.25)", fontSize: isMobile ? 9 : 12,
+                color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 9 : 12,
               }}>
                 {t("gauge.confidence")}
               </span>
               <span className="font-mono font-bold mt-0.5" style={{
-                color: "rgba(255,255,255,0.6)", fontSize: isMobile ? 18 : 24,
+                color: "rgba(255,248,220,0.55)", fontSize: isMobile ? 18 : 24,
               }}>
                 {globalConf}%
               </span>
@@ -1532,64 +1617,38 @@ export default function AlienGauge() {
         </div>
       </div>
 
-      {/* PRIORITY FOOTER */}
-      {signals.length > 0 && (() => {
-        const priority = signals.reduce((best, s) =>
-          s.t_minus_minutes < best.t_minus_minutes ? s : best, signals[0]);
-        const prioColor = priority.dominant === "opportunity" ? opportunityColor(priority.opportunity) : riskColor(priority.risk);
-        return (
-          <div className="fixed left-0 right-0 z-20 flex justify-center pointer-events-none"
-            style={{ bottom: isMobile ? (hasPosition ? 110 : 55) : (hasPosition ? 130 : 65) }}>
-            <div className="font-mono text-center px-5 py-2 rounded-lg" style={{
-              background: "rgba(0,0,0,0.5)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              fontSize: isMobile ? 11 : 13,
-              letterSpacing: "0.1em",
-            }}>
-              <span style={{ color: "rgba(255,255,255,0.4)" }}>{t("priority.current")} : </span>
-              <span style={{ color: prioColor, fontWeight: 700 }}>SN-{priority.netuid}</span>
-              <span style={{ color: "rgba(255,255,255,0.55)", marginLeft: 8 }}>
-                ({formatTimeClear(priority.t_minus_minutes)} {t("priority.before")})
-              </span>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* POSITION BAR or OPEN BUTTON */}
-      {hasPosition ? (
-        <div className="fixed left-0 right-0 z-20 flex justify-center"
-          style={{ bottom: isMobile ? 12 : 20 }}>
+      <div className="fixed left-0 right-0 z-20 flex flex-col items-center"
+        style={{ bottom: isMobile ? 12 : 20 }}>
+        {hasPosition ? (
           <PositionBar position={activePosition!} isMobile={isMobile} t={t}
-            onClose={activePosition?.id ? handleClosePosition : undefined} />
-        </div>
-      ) : (
-        <div className="fixed z-20 flex justify-center"
-          style={{ bottom: isMobile ? 14 : 22, left: 0, right: 0 }}>
-          {user ? (
+            onClose={activePosition?.id ? handleClosePosition : undefined}
+            onTakeProfit={() => toast.info("Prise de profit partielle — à implémenter")} />
+        ) : (
+          user ? (
             <button
               onClick={() => { setPreselectedNetuid(undefined); setOpenPosDialog(true); }}
-              className="font-mono tracking-wider px-6 py-3 rounded-xl transition-all pointer-events-auto flex items-center gap-2"
+              className="font-mono tracking-wider px-7 py-3 rounded-xl transition-all pointer-events-auto flex items-center gap-2"
               style={{
-                background: "linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,215,0,0.06))",
+                background: "linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.04))",
                 color: "rgba(255,215,0,0.9)",
-                border: "1px solid rgba(255,215,0,0.3)",
+                border: "1px solid rgba(255,215,0,0.25)",
                 fontSize: isMobile ? 12 : 15,
                 fontWeight: 700,
-                boxShadow: "0 0 25px rgba(255,215,0,0.08)",
+                boxShadow: "0 0 30px rgba(255,215,0,0.06)",
                 letterSpacing: "0.08em",
               }}
             >
-              <span style={{ fontSize: isMobile ? 16 : 18 }}>➕</span> {t("pos.open")}
+              + {t("pos.open")}
             </button>
           ) : (
             <span className="font-mono text-[10px] tracking-wider px-3 py-2 rounded-md pointer-events-auto"
               style={{ color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
               {t("pos.login_required")}
             </span>
-          )}
-        </div>
-      )}
+          )
+        )}
+      </div>
 
       {/* Dialogs */}
       <OpenPositionDialog open={openPosDialog} onClose={() => setOpenPosDialog(false)}
