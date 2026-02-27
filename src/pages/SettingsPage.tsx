@@ -4,8 +4,8 @@ export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
 
   return (
-    <div className="h-full w-full bg-[#000] text-white p-6 overflow-auto">
-      <h1 className="font-mono text-lg tracking-widest text-white/80 mb-8">{t("settings.title")}</h1>
+    <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
+      <h1 className="font-mono text-base sm:text-lg tracking-widest text-white/80 mb-6 sm:mb-8">{t("settings.title")}</h1>
 
       <div className="max-w-md space-y-8">
         {/* Language */}

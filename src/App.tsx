@@ -32,7 +32,6 @@ function AppLayout() {
     refetchInterval: 60_000,
   });
 
-  const isGauge = location.pathname === "/";
 
   const navItems = [
     { path: "/", label: t("nav.gauge"), icon: "◎" },
@@ -73,8 +72,13 @@ function AppLayout() {
         </Link>
       )}
 
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <div className="flex-shrink-0 transition-all duration-300 ease-in-out"
+      <div className={`fixed md:relative z-40 h-full transition-all duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
         style={{
           width: sidebarOpen ? 200 : 0,
           opacity: sidebarOpen ? 1 : 0,
@@ -86,7 +90,7 @@ function AppLayout() {
             const active = location.pathname === item.path;
             return (
               <Link key={item.path} to={item.path}
-                onClick={() => { if (isGauge) setSidebarOpen(false); }}
+                onClick={() => setSidebarOpen(false)}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all font-mono text-xs tracking-wider"
                 style={{
                   background: active ? "rgba(255,255,255,0.06)" : "transparent",

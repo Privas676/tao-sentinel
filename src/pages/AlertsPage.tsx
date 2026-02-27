@@ -37,8 +37,8 @@ export default function AlertsPage() {
   };
 
   return (
-    <div className="h-full w-full bg-[#000] text-white p-6 overflow-auto">
-      <h1 className="font-mono text-lg tracking-widest text-white/80 mb-6">{t("alerts.title")}</h1>
+    <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
+      <h1 className="font-mono text-base sm:text-lg tracking-widest text-white/80 mb-4 sm:mb-6">{t("alerts.title")}</h1>
 
       {(!events || events.length === 0) ? (
         <div className="text-center text-white/20 font-mono mt-20">{t("alerts.empty")}</div>
@@ -49,7 +49,7 @@ export default function AlertsPage() {
             const reasons = evidence?.reasons as string[] | undefined;
             const psi = evidence?.mpi ?? evidence?.psi ?? null;
             return (
-              <div key={ev.id} className="flex items-center gap-4 px-4 py-3 border border-white/[0.04] rounded-lg hover:bg-white/[0.02] transition-colors">
+              <div key={ev.id} className="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-2 sm:gap-4 px-3 sm:px-4 py-3 border border-white/[0.04] rounded-lg hover:bg-white/[0.02] transition-colors">
                 {/* Severity dot */}
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: severityColor(ev.severity) }} />
 
