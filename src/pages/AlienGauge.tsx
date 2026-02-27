@@ -5,7 +5,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import {
   SubnetSignal, RawSignal, GaugeState, GaugePhase, Asymmetry,
-  clamp, deriveGaugeState, derivePhase, deriveTMinus, formatTMinus, formatTimeClear,
+  clamp, deriveGaugeState, derivePhase, deriveTMinus, formatTimeClear,
   stateColor, stateGlow, rayColor, processSignals,
   computeGlobalPsi, computeGlobalConfidence,
 } from "@/lib/gauge-engine";
@@ -304,7 +304,7 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const showLabel = !isHorizontalRay;
         const labelAnchor = angleDeg > -45 && angleDeg < 135 ? "start" : "end";
         const labelText = `SN${s.netuid}${isOverflow ? "+" : ""}`;
-        const tMinusText = formatTMinus(s.t_minus_minutes);
+        const tMinusText = formatTimeClear(s.t_minus_minutes);
         const labelFontSize = isMobileSize ? 13 : 15;
         const tMinusFontSize = isMobileSize ? 11 : 13;
 
@@ -571,7 +571,7 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
         fontFamily="'JetBrains Mono', monospace"
         letterSpacing="0.04em"
       >
-        {formatTMinus(signal.t_minus_minutes)}
+        {formatTimeClear(signal.t_minus_minutes)}
       </text>
       <text
         x={tx + TW - PAD} y={ty + PAD + 72}
@@ -677,8 +677,8 @@ function SubnetPanel({ signal, open, onClose }: {
               <div className="font-mono text-[9px] text-white/30 tracking-widest mt-1">{t("tip.confidence")}</div>
             </div>
             <div className="text-center">
-              <div className="font-mono text-lg text-white/70">{formatTMinus(signal.t_minus_minutes)}</div>
-              <div className="font-mono text-[9px] text-white/30 tracking-widest mt-1">T-MINUS</div>
+              <div className="font-mono text-lg text-white/70">{formatTimeClear(signal.t_minus_minutes)}</div>
+              <div className="font-mono text-[9px] text-white/30 tracking-widest mt-1">{t("gauge.remaining")}</div>
             </div>
           </div>
 
@@ -921,7 +921,7 @@ export default function AlienGauge() {
         const sig = signals.find(s => s.netuid === netuid);
         if (sig) {
           new Notification(`⚠ IMMINENT — SN-${sig.netuid}`, {
-            body: `${sig.name} · PSI ${sig.psi} · ${formatTMinus(sig.t_minus_minutes)}`,
+            body: `${sig.name} · PSI ${sig.psi} · ${formatTimeClear(sig.t_minus_minutes)}`,
             icon: "/pwa-192x192.png",
             tag: `imminent-${netuid}`,
           });
