@@ -25,6 +25,9 @@ const translations = {
   "gauge.confidence": { fr: "CONFIANCE", en: "CONFIDENCE" },
   "gauge.phase": { fr: "PHASE", en: "PHASE" },
   "gauge.notif": { fr: "Activer les notifications", en: "Enable notifications" },
+  "gauge.window": { fr: "FENÊTRE D'OPPORTUNITÉ", en: "OPPORTUNITY WINDOW" },
+  "gauge.before": { fr: "Avant déclenchement potentiel", en: "Before potential trigger" },
+  "gauge.pressure": { fr: "PRESSION", en: "PRESSURE" },
 
   // Tooltip
   "tip.psi": { fr: "PSI", en: "PSI" },
