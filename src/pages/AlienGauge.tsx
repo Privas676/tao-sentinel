@@ -544,10 +544,32 @@ export default function AlienGauge() {
     refetchInterval: 300_000,
   });
 
+  /* ─── demo mode ─── */
+  const [demoMode, setDemoMode] = useState(false);
+
   /* ─── signals ─── */
-  const signals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
-  const globalPsi = useMemo(() => computeGlobalPsi(rawSignals ?? []), [rawSignals]);
-  const globalConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
+  const signals = useMemo(() => {
+    const real = processSignals(rawSignals ?? [], sparklines ?? {});
+    if (!demoMode) return real;
+    // Inject a fake IMMINENT signal as the first ray
+    const demoSignal: SubnetSignal = {
+      netuid: 999,
+      name: "DEMO · IMMINENT",
+      psi: 92,
+      t_minus_minutes: 4,
+      confidence: 88,
+      state: "IMMINENT",
+      phase: "TRIGGER",
+      asymmetry: "HIGH",
+      sparkline_7d: [20, 35, 30, 55, 70, 85, 92],
+      liquidity: 80,
+      momentum: 95,
+    };
+    return [demoSignal, ...real.slice(0, 6)];
+  }, [rawSignals, sparklines, demoMode]);
+
+  const globalPsi = useMemo(() => demoMode ? 92 : computeGlobalPsi(rawSignals ?? []), [rawSignals, demoMode]);
+  const globalConf = useMemo(() => demoMode ? 88 : computeGlobalConfidence(rawSignals ?? []), [rawSignals, demoMode]);
   const globalState = deriveGaugeState(globalPsi, globalConf);
   const globalPhase = derivePhase(globalPsi);
   const globalTMinus = deriveTMinus(globalPsi);
@@ -670,6 +692,19 @@ export default function AlienGauge() {
           {t("gauge.confidence")} {globalConf}%
         </span>
       </div>
+
+      {/* Demo toggle (bottom-left) */}
+      <button
+        onClick={() => setDemoMode(d => !d)}
+        className="absolute bottom-4 left-4 z-20 font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-md transition-all"
+        style={{
+          background: demoMode ? "rgba(229,57,53,0.15)" : "rgba(255,255,255,0.03)",
+          color: demoMode ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.2)",
+          border: `1px solid ${demoMode ? "rgba(229,57,53,0.3)" : "rgba(255,255,255,0.06)"}`,
+        }}
+      >
+        {demoMode ? "◉ DEMO ON" : "○ DEMO"}
+      </button>
 
       {/* GAUGE */}
       <div className="relative z-10" style={{ width: SIZE, height: SIZE }}>
