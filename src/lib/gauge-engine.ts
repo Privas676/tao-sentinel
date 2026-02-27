@@ -81,6 +81,14 @@ export function formatTMinus(minutes: number): string {
   return m > 0 ? `T-${h}h${m}m` : `T-${h}h`;
 }
 
+/** Human-readable time: "1h06" or "45min" */
+export function formatTimeClear(minutes: number): string {
+  if (minutes < 60) return `${minutes}min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+}
+
 /* Colors */
 export function stateColor(state: GaugeState): string {
   switch (state) {

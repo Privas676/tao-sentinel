@@ -25,9 +25,11 @@ const translations = {
   "gauge.confidence": { fr: "CONFIANCE", en: "CONFIDENCE" },
   "gauge.phase": { fr: "PHASE", en: "PHASE" },
   "gauge.notif": { fr: "Activer les notifications", en: "Enable notifications" },
-  "gauge.window": { fr: "FENÊTRE D'OPPORTUNITÉ", en: "OPPORTUNITY WINDOW" },
-  "gauge.before": { fr: "Avant déclenchement potentiel", en: "Before potential trigger" },
+  "gauge.window": { fr: "SIGNAL MARCHÉ", en: "MARKET SIGNAL" },
+  "gauge.before": { fr: "avant zone de bascule", en: "before tipping zone" },
   "gauge.pressure": { fr: "PRESSION", en: "PRESSURE" },
+  "gauge.remaining": { fr: "Fenêtre d'opportunité restante", en: "Remaining opportunity window" },
+  "gauge.before_risk": { fr: "avant risque potentiel", en: "before potential risk" },
 
   // Tooltip
   "tip.psi": { fr: "PSI", en: "PSI" },
@@ -69,6 +71,23 @@ const translations = {
   "panel.miners": { fr: "Mineurs actifs", en: "Active Miners" },
   "panel.cap": { fr: "Cap. Marché", en: "Market Cap" },
   "panel.open_taostats": { fr: "Ouvrir Taostats", en: "Open Taostats" },
+
+  // Position bar
+  "pos.capital": { fr: "Capital investi", en: "Invested Capital" },
+  "pos.current": { fr: "Valeur actuelle", en: "Current Value" },
+  "pos.pnl": { fr: "Gain/Perte", en: "Gain/Loss" },
+  "pos.protection": { fr: "Seuil de protection", en: "Protection Threshold" },
+  "pos.exit_rec": { fr: "Sortie recommandée", en: "Recommended Exit" },
+  "pos.no_position": { fr: "Aucune position ouverte", en: "No open position" },
+  "pos.open": { fr: "Ouvrir une position", en: "Open a position" },
+  "pos.close": { fr: "Fermer", en: "Close" },
+  "pos.profit": { fr: "Profit sécurisé", en: "Secured Profit" },
+  "pos.caution": { fr: "Vigilance", en: "Caution" },
+  "pos.danger": { fr: "Danger capital", en: "Capital Danger" },
+
+  // Priority
+  "priority.current": { fr: "PRIORITÉ ACTUELLE", en: "CURRENT PRIORITY" },
+  "priority.before": { fr: "avant risque potentiel", en: "before potential risk" },
 } as const;
 
 type TKey = keyof typeof translations;
