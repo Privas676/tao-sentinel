@@ -1347,7 +1347,7 @@ export default function AlienGauge() {
 
       {/* Demo toggle */}
       <button onClick={() => setDemoMode(d => !d)}
-        className="absolute bottom-4 right-4 z-20 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all"
+        className="absolute bottom-4 right-4 z-30 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all pointer-events-auto"
         style={{
           background: demoMode ? "rgba(0,255,200,0.12)" : "rgba(255,255,255,0.03)",
           color: demoMode ? "rgba(0,255,200,0.8)" : "rgba(255,255,255,0.25)",
