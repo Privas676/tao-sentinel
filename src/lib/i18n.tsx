@@ -93,6 +93,10 @@ const translations = {
   "pos.cancel": { fr: "Annuler", en: "Cancel" },
   "pos.close_confirm": { fr: "Fermer la position ?", en: "Close position?" },
   "pos.login_required": { fr: "Connectez-vous pour gérer vos positions", en: "Sign in to manage positions" },
+  "pos.alert_sl": { fr: "⛔ STOP-LOSS ATTEINT", en: "⛔ STOP-LOSS HIT" },
+  "pos.alert_tp": { fr: "🎯 TAKE-PROFIT ATTEINT", en: "🎯 TAKE-PROFIT HIT" },
+  "pos.alert_sl_body": { fr: "Votre position SN-{netuid} a atteint le seuil de protection ({pct}%). P&L actuel : {pnl}%", en: "Your SN-{netuid} position hit the protection threshold ({pct}%). Current P&L: {pnl}%" },
+  "pos.alert_tp_body": { fr: "Votre position SN-{netuid} a atteint la sortie recommandée ({pct}%). P&L actuel : {pnl}%", en: "Your SN-{netuid} position hit the recommended exit ({pct}%). Current P&L: {pnl}%" },
 
   // Priority
   "priority.current": { fr: "PRIORITÉ ACTUELLE", en: "CURRENT PRIORITY" },
