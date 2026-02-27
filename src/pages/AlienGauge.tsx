@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import {
-  SubnetSignal, RawSignal, GaugeState, GaugePhase,
+  SubnetSignal, RawSignal, GaugeState, GaugePhase, Asymmetry,
   clamp, deriveGaugeState, derivePhase, deriveTMinus, formatTMinus,
   stateColor, stateGlow, rayColor, processSignals,
   computeGlobalPsi, computeGlobalConfidence,
@@ -121,7 +121,7 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
   hoveredIdx: number | null; setHoveredIdx: (i: number | null) => void;
   onClickRay: (s: SubnetSignal) => void;
 }) {
-  const angleStep = 360 / 7;
+  const angleStep = 360 / Math.max(signals.length, 1);
   const gap = 35;
   const [tremble, setTremble] = useState(0);
   const [rayBreathe, setRayBreathe] = useState(0);
@@ -256,11 +256,11 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
 /* ═══════════════════════════════════════ */
 /*     PREMIUM TOOLTIP + CONNECTOR         */
 /* ═══════════════════════════════════════ */
-function RayTooltip({ signal, cx, cy, outerR, index, svgSize }: {
-  signal: SubnetSignal; cx: number; cy: number; outerR: number; index: number; svgSize: number;
+function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
+  signal: SubnetSignal; cx: number; cy: number; outerR: number; index: number; svgSize: number; total: number;
 }) {
   const { t } = useI18n();
-  const angleStep = 360 / 7;
+  const angleStep = 360 / Math.max(total, 1);
   const angleDeg = (index * angleStep) - 90;
   const angle = angleDeg * (Math.PI / 180);
 
@@ -595,10 +595,27 @@ export default function AlienGauge() {
     refetchInterval: 300_000,
   });
 
+  /* ─── demo mode ─── */
+  const [demoMode, setDemoMode] = useState(false);
+
+  const demoSignals: SubnetSignal[] = useMemo(() => [
+    { netuid: 1, name: "Alpha (Top)", psi: 72, t_minus_minutes: 45, confidence: 85, state: "IMMINENT" as GaugeState, phase: "TRIGGER" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [10,15,12,18,22,20,25], liquidity: 1200, momentum: 0.8 },
+    { netuid: 2, name: "Beta (Top-Right)", psi: 55, t_minus_minutes: 120, confidence: 65, state: "ALERT" as GaugeState, phase: "ARMED" as GaugePhase, asymmetry: "MED" as Asymmetry, sparkline_7d: [5,8,6,9,11,10,12], liquidity: 800, momentum: 0.5 },
+    { netuid: 3, name: "Gamma (Right)", psi: 60, t_minus_minutes: 90, confidence: 70, state: "ALERT" as GaugeState, phase: "ARMED" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [20,18,22,25,23,28,30], liquidity: 2000, momentum: 0.65 },
+    { netuid: 4, name: "Delta (Bottom-Right)", psi: 45, t_minus_minutes: 180, confidence: 55, state: "ALERT" as GaugeState, phase: "BUILD" as GaugePhase, asymmetry: "LOW" as Asymmetry, sparkline_7d: [3,4,3,5,4,6,5], liquidity: 500, momentum: 0.3 },
+    { netuid: 5, name: "Epsilon (Bottom)", psi: 88, t_minus_minutes: 15, confidence: 92, state: "IMMINENT" as GaugeState, phase: "TRIGGER" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [30,35,40,38,45,50,55], liquidity: 3000, momentum: 0.95 },
+    { netuid: 6, name: "Zeta (Bottom-Left)", psi: 40, t_minus_minutes: 200, confidence: 50, state: "ALERT" as GaugeState, phase: "BUILD" as GaugePhase, asymmetry: "MED" as Asymmetry, sparkline_7d: [7,6,8,7,9,8,10], liquidity: 600, momentum: 0.25 },
+    { netuid: 7, name: "Eta (Left)", psi: 65, t_minus_minutes: 60, confidence: 75, state: "ALERT" as GaugeState, phase: "ARMED" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [15,18,16,20,22,21,24], liquidity: 1500, momentum: 0.7 },
+    { netuid: 8, name: "Theta (Top-Left)", psi: 50, t_minus_minutes: 150, confidence: 60, state: "ALERT" as GaugeState, phase: "BUILD" as GaugePhase, asymmetry: "MED" as Asymmetry, sparkline_7d: [8,10,9,12,11,14,13], liquidity: 900, momentum: 0.4 },
+  ], []);
+
   /* ─── signals ─── */
-  const signals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
-  const globalPsi = useMemo(() => computeGlobalPsi(rawSignals ?? []), [rawSignals]);
-  const globalConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
+  const realSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
+  const signals = demoMode ? demoSignals : realSignals;
+  const realPsi = useMemo(() => computeGlobalPsi(rawSignals ?? []), [rawSignals]);
+  const realConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
+  const globalPsi = demoMode ? 62 : realPsi;
+  const globalConf = demoMode ? 71 : realConf;
   const globalState = deriveGaugeState(globalPsi, globalConf);
   const globalPhase = derivePhase(globalPsi);
   const globalTMinus = deriveTMinus(globalPsi);
@@ -809,6 +826,19 @@ export default function AlienGauge() {
         </button>
       )}
 
+      {/* Demo mode toggle */}
+      <button
+        onClick={() => setDemoMode(d => !d)}
+        className="absolute bottom-4 right-4 z-20 font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-md transition-all"
+        style={{
+          background: demoMode ? "rgba(0,255,200,0.12)" : "rgba(255,255,255,0.03)",
+          color: demoMode ? "rgba(0,255,200,0.8)" : "rgba(255,255,255,0.25)",
+          border: `1px solid ${demoMode ? "rgba(0,255,200,0.3)" : "rgba(255,255,255,0.06)"}`,
+        }}
+      >
+        {demoMode ? "⬤ DEMO ON" : "◯ DEMO"}
+      </button>
+
 
       {/* GAUGE — arcs are purely decorative, center HUD is an independent layer */}
       <div className="absolute z-10" style={{ width: SIZE, height: SIZE, top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}>
@@ -947,7 +977,7 @@ export default function AlienGauge() {
 
           {/* Tooltip */}
           {hoveredIdx !== null && signals[hoveredIdx] && (
-            <RayTooltip signal={signals[hoveredIdx]} cx={CX} cy={CY} outerR={R_OUTER} index={hoveredIdx} svgSize={SVG_SIZE} />
+            <RayTooltip signal={signals[hoveredIdx]} cx={CX} cy={CY} outerR={R_OUTER} index={hoveredIdx} svgSize={SVG_SIZE} total={signals.length} />
           )}
         </svg>
       </div>
