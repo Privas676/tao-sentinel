@@ -287,11 +287,36 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize }: {
   const viewMaxY = svgSize - (halfSvg - (svgSize * 0.35)) - TH - margin;
   tx = Math.max(viewMin, Math.min(viewMax, tx));
   ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
-  // Push tooltip away from vertical center to avoid covering the HUD
-  const centerZoneY = 180;
-  if (Math.abs(ty + TH / 2 - cy) < centerZoneY && Math.abs(tx + TW / 2 - cx) < outerR + 100) {
-    ty = ty + TH / 2 < cy ? cy - centerZoneY - TH / 2 : cy + centerZoneY - TH / 2;
+
+  // STRICT: minimum 120px from gauge outer edge, and NEVER overlap sacred center
+  const minDistFromEdge = 120;
+  const tooltipCenterX = tx + TW / 2;
+  const tooltipCenterY = ty + TH / 2;
+  const distFromCenter = Math.sqrt((tooltipCenterX - cx) ** 2 + (tooltipCenterY - cy) ** 2);
+  const sacredZone = outerR * 0.7; // sacred center radius in SVG coords
+
+  // If tooltip center is inside sacred zone, push it outward radially
+  if (distFromCenter < sacredZone + TH / 2) {
+    const pushAngle = Math.atan2(tooltipCenterY - cy, tooltipCenterX - cx);
+    const targetDist = sacredZone + TH / 2 + 20;
+    tx = cx + targetDist * Math.cos(pushAngle) - TW / 2;
+    ty = cy + targetDist * Math.sin(pushAngle) - TH / 2;
   }
+
+  // Also enforce minimum distance from outer ring edge
+  const edgeDist = outerR + minDistFromEdge;
+  const finalCx = tx + TW / 2;
+  const finalCy = ty + TH / 2;
+  const finalDist = Math.sqrt((finalCx - cx) ** 2 + (finalCy - cy) ** 2);
+  if (finalDist < edgeDist) {
+    const pushAngle = Math.atan2(finalCy - cy, finalCx - cx);
+    tx = cx + edgeDist * Math.cos(pushAngle) - TW / 2;
+    ty = cy + edgeDist * Math.sin(pushAngle) - TH / 2;
+  }
+
+  // Reclamp to viewport
+  tx = Math.max(viewMin, Math.min(viewMax, tx));
+  ty = Math.max(viewMinY, Math.min(viewMaxY, ty));
 
   const tooltipCx = tx + TW / 2;
   const tooltipCy = ty + TH / 2;
@@ -680,6 +705,7 @@ export default function AlienGauge() {
   const R_OUTER = isMobile ? 138 : 360;
   const R_INNER = isMobile ? 118 : 310;
   const R_TRIGGER = isMobile ? 100 : 268;
+  const CENTER_RADIUS = isMobile ? 90 : 240; // sacred center zone — no tooltip allowed
 
   const color = stateColor(globalState);
   const glow = stateGlow(globalState);
@@ -744,10 +770,22 @@ export default function AlienGauge() {
         }
       `}</style>
 
-      {/* Phase indicator (top) */}
-      <div className="absolute top-3 sm:top-6 left-0 right-0 text-center z-10">
-        <span className="font-mono tracking-[0.45em] uppercase" style={{ color: `${color}66`, fontSize: isMobile ? 9 : 14, transition: "color 800ms ease" }}>
-          {t("gauge.phase")} : {phaseLabel}
+      {/* Phase indicator (top) — large and clear */}
+      <div className="absolute top-6 sm:top-10 left-0 right-0 flex flex-col items-center z-10">
+        <span className="font-mono tracking-[0.5em] uppercase" style={{
+          color: "rgba(255,255,255,0.35)",
+          fontSize: isMobile ? 10 : 14,
+          letterSpacing: "0.5em",
+        }}>
+          {t("gauge.phase")}
+        </span>
+        <span className="font-mono font-bold tracking-[0.3em] uppercase mt-1" style={{
+          color,
+          fontSize: isMobile ? 16 : 22,
+          transition: "color 800ms ease",
+          textShadow: `0 0 30px ${color}20`,
+        }}>
+          {phaseLabel}
         </span>
       </div>
 
@@ -767,7 +805,7 @@ export default function AlienGauge() {
       )}
 
 
-      {/* GAUGE */}
+      {/* GAUGE — arcs are purely decorative, center HUD is an independent layer */}
       <div className="relative z-10" style={{ width: SIZE, height: SIZE }}>
         {showHalo && (
           <div className="absolute inset-0 rounded-full pointer-events-none" style={{
@@ -843,7 +881,7 @@ export default function AlienGauge() {
             );
           })}
 
-          {/* State transition sweep — progressive color wash on rings */}
+          {/* State transition sweep */}
           {stateTransition && (() => {
             const toColor = stateColor(stateTransition.to);
             const eased = 1 - Math.pow(1 - stateTransition.progress, 3);
@@ -908,12 +946,28 @@ export default function AlienGauge() {
           )}
         </svg>
 
-        {/* Center HUD — strategic instrument */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
-          style={{ animation: "phase-pulse 3s ease-in-out infinite" }}>
-
+        {/* ═══════════════════════════════════════ */}
+        {/* CENTER HUD — independent of arcs       */}
+        {/* Positioned with absolute 50%/50% +     */}
+        {/* translate(-50%, -50%) for mathematical  */}
+        {/* centering that cannot be influenced by  */}
+        {/* SVG arc rendering.                      */}
+        {/* ═══════════════════════════════════════ */}
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: isMobile ? 200 : 440,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            animation: "phase-pulse 3s ease-in-out infinite",
+          }}
+        >
           {/* Title: FENÊTRE D'OPPORTUNITÉ */}
-          <span className="font-mono tracking-[0.35em] uppercase" style={{
+          <span className="font-mono tracking-[0.35em] uppercase text-center" style={{
             fontSize: isMobile ? 8 : 12,
             color: "rgba(255,255,255,0.3)",
             letterSpacing: "0.4em",
@@ -923,7 +977,9 @@ export default function AlienGauge() {
 
           {/* Timer principal — 88px+ */}
           <span className="font-mono font-bold leading-none mt-1 sm:mt-3" style={{
-            fontSize: isMobile ? 54 : 88, color, transition: "color 800ms ease",
+            fontSize: isMobile ? 54 : 88,
+            color,
+            transition: "color 800ms ease",
             letterSpacing: "0.08em",
             textShadow: `0 0 60px ${color}30, 0 0 120px ${color}12`,
           }}>
@@ -935,16 +991,19 @@ export default function AlienGauge() {
           </span>
 
           {/* Sous-texte */}
-          <span className="font-mono tracking-[0.25em] uppercase mt-1 sm:mt-2" style={{
+          <span className="font-mono tracking-[0.25em] uppercase mt-1 sm:mt-2 text-center" style={{
             fontSize: isMobile ? 7 : 10,
             color: "rgba(255,255,255,0.2)",
           }}>
             {t("gauge.before")}
           </span>
 
-          {/* Phase + State */}
+          {/* State label */}
           <span className="font-mono tracking-[0.5em] mt-3 sm:mt-6 uppercase" style={{
-            fontSize: isMobile ? 11 : 16, color, opacity: 0.85, transition: "color 800ms ease",
+            fontSize: isMobile ? 11 : 16,
+            color,
+            opacity: 0.85,
+            transition: "color 800ms ease",
           }}>
             {stateLabel}
           </span>
