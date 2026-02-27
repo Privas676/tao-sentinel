@@ -140,6 +140,19 @@ const translations = {
   "mode.hunter": { fr: "CHASSEUR", en: "HUNTER" },
   "mode.defensive": { fr: "DÉFENSIF", en: "DEFENSIVE" },
 
+  // Smart Capital
+  "sc.label": { fr: "SMART CAPITAL", en: "SMART CAPITAL" },
+  "sc.accumulation": { fr: "Accumulation", en: "Accumulation" },
+  "sc.stable": { fr: "Stable", en: "Stable" },
+  "sc.distribution": { fr: "Distribution", en: "Distribution" },
+
+  // Dual Core
+  "dc.structure": { fr: "CORE STRUCTURE", en: "CORE STRUCTURE" },
+  "dc.sniper": { fr: "CORE SNIPER", en: "CORE SNIPER" },
+
+  // Ray labels
+  "ray.before": { fr: "avant bascule", en: "before shift" },
+
   // Position actions
   "pos.close_position": { fr: "Fermer position", en: "Close position" },
   "pos.take_profit_btn": { fr: "Prendre profit", en: "Take Profit" },
