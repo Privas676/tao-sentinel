@@ -111,6 +111,7 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const x2 = cx + r2 * Math.cos(angle);
         const y2 = cy + r2 * Math.sin(angle);
         const isHovered = hoveredIdx === i;
+        const breatheScale = isHovered ? 1 : 0;
 
         // Ring traction effect for IMMINENT rays
         const tractionPts = isImm ? (() => {
@@ -138,8 +139,24 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
             {/* Visible ray */}
             <line x1={x1} y1={y1} x2={x2} y2={y2}
               stroke={rayColor(s.state)} strokeWidth={thickness} strokeLinecap="round"
-              style={{ opacity: isHovered ? 1 : 0.75, transition: "opacity 200ms", pointerEvents: "none" }}
+              style={{
+                opacity: isHovered ? 1 : 0.75,
+                filter: isHovered ? `drop-shadow(0 0 6px ${rayColor(s.state, 0.5)})` : "none",
+                transition: "opacity 200ms, filter 300ms",
+                pointerEvents: "none",
+              }}
             />
+            {/* Breathing glow on hovered ray */}
+            {isHovered && (
+              <line x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={rayColor(s.state, 0.3)} strokeWidth={thickness + 6} strokeLinecap="round"
+                style={{
+                  opacity: 0.4,
+                  animation: "ray-breathe 1.8s ease-in-out infinite",
+                  pointerEvents: "none",
+                }}
+              />
+            )}
             {/* Sparkline on ray */}
             <RaySparkline data={s.sparkline_7d} x1={x1} y1={y1} x2={x2} y2={y2} state={s.state} />
             {/* Traction deformation for IMMINENT */}
@@ -627,6 +644,20 @@ export default function AlienGauge() {
           viewBox={`${(SVG_SIZE - SIZE) / -2} ${(SVG_SIZE - SIZE) / -2} ${SVG_SIZE} ${SVG_SIZE}`}
           style={{ overflow: "visible" }}>
 
+          {/* Animation keyframes */}
+          <defs>
+            <style>{`
+              @keyframes ray-breathe {
+                0%, 100% { opacity: 0.15; }
+                50% { opacity: 0.5; }
+              }
+              @keyframes ring-pulse {
+                0%, 100% { opacity: 0.15; stroke-width: 8; }
+                50% { opacity: 0.35; stroke-width: 12; }
+              }
+            `}</style>
+          </defs>
+
           {/* Outer ring track (+35% thickness = ~7) */}
           <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="7" />
           {tensionAngle > 0 && (
@@ -660,13 +691,29 @@ export default function AlienGauge() {
           {/* Micro-pulse on ring toward hovered ray */}
           {hoveredIdx !== null && signals[hoveredIdx] && (() => {
             const hAngleDeg = (hoveredIdx * (360 / 7)) - 90;
-            const spread = 8;
+            const spread = 14;
+            const hColor = stateColor(signals[hoveredIdx].state);
             return (
-              <path
-                d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
-                fill="none" stroke={stateColor(signals[hoveredIdx].state)} strokeWidth="9" strokeLinecap="round"
-                style={{ opacity: 0.25, transition: "opacity 200ms ease" }}
-              />
+              <g>
+                {/* Wide glow arc */}
+                <path
+                  d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
+                  fill="none" stroke={hColor} strokeWidth="14" strokeLinecap="round"
+                  style={{ opacity: 0.12, filter: `blur(4px)` }}
+                />
+                {/* Bright core arc */}
+                <path
+                  d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread * 0.5, hAngleDeg + spread * 0.5)}
+                  fill="none" stroke={hColor} strokeWidth="9" strokeLinecap="round"
+                  style={{ opacity: 0.5, transition: "opacity 200ms ease" }}
+                />
+                {/* Breathing pulse arc */}
+                <path
+                  d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
+                  fill="none" stroke={hColor} strokeWidth="10" strokeLinecap="round"
+                  style={{ opacity: 0.25, animation: "ring-pulse 2s ease-in-out infinite" }}
+                />
+              </g>
             );
           })()}
 
