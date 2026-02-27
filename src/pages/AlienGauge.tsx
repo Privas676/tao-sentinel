@@ -276,7 +276,7 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize }: {
 
   const tooltipR = rayTipR + 50;
   let tx = cx + tooltipR * Math.cos(angle) - TW / 2;
-  let ty = cx + tooltipR * Math.sin(angle) - TH / 2;
+  let ty = cy + tooltipR * Math.sin(angle) - TH / 2;
 
   // Ensure tooltip never overlaps the center area
   const margin = 12;
