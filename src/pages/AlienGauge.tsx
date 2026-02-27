@@ -994,6 +994,7 @@ export default function AlienGauge() {
   /* ─── demo mode + view mode ─── */
   const [demoMode, setDemoMode] = useState(false);
   const [viewMode, setViewMode] = useState<"hunter" | "defensive">("hunter");
+  const [bagBuilder, setBagBuilder] = useState(false);
 
   const demoSignals: SubnetSignal[] = useMemo(() => [
     { netuid: 1, name: "Alpha", psi: 72, opportunity: 78, risk: 22, t_minus_minutes: 45, confidence: 85, state: "IMMINENT" as GaugeState, phase: "TRIGGER" as GaugePhase, asymmetry: "HIGH" as Asymmetry, sparkline_7d: [10,15,12,18,22,20,25], liquidity: 1200, momentum: 0.8, reasons: ["Momentum fort ↑", "Consensus élevé ✓", "Signal d'entrée actif"], dominant: "opportunity" as const },
@@ -1009,13 +1010,22 @@ export default function AlienGauge() {
   const realSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
   const allSignals = demoMode ? demoSignals : realSignals;
 
-  // Filter top 7 by mode: hunter = top opportunity, defensive = top risk
+  // Filter top 7 by mode + bag builder weighting
   const signals = useMemo(() => {
-    const sorted = [...allSignals].sort((a, b) =>
-      viewMode === "hunter" ? b.opportunity - a.opportunity : b.risk - a.risk
-    );
-    return sorted.slice(0, 7);
-  }, [allSignals, viewMode]);
+    const scored = allSignals.map(s => {
+      let sortScore: number;
+      if (viewMode === "hunter") {
+        sortScore = bagBuilder
+          ? s.opportunity * 0.5 + (s.asymmetry === "HIGH" ? 30 : s.asymmetry === "MED" ? 15 : 0) + (s.confidence < 60 ? 10 : 0)
+          : s.opportunity;
+      } else {
+        sortScore = s.risk;
+      }
+      return { ...s, _sort: sortScore };
+    });
+    scored.sort((a, b) => b._sort - a._sort);
+    return scored.slice(0, 7);
+  }, [allSignals, viewMode, bagBuilder]);
   const realPsi = useMemo(() => computeGlobalPsi(rawSignals ?? []), [rawSignals]);
   const realConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
   const realOpp = useMemo(() => computeGlobalOpportunity(rawSignals ?? []), [rawSignals]);
@@ -1332,6 +1342,19 @@ export default function AlienGauge() {
               border: `1px solid ${viewMode === "defensive" ? "rgba(229,57,53,0.25)" : "rgba(255,255,255,0.06)"}`,
             }}>
             <span>🛡</span> {t("mode.defensive")}
+          </button>
+          <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.08)" }} />
+          <button onClick={() => setBagBuilder(b => !b)}
+            className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+            style={{
+              fontSize: isMobile ? 9 : 11,
+              fontWeight: 700,
+              background: bagBuilder ? "rgba(0,220,180,0.1)" : "rgba(255,255,255,0.03)",
+              color: bagBuilder ? "rgba(0,220,180,0.9)" : "rgba(255,255,255,0.3)",
+              border: `1px solid ${bagBuilder ? "rgba(0,220,180,0.3)" : "rgba(255,255,255,0.06)"}`,
+              boxShadow: bagBuilder ? "0 0 15px rgba(0,220,180,0.08)" : "none",
+            }}>
+            <span>💎</span> {t("mode.bag_builder")}
           </button>
         </div>
       </div>
