@@ -1621,14 +1621,18 @@ export default function AlienGauge() {
           {user ? (
             <button
               onClick={() => setOpenPosDialog(true)}
-              className="font-mono text-[10px] tracking-wider px-4 py-2 rounded-lg transition-all pointer-events-auto"
+              className="font-mono tracking-wider px-5 py-2.5 rounded-xl transition-all pointer-events-auto flex items-center gap-2"
               style={{
-                background: "rgba(255,255,255,0.03)",
-                color: "rgba(255,255,255,0.3)",
-                border: "1px solid rgba(255,255,255,0.08)",
+                background: "linear-gradient(135deg, rgba(76,175,80,0.12), rgba(76,175,80,0.06))",
+                color: "rgba(76,175,80,0.85)",
+                border: "1px solid rgba(76,175,80,0.25)",
+                fontSize: isMobile ? 11 : 13,
+                fontWeight: 600,
+                boxShadow: "0 0 20px rgba(76,175,80,0.08)",
+                letterSpacing: "0.08em",
               }}
             >
-              + {t("pos.open")}
+              <span style={{ fontSize: isMobile ? 14 : 16 }}>➕</span> {t("pos.open")}
             </button>
           ) : (
             <span className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-md"
