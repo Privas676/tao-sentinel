@@ -237,6 +237,93 @@ export function processSignals(
     .slice(0, 7);
 }
 
+/* ═══════════════════════════════════════ */
+/*   SMART CAPITAL MODULE                   */
+/* ═══════════════════════════════════════ */
+
+export type SmartCapitalState = "ACCUMULATION" | "STABLE" | "DISTRIBUTION";
+
+export type SmartCapitalData = {
+  score: number;          // 0-100
+  state: SmartCapitalState;
+};
+
+/** Derive Smart Capital from available metrics (flow, volume, miners, quality) */
+export function computeSmartCapital(raw: RawSignal[]): SmartCapitalData {
+  if (!raw?.length) return { score: 50, state: "STABLE" };
+
+  // Aggregate signals to detect capital flow patterns
+  const scores = raw.map(s => {
+    const psi = s.mpi ?? s.score ?? 0;
+    const conf = s.confidence_pct ?? 0;
+    const quality = s.quality_score ?? 0;
+    // High quality + rising momentum = accumulation signal
+    // Low quality + high PSI = distribution signal (hype > adoption)
+    const accumulationSignal = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
+    const distributionSignal = clamp((100 - quality) * 0.4, 0, 40) + 
+      (psi >= 80 && quality < 50 ? 30 : 0) +
+      (s.state === "BREAK" || s.state === "EXIT_FAST" ? 25 : 0);
+    return { acc: accumulationSignal, dist: distributionSignal };
+  });
+
+  const avgAcc = scores.reduce((a, s) => a + s.acc, 0) / scores.length;
+  const avgDist = scores.reduce((a, s) => a + s.dist, 0) / scores.length;
+  
+  // Smart Capital Score: higher = more accumulation detected
+  const scScore = Math.round(clamp(avgAcc - avgDist * 0.5 + 30, 0, 100));
+  
+  let state: SmartCapitalState;
+  if (scScore >= 65) state = "ACCUMULATION";
+  else if (scScore <= 35) state = "DISTRIBUTION";
+  else state = "STABLE";
+
+  return { score: scScore, state };
+}
+
+/* ═══════════════════════════════════════ */
+/*   DUAL CORE STRATEGY                     */
+/* ═══════════════════════════════════════ */
+
+export type DualCoreAllocation = {
+  structurePct: number;   // 60-70% recommended for solid subnets
+  sniperPct: number;      // 30-40% recommended for low-cap opportunities
+  structureNetuids: number[];
+  sniperNetuids: number[];
+};
+
+/** Compute Dual Core allocation from processed signals */
+export function computeDualCore(signals: SubnetSignal[], smartCapital: SmartCapitalData): DualCoreAllocation {
+  if (!signals.length) return { structurePct: 65, sniperPct: 35, structureNetuids: [], sniperNetuids: [] };
+
+  // Structure: high quality, stable, moderate opportunity
+  const structure = signals
+    .filter(s => s.confidence >= 60 && s.risk < 50 && s.asymmetry !== "HIGH")
+    .sort((a, b) => (b.opportunity * 0.6 + b.confidence * 0.4) - (a.opportunity * 0.6 + a.confidence * 0.4))
+    .slice(0, 4);
+
+  // Sniper: high asymmetry, low cap potential, strong momentum
+  const sniper = signals
+    .filter(s => s.asymmetry === "HIGH" || (s.opportunity >= 65 && s.confidence < 70))
+    .sort((a, b) => b.opportunity - a.opportunity)
+    .slice(0, 3);
+
+  // Adjust allocation based on Smart Capital state
+  let structurePct = 65;
+  let sniperPct = 35;
+  if (smartCapital.state === "ACCUMULATION") {
+    structurePct = 55; sniperPct = 45; // More aggressive
+  } else if (smartCapital.state === "DISTRIBUTION") {
+    structurePct = 75; sniperPct = 25; // More defensive
+  }
+
+  return {
+    structurePct,
+    sniperPct,
+    structureNetuids: structure.map(s => s.netuid),
+    sniperNetuids: sniper.map(s => s.netuid),
+  };
+}
+
 /* Compute global scores */
 export function computeGlobalPsi(raw: RawSignal[]): number {
   if (!raw?.length) return 0;

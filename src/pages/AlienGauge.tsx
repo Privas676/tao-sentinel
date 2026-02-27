@@ -12,6 +12,8 @@ import {
   computeGlobalPsi, computeGlobalConfidence,
   computeGlobalOpportunity, computeGlobalRisk,
   opportunityColor, riskColor,
+  computeSmartCapital, computeDualCore,
+  type SmartCapitalState,
 } from "@/lib/gauge-engine";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -247,10 +249,8 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         );
         const showLabel = !isHorizontalRay;
         const labelAnchor = angleDeg > -45 && angleDeg < 135 ? "start" : "end";
-        const labelText = `SN${s.netuid}`;
-        const tMinusText = formatTimeClear(s.t_minus_minutes);
-        const labelFontSize = isMobileSize ? 13 : 16;
-        const tMinusFontSize = isMobileSize ? 11 : 14;
+        const labelText = `SN${s.netuid} • ${formatTimeClear(s.t_minus_minutes)}`;
+        const labelFontSize = isMobileSize ? 11 : 14;
 
         // Graduated ticks on ray body (3h, 2h, 1h marks)
         const rayTicks = [60, 120, 180].map(min => {
@@ -336,23 +336,17 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
                   </>
                 )}
                 <rect
-                  x={labelAnchor === "start" ? lx - 3 : lx - (isMobileSize ? 70 : 95)}
+                  x={labelAnchor === "start" ? lx - 3 : lx - (isMobileSize ? 110 : 160)}
                   y={ly - (isMobileSize ? 14 : 18)}
-                  width={isMobileSize ? 73 : 98} height={isMobileSize ? 28 : 38}
+                  width={isMobileSize ? 113 : 163} height={isMobileSize ? 20 : 26}
                   rx={4} fill="rgba(0,0,0,0.7)"
                   style={{ pointerEvents: "none" }}
                 />
-                <text x={lx} y={ly - (isMobileSize ? 1 : 2)} textAnchor={labelAnchor}
+                <text x={lx} y={ly + (isMobileSize ? 2 : 2)} textAnchor={labelAnchor}
                   fill="rgba(255,255,255,0.92)" fontSize={labelFontSize} fontWeight="700"
                   fontFamily="'JetBrains Mono', monospace" letterSpacing="0.04em"
                   style={{ pointerEvents: "none" }}>
                   {labelText}
-                </text>
-                <text x={lx} y={ly + (isMobileSize ? 11 : 16)} textAnchor={labelAnchor}
-                  fill={dominantColor} fontSize={tMinusFontSize} fontWeight="600"
-                  fontFamily="'JetBrains Mono', monospace" letterSpacing="0.06em"
-                  style={{ pointerEvents: "none" }}>
-                  {tMinusText}
                 </text>
               </>
             )}
@@ -1035,7 +1029,14 @@ export default function AlienGauge() {
   const globalPhase = derivePhase(globalPsi);
   const globalTMinus = deriveTMinus(globalPsi);
 
-  /* ─── position management ─── */
+  /* ─── smart capital + dual core ─── */
+  const smartCapital = useMemo(() => {
+    if (demoMode) return { score: 72, state: "ACCUMULATION" as SmartCapitalState };
+    return computeSmartCapital(rawSignals ?? []);
+  }, [rawSignals, demoMode]);
+
+  const dualCore = useMemo(() => computeDualCore(signals, smartCapital), [signals, smartCapital]);
+
   const { user } = useAuth();
   const { data: dbPositions } = usePositions();
   const closePosition = useClosePosition();
@@ -1581,15 +1582,15 @@ export default function AlienGauge() {
           </div>
 
           {/* Opportunity + Risk scores below separator */}
-          <div className="flex items-center mt-3 sm:mt-5" style={{ gap: isMobile ? 20 : 50 }}>
+          <div className="flex items-center mt-3 sm:mt-5" style={{ gap: isMobile ? 16 : 40 }}>
             <div className="flex flex-col items-center">
               <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(255,215,0,0.35)", fontSize: isMobile ? 9 : 12,
+                color: "rgba(255,215,0,0.35)", fontSize: isMobile ? 8 : 11,
               }}>
                 {t("gauge.opportunity")}
               </span>
               <span className="font-mono font-bold mt-0.5" style={{
-                color: oppGlobal, fontSize: isMobile ? 22 : 30,
+                color: oppGlobal, fontSize: isMobile ? 20 : 28,
               }}>
                 {globalOpp}
               </span>
@@ -1597,12 +1598,12 @@ export default function AlienGauge() {
             <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.08)" }} />
             <div className="flex flex-col items-center">
               <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(229,57,53,0.3)", fontSize: isMobile ? 9 : 12,
+                color: "rgba(229,57,53,0.3)", fontSize: isMobile ? 8 : 11,
               }}>
                 {t("gauge.risk")}
               </span>
               <span className="font-mono font-bold mt-0.5" style={{
-                color: rskGlobal, fontSize: isMobile ? 22 : 30,
+                color: rskGlobal, fontSize: isMobile ? 20 : 28,
               }}>
                 {globalRisk}
               </span>
@@ -1610,14 +1611,41 @@ export default function AlienGauge() {
             <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.08)" }} />
             <div className="flex flex-col items-center">
               <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 9 : 12,
+                color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.5)" :
+                       smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.5)" :
+                       "rgba(255,255,255,0.25)",
+                fontSize: isMobile ? 8 : 11,
               }}>
-                {t("gauge.confidence")}
+                {t("sc.label")}
               </span>
               <span className="font-mono font-bold mt-0.5" style={{
-                color: "rgba(255,248,220,0.55)", fontSize: isMobile ? 18 : 24,
+                color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" :
+                       smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" :
+                       "rgba(255,248,220,0.55)",
+                fontSize: isMobile ? 12 : 16,
               }}>
-                {globalConf}%
+                {t(`sc.${smartCapital.state.toLowerCase()}` as any)}
+              </span>
+              <span className="font-mono mt-0.5" style={{
+                color: "rgba(255,255,255,0.25)", fontSize: isMobile ? 9 : 11,
+              }}>
+                {smartCapital.score}/100
+              </span>
+            </div>
+          </div>
+
+          {/* Dual Core allocation */}
+          <div className="flex items-center mt-3 sm:mt-4" style={{ gap: isMobile ? 12 : 24 }}>
+            <div className="flex items-center gap-1.5">
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(255,215,0,0.6)" }} />
+              <span className="font-mono" style={{ color: "rgba(255,215,0,0.45)", fontSize: isMobile ? 8 : 10, letterSpacing: "0.1em" }}>
+                {t("dc.structure")} {dualCore.structurePct}%
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(0,200,255,0.6)" }} />
+              <span className="font-mono" style={{ color: "rgba(0,200,255,0.45)", fontSize: isMobile ? 8 : 10, letterSpacing: "0.1em" }}>
+                {t("dc.sniper")} {dualCore.sniperPct}%
               </span>
             </div>
           </div>
