@@ -139,6 +139,7 @@ const translations = {
   "header.title": { fr: "TAO SENTINEL", en: "TAO SENTINEL" },
   "mode.hunter": { fr: "CHASSEUR", en: "HUNTER" },
   "mode.defensive": { fr: "DÉFENSIF", en: "DEFENSIVE" },
+  "mode.bag_builder": { fr: "BAG BUILDER", en: "BAG BUILDER" },
 
   // Smart Capital
   "sc.label": { fr: "SMART CAPITAL", en: "SMART CAPITAL" },
