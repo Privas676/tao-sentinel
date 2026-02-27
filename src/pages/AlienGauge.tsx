@@ -37,7 +37,7 @@ function TooltipSparkline({ data, width, height, color }: { data: number[]; widt
     return `${x},${y}`;
   }).join(" ");
   return (
-    <polyline points={pts} fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   );
 }
 
@@ -122,7 +122,7 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
   onClickRay: (s: SubnetSignal) => void;
 }) {
   const angleStep = 360 / 7;
-  const gap = 24;
+  const gap = 28;
   const [tremble, setTremble] = useState(0);
   const [rayBreathe, setRayBreathe] = useState(0);
 
@@ -132,7 +132,7 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
     const tick = (now: number) => {
       const elapsed = now - start;
       setTremble(Math.sin(elapsed / 80) * 2);
-      setRayBreathe(Math.sin(elapsed / 1200) * 0.5 + 0.5); // 0→1 breathing cycle ~2.4s
+      setRayBreathe(Math.sin(elapsed / 1200) * 0.5 + 0.5);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -147,24 +147,29 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
         const angleDeg = (i * angleStep) - 90;
         const angle = angleDeg * (Math.PI / 180);
         const r1 = outerR + gap;
-        const maxLen = outerR > 200 ? 140 : 75;
-        const minLen = outerR > 200 ? 30 : 18;
-        // Length proportional to asymmetry
+        const maxLen = outerR > 250 ? 170 : 85;
+        const minLen = outerR > 250 ? 40 : 22;
         const asymFactor = s.asymmetry === "HIGH" ? 1.0 : s.asymmetry === "MED" ? 0.65 : 0.35;
         const len = minLen + asymFactor * (maxLen - minLen);
         const isImm = s.state === "IMMINENT";
         const trembleOffset = isImm ? tremble : 0;
-        // Micro breathing on ray length
         const breatheLen = len * (1 + rayBreathe * 0.04);
         const r2 = r1 + breatheLen + trembleOffset;
-        const thickness = 2.5 + (s.confidence / 100) * 4; // Thicker rays
+        const thickness = (2.5 + (s.confidence / 100) * 4) * 1.8;
         const x1 = cx + r1 * Math.cos(angle);
         const y1 = cy + r1 * Math.sin(angle);
         const x2 = cx + r2 * Math.cos(angle);
         const y2 = cy + r2 * Math.sin(angle);
         const isHovered = hoveredIdx === i;
 
-        // Ring traction effect for IMMINENT rays
+        // Label position: at ray tip + offset
+        const labelR = r2 + 16;
+        const lx = cx + labelR * Math.cos(angle);
+        const ly = cy + labelR * Math.sin(angle);
+        const labelAnchor = angleDeg > -45 && angleDeg < 135 ? "start" : "end";
+        const labelText = `SN${s.netuid}`;
+        const tMinusText = formatTMinus(s.t_minus_minutes);
+
         const tractionPts = isImm ? (() => {
           const trR = outerR + 2;
           const spreadDeg = 4;
@@ -180,37 +185,41 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
 
         return (
           <g key={s.netuid}>
-            {/* Hit area */}
-            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={22}
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={28}
               style={{ cursor: "pointer" }}
               onMouseEnter={() => setHoveredIdx(i)}
               onMouseLeave={() => setHoveredIdx(null)}
               onClick={() => onClickRay(s)}
             />
-            {/* Visible ray */}
             <line x1={x1} y1={y1} x2={x2} y2={y2}
               stroke={rayColor(s.state)} strokeWidth={thickness} strokeLinecap="round"
               style={{
                 opacity: isHovered ? 1 : 0.75,
-                filter: isHovered ? `drop-shadow(0 0 6px ${rayColor(s.state, 0.5)})` : "none",
+                filter: isHovered ? `drop-shadow(0 0 10px ${rayColor(s.state, 0.5)})` : "none",
                 transition: "opacity 200ms, filter 300ms",
                 pointerEvents: "none",
               }}
             />
-            {/* Breathing glow on hovered ray */}
             {isHovered && (
               <line x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke={rayColor(s.state, 0.3)} strokeWidth={thickness + 6} strokeLinecap="round"
-                style={{
-                  opacity: 0.4,
-                  animation: "ray-breathe 1.8s ease-in-out infinite",
-                  pointerEvents: "none",
-                }}
+                stroke={rayColor(s.state, 0.3)} strokeWidth={thickness + 10} strokeLinecap="round"
+                style={{ opacity: 0.4, animation: "ray-breathe 1.8s ease-in-out infinite", pointerEvents: "none" }}
               />
             )}
-            {/* Sparkline on ray */}
+            {/* Always-visible label: SN + T-minus */}
+            <text x={lx} y={ly - 7} textAnchor={labelAnchor}
+              fill="rgba(255,255,255,0.7)" fontSize="14" fontWeight="600"
+              fontFamily="'JetBrains Mono', monospace" letterSpacing="0.04em"
+              style={{ pointerEvents: "none" }}>
+              {labelText}
+            </text>
+            <text x={lx} y={ly + 10} textAnchor={labelAnchor}
+              fill={stateColor(s.state)} fontSize="12" fontWeight="500"
+              fontFamily="'JetBrains Mono', monospace" letterSpacing="0.06em"
+              style={{ pointerEvents: "none", opacity: 0.75 }}>
+              {tMinusText}
+            </text>
             <RaySparkline data={s.sparkline_7d} x1={x1} y1={y1} x2={x2} y2={y2} state={s.state} />
-            {/* Traction deformation for IMMINENT */}
             {tractionPts && (
               <path
                 d={`M ${tractionPts.p1.x} ${tractionPts.p1.y} Q ${tractionPts.p2.x} ${tractionPts.p2.y} ${tractionPts.p3.x} ${tractionPts.p3.y}`}
@@ -218,7 +227,6 @@ function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClic
                 style={{ pointerEvents: "none" }}
               />
             )}
-            {/* IMMINENT particles */}
             {isImm && (
               <ImminentParticles x1={x1} y1={y1} x2={x2} y2={y2} color={stateColor(s.state)} />
             )}
@@ -240,23 +248,20 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize }: {
   const angleDeg = (index * angleStep) - 90;
   const angle = angleDeg * (Math.PI / 180);
 
-  // Tooltip dimensions
-  const TW = 270, TH = 160, PAD = 14, BR = 10;
+  // Tooltip dimensions — BIGGER
+  const TW = 340, TH = 190, PAD = 18, BR = 12;
 
-  // Ray tip position (end of ray)
-  const gap = 24;
+  const gap = 28;
   const imminenceFactor = clamp(1 - (signal.t_minus_minutes / 240), 0, 1);
-  const rayLen = 25 + imminenceFactor * 105;
+  const rayLen = 30 + imminenceFactor * 130;
   const rayTipR = outerR + gap + rayLen;
   const tipX = cx + rayTipR * Math.cos(angle);
   const tipY = cy + rayTipR * Math.sin(angle);
 
-  // Tooltip anchor: pushed further out from ray tip
-  const tooltipR = rayTipR + 35;
+  const tooltipR = rayTipR + 40;
   let tx = cx + tooltipR * Math.cos(angle) - TW / 2;
   let ty = cx + tooltipR * Math.sin(angle) - TH / 2;
 
-  // Viewport clamping (SVG coords)
   const margin = 8;
   const minX = -((svgSize - 720) / 2) + margin;
   const maxX = svgSize - ((svgSize - 720) / 2) - TW - margin;
@@ -274,23 +279,20 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize }: {
   const phaseLabel = signal.phase !== "NONE" ? t(`phase.${signal.phase.toLowerCase()}` as any) : "—";
   const asymLabel = t(`asym.${signal.asymmetry.toLowerCase()}` as any);
 
-  // Sparkline data
   const sparkData = signal.sparkline_7d;
   const sparkW = TW - PAD * 2 - 4;
-  const sparkH = 28;
+  const sparkH = 36;
 
   return (
     <g style={{ pointerEvents: "none" }}>
-      {/* Connector line: ray tip → tooltip center */}
       <line
         x1={tipX} y1={tipY}
         x2={tooltipCx} y2={tooltipCy}
-        stroke="rgba(255,255,255,0.06)"
-        strokeWidth="0.8"
-        strokeDasharray="3,3"
+        stroke="rgba(255,255,255,0.08)"
+        strokeWidth="1"
+        strokeDasharray="4,4"
       />
 
-      {/* Tooltip card */}
       <rect
         x={tx} y={ty} width={TW} height={TH} rx={BR}
         fill="#0E0F12"
@@ -299,101 +301,98 @@ function RayTooltip({ signal, cx, cy, outerR, index, svgSize }: {
         filter="url(#tooltip-shadow)"
       />
 
-      {/* Shadow filter */}
       <defs>
         <filter id="tooltip-shadow" x="-10%" y="-10%" width="130%" height="130%">
-          <feDropShadow dx="0" dy="4" stdDeviation="8" floodColor="rgba(0,0,0,0.5)" floodOpacity="0.4" />
+          <feDropShadow dx="0" dy="4" stdDeviation="10" floodColor="rgba(0,0,0,0.6)" floodOpacity="0.5" />
         </filter>
       </defs>
 
-      {/* ─ Line 1: Name ─ */}
+      {/* Name */}
       <text
-        x={tx + PAD} y={ty + PAD + 13}
-        fill="rgba(255,255,255,0.88)"
-        fontSize="14" fontWeight="600"
+        x={tx + PAD} y={ty + PAD + 16}
+        fill="rgba(255,255,255,0.92)"
+        fontSize="16" fontWeight="600"
         fontFamily="'JetBrains Mono', monospace"
         letterSpacing="0.02em"
       >
-        {displayName.length > 24 ? displayName.slice(0, 22) + "…" : displayName}
+        {displayName.length > 28 ? displayName.slice(0, 26) + "…" : displayName}
       </text>
 
-      {/* ─ Line 2: State badge ─ */}
+      {/* State badge */}
       <rect
-        x={tx + PAD} y={ty + PAD + 22}
-        width={stateLabel.length * 8.5 + 16} height={20} rx={4}
-        fill={color} fillOpacity={0.12}
-        stroke={color} strokeOpacity={0.25} strokeWidth={0.5}
+        x={tx + PAD} y={ty + PAD + 26}
+        width={stateLabel.length * 10 + 18} height={24} rx={5}
+        fill={color} fillOpacity={0.14}
+        stroke={color} strokeOpacity={0.3} strokeWidth={0.5}
       />
       <text
-        x={tx + PAD + 8} y={ty + PAD + 37}
+        x={tx + PAD + 9} y={ty + PAD + 43}
         fill={color}
-        fontSize="11" fontWeight="500"
+        fontSize="13" fontWeight="500"
         fontFamily="'JetBrains Mono', monospace"
         letterSpacing="0.08em"
       >
         {stateLabel}
       </text>
-      {/* Phase next to state */}
       <text
-        x={tx + PAD + stateLabel.length * 8.5 + 28} y={ty + PAD + 37}
-        fill="rgba(255,255,255,0.35)"
-        fontSize="10"
+        x={tx + PAD + stateLabel.length * 10 + 32} y={ty + PAD + 43}
+        fill="rgba(255,255,255,0.4)"
+        fontSize="12"
         fontFamily="'JetBrains Mono', monospace"
         letterSpacing="0.04em"
       >
         {phaseLabel}
       </text>
 
-      {/* ─ Line 3: T-minus (large) ─ */}
+      {/* T-minus */}
       <text
-        x={tx + PAD} y={ty + PAD + 62}
+        x={tx + PAD} y={ty + PAD + 72}
         fill={color}
-        fontSize="16" fontWeight="600"
+        fontSize="18" fontWeight="600"
         fontFamily="'JetBrains Mono', monospace"
         letterSpacing="0.04em"
       >
         {formatTMinus(signal.t_minus_minutes)}
       </text>
-      {/* PSI + Confidence on same line */}
       <text
-        x={tx + TW - PAD} y={ty + PAD + 62}
+        x={tx + TW - PAD} y={ty + PAD + 72}
         textAnchor="end"
-        fill="rgba(255,255,255,0.5)"
-        fontSize="11"
+        fill="rgba(255,255,255,0.55)"
+        fontSize="13"
         fontFamily="'JetBrains Mono', monospace"
       >
         PSI {signal.psi} · {signal.confidence}%
       </text>
 
-      {/* ─ Line 4: Asymmetry ─ */}
+      {/* Asymmetry */}
       <text
-        x={tx + PAD} y={ty + PAD + 80}
-        fill="rgba(255,255,255,0.22)"
-        fontSize="10"
+        x={tx + PAD} y={ty + PAD + 92}
+        fill="rgba(255,255,255,0.28)"
+        fontSize="12"
         fontFamily="'JetBrains Mono', monospace"
         letterSpacing="0.06em"
       >
         {t("tip.asym")}: {asymLabel}
       </text>
 
-      {/* ─ Sparkline 7d ─ */}
+      {/* Sparkline 7d */}
       <line
-        x1={tx + PAD} y1={ty + PAD + 90}
-        x2={tx + TW - PAD} y2={ty + PAD + 90}
-        stroke="rgba(255,255,255,0.04)" strokeWidth="0.5"
+        x1={tx + PAD} y1={ty + PAD + 102}
+        x2={tx + TW - PAD} y2={ty + PAD + 102}
+        stroke="rgba(255,255,255,0.06)" strokeWidth="0.5"
       />
       {sparkData.length >= 2 && (
-        <g transform={`translate(${tx + PAD + 2}, ${ty + PAD + 96})`}>
+        <g transform={`translate(${tx + PAD + 2}, ${ty + PAD + 110})`}>
           <svg width={sparkW} height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`}>
             <TooltipSparkline data={sparkData} width={sparkW} height={sparkH - 2} color={color} />
           </svg>
         </g>
       )}
       <text
-        x={tx + TW - PAD} y={ty + TH - 8}
+        x={tx + TW - PAD} y={ty + TH - 10}
         textAnchor="end"
-        fill="rgba(255,255,255,0.15)"
-        fontSize="8"
+        fill="rgba(255,255,255,0.2)"
+        fontSize="10"
         fontFamily="'JetBrains Mono', monospace"
         letterSpacing="0.05em"
       >
@@ -442,7 +441,6 @@ function SubnetPanel({ signal, open, onClose }: {
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          {/* Header */}
           <div className="text-center">
             <div className="font-mono text-2xl tracking-wider" style={{ color }}>
               SN-{signal.netuid}
@@ -450,7 +448,6 @@ function SubnetPanel({ signal, open, onClose }: {
             <div className="font-mono text-sm text-white/50 mt-1">{signal.name}</div>
           </div>
 
-          {/* PSI gauge mini */}
           <div className="flex items-center justify-center gap-8">
             <div className="text-center">
               <div className="font-mono text-3xl font-bold" style={{ color }}>{signal.psi}</div>
@@ -466,13 +463,11 @@ function SubnetPanel({ signal, open, onClose }: {
             </div>
           </div>
 
-          {/* Phase + State */}
           <div className="flex justify-between font-mono text-xs px-2">
             <span className="text-white/40">{t("sub.phase")}: <span style={{ color }}>{phaseLabel}</span></span>
             <span className="text-white/40">{t("sub.state")}: <span style={{ color }}>{t(`state.${signal.state.toLowerCase()}` as any)}</span></span>
           </div>
 
-          {/* Sparkline */}
           {signal.sparkline_7d.length > 1 && (
             <div className="bg-white/[0.02] rounded-lg p-4">
               <div className="font-mono text-[9px] text-white/25 tracking-widest mb-2">{t("tip.price7d")}</div>
@@ -482,7 +477,6 @@ function SubnetPanel({ signal, open, onClose }: {
             </div>
           )}
 
-          {/* Metrics from DB */}
           {metrics && (
             <div className="space-y-3">
               <div className="font-mono text-[9px] text-white/25 tracking-widest">{t("panel.metrics")}</div>
@@ -500,7 +494,6 @@ function SubnetPanel({ signal, open, onClose }: {
             </div>
           )}
 
-          {/* Open Taostats button */}
           <button
             onClick={() => window.open(`https://taostats.io/subnets/${signal.netuid}`, "_blank")}
             className="w-full font-mono text-xs tracking-widest py-3 rounded-lg border border-white/10 hover:border-white/20 text-white/50 hover:text-white/80 transition-all"
@@ -630,14 +623,14 @@ export default function AlienGauge() {
     setPanelSignal(s);
   }, []);
 
-  /* ─── geometry (responsive) ─── */
+  /* ─── geometry (responsive) — BIGGER gauge ─── */
   const isMobile = useIsMobile();
-  const SIZE = isMobile ? 300 : 720;
-  const SVG_SIZE = isMobile ? 420 : 960;
+  const SIZE = isMobile ? 320 : 780;
+  const SVG_SIZE = isMobile ? 460 : 1100;
   const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
-  const R_OUTER = isMobile ? 125 : 320;
-  const R_INNER = isMobile ? 107 : 275;
-  const R_TRIGGER = isMobile ? 92 : 238;
+  const R_OUTER = isMobile ? 130 : 350;
+  const R_INNER = isMobile ? 112 : 300;
+  const R_TRIGGER = isMobile ? 96 : 260;
 
   const color = stateColor(globalState);
   const glow = stateGlow(globalState);
@@ -652,7 +645,6 @@ export default function AlienGauge() {
     return Array.from({ length: count }, (_, i) => ({ angle: -135 + (i / count) * 270 }));
   }, [globalPhase, globalState]);
 
-  // State / Phase labels
   const stateLabel = (() => {
     switch (globalState) {
       case "CALM": return t("state.calm");
@@ -678,13 +670,13 @@ export default function AlienGauge() {
         background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)",
       }} />
 
-      {/* Ambient radial halo behind gauge — always present, ultra subtle */}
+      {/* Ambient radial halo behind gauge */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: 0 }}>
         <div style={{
-          width: isMobile ? 400 : 900,
-          height: isMobile ? 400 : 900,
+          width: isMobile ? 450 : 1000,
+          height: isMobile ? 450 : 1000,
           borderRadius: "50%",
-          background: `radial-gradient(circle, ${color}08 0%, ${color}04 30%, transparent 65%)`,
+          background: `radial-gradient(circle, ${color}0A 0%, ${color}05 35%, transparent 65%)`,
           transition: "background 1.2s ease",
         }} />
       </div>
@@ -698,17 +690,17 @@ export default function AlienGauge() {
 
       {/* Phase indicator (top) */}
       <div className="absolute top-3 sm:top-6 left-0 right-0 text-center z-10">
-        <span className="font-mono tracking-[0.45em] uppercase" style={{ color: `${color}88`, fontSize: isMobile ? 9 : 14, transition: "color 800ms ease" }}>
+        <span className="font-mono tracking-[0.45em] uppercase" style={{ color: `${color}88`, fontSize: isMobile ? 10 : 18, transition: "color 800ms ease" }}>
           {t("gauge.phase")} : {phaseLabel}
         </span>
       </div>
       <div className="absolute top-8 sm:top-14 left-0 right-0 text-center z-10">
-        <span className="font-mono tracking-[0.3em] uppercase" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 8 : 11 }}>
+        <span className="font-mono tracking-[0.3em] uppercase" style={{ color: "rgba(255,255,255,0.25)", fontSize: isMobile ? 9 : 13 }}>
           {t("gauge.confidence")} {globalConf}%
         </span>
       </div>
 
-      {/* Notification permission button (bottom-left) */}
+      {/* Notification permission button */}
       {typeof Notification !== "undefined" && Notification.permission !== "granted" && (
         <button
           onClick={() => Notification.requestPermission()}
@@ -725,7 +717,6 @@ export default function AlienGauge() {
 
       {/* GAUGE */}
       <div className="relative z-10" style={{ width: SIZE, height: SIZE }}>
-        {/* Halo for high confidence */}
         {showHalo && (
           <div className="absolute inset-0 rounded-full pointer-events-none" style={{
             background: `radial-gradient(circle, rgba(100,180,255,0.06) 0%, transparent 70%)`,
@@ -733,7 +724,6 @@ export default function AlienGauge() {
           }} />
         )}
 
-        {/* Glow */}
         {(globalState === "IMMINENT" || globalState === "EXIT") && (
           <div className="absolute inset-0 rounded-full pointer-events-none" style={{
             background: `radial-gradient(circle, ${glow} 0%, transparent 70%)`,
@@ -747,7 +737,6 @@ export default function AlienGauge() {
           viewBox={`${(SVG_SIZE - SIZE) / -2} ${(SVG_SIZE - SIZE) / -2} ${SVG_SIZE} ${SVG_SIZE}`}
           style={{ overflow: "visible" }}>
 
-          {/* Animation keyframes */}
           <defs>
             <style>{`
               @keyframes ray-breathe {
@@ -773,18 +762,18 @@ export default function AlienGauge() {
           </defs>
 
           {/* Outer ring track */}
-          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 4 : 7} />
+          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 5 : 8} />
           {tensionAngle > 0 && (
             <path d={describeArc(CX, CY, R_OUTER, -135, -135 + tensionAngle)} fill="none"
-              stroke={color} strokeWidth={isMobile ? 4 : 7} strokeLinecap="round"
+              stroke={color} strokeWidth={isMobile ? 5 : 8} strokeLinecap="round"
               style={{ opacity: 0.4, transition: "d 600ms ease, stroke 500ms ease" }} />
           )}
 
           {/* Inner ring */}
-          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 6 : 11} />
+          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth={isMobile ? 7 : 12} />
           {innerAngle > 0 && (
             <path d={describeArc(CX, CY, R_INNER, -135, -135 + innerAngle)} fill="none"
-              stroke={color} strokeWidth={isMobile ? 6 : 11} strokeLinecap="round"
+              stroke={color} strokeWidth={isMobile ? 7 : 12} strokeLinecap="round"
               style={{ opacity: innerOpacity, transition: "d 600ms ease, stroke 500ms ease, opacity 400ms ease" }} />
           )}
 
@@ -792,7 +781,7 @@ export default function AlienGauge() {
           <circle cx={CX} cy={CY} r={R_TRIGGER} fill="none" stroke="rgba(255,255,255,0.015)" strokeWidth="2" />
           {triggerTicks.map((tick, i) => {
             const rad = ((tick.angle - 90) * Math.PI) / 180;
-            const r1 = R_TRIGGER - 6, r2 = R_TRIGGER + 6;
+            const r1 = R_TRIGGER - 7, r2 = R_TRIGGER + 7;
             return (
               <line key={i}
                 x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)}
@@ -809,19 +798,16 @@ export default function AlienGauge() {
             const hColor = stateColor(signals[hoveredIdx].state);
             return (
               <g>
-                {/* Wide glow arc */}
                 <path
                   d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
                   fill="none" stroke={hColor} strokeWidth="14" strokeLinecap="round"
                   style={{ opacity: 0.12, filter: `blur(4px)` }}
                 />
-                {/* Bright core arc */}
                 <path
                   d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread * 0.5, hAngleDeg + spread * 0.5)}
                   fill="none" stroke={hColor} strokeWidth="9" strokeLinecap="round"
                   style={{ opacity: 0.5, transition: "opacity 200ms ease" }}
                 />
-                {/* Breathing pulse arc */}
                 <path
                   d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
                   fill="none" stroke={hColor} strokeWidth="10" strokeLinecap="round"
@@ -844,33 +830,33 @@ export default function AlienGauge() {
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
           style={{ animation: "phase-pulse 3s ease-in-out infinite" }}>
-          {/* T-minus — dominant */}
-          <span className="font-mono font-extralight leading-none" style={{
-            fontSize: isMobile ? 48 : 72, color, transition: "color 800ms ease",
-            letterSpacing: "0.08em",
-            textShadow: `0 0 40px ${color}33`,
+          {/* T-minus — dominant 84px */}
+          <span className="font-mono font-bold leading-none" style={{
+            fontSize: isMobile ? 52 : 84, color, transition: "color 800ms ease",
+            letterSpacing: "0.1em",
+            textShadow: `0 0 50px ${color}33, 0 0 100px ${color}15`,
           }}>
             {formatTMinus(globalTMinus)}
           </span>
 
-          {/* Phase : State — prominent */}
-          <span className="font-mono tracking-[0.5em] mt-2 sm:mt-4 uppercase" style={{
-            fontSize: isMobile ? 10 : 14, color, opacity: 0.85, transition: "color 800ms ease",
-            letterSpacing: "0.4em",
+          {/* Phase : State — 18px uppercase */}
+          <span className="font-mono tracking-[0.5em] mt-2 sm:mt-5 uppercase" style={{
+            fontSize: isMobile ? 12 : 18, color, opacity: 0.85, transition: "color 800ms ease",
+            letterSpacing: "0.45em",
           }}>
             {stateLabel}
           </span>
 
           {/* PSI GLOBAL label */}
-          <span className="font-mono mt-3 sm:mt-8 tracking-[0.25em] uppercase" style={{
-            color: "rgba(255,255,255,0.18)", fontSize: isMobile ? 8 : 11,
+          <span className="font-mono mt-4 sm:mt-10 tracking-[0.25em] uppercase" style={{
+            color: "rgba(255,255,255,0.22)", fontSize: isMobile ? 10 : 13,
           }}>
             {t("gauge.global")}
           </span>
 
-          {/* PSI value — better hierarchy */}
+          {/* PSI value — 16px */}
           <span className="font-mono mt-1 tracking-[0.15em]" style={{
-            color: "rgba(255,255,255,0.4)", fontSize: isMobile ? 12 : 16, fontWeight: 600,
+            color: "rgba(255,255,255,0.5)", fontSize: isMobile ? 14 : 20, fontWeight: 700,
           }}>
             {globalPsi}
           </span>
