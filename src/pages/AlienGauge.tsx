@@ -1090,6 +1090,35 @@ export default function AlienGauge() {
     prevImminentRef.current = currentImminent;
   }, [signals]);
 
+  /* ─── P&L threshold alerts (SL/TP) ─── */
+  const prevAlertRef = useRef<{ sl: boolean; tp: boolean }>({ sl: false, tp: false });
+  useEffect(() => {
+    if (!activePosition || demoMode) return;
+    const pnlPct = ((activePosition.currentValue - activePosition.capital) / activePosition.capital) * 100;
+    const slHit = pnlPct <= activePosition.protectionThreshold;
+    const tpHit = pnlPct >= activePosition.exitRecommended;
+
+    // Stop-loss alert
+    if (slHit && !prevAlertRef.current.sl) {
+      const title = t("pos.alert_sl" as any);
+      const body = `SN-${activePosition.netuid} · P&L ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}% · Seuil ${activePosition.protectionThreshold}%`;
+      toast.error(title, { description: body, duration: 10000 });
+      if (Notification.permission === "granted") {
+        new Notification(title, { body, icon: "/pwa-192x192.png", tag: "pos-sl" });
+      }
+    }
+    // Take-profit alert
+    if (tpHit && !prevAlertRef.current.tp) {
+      const title = t("pos.alert_tp" as any);
+      const body = `SN-${activePosition.netuid} · P&L +${pnlPct.toFixed(1)}% · Objectif ${activePosition.exitRecommended}%`;
+      toast.success(title, { description: body, duration: 10000 });
+      if (Notification.permission === "granted") {
+        new Notification(title, { body, icon: "/pwa-192x192.png", tag: "pos-tp" });
+      }
+    }
+    prevAlertRef.current = { sl: slHit, tp: tpHit };
+  }, [activePosition, demoMode, t]);
+
   /* ─── mechanical click ─── */
   const audioCtxRef = useRef<AudioContext | null>(null);
   const playClick = useCallback(() => {
