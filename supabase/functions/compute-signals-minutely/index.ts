@@ -459,7 +459,7 @@ Deno.serve(async (req) => {
           reasons,
         };
         if (existingId) {
-          overrideUpdates.push({ id: existingId, ts: nowIso });
+          overrideUpdates.push({ id: existingId, ts: nowIso, evidence });
         } else {
           overrideInserts.push({
             netuid: s.netuid, ts: nowIso, type: "RISK_OVERRIDE", severity: 3, evidence,
@@ -485,7 +485,7 @@ Deno.serve(async (req) => {
         ? sb.from("events").insert(overrideInserts)
         : Promise.resolve({ error: null }),
       ...overrideUpdates.map(u =>
-        sb.from("events").update({ ts: u.ts }).eq("id", u.id)
+        sb.from("events").update({ ts: u.ts, evidence: u.evidence }).eq("id", u.id)
       ),
       clearedOverrideIds.length > 0
         ? sb.from("events").delete().in("id", clearedOverrideIds)
