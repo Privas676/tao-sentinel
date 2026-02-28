@@ -197,6 +197,10 @@ const translations = {
   "pre_hype.label": { fr: "PRÉ-HYPE", en: "PRE-HYPE" },
   "pre_hype.detected": { fr: "Pré-Hype détecté", en: "Pre-Hype detected" },
   "pre_hype.intensity": { fr: "Intensité", en: "Intensity" },
+
+  // DataFusion
+  "data.confiance": { fr: "CONFIANCE DATA", en: "DATA CONFIDENCE" },
+  "data.divergence": { fr: "Divergence détectée", en: "Divergence detected" },
 } as const;
 
 type TKey = keyof typeof translations;

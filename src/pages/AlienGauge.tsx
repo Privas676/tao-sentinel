@@ -23,6 +23,10 @@ import {
   computeSentinelIndex, sentinelIndexColor, sentinelIndexLabel,
   deriveSubnetAction, deriveStrategicActionMicro, type StrategyMode,
 } from "@/lib/strategy-engine";
+import {
+  computeGlobalConfianceData, confianceColor, shouldModerateRecommendation,
+  type SourceMetrics,
+} from "@/lib/data-fusion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -554,10 +558,58 @@ export default function AlienGauge() {
     refetchInterval: 300_000,
   });
 
+  /* ─── TMC metrics (secondary source) ─── */
+  const { data: primaryMetricsRaw } = useQuery({
+    queryKey: ["metrics-primary"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subnet_metrics_ts")
+        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
+        .eq("source", "taostats")
+        .order("ts", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      // Dedupe: keep latest per netuid
+      const map = new Map<number, SourceMetrics>();
+      for (const r of data || []) {
+        const nid = r.netuid;
+        if (!map.has(nid)) map.set(nid, { netuid: nid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
+      }
+      return [...map.values()];
+    },
+    refetchInterval: 120_000,
+  });
+
+  const { data: secondaryMetricsRaw } = useQuery({
+    queryKey: ["metrics-secondary"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subnet_metrics_ts")
+        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
+        .eq("source", "taomarketcap")
+        .order("ts", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      const map = new Map<number, SourceMetrics>();
+      for (const r of data || []) {
+        const nid = r.netuid;
+        if (!map.has(nid)) map.set(nid, { netuid: nid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taomarketcap" });
+      }
+      return [...map.values()];
+    },
+    refetchInterval: 120_000,
+  });
+
   /* ─── view mode ─── */
   const [demoMode, setDemoMode] = useState(false);
   const [viewMode, setViewMode] = useState<"hunter" | "defensive">("hunter");
   const [bagBuilder, setBagBuilder] = useState(false);
+
+  /* ─── DataFusion Confiance Data ─── */
+  const confianceData = useMemo(() => {
+    if (demoMode) return { score: 82, concordance: 88, freshness: 90, completeness: 75, availability: 100, divergentSubnets: [] };
+    return computeGlobalConfianceData(primaryMetricsRaw ?? [], secondaryMetricsRaw ?? []);
+  }, [primaryMetricsRaw, secondaryMetricsRaw, demoMode]);
 
   /* ─── signals ─── */
   const allSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
@@ -601,12 +653,16 @@ export default function AlienGauge() {
     });
   }, [allSignals, smartCapital.state, flowData]);
 
-  /* ─── Strategy mode ─── */
+  /* ─── Strategy mode (modulated by Confiance Data) ─── */
   const strategyMode = bagBuilder ? "bagbuilder" as const : viewMode;
-  const strategicAction = useMemo(() =>
-    deriveStrategicAction(globalOpp, globalRisk, smartCapital.state, globalConf, strategyMode),
-    [globalOpp, globalRisk, smartCapital.state, globalConf, strategyMode]
-  );
+  const strategicAction = useMemo(() => {
+    const raw = deriveStrategicAction(globalOpp, globalRisk, smartCapital.state, globalConf, strategyMode);
+    // Moderate: if Confiance Data < 60, downgrade ENTER to WATCH unless very strong signal
+    if (raw === "ENTER" && shouldModerateRecommendation(confianceData.score, globalOpp, globalRisk)) {
+      return "WATCH" as const;
+    }
+    return raw;
+  }, [globalOpp, globalRisk, smartCapital.state, globalConf, strategyMode, confianceData.score]);
 
   /* ─── Sentinel Index ─── */
   const sentinelIndex = useMemo(() => computeSentinelIndex(globalOpp, globalRisk, smartCapital.score), [globalOpp, globalRisk, smartCapital.score]);
@@ -847,9 +903,14 @@ export default function AlienGauge() {
           <StrategicBadge action={strategicAction} label={t(`strat.${strategicAction.toLowerCase()}` as any)} isMobile={isMobile} />
         </div>
 
-        {/* ═══ SENTINEL INDEX + FLOW BADGES ═══ */}
+        {/* ═══ SENTINEL INDEX + CONFIANCE DATA + FLOW BADGES ═══ */}
         <div className="mt-5 sm:mt-8 flex flex-col sm:flex-row items-center gap-4 sm:gap-10">
-          <SentinelIndexDisplay score={sentinelIndex} label={sentinelLabel} isMobile={isMobile} />
+          <div className="flex flex-col items-center gap-1">
+            <SentinelIndexDisplay score={sentinelIndex} label={sentinelLabel} isMobile={isMobile} />
+            <span className="font-mono" style={{ fontSize: isMobile ? 8 : 10, color: confianceColor(confianceData.score), letterSpacing: "0.08em" }}>
+              {t("data.confiance")}: {confianceData.score}%
+            </span>
+          </div>
           <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.05)" }} className="hidden sm:block" />
           <div className="flex items-center gap-2">
             <FlowBadge label={t("flow.dominance")} direction={flowData.dominance} isMobile={isMobile} />
