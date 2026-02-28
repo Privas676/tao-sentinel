@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { useI18n, Lang } from "@/lib/i18n";
 import { useOverrideMode } from "@/hooks/use-override-mode";
+import { useDelistMode } from "@/hooks/use-delist-mode";
+import type { DelistMode } from "@/lib/delist-risk";
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
   const { mode, setMode } = useOverrideMode();
+  const { delistMode, setDelistMode } = useDelistMode();
   const fr = lang === "fr";
 
   const [showMinorDiv, setShowMinorDiv] = useState(() => {
@@ -14,6 +17,24 @@ export default function SettingsPage() {
   useEffect(() => {
     localStorage.setItem("show-minor-divergences", showMinorDiv ? "true" : "false");
   }, [showMinorDiv]);
+
+  const delistOptions: { value: DelistMode; label: string; desc: string }[] = [
+    {
+      value: "manual",
+      label: fr ? "📋 Manuel" : "📋 Manual",
+      desc: fr ? "Listes Taoflute (DEPEG + Proche Delist)" : "Taoflute lists (DEPEG + Near Delist)",
+    },
+    {
+      value: "auto_taostats",
+      label: fr ? "🤖 Auto (Taostats)" : "🤖 Auto (Taostats)",
+      desc: fr ? "Score calculé via métriques Taostats" : "Score computed from Taostats metrics",
+    },
+    {
+      value: "auto_taomarketcap",
+      label: fr ? "🤖 Auto (TMC)" : "🤖 Auto (TMC)",
+      desc: fr ? "Score calculé via TaoMarketCap" : "Score computed from TaoMarketCap metrics",
+    },
+  ];
 
   return (
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
@@ -36,6 +57,32 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Delist Detection Mode */}
+        <div>
+          <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
+            {fr ? "DÉTECTION DEPEG / DELIST" : "DEPEG / DELIST DETECTION"}
+          </label>
+          <div className="flex flex-col gap-2">
+            {delistOptions.map(opt => (
+              <button key={opt.value} onClick={() => setDelistMode(opt.value)}
+                className="font-mono text-sm px-4 py-3 rounded-lg transition-all tracking-wider text-left"
+                style={{
+                  background: delistMode === opt.value ? "rgba(229,57,53,0.1)" : "transparent",
+                  color: delistMode === opt.value ? "rgba(229,57,53,0.9)" : "rgba(255,255,255,0.3)",
+                  border: `1px solid ${delistMode === opt.value ? "rgba(229,57,53,0.3)" : "rgba(255,255,255,0.05)"}`,
+                }}>
+                <div>{opt.label}</div>
+                <div className="text-[10px] mt-0.5" style={{ opacity: 0.5 }}>{opt.desc}</div>
+              </button>
+            ))}
+          </div>
+          <p className="font-mono text-[10px] text-white/25 mt-2">
+            {fr
+              ? "Le mode Manuel sera remplacé lorsque la détection Auto sera fiable."
+              : "Manual mode will be deprecated once Auto detection is reliable."}
+          </p>
         </div>
 
         {/* Override Mode */}
