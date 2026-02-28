@@ -1,285 +1,87 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
-import { useAuth } from "@/hooks/use-auth";
-import { usePositions, useOpenPosition, useClosePosition, type DbPosition } from "@/hooks/use-positions";
-import { opportunityColor, riskColor, clamp } from "@/lib/gauge-engine";
+import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
+import { clamp } from "@/lib/gauge-engine";
+import { deriveSubnetAction, actionColor, actionBg, actionBorder, actionIcon } from "@/lib/strategy-engine";
+import { evaluateRiskOverride, systemStatusLabel, systemStatusColor } from "@/lib/risk-override";
+import { fuseMetrics, confianceColor, type SourceMetrics } from "@/lib/data-fusion";
+import { computeStabilitySetup, stabilityColor } from "@/lib/gauge-engine";
 import { toast } from "sonner";
 
 /* ═══════════════════════════════════════ */
 /*        TYPES                            */
 /* ═══════════════════════════════════════ */
-type LivePrice = { netuid: number; price: number; name: string | null };
-type SignalRow = { netuid: number | null; state: string | null; mpi: number | null; score: number | null; confidence_pct: number | null; quality_score: number | null };
+type SignalRow = {
+  netuid: number | null;
+  subnet_name: string | null;
+  state: string | null;
+  mpi: number | null;
+  score: number | null;
+  confidence_pct: number | null;
+  quality_score: number | null;
+};
+
+type MarketRiskData = {
+  volCap: number;
+  topMinersShare: number;
+  priceVol7d: number;
+  liqRatio: number;
+};
 
 /* ═══════════════════════════════════════ */
-/*        POSITION CARD                    */
+/*  SCORING (same as SubnetsPage)           */
 /* ═══════════════════════════════════════ */
-function PositionCard({
-  pos, livePrice, signal, lang, onClose,
-}: {
-  pos: DbPosition;
-  livePrice: number | null;
-  signal: SignalRow | null;
-  lang: string;
-  onClose: (id: string, price: number) => void;
-}) {
-  const fr = lang === "fr";
-  const currentValue = livePrice ? pos.quantity * livePrice : null;
-  const pnl = currentValue ? currentValue - pos.capital : null;
-  const pnlPct = pnl !== null && pos.capital > 0 ? (pnl / pos.capital) * 100 : null;
-  const stopDist = pnlPct !== null ? pnlPct - pos.stop_loss_pct : null;
-
-  // Smart Capital state per subnet
-  const psi = signal?.mpi ?? signal?.score ?? 0;
-  const quality = signal?.quality_score ?? 0;
-  const conf = signal?.confidence_pct ?? 0;
-  const riskScore = deriveRiskSimple(psi, conf, quality, signal?.state ?? null);
-  const scState = deriveSCSimple(psi, quality, conf, signal?.state ?? null);
-
-  // Alert conditions
-  const alertRef = useRef({ sl: false, tp: false });
-  useEffect(() => {
-    if (pnlPct === null) return;
-    if (pnlPct <= pos.stop_loss_pct && !alertRef.current.sl) {
-      alertRef.current.sl = true;
-      toast.error(fr ? "⛔ STOP-LOSS ATTEINT" : "⛔ STOP-LOSS HIT", {
-        description: `SN-${pos.netuid} : ${pnlPct.toFixed(1)}%`,
-      });
-    }
-    if (pnlPct >= pos.take_profit_pct && !alertRef.current.tp) {
-      alertRef.current.tp = true;
-      toast.success(fr ? "🎯 TAKE-PROFIT ATTEINT" : "🎯 TAKE-PROFIT HIT", {
-        description: `SN-${pos.netuid} : +${pnlPct.toFixed(1)}%`,
-      });
-    }
-  }, [pnlPct, pos.stop_loss_pct, pos.take_profit_pct, pos.netuid, fr]);
-
-  // Exit recommendation
-  const exitWarning = scState === "DISTRIBUTION" || riskScore > 70;
-
-  const pnlColor = pnlPct === null ? "rgba(255,255,255,0.4)"
-    : pnlPct > 0 ? "rgba(76,175,80,0.9)"
-    : pnlPct < -5 ? "rgba(229,57,53,0.9)"
-    : "rgba(255,193,7,0.8)";
-
-  return (
-    <div className="rounded-xl p-4 sm:p-5 space-y-3" style={{
-      background: "rgba(255,255,255,0.02)",
-      border: exitWarning ? "1px solid rgba(229,57,53,0.4)" : "1px solid rgba(255,255,255,0.06)",
-      boxShadow: exitWarning ? "0 0 20px rgba(229,57,53,0.1)" : undefined,
-    }}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-white/50 text-xs">SN-{pos.netuid}</span>
-          <span className="font-mono text-sm text-white/80 font-bold">{signal ? `SN-${pos.netuid}` : `Subnet ${pos.netuid}`}</span>
-          {exitWarning && (
-            <span className="font-mono text-[9px] px-2 py-0.5 rounded" style={{
-              background: "rgba(229,57,53,0.15)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.3)",
-            }}>
-              {fr ? "SORTIE RECOMMANDÉE" : "EXIT RECOMMENDED"}
-            </span>
-          )}
-        </div>
-        <span className="font-mono text-[10px] tracking-wider" style={{
-          color: scState === "ACCUMULATION" ? "rgba(76,175,80,0.8)"
-            : scState === "DISTRIBUTION" ? "rgba(229,57,53,0.8)"
-            : "rgba(255,255,255,0.35)",
-        }}>
-          SC: {scState === "ACCUMULATION" ? "Accum." : scState === "DISTRIBUTION" ? "Distrib." : "Stable"}
-        </span>
-      </div>
-
-      {/* Metrics grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricBox label={fr ? "Capital" : "Capital"} value={`${pos.capital.toFixed(2)} τ`} color="rgba(255,215,0,0.7)" />
-        <MetricBox label={fr ? "Valeur actuelle" : "Current Value"}
-          value={currentValue !== null ? `${currentValue.toFixed(2)} τ` : "—"}
-          color={pnlColor} />
-        <MetricBox label="P&L"
-          value={pnlPct !== null ? `${pnlPct > 0 ? "+" : ""}${pnlPct.toFixed(1)}%` : "—"}
-          color={pnlColor} />
-        <MetricBox label={fr ? "Distance stop" : "Stop distance"}
-          value={stopDist !== null ? `${stopDist.toFixed(1)}%` : "—"}
-          color={stopDist !== null && stopDist < 3 ? "rgba(229,57,53,0.9)" : "rgba(255,255,255,0.4)"} />
-      </div>
-
-      {/* Progress bar SL → TP */}
-      <div className="relative h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-        {pnlPct !== null && (
-          <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500" style={{
-            width: `${clamp(((pnlPct - pos.stop_loss_pct) / (pos.take_profit_pct - pos.stop_loss_pct)) * 100, 0, 100)}%`,
-            background: pnlPct > 0 ? "rgba(76,175,80,0.6)" : "rgba(229,57,53,0.6)",
-          }} />
-        )}
-      </div>
-      <div className="flex justify-between font-mono text-[9px] text-white/25">
-        <span>SL {pos.stop_loss_pct}%</span>
-        <span>TP +{pos.take_profit_pct}%</span>
-      </div>
-
-      {/* Actions */}
-      <div className="flex gap-2 pt-1">
-        <button onClick={() => livePrice && onClose(pos.id, livePrice)}
-          className="font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-lg transition-all hover:scale-105"
-          style={{ background: "rgba(229,57,53,0.15)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.3)" }}>
-          {fr ? "FERMER" : "CLOSE"}
-        </button>
-      </div>
-    </div>
-  );
+function deriveOpp(psi: number, conf: number, quality: number, state: string | null): number {
+  let opp = 0;
+  opp += psi * 0.35;
+  opp += quality * 0.25;
+  opp += conf * 0.20;
+  if (state === "GO") opp += 15;
+  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 8;
+  else if (state === "WATCH") opp += 3;
+  else if (state === "HOLD") opp -= 3;
+  if (state === "BREAK" || state === "EXIT_FAST") opp -= 25;
+  if (psi < 30) opp -= 10;
+  return Math.round(clamp(opp, 0, 100));
 }
 
-function MetricBox({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="font-mono text-[8px] tracking-[0.15em] uppercase text-white/25">{label}</span>
-      <span className="font-mono text-sm font-bold" style={{ color }}>{value}</span>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════ */
-/*  OPEN POSITION MODAL                    */
-/* ═══════════════════════════════════════ */
-function OpenPositionModal({
-  subnets, livePrices, lang, onOpen, onCancel,
-}: {
-  subnets: { netuid: number; name: string }[];
-  livePrices: Map<number, number>;
-  lang: string;
-  onOpen: (p: { netuid: number; capital: number; entry_price: number; stop_loss_pct: number; take_profit_pct: number }) => void;
-  onCancel: () => void;
-}) {
-  const fr = lang === "fr";
-  const [netuid, setNetuid] = useState(subnets[0]?.netuid ?? 1);
-  const [capital, setCapital] = useState(10);
-  const [objective, setObjective] = useState<"x2" | "x5" | "x10" | "x20">("x2");
-  const [stopMode, setStopMode] = useState<"dynamic" | "manual">("dynamic");
-  const [manualSL, setManualSL] = useState(-5);
-
-  const tpMap = { x2: 100, x5: 400, x10: 900, x20: 1900 };
-  const slMap = { x2: -10, x5: -15, x10: -20, x20: -25 };
-  const tp = tpMap[objective];
-  const sl = stopMode === "dynamic" ? slMap[objective] : manualSL;
-  const price = livePrices.get(netuid) ?? 0;
-  const qty = price > 0 ? capital / price : 0;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onCancel}>
-      <div className="w-full max-w-md rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()} style={{
-        background: "rgba(10,10,14,0.98)", border: "1px solid rgba(255,215,0,0.15)",
-      }}>
-        <h2 className="font-mono text-sm tracking-widest text-white/80">{fr ? "OUVRIR UNE POSITION" : "OPEN POSITION"}</h2>
-
-        {/* Subnet select */}
-        <div>
-          <label className="font-mono text-[9px] text-white/30 tracking-wider">SUBNET</label>
-          <select value={netuid} onChange={e => setNetuid(Number(e.target.value))}
-            className="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 font-mono text-xs text-white/80">
-            {subnets.map(s => <option key={s.netuid} value={s.netuid}>SN-{s.netuid} — {s.name}</option>)}
-          </select>
-        </div>
-
-        {/* Capital */}
-        <div>
-          <label className="font-mono text-[9px] text-white/30 tracking-wider">{fr ? "CAPITAL (TAO)" : "CAPITAL (TAO)"}</label>
-          <input type="number" value={capital} onChange={e => setCapital(Number(e.target.value))} min={0.1} step={1}
-            className="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 font-mono text-xs text-white/80" />
-        </div>
-
-        {/* Objective */}
-        <div>
-          <label className="font-mono text-[9px] text-white/30 tracking-wider">{fr ? "OBJECTIF" : "OBJECTIVE"}</label>
-          <div className="flex gap-2 mt-1">
-            {(["x2", "x5", "x10", "x20"] as const).map(o => (
-              <button key={o} onClick={() => setObjective(o)}
-                className="font-mono text-[11px] px-3 py-1.5 rounded-lg transition-all"
-                style={{
-                  background: objective === o ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.03)",
-                  color: objective === o ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)",
-                  border: objective === o ? "1px solid rgba(255,215,0,0.3)" : "1px solid rgba(255,255,255,0.06)",
-                }}>
-                ×{o.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Stop mode */}
-        <div>
-          <label className="font-mono text-[9px] text-white/30 tracking-wider">{fr ? "MODE STOP" : "STOP MODE"}</label>
-          <div className="flex gap-2 mt-1">
-            {(["dynamic", "manual"] as const).map(m => (
-              <button key={m} onClick={() => setStopMode(m)}
-                className="font-mono text-[11px] px-3 py-1.5 rounded-lg transition-all"
-                style={{
-                  background: stopMode === m ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.03)",
-                  color: stopMode === m ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)",
-                  border: stopMode === m ? "1px solid rgba(255,215,0,0.3)" : "1px solid rgba(255,255,255,0.06)",
-                }}>
-                {m === "dynamic" ? (fr ? "Trailing" : "Trailing") : (fr ? "Fixe" : "Fixed")}
-              </button>
-            ))}
-          </div>
-          {stopMode === "manual" && (
-            <input type="number" value={manualSL} onChange={e => setManualSL(Number(e.target.value))} max={0} step={1}
-              className="w-full mt-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 font-mono text-xs text-white/80" />
-          )}
-        </div>
-
-        {/* Summary */}
-        <div className="rounded-lg p-3 space-y-1" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
-          <div className="flex justify-between font-mono text-[10px]">
-            <span className="text-white/30">{fr ? "Prix d'entrée" : "Entry price"}</span>
-            <span className="text-white/60">{price > 0 ? price.toFixed(4) : "—"} τ</span>
-          </div>
-          <div className="flex justify-between font-mono text-[10px]">
-            <span className="text-white/30">{fr ? "Quantité est." : "Est. quantity"}</span>
-            <span className="text-white/60">{qty > 0 ? qty.toFixed(2) : "—"}</span>
-          </div>
-          <div className="flex justify-between font-mono text-[10px]">
-            <span className="text-white/30">SL / TP</span>
-            <span className="text-white/60">{sl}% / +{tp}%</span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-3 pt-2">
-          <button onClick={onCancel}
-            className="flex-1 font-mono text-[11px] tracking-wider py-2.5 rounded-lg transition-all"
-            style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.08)" }}>
-            {fr ? "ANNULER" : "CANCEL"}
-          </button>
-          <button onClick={() => price > 0 && onOpen({ netuid, capital, entry_price: price, stop_loss_pct: sl, take_profit_pct: tp })}
-            disabled={price <= 0 || capital <= 0}
-            className="flex-1 font-mono text-[11px] tracking-wider py-2.5 rounded-lg transition-all hover:scale-[1.02] disabled:opacity-30"
-            style={{ background: "rgba(76,175,80,0.15)", color: "rgba(76,175,80,0.9)", border: "1px solid rgba(76,175,80,0.3)" }}>
-            {fr ? "CONFIRMER" : "CONFIRM"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════ */
-/*        HELPERS                          */
-/* ═══════════════════════════════════════ */
-function deriveRiskSimple(psi: number, conf: number, quality: number, state: string | null): number {
-  let risk = 0;
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 40;
-  else if (state === "HOLD") risk += 5;
-  const qd = (100 - quality) / 100; risk += qd * qd * 30;
-  const cd = (100 - conf) / 100; risk += cd * cd * 20;
-  if (psi >= 80 && quality < 50) risk += 15;
-  if (psi < 25) risk += 8;
+function deriveRisk(
+  psi: number, conf: number, quality: number, state: string | null,
+  dataUncertain = false, market?: MarketRiskData
+): number {
+  let risk = 20;
+  risk += (100 - quality) * 0.25;
+  risk += (100 - conf) * 0.20;
+  risk += (100 - psi) * 0.10;
+  if (market) {
+    const vc = market.volCap;
+    const vcIdeal = 0.08;
+    const vcDist = Math.abs(Math.log((vc + 0.001) / vcIdeal));
+    risk += clamp(vcDist * 8, 0, 15);
+    risk += clamp(market.topMinersShare * 12, 0, 10);
+    const lrScore = clamp(1 - market.liqRatio * 5, 0, 1);
+    risk += lrScore * 10;
+    risk += clamp(market.priceVol7d * 20, 0, 10);
+  } else {
+    risk += 15;
+  }
+  if (psi >= 70 && quality < 60) risk += 5;
+  if (psi >= 80 && quality < 50) risk += 8;
+  if (psi >= 85) risk += 3;
+  if (psi < 40) risk += 5;
+  if (conf < 50) risk += 4;
+  if (conf < 30) risk += 4;
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 15;
+  else if (state === "HOLD") risk += 3;
+  else if (state === "WATCH") risk += 2;
+  if (psi >= 40 && psi <= 60 && conf < 40) risk += 3;
+  if (dataUncertain) risk += 8;
   return Math.round(clamp(risk, 0, 100));
 }
 
-function deriveSCSimple(psi: number, quality: number, conf: number, state: string | null): "ACCUMULATION" | "STABLE" | "DISTRIBUTION" {
+function deriveSC(psi: number, quality: number, conf: number, state: string | null): "ACCUMULATION" | "STABLE" | "DISTRIBUTION" {
   const acc = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
   const dist = clamp((100 - quality) * 0.4, 0, 40) + (psi >= 80 && quality < 50 ? 30 : 0) + (state === "BREAK" || state === "EXIT_FAST" ? 25 : 0);
   const score = clamp(acc - dist * 0.5 + 30, 0, 100);
@@ -288,47 +90,87 @@ function deriveSCSimple(psi: number, quality: number, conf: number, state: strin
   return "STABLE";
 }
 
+function scColor(state: "ACCUMULATION" | "STABLE" | "DISTRIBUTION"): string {
+  switch (state) {
+    case "ACCUMULATION": return "rgba(76,175,80,0.8)";
+    case "DISTRIBUTION": return "rgba(229,57,53,0.8)";
+    case "STABLE": return "rgba(255,248,220,0.4)";
+  }
+}
+
 /* ═══════════════════════════════════════ */
 /*        MAIN PAGE                        */
 /* ═══════════════════════════════════════ */
 export default function PortfolioPage() {
   const { lang } = useI18n();
   const fr = lang === "fr";
-  const { user } = useAuth();
-  const { data: positions, isLoading } = usePositions();
-  const openPosition = useOpenPosition();
-  const closePosition = useClosePosition();
-  const [showModal, setShowModal] = useState(false);
+  const portfolio = useLocalPortfolio();
+  const [showAdd, setShowAdd] = useState(false);
+  const [addNetuid, setAddNetuid] = useState<number>(1);
+  const [addQty, setAddQty] = useState<number>(10);
 
-  // Live prices
-  const { data: livePrices } = useQuery({
-    queryKey: ["portfolio-live-prices"],
+  // Live prices (consensus)
+  const { data: primaryMetrics } = useQuery({
+    queryKey: ["portfolio-primary"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("subnet_latest_display").select("netuid, price, source");
+      const { data, error } = await supabase.from("subnet_metrics_ts")
+        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
+        .eq("source", "taostats").order("ts", { ascending: false }).limit(200);
       if (error) throw error;
-      const map = new Map<number, number>();
+      const map = new Map<number, SourceMetrics>();
       for (const r of data || []) {
-        if (r.netuid && r.price && !map.has(r.netuid)) map.set(r.netuid, Number(r.price));
+        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
       }
       return map;
     },
     refetchInterval: 30_000,
   });
 
-  // Signals for SC/risk
+  const { data: secondaryMetrics } = useQuery({
+    queryKey: ["portfolio-secondary"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("subnet_metrics_ts")
+        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
+        .eq("source", "taomarketcap").order("ts", { ascending: false }).limit(200);
+      if (error) throw error;
+      const map = new Map<number, SourceMetrics>();
+      for (const r of data || []) {
+        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taomarketcap" });
+      }
+      return map;
+    },
+    refetchInterval: 30_000,
+  });
+
   const { data: signals } = useQuery({
     queryKey: ["portfolio-signals"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("signals_latest").select("netuid, state, mpi, score, confidence_pct, quality_score");
+      const { data, error } = await supabase.from("signals_latest").select("netuid, subnet_name, state, mpi, score, confidence_pct, quality_score");
       if (error) throw error;
       return (data || []) as SignalRow[];
     },
     refetchInterval: 60_000,
   });
 
-  // Subnet names for modal
+  const { data: subnetLatest } = useQuery({
+    queryKey: ["portfolio-subnet-latest"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("subnet_latest").select("netuid, vol_cap, top_miners_share, liquidity, cap");
+      if (error) throw error;
+      const map = new Map<number, { volCap: number; topMinersShare: number; liqRatio: number }>();
+      for (const r of data || []) {
+        if (r.netuid == null) continue;
+        const cap = Number(r.cap) || 0;
+        const liq = Number(r.liquidity) || 0;
+        map.set(r.netuid, { volCap: Number(r.vol_cap) || 0, topMinersShare: Number(r.top_miners_share) || 0, liqRatio: cap > 0 ? liq / cap : 0 });
+      }
+      return map;
+    },
+    refetchInterval: 120_000,
+  });
+
   const { data: subnetList } = useQuery({
-    queryKey: ["subnet-names"],
+    queryKey: ["subnet-names-portfolio"],
     queryFn: async () => {
       const { data, error } = await supabase.from("subnets").select("netuid, name").order("netuid");
       if (error) throw error;
@@ -336,116 +178,391 @@ export default function PortfolioPage() {
     },
   });
 
+  // Consensus prices
+  const consensusPrices = useMemo(() => {
+    if (!primaryMetrics) return new Map<number, number>();
+    const pa = [...primaryMetrics.values()];
+    const sa = secondaryMetrics ? [...secondaryMetrics.values()] : [];
+    const fused = fuseMetrics(pa, sa);
+    const map = new Map<number, number>();
+    for (const f of fused) {
+      if (f.price) map.set(f.netuid, f.price);
+    }
+    return map;
+  }, [primaryMetrics, secondaryMetrics]);
+
+  // Consensus data
+  const consensusMap = useMemo(() => {
+    if (!primaryMetrics && !secondaryMetrics) return new Map<number, { confianceData: number; dataUncertain: boolean }>();
+    const pa = primaryMetrics ? [...primaryMetrics.values()] : [];
+    const sa = secondaryMetrics ? [...secondaryMetrics.values()] : [];
+    const fused = fuseMetrics(pa, sa);
+    const map = new Map<number, { confianceData: number; dataUncertain: boolean }>();
+    for (const f of fused) {
+      map.set(f.netuid, { confianceData: f.confianceData, dataUncertain: f.dataUncertain });
+    }
+    return map;
+  }, [primaryMetrics, secondaryMetrics]);
+
   const signalMap = useMemo(() => {
     const m = new Map<number, SignalRow>();
     for (const s of signals || []) { if (s.netuid) m.set(s.netuid, s); }
     return m;
   }, [signals]);
 
+  const subnetNameMap = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const s of subnetList || []) m.set(s.netuid, s.name);
+    // Also use signal names
+    for (const s of signals || []) {
+      if (s.netuid && s.subnet_name && !m.has(s.netuid)) m.set(s.netuid, s.subnet_name);
+    }
+    return m;
+  }, [subnetList, signals]);
+
+  // Build enriched rows for portfolio positions
+  const rows = useMemo(() => {
+    return portfolio.positions.map(pos => {
+      const netuid = pos.subnet_id;
+      const signal = signalMap.get(netuid);
+      const psi = signal?.mpi ?? signal?.score ?? 0;
+      const conf = signal?.confidence_pct ?? 0;
+      const quality = signal?.quality_score ?? 0;
+      const state = signal?.state ?? null;
+      const consensus = consensusMap.get(netuid);
+      const dataUncertain = consensus?.dataUncertain ?? false;
+      const confianceData = consensus?.confianceData ?? 50;
+
+      const sl = subnetLatest?.get(netuid);
+      const market: MarketRiskData | undefined = sl ? {
+        volCap: sl.volCap, topMinersShare: sl.topMinersShare, liqRatio: sl.liqRatio, priceVol7d: 0,
+      } : undefined;
+
+      let opp = deriveOpp(psi, conf, quality, state);
+      const risk = deriveRisk(psi, conf, quality, state, dataUncertain, market);
+      const isBreak = state === "BREAK" || state === "EXIT_FAST";
+      if (isBreak || state === "DEPEG_WARNING" || state === "DEPEG_CRITICAL") opp = 0;
+
+      const override = evaluateRiskOverride({ state, psi, risk, quality });
+      if (override.isOverridden) opp = 0;
+
+      let asymmetry = opp - risk;
+      if (dataUncertain) asymmetry -= 15;
+
+      const sc = deriveSC(psi, quality, conf, state);
+      const momentum = clamp(psi - 40, 0, 60) / 60 * 100;
+      const stability = computeStabilitySetup(opp, risk, conf, momentum, quality, dataUncertain);
+
+      // Action: RENFORCER instead of ENTRER for owned subnets
+      const rawAction = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, conf);
+      let action: string = rawAction;
+      if (override.systemStatus !== "OK" && rawAction === "ENTER") action = "WATCH";
+      if (action === "ENTER") action = "REINFORCE"; // Owned = RENFORCER
+
+      const price = consensusPrices.get(netuid) ?? 0;
+      const currentValue = pos.quantity_tao * price;
+
+      // Alert conditions
+      const alerts: string[] = [];
+      if (override.isOverridden) alerts.push("Risque critique");
+      else if (risk > 70) alerts.push("Risque élevé");
+      if (stability < 40) alerts.push("Stabilité faible");
+      if (dataUncertain) alerts.push("Data incertaine");
+      if (isBreak) alerts.push("Zone Critique");
+
+      return {
+        netuid,
+        name: subnetNameMap.get(netuid) || `SN-${netuid}`,
+        quantity: pos.quantity_tao,
+        entryPrice: pos.entry_price,
+        price,
+        currentValue,
+        opp, risk, asymmetry,
+        stability,
+        sc,
+        action,
+        isOverridden: override.isOverridden,
+        systemStatus: override.systemStatus,
+        confianceData,
+        alerts,
+      };
+    });
+  }, [portfolio.positions, signalMap, consensusPrices, consensusMap, subnetLatest, subnetNameMap]);
+
   // Portfolio totals
   const totals = useMemo(() => {
-    if (!positions?.length || !livePrices) return { invested: 0, current: 0, pnl: 0, pnlPct: 0 };
-    let invested = 0, current = 0;
-    for (const p of positions) {
-      invested += p.capital;
-      const price = livePrices.get(p.netuid);
-      current += price ? p.quantity * price : p.capital;
-    }
-    const pnl = current - invested;
-    return { invested, current, pnl, pnlPct: invested > 0 ? (pnl / invested) * 100 : 0 };
-  }, [positions, livePrices]);
+    const totalTao = rows.reduce((a, r) => a + r.quantity, 0);
+    const totalValue = rows.reduce((a, r) => a + r.currentValue, 0);
+    const weightedAS = rows.length > 0
+      ? rows.reduce((a, r) => a + r.asymmetry * r.quantity, 0) / (totalTao || 1)
+      : 0;
+    const avgStability = rows.length > 0
+      ? rows.reduce((a, r) => a + r.stability, 0) / rows.length
+      : 0;
+    const accPct = rows.length > 0
+      ? Math.round((rows.filter(r => r.sc === "ACCUMULATION").length / rows.length) * 100)
+      : 0;
+    const distPct = rows.length > 0
+      ? Math.round((rows.filter(r => r.sc === "DISTRIBUTION").length / rows.length) * 100)
+      : 0;
+    const highRiskPct = rows.length > 0
+      ? Math.round((rows.filter(r => r.risk > 60).length / rows.length) * 100)
+      : 0;
 
-  const handleOpen = async (params: { netuid: number; capital: number; entry_price: number; stop_loss_pct: number; take_profit_pct: number }) => {
-    try {
-      await openPosition.mutateAsync(params);
-      setShowModal(false);
-      toast.success(fr ? "Position ouverte ✓" : "Position opened ✓");
-    } catch (e: any) {
-      toast.error(e.message);
-    }
+    return { totalTao, totalValue, weightedAS, avgStability, accPct, distPct, highRiskPct };
+  }, [rows]);
+
+  // Portfolio alerts (sorted by severity)
+  const portfolioAlerts = useMemo(() => {
+    return rows
+      .filter(r => r.alerts.length > 0)
+      .sort((a, b) => (b.isOverridden ? 1 : 0) - (a.isOverridden ? 1 : 0) || b.risk - a.risk);
+  }, [rows]);
+
+  const handleAdd = () => {
+    if (addQty <= 0) return;
+    const price = consensusPrices.get(addNetuid);
+    portfolio.addPosition(addNetuid, addQty, price);
+    toast.success(fr ? `SN-${addNetuid} ajouté au portefeuille ✓` : `SN-${addNetuid} added to portfolio ✓`);
+    setShowAdd(false);
+    setAddQty(10);
   };
 
-  const handleClose = async (id: string, price: number) => {
-    try {
-      await closePosition.mutateAsync({ id, closed_price: price });
-      toast.success(fr ? "Position fermée ✓" : "Position closed ✓");
-    } catch (e: any) {
-      toast.error(e.message);
-    }
+  const handleSell = (netuid: number) => {
+    const price = consensusPrices.get(netuid);
+    portfolio.sellPosition(netuid, price);
+    toast.success(fr ? `SN-${netuid} vendu et archivé ✓` : `SN-${netuid} sold and archived ✓`);
   };
-
-  if (!user) {
-    return (
-      <div className="h-full w-full bg-[#000] text-white flex items-center justify-center p-6 pt-14">
-        <div className="text-center space-y-4">
-          <span className="font-mono text-3xl">🔒</span>
-          <p className="font-mono text-sm text-white/50">
-            {fr ? "Connectez-vous pour gérer votre portefeuille" : "Sign in to manage your portfolio"}
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
-      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-5 sm:mb-7">
+      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-5">
         {fr ? "Portefeuille" : "Portfolio"}
       </h1>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <SummaryCard label={fr ? "Capital investi" : "Invested"} value={`${totals.invested.toFixed(2)} τ`} color="rgba(255,215,0,0.7)" />
-        <SummaryCard label={fr ? "Valeur actuelle" : "Current Value"} value={`${totals.current.toFixed(2)} τ`}
-          color={totals.pnl >= 0 ? "rgba(76,175,80,0.9)" : "rgba(229,57,53,0.9)"} />
-        <SummaryCard label="P&L"
-          value={`${totals.pnl >= 0 ? "+" : ""}${totals.pnl.toFixed(2)} τ`}
-          color={totals.pnl >= 0 ? "rgba(76,175,80,0.9)" : "rgba(229,57,53,0.9)"} />
-        <SummaryCard label="P&L %"
-          value={`${totals.pnlPct >= 0 ? "+" : ""}${totals.pnlPct.toFixed(1)}%`}
-          color={totals.pnlPct >= 0 ? "rgba(76,175,80,0.9)" : "rgba(229,57,53,0.9)"} />
+      {/* ── SUMMARY CARDS ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <SummaryCard label={fr ? "Total TAO" : "Total TAO"} value={`${totals.totalTao.toFixed(2)} τ`} color="rgba(255,215,0,0.7)" />
+        <SummaryCard label={fr ? "Valeur estimée" : "Estimated Value"} value={`${totals.totalValue.toFixed(4)} τ`} color="rgba(255,215,0,0.7)" />
+        <SummaryCard label={fr ? "AS moyen pondéré" : "Weighted AS"} value={`${totals.weightedAS >= 0 ? "+" : ""}${totals.weightedAS.toFixed(0)}`}
+          color={totals.weightedAS >= 0 ? "rgba(76,175,80,0.9)" : "rgba(229,57,53,0.9)"} />
+        <SummaryCard label={fr ? "Stabilité moy." : "Avg Stability"} value={`${totals.avgStability.toFixed(0)}%`}
+          color={stabilityColor(totals.avgStability)} />
       </div>
 
-      {/* Open position button */}
-      <button onClick={() => setShowModal(true)}
-        className="mb-6 font-mono text-[11px] tracking-wider px-5 py-2.5 rounded-lg transition-all hover:scale-105"
+      {/* ── MINI DASHBOARD ── */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <MiniStat label={fr ? "Accumulation" : "Accumulation"} value={`${totals.accPct}%`} color="rgba(76,175,80,0.8)" />
+        <MiniStat label={fr ? "Distribution" : "Distribution"} value={`${totals.distPct}%`} color="rgba(229,57,53,0.8)" />
+        <MiniStat label={fr ? "Risque élevé" : "High Risk"} value={`${totals.highRiskPct}%`} color={totals.highRiskPct > 30 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.4)"} />
+      </div>
+
+      {/* ── PORTFOLIO ALERTS ── */}
+      {portfolioAlerts.length > 0 && (
+        <div className="mb-5 rounded-xl p-3 space-y-2" style={{ background: "rgba(229,57,53,0.04)", border: "1px solid rgba(229,57,53,0.15)" }}>
+          <span className="font-mono text-[9px] tracking-[0.2em] uppercase text-red-400/70">
+            {fr ? "⚠ ALERTES PORTEFEUILLE" : "⚠ PORTFOLIO ALERTS"}
+          </span>
+          {portfolioAlerts.map(r => (
+            <div key={r.netuid} className="flex items-center gap-2 font-mono text-[10px]">
+              <span className="text-white/50">SN-{r.netuid}</span>
+              <span className="text-white/70">{r.name}</span>
+              {r.alerts.map((a, i) => (
+                <span key={i} className="px-1.5 py-0.5 rounded text-[8px]" style={{
+                  background: "rgba(229,57,53,0.15)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.3)",
+                }}>{a}</span>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── ADD BUTTON ── */}
+      <button onClick={() => setShowAdd(true)}
+        className="mb-5 font-mono text-[11px] tracking-wider px-5 py-2.5 rounded-lg transition-all hover:scale-105"
         style={{
           background: "linear-gradient(135deg, rgba(76,175,80,0.15), rgba(76,175,80,0.08))",
           color: "rgba(76,175,80,0.9)",
           border: "1px solid rgba(76,175,80,0.3)",
           boxShadow: "0 0 15px rgba(76,175,80,0.08)",
         }}>
-        ➕ {fr ? "Ouvrir une position" : "Open a position"}
+        ➕ {fr ? "Ajouter un subnet" : "Add a subnet"}
       </button>
 
-      {/* Positions list */}
-      {isLoading ? (
-        <div className="font-mono text-xs text-white/30 text-center py-12">{fr ? "Chargement…" : "Loading…"}</div>
-      ) : !positions?.length ? (
-        <div className="text-center py-16 space-y-3">
-          <span className="text-3xl">📊</span>
-          <p className="font-mono text-xs text-white/35">{fr ? "Aucune position ouverte" : "No open positions"}</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {positions.map(p => (
-            <PositionCard key={p.id} pos={p}
-              livePrice={livePrices?.get(p.netuid) ?? null}
-              signal={signalMap.get(p.netuid) ?? null}
-              lang={lang} onClose={handleClose} />
-          ))}
+      {/* ── ADD MODAL ── */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowAdd(false)}>
+          <div className="w-full max-w-sm rounded-2xl p-6 space-y-4" onClick={e => e.stopPropagation()} style={{
+            background: "rgba(10,10,14,0.98)", border: "1px solid rgba(255,215,0,0.15)",
+          }}>
+            <h2 className="font-mono text-sm tracking-widest text-white/80">{fr ? "AJOUTER AU PORTEFEUILLE" : "ADD TO PORTFOLIO"}</h2>
+            <div>
+              <label className="font-mono text-[9px] text-white/30 tracking-wider">SUBNET</label>
+              <select value={addNetuid} onChange={e => setAddNetuid(Number(e.target.value))}
+                className="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 font-mono text-xs text-white/80">
+                {(subnetList || []).map(s => (
+                  <option key={s.netuid} value={s.netuid}>
+                    SN-{s.netuid} — {s.name} {portfolio.isOwned(s.netuid) ? "(possédé)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="font-mono text-[9px] text-white/30 tracking-wider">{fr ? "QUANTITÉ TAO" : "QUANTITY TAO"}</label>
+              <input type="number" value={addQty} onChange={e => setAddQty(Number(e.target.value))} min={0.01} step={1}
+                className="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 font-mono text-xs text-white/80" />
+            </div>
+            {/* Price preview */}
+            <div className="rounded-lg p-3 space-y-1" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
+              <div className="flex justify-between font-mono text-[10px]">
+                <span className="text-white/30">{fr ? "Prix consensus" : "Consensus price"}</span>
+                <span className="text-white/60">{(consensusPrices.get(addNetuid) ?? 0).toFixed(6)} τ</span>
+              </div>
+              <div className="flex justify-between font-mono text-[10px]">
+                <span className="text-white/30">{fr ? "Valeur estimée" : "Est. value"}</span>
+                <span className="text-white/60">{(addQty * (consensusPrices.get(addNetuid) ?? 0)).toFixed(4)} τ</span>
+              </div>
+              {portfolio.isOwned(addNetuid) && (
+                <div className="flex justify-between font-mono text-[10px]">
+                  <span className="text-yellow-500/70">{fr ? "⚠ Déjà possédé — quantité ajoutée" : "⚠ Already owned — quantity added"}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowAdd(false)}
+                className="flex-1 font-mono text-[11px] tracking-wider py-2.5 rounded-lg"
+                style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                {fr ? "ANNULER" : "CANCEL"}
+              </button>
+              <button onClick={handleAdd} disabled={addQty <= 0}
+                className="flex-1 font-mono text-[11px] tracking-wider py-2.5 rounded-lg transition-all hover:scale-[1.02] disabled:opacity-30"
+                style={{ background: "rgba(76,175,80,0.15)", color: "rgba(76,175,80,0.9)", border: "1px solid rgba(76,175,80,0.3)" }}>
+                {fr ? "AJOUTER" : "ADD"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Open position modal */}
-      {showModal && subnetList && livePrices && (
-        <OpenPositionModal subnets={subnetList} livePrices={livePrices}
-          lang={lang} onOpen={handleOpen} onCancel={() => setShowModal(false)} />
+      {/* ── POSITIONS TABLE ── */}
+      {rows.length === 0 ? (
+        <div className="text-center py-16 space-y-3">
+          <span className="text-3xl">📊</span>
+          <p className="font-mono text-xs text-white/35">{fr ? "Aucun subnet dans le portefeuille" : "No subnets in portfolio"}</p>
+          <p className="font-mono text-[10px] text-white/20">{fr ? "Ajoutez vos positions pour suivre leur performance" : "Add your positions to track their performance"}</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/[0.06]">
+                {["SN", fr ? "Nom" : "Name", "TAO", fr ? "Prix" : "Price", fr ? "Valeur" : "Value",
+                  "Opp", fr ? "Risque" : "Risk", "AS", fr ? "Stabilité" : "Stability",
+                  "Smart Capital", fr ? "Statut" : "Status", "Action", ""].map((h, i) => (
+                  <th key={i} className="py-2 px-2 font-mono text-[8px] tracking-[0.15em] uppercase text-white/25 font-normal">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const actionLabel = r.action === "REINFORCE" ? (fr ? "RENFORCER" : "REINFORCE")
+                  : r.action === "EXIT" ? (fr ? "SORTIR" : "EXIT")
+                  : r.action === "ENTER" ? (fr ? "ENTRER" : "ENTER")
+                  : (fr ? "ATTENDRE" : "WATCH");
+                const aColor = r.action === "EXIT" ? "rgba(229,57,53,0.9)"
+                  : r.action === "REINFORCE" ? "rgba(76,175,80,0.9)"
+                  : "rgba(255,193,7,0.8)";
+                const aBg = r.action === "EXIT" ? "rgba(229,57,53,0.1)"
+                  : r.action === "REINFORCE" ? "rgba(76,175,80,0.08)"
+                  : "rgba(255,193,7,0.06)";
+                const aBorder = r.action === "EXIT" ? "rgba(229,57,53,0.3)"
+                  : r.action === "REINFORCE" ? "rgba(76,175,80,0.25)"
+                  : "rgba(255,193,7,0.2)";
+
+                return (
+                  <tr key={r.netuid} className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors"
+                    style={{
+                      background: r.isOverridden ? "rgba(229,57,53,0.03)" : undefined,
+                      borderLeft: r.isOverridden ? "2px solid rgba(229,57,53,0.4)" : r.alerts.length > 0 ? "2px solid rgba(255,193,7,0.3)" : undefined,
+                    }}>
+                    <td className="py-3 px-2 text-white/55 text-sm font-mono">{r.netuid}</td>
+                    <td className="py-3 px-2 text-sm font-mono">
+                      <span className="text-white/80">{r.name}</span>
+                      {r.isOverridden && (
+                        <span className="ml-2 text-[8px] px-1.5 py-0.5 rounded" style={{
+                          background: "rgba(229,57,53,0.15)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.3)",
+                        }}>CRITIQUE</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-2 text-sm font-mono text-white/70">{r.quantity.toFixed(2)}</td>
+                    <td className="py-3 px-2 text-sm font-mono text-white/50">{r.price > 0 ? r.price.toFixed(6) : "—"}</td>
+                    <td className="py-3 px-2 text-sm font-mono" style={{ color: "rgba(255,215,0,0.7)" }}>{r.currentValue > 0 ? r.currentValue.toFixed(4) : "—"}</td>
+                    <td className="py-3 px-2 text-sm font-mono font-bold" style={{ color: `rgba(76,175,80,${r.opp > 60 ? 0.9 : 0.5})` }}>{r.opp}</td>
+                    <td className="py-3 px-2 text-sm font-mono font-bold" style={{ color: r.risk >= 60 ? "rgba(229,57,53,0.9)" : r.risk >= 40 ? "rgba(255,193,7,0.8)" : "rgba(255,255,255,0.4)" }}>{r.risk}</td>
+                    <td className="py-3 px-2 text-sm font-mono font-bold" style={{
+                      color: r.asymmetry > 20 ? "rgba(76,175,80,0.9)" : r.asymmetry < -20 ? "rgba(229,57,53,0.9)" : "rgba(255,255,255,0.4)",
+                    }}>{r.asymmetry > 0 ? "+" : ""}{r.asymmetry}</td>
+                    <td className="py-3 px-2 text-sm font-mono" style={{ color: stabilityColor(r.stability) }}>{r.stability}%</td>
+                    <td className="py-3 px-2 text-[10px] font-mono" style={{ color: scColor(r.sc) }}>
+                      {r.sc === "ACCUMULATION" ? "Accum." : r.sc === "DISTRIBUTION" ? "Distrib." : "Stable"}
+                    </td>
+                    <td className="py-3 px-2 text-[10px] font-mono" style={{ color: systemStatusColor(r.systemStatus) }}>
+                      {systemStatusLabel(r.systemStatus)}
+                    </td>
+                    <td className="py-3 px-2">
+                      <span className="inline-flex items-center gap-1 font-mono text-[10px] px-2 py-1 rounded-lg" style={{
+                        background: aBg, color: aColor, border: `1px solid ${aBorder}`,
+                      }}>
+                        {actionLabel}
+                      </span>
+                    </td>
+                    <td className="py-3 px-2">
+                      <div className="flex gap-1">
+                        <button onClick={() => handleSell(r.netuid)} title={fr ? "Marquer comme vendu" : "Mark as sold"}
+                          className="font-mono text-[9px] px-2 py-1 rounded transition-all hover:scale-105"
+                          style={{ background: "rgba(229,57,53,0.1)", color: "rgba(229,57,53,0.8)", border: "1px solid rgba(229,57,53,0.2)" }}>
+                          {fr ? "VENDRE" : "SELL"}
+                        </button>
+                        <button onClick={() => portfolio.removePosition(r.netuid)} title={fr ? "Retirer" : "Remove"}
+                          className="font-mono text-[9px] px-2 py-1 rounded transition-all hover:scale-105"
+                          style={{ background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                          ✕
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── ARCHIVE ── */}
+      {portfolio.archive.length > 0 && (
+        <div className="mt-8">
+          <h2 className="font-mono text-[10px] tracking-[0.2em] uppercase text-white/25 mb-3">{fr ? "HISTORIQUE VENDU" : "SOLD HISTORY"}</h2>
+          <div className="space-y-1">
+            {portfolio.archive.slice(-10).reverse().map((a, i) => (
+              <div key={i} className="flex items-center gap-3 font-mono text-[10px] text-white/30 py-1.5 border-b border-white/[0.03]">
+                <span>SN-{a.subnet_id}</span>
+                <span>{a.quantity_tao.toFixed(2)} τ</span>
+                {a.pnl_estimated !== undefined && (
+                  <span style={{ color: a.pnl_estimated >= 0 ? "rgba(76,175,80,0.7)" : "rgba(229,57,53,0.7)" }}>
+                    P&L: {a.pnl_estimated >= 0 ? "+" : ""}{a.pnl_estimated.toFixed(4)} τ
+                  </span>
+                )}
+                <span className="text-white/15">{new Date(a.closed_at).toLocaleDateString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
+/* ── UI Components ── */
 function SummaryCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="rounded-xl px-4 py-3 flex flex-col gap-1" style={{
@@ -453,6 +570,17 @@ function SummaryCard({ label, value, color }: { label: string; value: string; co
     }}>
       <span className="font-mono text-[8px] tracking-[0.15em] uppercase text-white/25">{label}</span>
       <span className="font-mono text-base sm:text-lg font-bold" style={{ color }}>{value}</span>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="rounded-lg px-3 py-2 flex flex-col items-center gap-0.5" style={{
+      background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.04)",
+    }}>
+      <span className="font-mono text-[7px] tracking-[0.15em] uppercase text-white/20">{label}</span>
+      <span className="font-mono text-sm font-bold" style={{ color }}>{value}</span>
     </div>
   );
 }
