@@ -153,6 +153,28 @@ const translations = {
   "dc.structure": { fr: "CORE STRUCTURE", en: "CORE STRUCTURE" },
   "dc.sniper": { fr: "CORE SNIPER", en: "CORE SNIPER" },
 
+  // Strategic recommendation
+  "strat.label": { fr: "RECOMMANDATION STRATÉGIQUE", en: "STRATEGIC RECOMMENDATION" },
+  "strat.enter": { fr: "ENTRER", en: "ENTER" },
+  "strat.watch": { fr: "SURVEILLER", en: "WATCH" },
+  "strat.exit": { fr: "SORTIR", en: "EXIT" },
+
+  // Sentinel Index
+  "sentinel.index": { fr: "INDICE TAO SENTINEL", en: "TAO SENTINEL INDEX" },
+  "sentinel.offensive": { fr: "OFFENSIF", en: "OFFENSIVE" },
+  "sentinel.neutral": { fr: "NEUTRE", en: "NEUTRAL" },
+  "sentinel.defensive": { fr: "DÉFENSIF", en: "DEFENSIVE" },
+
+  // Flow / Rotation
+  "flow.dominance": { fr: "Dominance", en: "Dominance" },
+  "flow.emission": { fr: "Émission", en: "Emission" },
+  "flow.inflow": { fr: "Flux entrant", en: "Inflow" },
+
+  // Top sections
+  "top.opportunities": { fr: "TOP OPPORTUNITÉS", en: "TOP OPPORTUNITIES" },
+  "top.risks": { fr: "RISQUES CRITIQUES", en: "CRITICAL RISKS" },
+  "top.best": { fr: "MEILLEURE ASYMÉTRIE", en: "BEST ASYMMETRY" },
+
   // Ray labels
   "ray.before": { fr: "avant bascule", en: "before shift" },
 

@@ -15,6 +15,11 @@ import {
   computeSmartCapital, computeDualCore,
   type SmartCapitalState,
 } from "@/lib/gauge-engine";
+import {
+  deriveStrategicAction, actionColor, actionBg, actionBorder, actionIcon,
+  computeSentinelIndex, sentinelIndexColor, sentinelIndexLabel,
+  deriveSubnetAction,
+} from "@/lib/strategy-engine";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -32,9 +37,6 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
   return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
 }
 
-/* ═══════════════════════════════════════ */
-/*       MINI SPARKLINE                    */
-/* ═══════════════════════════════════════ */
 function TooltipSparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
   if (data.length < 2) return null;
   const min = Math.min(...data), max = Math.max(...data);
@@ -44,611 +46,161 @@ function TooltipSparkline({ data, width, height, color }: { data: number[]; widt
     const y = height - ((v - min) / range) * height;
     return `${x},${y}`;
   }).join(" ");
+  return <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />;
+}
+
+/* ═══════════════════════════════════════ */
+/*     STRATEGIC RECOMMENDATION BADGE      */
+/* ═══════════════════════════════════════ */
+function StrategicBadge({ action, label, isMobile }: { action: "ENTER" | "WATCH" | "EXIT"; label: string; isMobile: boolean }) {
   return (
-    <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all" style={{
+      background: actionBg(action),
+      border: `1.5px solid ${actionBorder(action)}`,
+      boxShadow: `0 0 25px ${actionBg(action)}, 0 0 50px ${actionBg(action)}`,
+      animation: action === "EXIT" ? "priority-pulse 2s ease-in-out infinite" : action === "ENTER" ? "priority-pulse 3s ease-in-out infinite" : "none",
+    }}>
+      <span style={{ fontSize: isMobile ? 16 : 22 }}>{actionIcon(action)}</span>
+      <span className="font-mono font-bold tracking-[0.2em]" style={{
+        color: actionColor(action),
+        fontSize: isMobile ? 14 : 20,
+      }}>
+        {label}
+      </span>
+    </div>
   );
 }
 
 /* ═══════════════════════════════════════ */
-/*       IMMINENT PARTICLES                */
+/*     SENTINEL INDEX RING                 */
 /* ═══════════════════════════════════════ */
-function ImminentParticles({ x1, y1, x2, y2, color }: {
-  x1: number; y1: number; x2: number; y2: number; color: string;
-}) {
-  const particles = useMemo(() => {
-    const dx = x2 - x1, dy = y2 - y1;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 10) return [];
-    const ux = dx / len, uy = dy / len;
-    const px = -uy, py = ux;
-    return Array.from({ length: 6 }, (_, i) => {
-      const t = 0.2 + Math.random() * 0.6;
-      const drift = (Math.random() - 0.5) * 14;
-      const size = 1 + Math.random() * 1.5;
-      return {
-        cx: x1 + ux * len * t + px * drift,
-        cy: y1 + uy * len * t + py * drift,
-        r: size,
-        delay: Math.random() * 3,
-        dur: 1.8 + Math.random() * 1.4,
-      };
-    });
-  }, [x1, y1, x2, y2]);
-
+function SentinelIndexDisplay({ score, label, isMobile }: { score: number; label: string; isMobile: boolean }) {
+  const color = sentinelIndexColor(score);
   return (
-    <g style={{ pointerEvents: "none" }}>
-      {particles.map((p, i) => (
-        <circle key={i} cx={p.cx} cy={p.cy} r={p.r}
-          fill={color} fillOpacity={0.6}
-          style={{
-            animation: `particle-float ${p.dur}s ease-in-out ${p.delay}s infinite`,
-            transformOrigin: `${p.cx}px ${p.cy}px`,
-          }}
-        />
-      ))}
-    </g>
+    <div className="flex flex-col items-center gap-1">
+      <span className="font-mono tracking-[0.2em] uppercase" style={{
+        color: "rgba(255,255,255,0.3)", fontSize: isMobile ? 7 : 9,
+      }}>
+        TAO SENTINEL INDEX
+      </span>
+      <div className="flex items-center gap-2">
+        <span className="font-mono font-bold" style={{ color, fontSize: isMobile ? 28 : 38 }}>{score}</span>
+        <span className="font-mono font-bold tracking-wider" style={{ color, fontSize: isMobile ? 10 : 13, opacity: 0.7 }}>{label}</span>
+      </div>
+    </div>
   );
 }
 
 /* ═══════════════════════════════════════ */
-/*     TIME RING (graduated scale)         */
+/*     FLOW / ROTATION BADGES              */
 /* ═══════════════════════════════════════ */
-const TIME_SCALE_MAX_MIN = 480;
-const TIME_GRADUATIONS = [
-  { min: 0, label: "0" },
-  { min: 60, label: "1h" },
-  { min: 120, label: "2h" },
-  { min: 180, label: "3h" },
-];
-
-function TimeRing({ cx, cy, outerR, isMobile }: {
-  cx: number; cy: number; outerR: number; isMobile: boolean;
-}) {
-  const gap = 35;
-  const maxLen = isMobile ? 85 : 180;
-  const ringR = outerR + gap;
-
+function FlowBadge({ label, direction, isMobile }: { label: string; direction: "up" | "down" | "stable"; isMobile: boolean }) {
+  const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "→";
+  const c = direction === "up" ? "rgba(76,175,80,0.8)" : direction === "down" ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.35)";
   return (
-    <g style={{ pointerEvents: "none" }}>
-      <circle cx={cx} cy={cy} r={ringR} fill="none"
-        stroke="rgba(255,255,255,0.04)" strokeWidth="1" strokeDasharray="4 6" />
-      {TIME_GRADUATIONS.map((grad) => {
-        const fraction = grad.min / TIME_SCALE_MAX_MIN;
-        const tickR = ringR + fraction * maxLen;
-        const tickAngle = -Math.PI / 2;
-        const tx = cx + tickR * Math.cos(tickAngle);
-        const ty1 = cy + tickR * Math.sin(tickAngle) - (isMobile ? 4 : 6);
-        const ty2 = cy + tickR * Math.sin(tickAngle) + (isMobile ? 4 : 6);
-        const showArc = grad.min === 60 || grad.min === 180;
-        return (
-          <g key={grad.min}>
-            {showArc && (
-              <circle cx={cx} cy={cy} r={tickR} fill="none"
-                stroke="rgba(255,255,255,0.02)" strokeWidth="0.5" strokeDasharray="2 8" />
-            )}
-            <line x1={tx} y1={ty1} x2={tx} y2={ty2}
-              stroke="rgba(255,255,255,0.15)" strokeWidth={grad.min === 0 ? 1.5 : 0.8} />
-            <text x={tx + (isMobile ? 6 : 8)} y={ty2 + 1}
-              fill="rgba(255,255,255,0.2)" fontSize={isMobile ? 7 : 9}
-              fontFamily="'JetBrains Mono', monospace"
-              textAnchor="start" dominantBaseline="middle">
-              {grad.label}
-            </text>
-          </g>
-        );
-      })}
-    </g>
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md" style={{
+      background: "rgba(255,255,255,0.02)",
+      border: "1px solid rgba(255,255,255,0.06)",
+    }}>
+      <span className="font-mono" style={{ color: "rgba(255,255,255,0.35)", fontSize: isMobile ? 8 : 10, letterSpacing: "0.08em" }}>{label}</span>
+      <span className="font-mono font-bold" style={{ color: c, fontSize: isMobile ? 12 : 14 }}>{arrow}</span>
+    </div>
   );
 }
 
 /* ═══════════════════════════════════════ */
-/*          SACRED RAYS                    */
+/*     TOP SUBNET CARD (best asymmetry)    */
 /* ═══════════════════════════════════════ */
-function SacredRays({ signals, cx, cy, outerR, hoveredIdx, setHoveredIdx, onClickRay }: {
-  signals: SubnetSignal[]; cx: number; cy: number; outerR: number;
-  hoveredIdx: number | null; setHoveredIdx: (i: number | null) => void;
-  onClickRay: (s: SubnetSignal) => void;
-}) {
-  const angleStep = 360 / Math.max(signals.length, 1);
-  const gap = 35;
-  const [tremble, setTremble] = useState(0);
-  const [rayBreathe, setRayBreathe] = useState(0);
-
-  useEffect(() => {
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const elapsed = now - start;
-      setTremble(Math.sin(elapsed / 80) * 2);
-      setRayBreathe(Math.sin(elapsed / 1200) * 0.5 + 0.5);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  if (!signals.length) return null;
-
-  const isMobileSize = outerR <= 300;
-  const maxLen = isMobileSize ? 85 : 180;
-  const minLen = isMobileSize ? 12 : 20;
-  const priorityIdx = signals.reduce((best, s, i) =>
-    s.t_minus_minutes < signals[best].t_minus_minutes ? i : best, 0);
-
+function BestSubnetCard({ signal, isMobile, t, onClick }: { signal: SubnetSignal; isMobile: boolean; t: (k: any) => string; onClick: () => void }) {
+  const action = deriveSubnetAction(signal.opportunity, signal.risk, signal.confidence);
+  const asymScore = signal.opportunity - signal.risk;
   return (
-    <>
-      <defs>
-        {signals.map((s, i) => {
-          const angleDeg = (i * angleStep) - 90;
-          const angle = angleDeg * (Math.PI / 180);
-          const cos = Math.cos(angle), sin = Math.sin(angle);
-          // Color by dominant: gold for opportunity, dark red for risk
-          const baseAlpha = 0.35;
-          const tipAlpha = 1.0;
-          const isOpp = s.dominant === "opportunity";
-          const baseColor = isOpp ? opportunityColor(s.opportunity, baseAlpha) : s.dominant === "risk" ? riskColor(s.risk, baseAlpha) : rayColor(s.state, baseAlpha);
-          const tipColor = isOpp ? opportunityColor(s.opportunity, tipAlpha) : s.dominant === "risk" ? riskColor(s.risk, tipAlpha) : rayColor(s.state, tipAlpha);
-          return (
-            <linearGradient key={`ray-grad-${s.netuid}`} id={`ray-grad-${s.netuid}`}
-              x1={String(0.5 - cos * 0.5)} y1={String(0.5 - sin * 0.5)}
-              x2={String(0.5 + cos * 0.5)} y2={String(0.5 + sin * 0.5)}>
-              <stop offset="0%" stopColor={baseColor} />
-              <stop offset="100%" stopColor={tipColor} />
-            </linearGradient>
-          );
-        })}
-        <style>{`
-          @keyframes priority-pulse {
-            0%, 100% { opacity: 0.25; }
-            50% { opacity: 0.55; }
-          }
-        `}</style>
-      </defs>
-
-      {signals.map((s, i) => {
-        const angleDeg = (i * angleStep) - 90;
-        const angle = angleDeg * (Math.PI / 180);
-        const r1 = outerR + gap;
-
-        const tMinusClamped = clamp(s.t_minus_minutes, 0, TIME_SCALE_MAX_MIN);
-        const tFraction = 1 - (tMinusClamped / TIME_SCALE_MAX_MIN);
-        const len = minLen + tFraction * (maxLen - minLen);
-
-        const isImm = s.state === "IMMINENT";
-        const trembleOffset = isImm ? tremble : 0;
-        const breatheLen = len * (1 + rayBreathe * 0.04);
-        const r2 = r1 + breatheLen + trembleOffset;
-
-        const baseThickness = isMobileSize ? 2.5 : 3.5;
-        const maxThickness = isMobileSize ? 8 : 12;
-        const thickness = baseThickness + (s.confidence / 100) * (maxThickness - baseThickness);
-
-        const x1 = cx + r1 * Math.cos(angle);
-        const y1 = cy + r1 * Math.sin(angle);
-        const x2 = cx + r2 * Math.cos(angle);
-        const y2 = cy + r2 * Math.sin(angle);
-        const isHovered = hoveredIdx === i;
-        const isPriority = i === priorityIdx;
-
-        const haloOpacity = s.t_minus_minutes < 60 ? 0.35 :
-                            s.t_minus_minutes < 240 ? 0.18 : 0.06;
-
-        // Ray color for halo
-        const isOpp = s.dominant === "opportunity";
-        const dominantColor = isOpp ? opportunityColor(s.opportunity) : s.dominant === "risk" ? riskColor(s.risk) : stateColor(s.state);
-
-        // Label positioning
-        const labelOffset = isMobileSize ? 20 : 18;
-        const labelR = r2 + labelOffset;
-        const lx = cx + labelR * Math.cos(angle);
-        const ly = cy + labelR * Math.sin(angle);
-        const normalizedAngle = ((angleDeg % 360) + 360) % 360;
-        const isHorizontalRay = isMobileSize && (
-          (normalizedAngle > 140 && normalizedAngle < 220) ||
-          (normalizedAngle > 310 || normalizedAngle < 50)
-        );
-        const showLabel = !isHorizontalRay;
-        const labelAnchor = angleDeg > -45 && angleDeg < 135 ? "start" : "end";
-        const labelText = `SN${s.netuid} • ${formatTimeClear(s.t_minus_minutes)}`;
-        const labelFontSize = isMobileSize ? 11 : 14;
-
-        // Graduated ticks on ray body (3h, 2h, 1h marks)
-        const rayTicks = [60, 120, 180].map(min => {
-          const tickFraction = 1 - (min / TIME_SCALE_MAX_MIN);
-          const tickLen = minLen + tickFraction * (maxLen - minLen);
-          const tickR = r1 + tickLen;
-          if (tickR > r2) return null;
-          const tx = cx + tickR * Math.cos(angle);
-          const ty = cy + tickR * Math.sin(angle);
-          const perpAngle = angle + Math.PI / 2;
-          const tickSize = isMobileSize ? 3 : 5;
-          return {
-            x1: tx + Math.cos(perpAngle) * tickSize,
-            y1: ty + Math.sin(perpAngle) * tickSize,
-            x2: tx - Math.cos(perpAngle) * tickSize,
-            y2: ty - Math.sin(perpAngle) * tickSize,
-          };
-        }).filter(Boolean);
-
-        return (
-          <g key={s.netuid}>
-            {/* Hit area */}
-            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={28}
-              style={{ cursor: "pointer" }}
-              onMouseEnter={() => setHoveredIdx(i)}
-              onMouseLeave={() => setHoveredIdx(null)}
-              onClick={() => onClickRay(s)}
-            />
-            {/* Dynamic halo */}
-            <line x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={dominantColor}
-              strokeWidth={thickness + (isPriority ? 16 : 10)} strokeLinecap="round"
-              style={{
-                opacity: haloOpacity * (isPriority ? 1.2 : 0.6),
-                filter: `blur(${isPriority ? 6 : 4}px)`,
-                animation: isPriority ? "priority-pulse 2.5s ease-in-out infinite" : "none",
-                pointerEvents: "none",
-              }}
-            />
-            {/* Ray body */}
-            <line x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={`url(#ray-grad-${s.netuid})`} strokeWidth={thickness} strokeLinecap="round"
-              style={{
-                opacity: isHovered ? 1 : (isPriority ? 0.9 : 0.75),
-                filter: isHovered ? `drop-shadow(0 0 10px ${dominantColor})` :
-                        isPriority ? `drop-shadow(0 0 6px ${dominantColor})` : "none",
-                transition: "opacity 200ms, filter 300ms",
-                pointerEvents: "none",
-              }}
-            />
-            {/* Graduated ticks on ray */}
-            {rayTicks.map((tick, ti) => tick && (
-              <line key={ti} x1={tick.x1} y1={tick.y1} x2={tick.x2} y2={tick.y2}
-                stroke="rgba(255,255,255,0.12)" strokeWidth="0.8"
-                style={{ pointerEvents: "none" }}
-              />
-            ))}
-            {/* Hover glow */}
-            {isHovered && (
-              <line x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke={dominantColor} strokeWidth={thickness + 10} strokeLinecap="round"
-                style={{ opacity: 0.3, animation: "ray-breathe 1.8s ease-in-out infinite", pointerEvents: "none" }}
-              />
-            )}
-            {/* Labels */}
-            {showLabel && (
-              <>
-                {isPriority && (
-                  <>
-                    <rect
-                      x={labelAnchor === "start" ? lx - 3 : lx - (isMobileSize ? 65 : 85)}
-                      y={ly - (isMobileSize ? 28 : 34)}
-                      width={isMobileSize ? 68 : 88} height={isMobileSize ? 13 : 15}
-                      rx={3} fill="rgba(229,57,53,0.15)"
-                      style={{ pointerEvents: "none" }}
-                    />
-                    <text x={lx} y={ly - (isMobileSize ? 18 : 22)} textAnchor={labelAnchor}
-                      fill="rgba(229,57,53,0.7)" fontSize={isMobileSize ? 7 : 9} fontWeight="700"
-                      fontFamily="'JetBrains Mono', monospace" letterSpacing="0.15em"
-                      style={{ pointerEvents: "none", animation: "priority-pulse 2.5s ease-in-out infinite" }}>
-                      PRIORITÉ
-                    </text>
-                  </>
-                )}
-                <rect
-                  x={labelAnchor === "start" ? lx - 3 : lx - (isMobileSize ? 110 : 160)}
-                  y={ly - (isMobileSize ? 14 : 18)}
-                  width={isMobileSize ? 113 : 163} height={isMobileSize ? 20 : 26}
-                  rx={4} fill="rgba(0,0,0,0.7)"
-                  style={{ pointerEvents: "none" }}
-                />
-                <text x={lx} y={ly + (isMobileSize ? 2 : 2)} textAnchor={labelAnchor}
-                  fill="rgba(255,255,255,0.92)" fontSize={labelFontSize} fontWeight="700"
-                  fontFamily="'JetBrains Mono', monospace" letterSpacing="0.04em"
-                  style={{ pointerEvents: "none" }}>
-                  {labelText}
-                </text>
-              </>
-            )}
-            {isImm && (
-              <ImminentParticles x1={x1} y1={y1} x2={x2} y2={y2} color={dominantColor} />
-            )}
-          </g>
-        );
-      })}
-    </>
-  );
-}
-
-/* ═══════════════════════════════════════ */
-/*     PREMIUM TOOLTIP (GRANDE CARTE)      */
-/* ═══════════════════════════════════════ */
-function RayTooltip({ signal, cx, cy, outerR, index, svgSize, total }: {
-  signal: SubnetSignal; cx: number; cy: number; outerR: number; index: number; svgSize: number; total: number;
-}) {
-  const { t } = useI18n();
-  const angleStep = 360 / Math.max(total, 1);
-  const angleDeg = (index * angleStep) - 90;
-  const angle = angleDeg * (Math.PI / 180);
-
-  const TW = 370, TH = 280, PAD = 20, BR = 14;
-
-  const gap = 28;
-  const imminenceFactor = clamp(1 - (signal.t_minus_minutes / 240), 0, 1);
-  const rayLen = 30 + imminenceFactor * 130;
-  const rayTipR = outerR + gap + rayLen;
-  const tipX = cx + rayTipR * Math.cos(angle);
-  const tipY = cy + rayTipR * Math.sin(angle);
-
-  const tooltipR = rayTipR + 60;
-  let tx = cx + tooltipR * Math.cos(angle) - TW / 2;
-  let ty = cy + tooltipR * Math.sin(angle) - TH / 2;
-
-  const margin = 12;
-  const viewMax = svgSize - TW + margin;
-  const viewMaxY = svgSize - TH + margin;
-  tx = Math.max(-margin, Math.min(viewMax, tx));
-  ty = Math.max(-margin, Math.min(viewMaxY, ty));
-
-  // Sacred HUD protection
-  const svgPerPx = svgSize / 800;
-  const sacredHalfW = 250 * svgPerPx;
-  const sacredTop = 150 * svgPerPx;
-  const sacredBottom = 210 * svgPerPx;
-
-  const doesOverlap = (ttx: number, tty: number) => {
-    const tRight = ttx + TW, tBottom = tty + TH;
-    return tRight > (cx - sacredHalfW) && ttx < (cx + sacredHalfW) &&
-           tBottom > (cy - sacredTop) && tty < (cy + sacredBottom);
-  };
-
-  if (doesOverlap(tx, ty)) {
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
-    if (Math.abs(cosA) > 0.5) {
-      tx = cosA > 0 ? (cx + sacredHalfW + 20) : (cx - sacredHalfW - TW - 20);
-      ty = cy + tooltipR * sinA - TH / 2;
-    } else {
-      ty = sinA >= 0 ? (cy + sacredBottom + 15) : (cy - sacredTop - TH - 15);
-    }
-  }
-  tx = Math.max(-margin, Math.min(viewMax, tx));
-  ty = Math.max(-margin, Math.min(viewMaxY, ty));
-
-  const tooltipCx = tx + TW / 2;
-  const tooltipCy = ty + TH / 2;
-
-  const displayName = `SN-${signal.netuid} · ${signal.name.startsWith("SN-") ? signal.name.slice(signal.name.indexOf(" ") + 1) : signal.name}`;
-  const oppColor = opportunityColor(signal.opportunity);
-  const rskColor = riskColor(signal.risk);
-  const phaseLabel = signal.phase !== "NONE" ? t(`phase.${signal.phase.toLowerCase()}` as any) : "—";
-
-  // Tags
-  const tags: string[] = [];
-  if (signal.opportunity >= 70) tags.push(t("tag.momentum"));
-  if (signal.confidence >= 70) tags.push(t("tag.consensus"));
-  if (signal.risk >= 60) tags.push(t("tag.high_risk"));
-  if (signal.asymmetry === "HIGH" && signal.opportunity > signal.risk) tags.push(t("tag.low_cap"));
-
-  const sparkData = signal.sparkline_7d;
-  const sparkW = TW - PAD * 2 - 4;
-  const sparkH = 32;
-
-  return (
-    <g style={{ pointerEvents: "none" }}>
-      {/* Connector line */}
-      <line x1={tipX} y1={tipY} x2={tooltipCx} y2={tooltipCy}
-        stroke="rgba(255,255,255,0.08)" strokeWidth="1" strokeDasharray="4,4" />
-
-      <defs>
-        <filter id="tooltip-shadow" x="-10%" y="-10%" width="130%" height="130%">
-          <feDropShadow dx="0" dy="4" stdDeviation="12" floodColor="rgba(0,0,0,0.7)" floodOpacity="0.6" />
-        </filter>
-      </defs>
-
-      {/* Card background */}
-      <rect x={tx} y={ty} width={TW} height={TH} rx={BR}
-        fill="#0A0B10" stroke="#2A2F36" strokeWidth={1} filter="url(#tooltip-shadow)" />
-
-      {/* Title */}
-      <text x={tx + PAD} y={ty + PAD + 16}
-        fill="rgba(255,255,255,0.95)" fontSize="17" fontWeight="700"
-        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.02em">
-        {displayName.length > 26 ? displayName.slice(0, 24) + "…" : displayName}
-      </text>
-
-      {/* Phase badge + tags */}
-      <rect x={tx + PAD} y={ty + PAD + 26} width={phaseLabel.length * 9 + 16} height={22} rx={5}
-        fill={stateColor(signal.state)} fillOpacity={0.14} stroke={stateColor(signal.state)} strokeOpacity={0.3} strokeWidth={0.5} />
-      <text x={tx + PAD + 8} y={ty + PAD + 42}
-        fill={stateColor(signal.state)} fontSize="12" fontWeight="600"
-        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.08em">
-        {phaseLabel}
-      </text>
-
-      {/* Tags */}
-      {tags.slice(0, 3).map((tag, ti) => {
-        const tagX = tx + PAD + phaseLabel.length * 9 + 26 + ti * 85;
-        return tagX + 75 < tx + TW ? (
-          <g key={ti}>
-            <rect x={tagX} y={ty + PAD + 26} width={tag.length * 7 + 12} height={22} rx={4}
-              fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth={0.5} />
-            <text x={tagX + 6} y={ty + PAD + 41} fill="rgba(255,255,255,0.5)" fontSize="10"
-              fontFamily="'JetBrains Mono', monospace">{tag}</text>
-          </g>
-        ) : null;
-      })}
-
-      {/* Opportunity + Risk scores — large and clear */}
-      <text x={tx + PAD} y={ty + PAD + 74} fill="rgba(255,255,255,0.4)" fontSize="11"
-        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em">
-        {t("gauge.opportunity")}
-      </text>
-      <text x={tx + PAD + 130} y={ty + PAD + 74} fill={oppColor} fontSize="22" fontWeight="700"
-        fontFamily="'JetBrains Mono', monospace">
-        {signal.opportunity}
-      </text>
-      <text x={tx + PAD + 160} y={ty + PAD + 74} fill="rgba(255,255,255,0.25)" fontSize="13"
-        fontFamily="'JetBrains Mono', monospace">/100</text>
-
-      <text x={tx + TW / 2 + 20} y={ty + PAD + 74} fill="rgba(255,255,255,0.4)" fontSize="11"
-        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em">
-        {t("gauge.risk")}
-      </text>
-      <text x={tx + TW / 2 + 80} y={ty + PAD + 74} fill={rskColor} fontSize="22" fontWeight="700"
-        fontFamily="'JetBrains Mono', monospace">
-        {signal.risk}
-      </text>
-      <text x={tx + TW / 2 + 110} y={ty + PAD + 74} fill="rgba(255,255,255,0.25)" fontSize="13"
-        fontFamily="'JetBrains Mono', monospace">/100</text>
-
-      {/* Window */}
-      <text x={tx + PAD} y={ty + PAD + 100} fill={stateColor(signal.state)} fontSize="16" fontWeight="700"
-        fontFamily="'JetBrains Mono', monospace">
-        {formatTimeClear(signal.t_minus_minutes)}
-      </text>
-      <text x={tx + PAD + 80} y={ty + PAD + 100} fill="rgba(255,255,255,0.35)" fontSize="12"
-        fontFamily="'JetBrains Mono', monospace">
-        {t("tip.window")}
-      </text>
-
-      {/* Separator */}
-      <line x1={tx + PAD} y1={ty + PAD + 112} x2={tx + TW - PAD} y2={ty + PAD + 112}
-        stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" />
-
-      {/* "Pourquoi ?" — reasons */}
-      <text x={tx + PAD} y={ty + PAD + 130} fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600"
-        fontFamily="'JetBrains Mono', monospace" letterSpacing="0.08em">
-        {t("tip.why")}
-      </text>
-      {signal.reasons.slice(0, 3).map((reason, ri) => (
-        <text key={ri} x={tx + PAD + 8} y={ty + PAD + 148 + ri * 18}
-          fill="rgba(255,255,255,0.6)" fontSize="12"
-          fontFamily="'JetBrains Mono', monospace">
-          • {reason}
-        </text>
-      ))}
-
-      {/* Sparkline */}
-      {sparkData.length >= 2 && (
-        <>
-          <line x1={tx + PAD} y1={ty + TH - sparkH - 22} x2={tx + TW - PAD} y2={ty + TH - sparkH - 22}
-            stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
-          <g transform={`translate(${tx + PAD + 2}, ${ty + TH - sparkH - 16})`}>
-            <svg width={sparkW} height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`}>
-              <TooltipSparkline data={sparkData} width={sparkW} height={sparkH - 2}
-                color={signal.dominant === "risk" ? rskColor : oppColor} />
-            </svg>
-          </g>
-          <text x={tx + TW - PAD} y={ty + TH - 8} textAnchor="end"
-            fill="rgba(255,255,255,0.2)" fontSize="10"
-            fontFamily="'JetBrains Mono', monospace">
-            {t("tip.price7d")}
-          </text>
-        </>
-      )}
-    </g>
-  );
-}
-
-/* ═══════════════════════════════════════ */
-/*        SUBNET SIDE PANEL                */
-/* ═══════════════════════════════════════ */
-function SubnetPanel({ signal, open, onClose }: {
-  signal: SubnetSignal | null; open: boolean; onClose: () => void;
-}) {
-  const { t } = useI18n();
-  if (!signal) return null;
-
-  const { data: metrics } = useQuery({
-    queryKey: ["subnet-detail", signal.netuid],
-    queryFn: async () => {
-      const { data } = await supabase.from("subnet_latest_display")
-        .select("*").eq("netuid", signal.netuid).maybeSingle();
-      return data;
-    },
-    enabled: open,
-  });
-
-  const oppColor = opportunityColor(signal.opportunity);
-  const rskColor = riskColor(signal.risk);
-
-  return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-full sm:w-[400px] border-l border-white/5 bg-[#080810] text-white overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="font-mono text-white/90 tracking-wider text-lg">
-            {t("panel.title")}
-          </SheetTitle>
-        </SheetHeader>
-        <div className="mt-6 space-y-6">
-          <div className="text-center">
-            <div className="font-mono text-2xl tracking-wider" style={{ color: stateColor(signal.state) }}>
-              SN-{signal.netuid}
-            </div>
-            <div className="font-mono text-sm text-white/60 mt-1">{signal.name}</div>
-          </div>
-
-          {/* Opp / Risk scores */}
-          <div className="flex items-center justify-center gap-8">
-            <div className="text-center">
-              <div className="font-mono text-3xl font-bold" style={{ color: oppColor }}>{signal.opportunity}</div>
-              <div className="font-mono text-[10px] text-white/40 tracking-widest mt-1">{t("gauge.opportunity")}</div>
-            </div>
-            <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.08)" }} />
-            <div className="text-center">
-              <div className="font-mono text-3xl font-bold" style={{ color: rskColor }}>{signal.risk}</div>
-              <div className="font-mono text-[10px] text-white/40 tracking-widest mt-1">{t("gauge.risk")}</div>
-            </div>
-          </div>
-
-          <div className="text-center font-mono text-lg" style={{ color: stateColor(signal.state) }}>
-            {formatTimeClear(signal.t_minus_minutes)} <span className="text-white/35 text-sm">{t("tip.window")}</span>
-          </div>
-
-          {/* Reasons */}
-          <div className="bg-white/[0.02] rounded-lg p-4">
-            <div className="font-mono text-[10px] text-white/40 tracking-widest mb-3">{t("tip.why")}</div>
-            {signal.reasons.map((r, i) => (
-              <div key={i} className="font-mono text-sm text-white/65 mb-1.5">• {r}</div>
-            ))}
-          </div>
-
-          {signal.sparkline_7d.length > 1 && (
-            <div className="bg-white/[0.02] rounded-lg p-4">
-              <div className="font-mono text-[10px] text-white/30 tracking-widest mb-2">{t("tip.price7d")}</div>
-              <svg width="100%" height="60" viewBox="0 0 300 60" preserveAspectRatio="none">
-                <TooltipSparkline data={signal.sparkline_7d} width={300} height={55} color={oppColor} />
-              </svg>
-            </div>
-          )}
-
-          {metrics && (
-            <div className="space-y-3">
-              <div className="font-mono text-[10px] text-white/30 tracking-widest">{t("panel.metrics")}</div>
-              {[
-                [t("panel.liquidity"), metrics.liquidity_usd ? `$${Number(metrics.liquidity_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
-                [t("panel.volume"), metrics.vol_24h_usd ? `$${Number(metrics.vol_24h_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
-                [t("panel.miners"), metrics.miners_active != null ? String(Math.round(Number(metrics.miners_active))) : "—"],
-                [t("panel.cap"), metrics.cap_usd ? `$${Number(metrics.cap_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
-              ].map(([label, val]) => (
-                <div key={label} className="flex justify-between font-mono text-xs border-b border-white/[0.04] pb-2">
-                  <span className="text-white/40">{label}</span>
-                  <span className="text-white/75">{val}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <button
-            onClick={() => window.open(`https://taostats.io/subnets/${signal.netuid}`, "_blank")}
-            className="w-full font-mono text-xs tracking-widest py-3 rounded-lg border border-white/10 hover:border-white/20 text-white/50 hover:text-white/80 transition-all"
-          >
-            {t("panel.open_taostats")} ↗
-          </button>
+    <div onClick={onClick} className="cursor-pointer rounded-xl transition-all hover:scale-[1.01]" style={{
+      background: "rgba(255,215,0,0.03)",
+      border: "1px solid rgba(255,215,0,0.12)",
+      padding: isMobile ? "12px 14px" : "16px 20px",
+      boxShadow: "0 0 40px rgba(255,215,0,0.04)",
+    }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="font-mono font-bold" style={{ color: "rgba(255,248,220,0.9)", fontSize: isMobile ? 14 : 18 }}>
+            SN-{signal.netuid}
+          </span>
+          <span className="font-mono" style={{ color: "rgba(255,255,255,0.4)", fontSize: isMobile ? 10 : 12 }}>
+            {signal.name}
+          </span>
         </div>
-      </SheetContent>
-    </Sheet>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md" style={{
+          background: actionBg(action),
+          border: `1px solid ${actionBorder(action)}`,
+        }}>
+          <span style={{ fontSize: isMobile ? 10 : 12 }}>{actionIcon(action)}</span>
+          <span className="font-mono font-bold tracking-wider" style={{
+            color: actionColor(action), fontSize: isMobile ? 9 : 11,
+          }}>
+            {t(`strat.${action.toLowerCase()}` as any)}
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="flex flex-col">
+          <span className="font-mono" style={{ color: "rgba(255,215,0,0.35)", fontSize: 8, letterSpacing: "0.12em" }}>{t("gauge.opportunity")}</span>
+          <span className="font-mono font-bold" style={{ color: opportunityColor(signal.opportunity), fontSize: isMobile ? 20 : 26 }}>{signal.opportunity}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="font-mono" style={{ color: "rgba(229,57,53,0.3)", fontSize: 8, letterSpacing: "0.12em" }}>{t("gauge.risk")}</span>
+          <span className="font-mono font-bold" style={{ color: riskColor(signal.risk), fontSize: isMobile ? 20 : 26 }}>{signal.risk}</span>
+        </div>
+        <div style={{ width: 1, height: 30, background: "rgba(255,255,255,0.06)" }} />
+        <div className="flex flex-col">
+          <span className="font-mono" style={{ color: "rgba(255,255,255,0.25)", fontSize: 8, letterSpacing: "0.12em" }}>ASYM</span>
+          <span className="font-mono font-bold" style={{ color: asymScore > 30 ? "rgba(76,175,80,0.9)" : "rgba(255,193,7,0.8)", fontSize: isMobile ? 18 : 22 }}>+{asymScore}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="font-mono" style={{ color: "rgba(255,255,255,0.25)", fontSize: 8, letterSpacing: "0.12em" }}>{t("sub.tminus")}</span>
+          <span className="font-mono font-bold" style={{ color: stateColor(signal.state), fontSize: isMobile ? 14 : 16 }}>{formatTimeClear(signal.t_minus_minutes)}</span>
+        </div>
+        {signal.sparkline_7d.length > 1 && (
+          <div className="ml-auto">
+            <svg width={isMobile ? 50 : 70} height={24} viewBox={`0 0 ${isMobile ? 50 : 70} 24`}>
+              <TooltipSparkline data={signal.sparkline_7d} width={isMobile ? 50 : 70} height={22} color={opportunityColor(signal.opportunity, 0.6)} />
+            </svg>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════ */
+/*     MINI SUBNET ROW                     */
+/* ═══════════════════════════════════════ */
+function SubnetRow({ signal, rank, type, isMobile, t, onClick }: {
+  signal: SubnetSignal; rank: number; type: "opp" | "risk"; isMobile: boolean; t: (k: any) => string; onClick: () => void;
+}) {
+  const action = deriveSubnetAction(signal.opportunity, signal.risk, signal.confidence);
+  const mainScore = type === "opp" ? signal.opportunity : signal.risk;
+  const mainColor = type === "opp" ? opportunityColor(mainScore) : riskColor(mainScore);
+  return (
+    <div onClick={onClick} className="flex items-center gap-3 py-2 px-3 rounded-lg cursor-pointer transition-all hover:bg-white/[0.03]"
+      style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+      <span className="font-mono" style={{ color: "rgba(255,255,255,0.15)", fontSize: isMobile ? 10 : 12, width: 16 }}>{rank}</span>
+      <span className="font-mono font-bold" style={{ color: "rgba(255,248,220,0.75)", fontSize: isMobile ? 11 : 13, width: isMobile ? 50 : 60 }}>
+        SN-{signal.netuid}
+      </span>
+      <span className="font-mono truncate" style={{ color: "rgba(255,255,255,0.35)", fontSize: isMobile ? 9 : 11, flex: 1 }}>
+        {signal.name}
+      </span>
+      <span className="font-mono font-bold" style={{ color: mainColor, fontSize: isMobile ? 14 : 16, width: 36, textAlign: "right" }}>
+        {mainScore}
+      </span>
+      <div className="flex items-center gap-1 px-2 py-0.5 rounded" style={{ background: actionBg(action), border: `1px solid ${actionBorder(action)}` }}>
+        <span style={{ fontSize: 8 }}>{actionIcon(action)}</span>
+        <span className="font-mono font-bold" style={{ color: actionColor(action), fontSize: isMobile ? 7 : 9, letterSpacing: "0.08em" }}>
+          {t(`strat.${action.toLowerCase()}` as any)}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -669,9 +221,7 @@ function PositionBar({ position, isMobile, t, onClose, onTakeProfit, exitWarning
 }) {
   const pnl = position.currentValue - position.capital;
   const pnlPct = ((pnl / position.capital) * 100);
-  
   const barColor = pnlPct >= 5 ? "hsl(145, 65%, 48%)" : pnlPct >= 0 ? "hsl(38, 92%, 55%)" : "hsl(0, 72%, 55%)";
-
   const barMin = -20, barMax = 30;
   const barRange = barMax - barMin;
   const currentPos = clamp((pnlPct - barMin) / barRange * 100, 2, 98);
@@ -681,14 +231,10 @@ function PositionBar({ position, isMobile, t, onClose, onTakeProfit, exitWarning
   return (
     <div className="font-mono" style={{
       width: isMobile ? "min(95vw, 440px)" : 680,
-      background: "rgba(10,8,5,0.85)",
-      border: "1px solid rgba(255,215,0,0.12)",
-      borderRadius: 14,
-      padding: isMobile ? "12px 14px 14px" : "16px 24px 18px",
-      backdropFilter: "blur(16px)",
-      boxShadow: "0 4px 40px rgba(0,0,0,0.6), 0 0 30px rgba(255,215,0,0.03)",
+      background: "rgba(10,8,5,0.85)", border: "1px solid rgba(255,215,0,0.12)",
+      borderRadius: 14, padding: isMobile ? "12px 14px 14px" : "16px 24px 18px",
+      backdropFilter: "blur(16px)", boxShadow: "0 4px 40px rgba(0,0,0,0.6), 0 0 30px rgba(255,215,0,0.03)",
     }}>
-      {/* Top row: Capital / Valeur / P&L */}
       <div className="flex items-center justify-between" style={{ fontSize: isMobile ? 11 : 13 }}>
         <div className="flex flex-col">
           <span style={{ color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 10 }}>{t("pos.capital")}</span>
@@ -706,79 +252,36 @@ function PositionBar({ position, isMobile, t, onClose, onTakeProfit, exitWarning
           </span>
         </div>
       </div>
-
       {/* Progress bar */}
       <div className="relative mt-3" style={{ height: isMobile ? 22 : 26 }}>
-        <div className="absolute inset-x-0 rounded" style={{
-          top: isMobile ? 8 : 10, height: isMobile ? 5 : 6,
-          background: "linear-gradient(90deg, rgba(229,57,53,0.15), rgba(255,193,7,0.15), rgba(76,175,80,0.25))",
-        }} />
-        <div className="absolute rounded" style={{
-          top: isMobile ? 8 : 10, height: isMobile ? 5 : 6, left: 0,
-          width: `${currentPos}%`,
-          background: `linear-gradient(90deg, rgba(255,255,255,0.03), ${barColor})`,
-          transition: "width 800ms ease",
-        }} />
-        <div className="absolute" style={{
-          left: `${protectionPos}%`, top: 2, bottom: 0,
-          width: 2, background: "hsl(38, 92%, 55%)", opacity: 0.7, borderRadius: 1,
-        }}>
-          <div className="absolute font-mono" style={{
-            bottom: -14, left: "50%", transform: "translateX(-50%)",
-            fontSize: 7, color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap",
-          }}>{t("pos.protection")}</div>
+        <div className="absolute inset-x-0 rounded" style={{ top: isMobile ? 8 : 10, height: isMobile ? 5 : 6, background: "linear-gradient(90deg, rgba(229,57,53,0.15), rgba(255,193,7,0.15), rgba(76,175,80,0.25))" }} />
+        <div className="absolute rounded" style={{ top: isMobile ? 8 : 10, height: isMobile ? 5 : 6, left: 0, width: `${currentPos}%`, background: `linear-gradient(90deg, rgba(255,255,255,0.03), ${barColor})`, transition: "width 800ms ease" }} />
+        <div className="absolute" style={{ left: `${protectionPos}%`, top: 2, bottom: 0, width: 2, background: "hsl(38, 92%, 55%)", opacity: 0.7, borderRadius: 1 }}>
+          <div className="absolute font-mono" style={{ bottom: -14, left: "50%", transform: "translateX(-50%)", fontSize: 7, color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap" }}>{t("pos.protection")}</div>
         </div>
-        <div className="absolute" style={{
-          left: `${exitPos}%`, top: 2, bottom: 0,
-          width: 2, background: "hsl(0, 72%, 55%)", opacity: 0.6, borderRadius: 1,
-        }}>
-          <div className="absolute font-mono" style={{
-            bottom: -14, left: "50%", transform: "translateX(-50%)",
-            fontSize: 7, color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap",
-          }}>{t("pos.exit_rec")}</div>
+        <div className="absolute" style={{ left: `${exitPos}%`, top: 2, bottom: 0, width: 2, background: "hsl(0, 72%, 55%)", opacity: 0.6, borderRadius: 1 }}>
+          <div className="absolute font-mono" style={{ bottom: -14, left: "50%", transform: "translateX(-50%)", fontSize: 7, color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap" }}>{t("pos.exit_rec")}</div>
         </div>
-        <div className="absolute" style={{
-          left: `${currentPos}%`, top: isMobile ? 4 : 5,
-          width: 3, height: isMobile ? 14 : 16,
-          background: barColor, transform: "translateX(-50%)",
-          boxShadow: `0 0 10px ${barColor}80`, borderRadius: 2,
-          transition: "left 800ms ease",
-        }} />
+        <div className="absolute" style={{ left: `${currentPos}%`, top: isMobile ? 4 : 5, width: 3, height: isMobile ? 14 : 16, background: barColor, transform: "translateX(-50%)", boxShadow: `0 0 10px ${barColor}80`, borderRadius: 2, transition: "left 800ms ease" }} />
       </div>
-
-      {/* Exit warning banner */}
       {exitWarning && (
         <div className="mt-3 px-3 py-2 rounded-lg flex items-center gap-2" style={{
-          background: "rgba(229,57,53,0.08)",
-          border: "1px solid rgba(229,57,53,0.2)",
+          background: "rgba(229,57,53,0.08)", border: "1px solid rgba(229,57,53,0.2)",
           animation: "priority-pulse 2.5s ease-in-out infinite",
         }}>
-          <span style={{ color: "rgba(229,57,53,0.9)", fontSize: isMobile ? 10 : 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em" }}>
-            {exitWarning}
-          </span>
+          <span style={{ color: "rgba(229,57,53,0.9)", fontSize: isMobile ? 10 : 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em" }}>{exitWarning}</span>
         </div>
       )}
-
-      {/* Action buttons */}
       <div className="flex items-center gap-3 mt-3">
         {onClose && (
-          <button onClick={onClose}
-            className="pointer-events-auto font-mono tracking-wider px-5 py-2.5 rounded-lg transition-all flex items-center gap-2"
-            style={{
-              background: "rgba(229,57,53,0.08)", color: "rgba(229,57,53,0.7)",
-              border: "1px solid rgba(229,57,53,0.15)", fontSize: isMobile ? 10 : 12, fontWeight: 600,
-            }}>
+          <button onClick={onClose} className="pointer-events-auto font-mono tracking-wider px-5 py-2.5 rounded-lg transition-all flex items-center gap-2"
+            style={{ background: "rgba(229,57,53,0.08)", color: "rgba(229,57,53,0.7)", border: "1px solid rgba(229,57,53,0.15)", fontSize: isMobile ? 10 : 12, fontWeight: 600 }}>
             <span>✦</span> {t("pos.close_position")}
           </button>
         )}
         {onTakeProfit && (
-          <button onClick={onTakeProfit}
-            className="pointer-events-auto flex-1 font-mono tracking-wider px-5 py-2.5 rounded-lg transition-all"
-            style={{
-              background: "linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,215,0,0.04))",
-              color: "rgba(255,248,220,0.85)", border: "1px solid rgba(255,215,0,0.2)",
-              fontSize: isMobile ? 11 : 13, fontWeight: 700,
-            }}>
+          <button onClick={onTakeProfit} className="pointer-events-auto flex-1 font-mono tracking-wider px-5 py-2.5 rounded-lg transition-all"
+            style={{ background: "linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,215,0,0.04))", color: "rgba(255,248,220,0.85)", border: "1px solid rgba(255,215,0,0.2)", fontSize: isMobile ? 11 : 13, fontWeight: 700 }}>
             {t("pos.take_profit_btn")}
           </button>
         )}
@@ -788,131 +291,177 @@ function PositionBar({ position, isMobile, t, onClose, onTakeProfit, exitWarning
 }
 
 /* ═══════════════════════════════════════ */
-/*     OPEN POSITION DIALOG (PREMIUM)      */
+/*     SUBNET SIDE PANEL                   */
 /* ═══════════════════════════════════════ */
-type ObjectivePreset = "x2" | "x5" | "x10" | "x20" | "custom";
-type StopMode = "dynamic" | "manual";
-
-function OpenPositionDialog({ open, onClose, signals, t, preselectedNetuid }: {
-  open: boolean; onClose: () => void; signals: SubnetSignal[]; t: (key: any) => string;
-  preselectedNetuid?: number;
-}) {
-  const [netuid, setNetuid] = useState(preselectedNetuid || signals[0]?.netuid || 1);
-  const [capital, setCapital] = useState("100");
-  const [stopLoss, setStopLoss] = useState("-8");
-  const [objective, setObjective] = useState<ObjectivePreset>("x2");
-  const [customTP, setCustomTP] = useState("50");
-  const [stopMode, setStopMode] = useState<StopMode>("dynamic");
-  const openPosition = useOpenPosition();
-
-  useEffect(() => {
-    if (preselectedNetuid) setNetuid(preselectedNetuid);
-  }, [preselectedNetuid]);
-
+function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
+  if (!signal) return null;
   const { data: metrics } = useQuery({
-    queryKey: ["subnet-price-for-position", netuid],
+    queryKey: ["subnet-detail", signal.netuid],
     queryFn: async () => {
-      const { data } = await supabase.from("subnet_latest_display")
-        .select("price_usd, price").eq("netuid", netuid).maybeSingle();
+      const { data } = await supabase.from("subnet_latest_display").select("*").eq("netuid", signal.netuid).maybeSingle();
       return data;
     },
     enabled: open,
   });
+  const oppC = opportunityColor(signal.opportunity);
+  const rskC = riskColor(signal.risk);
+  const action = deriveSubnetAction(signal.opportunity, signal.risk, signal.confidence);
 
-  const currentPriceTao = metrics?.price ? Number(metrics.price) : 0;
-  const currentPriceUsd = metrics?.price_usd ? Number(metrics.price_usd) : 0;
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full sm:w-[400px] border-l border-white/5 bg-[#080810] text-white overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="font-mono text-white/90 tracking-wider text-lg">{t("panel.title")}</SheetTitle>
+        </SheetHeader>
+        <div className="mt-6 space-y-6">
+          <div className="text-center">
+            <div className="font-mono text-2xl tracking-wider" style={{ color: stateColor(signal.state) }}>SN-{signal.netuid}</div>
+            <div className="font-mono text-sm text-white/60 mt-1">{signal.name}</div>
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: actionBg(action), border: `1px solid ${actionBorder(action)}` }}>
+              <span>{actionIcon(action)}</span>
+              <span className="font-mono font-bold tracking-wider" style={{ color: actionColor(action), fontSize: 13 }}>{t(`strat.${action.toLowerCase()}` as any)}</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-center gap-8">
+            <div className="text-center">
+              <div className="font-mono text-3xl font-bold" style={{ color: oppC }}>{signal.opportunity}</div>
+              <div className="font-mono text-[10px] text-white/40 tracking-widest mt-1">{t("gauge.opportunity")}</div>
+            </div>
+            <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.08)" }} />
+            <div className="text-center">
+              <div className="font-mono text-3xl font-bold" style={{ color: rskC }}>{signal.risk}</div>
+              <div className="font-mono text-[10px] text-white/40 tracking-widest mt-1">{t("gauge.risk")}</div>
+            </div>
+          </div>
+          <div className="text-center font-mono text-lg" style={{ color: stateColor(signal.state) }}>
+            {formatTimeClear(signal.t_minus_minutes)} <span className="text-white/35 text-sm">{t("tip.window")}</span>
+          </div>
+          <div className="bg-white/[0.02] rounded-lg p-4">
+            <div className="font-mono text-[10px] text-white/40 tracking-widest mb-3">{t("tip.why")}</div>
+            {signal.reasons.map((r, i) => (<div key={i} className="font-mono text-sm text-white/65 mb-1.5">• {r}</div>))}
+          </div>
+          {signal.sparkline_7d.length > 1 && (
+            <div className="bg-white/[0.02] rounded-lg p-4">
+              <div className="font-mono text-[10px] text-white/30 tracking-widest mb-2">{t("tip.price7d")}</div>
+              <svg width="100%" height="60" viewBox="0 0 300 60" preserveAspectRatio="none">
+                <TooltipSparkline data={signal.sparkline_7d} width={300} height={55} color={oppC} />
+              </svg>
+            </div>
+          )}
+          {metrics && (
+            <div className="space-y-3">
+              <div className="font-mono text-[10px] text-white/30 tracking-widest">{t("panel.metrics")}</div>
+              {[
+                [t("panel.liquidity"), metrics.liquidity_usd ? `$${Number(metrics.liquidity_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
+                [t("panel.volume"), metrics.vol_24h_usd ? `$${Number(metrics.vol_24h_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
+                [t("panel.miners"), metrics.miners_active != null ? String(Math.round(Number(metrics.miners_active))) : "—"],
+                [t("panel.cap"), metrics.cap_usd ? `$${Number(metrics.cap_usd).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"],
+              ].map(([label, val]) => (
+                <div key={label} className="flex justify-between font-mono text-xs border-b border-white/[0.04] pb-2">
+                  <span className="text-white/40">{label}</span><span className="text-white/75">{val}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={() => window.open(`https://taostats.io/subnets/${signal.netuid}`, "_blank")}
+            className="w-full font-mono text-xs tracking-widest py-3 rounded-lg border border-white/10 hover:border-white/20 text-white/50 hover:text-white/80 transition-all">
+            {t("panel.open_taostats")} ↗
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
 
-  const takeProfit = objective === "x2" ? 100 : objective === "x5" ? 400 : objective === "x10" ? 900 : objective === "x20" ? 1900 : parseFloat(customTP) || 50;
-  const estimatedQty = currentPriceTao > 0 ? (parseFloat(capital) || 0) / currentPriceTao : 0;
+/* ═══════════════════════════════════════ */
+/*     OPEN POSITION DIALOG                */
+/* ═══════════════════════════════════════ */
+type Objective = "x2" | "x5" | "x10" | "x20" | "custom";
+type StopMode = "dynamic" | "manual";
+const OBJ_TP: Record<Exclude<Objective, "custom">, number> = { x2: 100, x5: 400, x10: 900, x20: 1900 };
+
+function OpenPositionDialog({ open, onClose, signals, t, preselectedNetuid }: {
+  open: boolean; onClose: () => void; signals: SubnetSignal[]; t: (key: any) => string; preselectedNetuid?: number;
+}) {
+  const { user } = useAuth();
+  const openPosition = useOpenPosition();
+  const [netuid, setNetuid] = useState<string>("");
+  const [capital, setCapital] = useState("");
+  const [stopLoss, setStopLoss] = useState("8");
+  const [objective, setObjective] = useState<Objective>("x5");
+  const [customTP, setCustomTP] = useState("");
+  const [stopMode, setStopMode] = useState<StopMode>("dynamic");
+
+  useEffect(() => {
+    if (preselectedNetuid && open) setNetuid(String(preselectedNetuid));
+  }, [preselectedNetuid, open]);
+
+  const { data: currentPriceUsd } = useQuery({
+    queryKey: ["pos-price", netuid],
+    queryFn: async () => {
+      if (!netuid) return null;
+      const { data } = await supabase.from("subnet_latest_display").select("price_usd").eq("netuid", Number(netuid)).maybeSingle();
+      return data?.price_usd ? Number(data.price_usd) : null;
+    },
+    enabled: !!netuid && open,
+  });
+
+  const tpPct = objective === "custom" ? (parseFloat(customTP) || 100) : OBJ_TP[objective];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPriceUsd) {
-      toast.error("Prix introuvable");
-      return;
-    }
+    if (!user || !currentPriceUsd) return;
+    const capitalNum = parseFloat(capital);
+    if (!capitalNum || !netuid) return;
     try {
       await openPosition.mutateAsync({
-        netuid,
-        capital: parseFloat(capital),
+        netuid: Number(netuid), capital: capitalNum,
         entry_price: currentPriceUsd,
-        stop_loss_pct: parseFloat(stopLoss),
-        take_profit_pct: takeProfit,
+        stop_loss_pct: parseFloat(stopLoss) || 8, take_profit_pct: tpPct,
       });
       toast.success("Position ouverte ✓");
       onClose();
-    } catch (err: any) {
-      toast.error(err.message);
-    }
+    } catch (err: any) { toast.error(err.message); }
   };
 
-  const inputStyle = "w-full px-3 py-2.5 rounded-lg text-sm bg-white/[0.04] border border-white/[0.1] text-white/85 focus:border-white/25 focus:outline-none transition-colors font-mono";
-  const objectivePresets: ObjectivePreset[] = ["x2", "x5", "x10", "x20", "custom"];
+  const inputStyle = "w-full rounded-lg px-3 py-2.5 font-mono text-sm bg-white/[0.03] border border-white/[0.08] text-white/80 focus:border-[rgba(255,215,0,0.3)] focus:outline-none transition-colors";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-[#08080F] border-white/10 text-white max-w-md">
-        <DialogHeader>
-          <DialogTitle className="font-mono tracking-wider text-white/90 text-lg">
-            {t("pos.open_title")}
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="bg-[#0A0B10] border-white/10 text-white max-w-md">
+        <DialogHeader><DialogTitle className="font-mono tracking-widest text-white/90">{t("pos.open_title")}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          {/* Subnet */}
           <div>
             <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.subnet")}</label>
-            <select value={netuid} onChange={(e) => setNetuid(Number(e.target.value))}
-              className={inputStyle} style={{ appearance: "none" }}>
-              {signals.map(s => (
-                <option key={s.netuid} value={s.netuid} className="bg-[#08080F]">
-                  SN-{s.netuid} · {s.name} (Opp: {s.opportunity} | Risk: {s.risk})
-                </option>
-              ))}
+            <select value={netuid} onChange={e => setNetuid(e.target.value)} required className={`${inputStyle} appearance-none`}>
+              <option value="">—</option>
+              {signals.map(s => (<option key={s.netuid} value={s.netuid} className="bg-[#0a0a0f]">SN-{s.netuid} · {s.name}</option>))}
             </select>
           </div>
-
-          {/* Price info */}
-          {currentPriceUsd > 0 && (
-            <div className="flex justify-between text-xs font-mono px-1">
-              <span className="text-white/40">{t("pos.entry_price")}: <span className="text-white/70">${currentPriceUsd.toFixed(4)}</span></span>
-              {estimatedQty > 0 && (
-                <span className="text-white/40">{t("pos.estimated_qty")}: <span className="text-white/70">{estimatedQty.toFixed(2)}</span></span>
-              )}
+          {currentPriceUsd && (
+            <div className="flex items-center gap-4 text-xs font-mono text-white/40">
+              <span>{t("pos.entry_price")}: <span className="text-white/70">${currentPriceUsd.toFixed(4)}</span></span>
+              {capital && (<span>{t("pos.estimated_qty")}: <span className="text-white/70">{(parseFloat(capital) / currentPriceUsd).toFixed(4)}</span></span>)}
             </div>
           )}
-
-          {/* Capital */}
           <div>
             <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.amount")}</label>
-            <input type="number" value={capital} onChange={(e) => setCapital(e.target.value)}
-              min="1" step="any" required className={inputStyle} />
+            <input type="number" value={capital} onChange={e => setCapital(e.target.value)} min="1" step="any" required className={inputStyle} />
           </div>
-
-          {/* Objective */}
           <div>
             <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.objective")}</label>
-            <div className="flex gap-2">
-              {objectivePresets.map(p => (
-                <button key={p} type="button"
-                  onClick={() => setObjective(p)}
+            <div className="flex gap-1.5">
+              {(["x2", "x5", "x10", "x20", "custom"] as Objective[]).map(p => (
+                <button key={p} type="button" onClick={() => setObjective(p)}
                   className="flex-1 py-2 rounded-lg font-mono text-xs tracking-wider transition-all"
-                  style={{
-                    background: objective === p ? "rgba(255,215,0,0.12)" : "rgba(255,255,255,0.03)",
-                    color: objective === p ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.35)",
-                    border: `1px solid ${objective === p ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.06)"}`,
-                    fontWeight: objective === p ? 700 : 400,
-                  }}>
+                  style={{ background: objective === p ? "rgba(255,215,0,0.12)" : "rgba(255,255,255,0.03)", color: objective === p ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.35)", border: `1px solid ${objective === p ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.06)"}`, fontWeight: objective === p ? 700 : 400 }}>
                   {t(`pos.obj_${p}` as any)}
                 </button>
               ))}
             </div>
-            {objective === "custom" && (
-              <input type="number" value={customTP} onChange={(e) => setCustomTP(e.target.value)}
-                min="1" step="any" placeholder="%" className={`${inputStyle} mt-2`} />
-            )}
+            {objective === "custom" && (<input type="number" value={customTP} onChange={e => setCustomTP(e.target.value)} min="1" step="any" placeholder="%" className={`${inputStyle} mt-2`} />)}
           </div>
-
-          {/* Stop mode + Stop loss */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.stop_mode")}</label>
@@ -920,11 +469,7 @@ function OpenPositionDialog({ open, onClose, signals, t, preselectedNetuid }: {
                 {(["dynamic", "manual"] as StopMode[]).map(m => (
                   <button key={m} type="button" onClick={() => setStopMode(m)}
                     className="flex-1 py-2 rounded-lg font-mono text-[10px] tracking-wider transition-all"
-                    style={{
-                      background: stopMode === m ? "rgba(229,57,53,0.1)" : "rgba(255,255,255,0.02)",
-                      color: stopMode === m ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.3)",
-                      border: `1px solid ${stopMode === m ? "rgba(229,57,53,0.2)" : "rgba(255,255,255,0.06)"}`,
-                    }}>
+                    style={{ background: stopMode === m ? "rgba(229,57,53,0.1)" : "rgba(255,255,255,0.02)", color: stopMode === m ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.3)", border: `1px solid ${stopMode === m ? "rgba(229,57,53,0.2)" : "rgba(255,255,255,0.06)"}` }}>
                     {t(`pos.stop_${m}` as any)}
                   </button>
                 ))}
@@ -932,33 +477,14 @@ function OpenPositionDialog({ open, onClose, signals, t, preselectedNetuid }: {
             </div>
             <div>
               <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.stop_loss")}</label>
-              <input type="number" value={stopLoss} onChange={(e) => setStopLoss(e.target.value)}
-                step="any" required className={inputStyle} />
+              <input type="number" value={stopLoss} onChange={e => setStopLoss(e.target.value)} step="any" required className={inputStyle} />
             </div>
           </div>
-
-          {/* Partial TP info */}
-          <div className="bg-white/[0.02] rounded-lg px-3 py-2.5 font-mono text-[10px] text-white/35 space-y-1">
-            <div className="text-white/50 tracking-widest uppercase mb-1">{t("pos.partial_tp")}</div>
-            <div>{t("pos.partial_25_x2")}</div>
-            <div>{t("pos.partial_25_x5")}</div>
-            <div>{t("pos.partial_50_x10")}</div>
-          </div>
-
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 rounded-lg font-mono text-xs tracking-wider text-white/45 border border-white/10 hover:border-white/20 transition-colors">
-              {t("pos.cancel")}
-            </button>
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg font-mono text-xs tracking-wider text-white/45 border border-white/10 hover:border-white/20 transition-colors">{t("pos.cancel")}</button>
             <button type="submit" disabled={openPosition.isPending || !currentPriceUsd}
               className="flex-1 py-2.5 rounded-lg font-mono text-xs tracking-wider font-bold transition-all disabled:opacity-50"
-              style={{
-                background: "linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,215,0,0.08))",
-                color: "rgba(255,215,0,0.9)",
-                border: "1px solid rgba(255,215,0,0.3)",
-                boxShadow: "0 0 20px rgba(255,215,0,0.06)",
-              }}>
+              style={{ background: "linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,215,0,0.08))", color: "rgba(255,215,0,0.9)", border: "1px solid rgba(255,215,0,0.3)", boxShadow: "0 0 20px rgba(255,215,0,0.06)" }}>
               {openPosition.isPending ? "..." : t("pos.confirm")}
             </button>
           </div>
@@ -969,7 +495,7 @@ function OpenPositionDialog({ open, onClose, signals, t, preselectedNetuid }: {
 }
 
 /* ═══════════════════════════════════════ */
-/*    ALIEN GAUGE — MAIN PAGE              */
+/*    ALIEN GAUGE — MAIN PAGE (WAR MODE)   */
 /* ═══════════════════════════════════════ */
 export default function AlienGauge() {
   const { t, lang } = useI18n();
@@ -1023,7 +549,6 @@ export default function AlienGauge() {
   const realSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
   const allSignals = demoMode ? demoSignals : realSignals;
 
-  // Filter top 7 by mode + bag builder weighting
   const signals = useMemo(() => {
     const scored = allSignals.map(s => {
       let sortScore: number;
@@ -1039,6 +564,7 @@ export default function AlienGauge() {
     scored.sort((a, b) => b._sort - a._sort);
     return scored.slice(0, 7);
   }, [allSignals, viewMode, bagBuilder]);
+
   const realPsi = useMemo(() => computeGlobalPsi(rawSignals ?? []), [rawSignals]);
   const realConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
   const realOpp = useMemo(() => computeGlobalOpportunity(rawSignals ?? []), [rawSignals]);
@@ -1048,8 +574,6 @@ export default function AlienGauge() {
   const globalConf = demoMode ? 71 : realConf;
   const globalOpp = demoMode ? 68 : realOpp;
   const globalRisk = demoMode ? 32 : realRisk;
-  const globalState = deriveGaugeState(globalPsi, globalConf);
-  const globalPhase = derivePhase(globalPsi);
   const globalTMinus = deriveTMinus(globalPsi);
 
   /* ─── smart capital + dual core ─── */
@@ -1060,25 +584,63 @@ export default function AlienGauge() {
 
   const dualCore = useMemo(() => computeDualCore(signals, smartCapital), [signals, smartCapital]);
 
+  /* ─── Strategic recommendation ─── */
+  const strategicAction = useMemo(() =>
+    deriveStrategicAction(globalOpp, globalRisk, smartCapital.state, globalConf),
+    [globalOpp, globalRisk, smartCapital.state, globalConf]
+  );
+
+  /* ─── Sentinel Index ─── */
+  const sentinelIndex = useMemo(() =>
+    computeSentinelIndex(globalOpp, globalRisk, smartCapital.score),
+    [globalOpp, globalRisk, smartCapital.score]
+  );
+  const sentinelLabel = sentinelIndexLabel(sentinelIndex, lang);
+
+  /* ─── Flow/Rotation badges (derived from signals) ─── */
+  const flowData = useMemo(() => {
+    if (!signals.length) return { dominance: "stable" as const, emission: "stable" as const, inflow: "stable" as const };
+    const oppSignals = signals.filter(s => s.dominant === "opportunity").length;
+    const riskSignals = signals.filter(s => s.dominant === "risk").length;
+    const avgMomentum = signals.reduce((a, s) => a + s.momentum, 0) / signals.length;
+    return {
+      dominance: oppSignals > riskSignals + 1 ? "up" as const : riskSignals > oppSignals + 1 ? "down" as const : "stable" as const,
+      emission: avgMomentum > 55 ? "up" as const : avgMomentum < 35 ? "down" as const : "stable" as const,
+      inflow: smartCapital.state === "ACCUMULATION" ? "up" as const : smartCapital.state === "DISTRIBUTION" ? "down" as const : "stable" as const,
+    };
+  }, [signals, smartCapital.state]);
+
+  /* ─── Best asymmetry subnet (dynamic center) ─── */
+  const bestSubnet = useMemo(() => {
+    if (!signals.length) return null;
+    return [...signals].sort((a, b) => (b.opportunity - b.risk) - (a.opportunity - a.risk))[0];
+  }, [signals]);
+
+  /* ─── Top 5 opportunities + Top 3 risks ─── */
+  const topOpportunities = useMemo(() =>
+    [...allSignals].sort((a, b) => b.opportunity - a.opportunity).slice(0, 5),
+    [allSignals]
+  );
+  const topRisks = useMemo(() =>
+    [...allSignals].filter(s => s.risk > 40).sort((a, b) => b.risk - a.risk).slice(0, 3),
+    [allSignals]
+  );
+
   const { user } = useAuth();
   const { data: dbPositions } = usePositions();
   const closePosition = useClosePosition();
   const [openPosDialog, setOpenPosDialog] = useState(false);
   const [preselectedNetuid, setPreselectedNetuid] = useState<number | undefined>();
+  const [panelSignal, setPanelSignal] = useState<SubnetSignal | null>(null);
 
   const { data: latestPrices } = useQuery({
     queryKey: ["position-prices", dbPositions?.map(p => p.netuid)],
     queryFn: async () => {
       if (!dbPositions?.length) return {};
       const netuids = [...new Set(dbPositions.map(p => p.netuid))];
-      const { data } = await supabase
-        .from("subnet_latest_display")
-        .select("netuid, price_usd")
-        .in("netuid", netuids);
+      const { data } = await supabase.from("subnet_latest_display").select("netuid, price_usd").in("netuid", netuids);
       const map: Record<number, number> = {};
-      for (const r of data || []) {
-        map[r.netuid!] = Number(r.price_usd) || 0;
-      }
+      for (const r of data || []) { map[r.netuid!] = Number(r.price_usd) || 0; }
       return map;
     },
     enabled: !!dbPositions?.length,
@@ -1091,14 +653,7 @@ export default function AlienGauge() {
     const pos = dbPositions[0];
     const currentPrice = latestPrices[pos.netuid] || Number(pos.entry_price);
     const currentValue = Number(pos.quantity) * currentPrice;
-    return {
-      id: pos.id,
-      netuid: pos.netuid,
-      capital: Number(pos.capital),
-      currentValue,
-      protectionThreshold: Number(pos.stop_loss_pct),
-      exitRecommended: Number(pos.take_profit_pct),
-    };
+    return { id: pos.id, netuid: pos.netuid, capital: Number(pos.capital), currentValue, protectionThreshold: Number(pos.stop_loss_pct), exitRecommended: Number(pos.take_profit_pct) };
   }, [demoMode, dbPositions, latestPrices]);
 
   const hasPosition = activePosition !== null;
@@ -1106,58 +661,11 @@ export default function AlienGauge() {
   const handleClosePosition = useCallback(async () => {
     if (!activePosition?.id || !latestPrices) return;
     const price = latestPrices[activePosition.netuid!] || 0;
-    try {
-      await closePosition.mutateAsync({ id: activePosition.id, closed_price: price });
-      toast.success("Position fermée ✓");
-    } catch (err: any) {
-      toast.error(err.message);
-    }
+    try { await closePosition.mutateAsync({ id: activePosition.id, closed_price: price }); toast.success("Position fermée ✓"); }
+    catch (err: any) { toast.error(err.message); }
   }, [activePosition, latestPrices, closePosition]);
 
-  /* ─── IMMINENT notifications ─── */
-  const prevImminentRef = useRef<Set<number>>(new Set());
-  useEffect(() => {
-    if (!signals.length) return;
-    const currentImminent = new Set(signals.filter(s => s.state === "IMMINENT").map(s => s.netuid));
-    const newImminent = [...currentImminent].filter(id => !prevImminentRef.current.has(id));
-    if (newImminent.length > 0 && Notification.permission === "granted") {
-      for (const netuid of newImminent) {
-        const sig = signals.find(s => s.netuid === netuid);
-        if (sig) {
-          new Notification(`⚠ IMMINENT — SN-${sig.netuid}`, {
-            body: `${sig.name} · Opp ${sig.opportunity} · Risk ${sig.risk} · ${formatTimeClear(sig.t_minus_minutes)}`,
-            icon: "/pwa-192x192.png",
-            tag: `imminent-${netuid}`,
-          });
-        }
-      }
-    }
-    prevImminentRef.current = currentImminent;
-  }, [signals]);
-
-  /* ─── P&L threshold alerts ─── */
-  const prevAlertRef = useRef<{ sl: boolean; tp: boolean }>({ sl: false, tp: false });
-  useEffect(() => {
-    if (!activePosition || demoMode) return;
-    const pnlPct = ((activePosition.currentValue - activePosition.capital) / activePosition.capital) * 100;
-    const slHit = pnlPct <= activePosition.protectionThreshold;
-    const tpHit = pnlPct >= activePosition.exitRecommended;
-    if (slHit && !prevAlertRef.current.sl) {
-      const title = t("pos.alert_sl" as any);
-      const body = `SN-${activePosition.netuid} · P&L ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%`;
-      toast.error(title, { description: body, duration: 10000 });
-      if (Notification.permission === "granted") new Notification(title, { body, icon: "/pwa-192x192.png", tag: "pos-sl" });
-    }
-    if (tpHit && !prevAlertRef.current.tp) {
-      const title = t("pos.alert_tp" as any);
-      const body = `SN-${activePosition.netuid} · P&L +${pnlPct.toFixed(1)}%`;
-      toast.success(title, { description: body, duration: 10000 });
-      if (Notification.permission === "granted") new Notification(title, { body, icon: "/pwa-192x192.png", tag: "pos-tp" });
-    }
-    prevAlertRef.current = { sl: slHit, tp: tpHit };
-  }, [activePosition, demoMode, t]);
-
-  /* ─── Smart exit recommendation alert ─── */
+  /* ─── Notifications ─── */
   const prevExitWarnRef = useRef(false);
   useEffect(() => {
     if (!activePosition || demoMode) return;
@@ -1165,547 +673,258 @@ export default function AlienGauge() {
     if (shouldWarn && !prevExitWarnRef.current) {
       const msg = smartCapital.state === "DISTRIBUTION" ? t("pos.exit_warn_sc" as any) : t("pos.exit_warn_risk" as any);
       toast.warning(msg, { duration: 15000 });
-      if (Notification.permission === "granted") {
-        new Notification(msg, { icon: "/pwa-192x192.png", tag: "pos-exit-warn" });
-      }
+      if (Notification.permission === "granted") new Notification(msg, { icon: "/pwa-192x192.png", tag: "pos-exit-warn" });
     }
     prevExitWarnRef.current = shouldWarn;
   }, [activePosition, smartCapital.state, globalRisk, demoMode, t]);
 
-  /* ─── mechanical click ─── */
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const playClick = useCallback(() => {
-    try {
-      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
-      const ctx = audioCtxRef.current;
-      const now = ctx.currentTime;
-      const bufLen = Math.floor(ctx.sampleRate * 0.035);
-      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufLen * 0.12)) * 0.15;
-      const src = ctx.createBufferSource(); src.buffer = buf;
-      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 3200; bp.Q.value = 2.5;
-      const gain = ctx.createGain(); gain.gain.setValueAtTime(0.25, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-      src.connect(bp).connect(gain).connect(ctx.destination); src.start(now); src.stop(now + 0.06);
-    } catch { /* silent */ }
-  }, []);
-
-  const prevStateRef = useRef<GaugeState | null>(null);
-  const [stateTransition, setStateTransition] = useState<{ from: GaugeState; to: GaugeState; progress: number } | null>(null);
-  const transitionRaf = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (prevStateRef.current !== null && prevStateRef.current !== globalState) {
-      playClick();
-      const from = prevStateRef.current;
-      const to = globalState;
-      const startTime = performance.now();
-      const duration = 1200;
-      const animate = (now: number) => {
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        setStateTransition({ from, to, progress });
-        if (progress < 1) transitionRaf.current = requestAnimationFrame(animate);
-        else setStateTransition(null);
-      };
-      if (transitionRaf.current) cancelAnimationFrame(transitionRaf.current);
-      transitionRaf.current = requestAnimationFrame(animate);
-    }
-    prevStateRef.current = globalState;
-    return () => { if (transitionRaf.current) cancelAnimationFrame(transitionRaf.current); };
-  }, [globalState, playClick]);
-
-  /* ─── breathing ─── */
-  const [breathe, setBreathe] = useState(0);
-  useEffect(() => {
-    if (globalState === "IMMINENT") { setBreathe(0); return; }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => { setBreathe(Math.sin(((now - start) % 2500) / 2500 * Math.PI * 2) * 0.5 + 0.5); raf = requestAnimationFrame(tick); };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [globalState]);
-
-  /* ─── flash ─── */
-  const [flashActive, setFlashActive] = useState(false);
-  useEffect(() => {
-    if (prevStateRef.current !== globalState || globalState === "IMMINENT") {
-      setFlashActive(true);
-      const timeout = setTimeout(() => setFlashActive(false), 400);
-      return () => clearTimeout(timeout);
-    }
-  }, [globalState]);
-
-  /* ─── hover + panel ─── */
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const [panelSignal, setPanelSignal] = useState<SubnetSignal | null>(null);
-
-  const handleClickRay = useCallback((s: SubnetSignal) => {
-    setPanelSignal(s);
-  }, []);
-
-  /* ─── geometry — LARGER (+30%) ─── */
+  /* ─── geometry ─── */
   const isMobile = useIsMobile();
-  const SIZE = isMobile ? 420 : 1000;
-  const SVG_SIZE = isMobile ? 620 : 1500;
+  const SIZE = isMobile ? 300 : 520;
+  const SVG_SIZE = SIZE;
   const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
-  const R_OUTER = isMobile ? 170 : 430;      // Opportunity ring (outer)
-  const R_INNER = isMobile ? 140 : 360;      // Risk ring (inner)
-  const R_TRIGGER = isMobile ? 115 : 300;
+  const R_OUTER = isMobile ? 120 : 220;
+  const R_INNER = isMobile ? 95 : 180;
 
-  // Opportunity ring = golden, Risk ring = red
   const oppGlobal = opportunityColor(globalOpp);
   const rskGlobal = riskColor(globalRisk);
-  const color = stateColor(globalState);
-  const glow = stateGlow(globalState);
-
   const oppAngle = (globalOpp / 100) * 270;
   const riskAngle = (globalRisk / 100) * 270;
-  const innerOpacity = globalState === "IMMINENT" ? 0.9 : 0.55 + breathe * 0.35;
-  const showHalo = globalConf >= 70;
-
-  const triggerTicks = useMemo(() => {
-    if (globalPhase !== "TRIGGER" && globalState !== "IMMINENT") return [];
-    const count = globalState === "IMMINENT" ? 24 : 12;
-    return Array.from({ length: count }, (_, i) => ({ angle: -135 + (i / count) * 270 }));
-  }, [globalPhase, globalState]);
-
-  const phaseLabel = (() => {
-    switch (globalPhase) {
-      case "BUILD": return t("phase.build");
-      case "ARMED": return t("phase.armed");
-      case "TRIGGER": return t("phase.trigger");
-      default: return "—";
-    }
-  })();
-
 
   return (
-    <div className="fixed inset-0 select-none" style={{ background: "#000", overflow: "hidden" }}>
+    <div className="fixed inset-0 select-none overflow-y-auto" style={{ background: "#000" }}>
       {/* Vignette */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: "radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.75) 100%)",
-      }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.75) 100%)" }} />
 
-      {/* Ambient halo — warmer */}
-      <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: 0 }}>
-        <div style={{
-          width: isMobile ? 550 : 1300,
-          height: isMobile ? 550 : 1300,
-          borderRadius: "50%",
-          background: `radial-gradient(circle, rgba(255,180,50,0.06) 0%, rgba(255,215,0,0.02) 35%, transparent 65%)`,
-          transition: "background 1.2s ease",
-        }} />
-      </div>
-
-      {/* Flash */}
-      {flashActive && (
-        <div className="absolute inset-0 pointer-events-none z-50" style={{
-          background: `radial-gradient(circle, ${color}40 0%, ${color}15 30%, transparent 65%)`,
-          animation: "flash-fade 0.4s ease-out forwards",
-        }} />
-      )}
       <style>{`
-        @keyframes flash-fade {
-          0% { opacity: 1; transform: scale(0.95); }
-          100% { opacity: 0; transform: scale(1.1); }
+        @keyframes priority-pulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
         }
         @keyframes opp-sweep {
           0% { opacity: 0.3; }
           50% { opacity: 0.6; }
           100% { opacity: 0.3; }
         }
-        @keyframes tick-glow {
-          0%, 100% { opacity: 0.15; }
-          50% { opacity: 0.4; }
-        }
       `}</style>
 
-      {/* ═══════════════════════════════════════ */}
-      {/* HEADER — TAO SENTINEL                   */}
-      {/* ═══════════════════════════════════════ */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex items-start justify-between px-4 sm:px-8 pt-4 sm:pt-6 pointer-events-none">
-        {/* Spacer for menu button */}
+      {/* ═══ HEADER ═══ */}
+      <div className="relative z-30 flex items-start justify-between px-4 sm:px-8 pt-4 sm:pt-6">
         <div style={{ width: 100 }} />
-
-        {/* Center: Title */}
-        <div className="flex flex-col items-center pointer-events-none">
-          {/* Ornamental dot */}
-          <div style={{
-            width: 6, height: 6, borderRadius: "50%",
-            background: "rgba(255,215,0,0.6)",
-            boxShadow: "0 0 12px rgba(255,215,0,0.3)",
-            marginBottom: 8,
-          }} />
-          <span className="font-mono font-bold tracking-[0.4em] sm:tracking-[0.6em]" style={{
-            fontSize: isMobile ? 14 : 20,
-            color: "rgba(255,248,220,0.85)",
-            textShadow: "0 0 30px rgba(255,215,0,0.15)",
-          }}>
+        <div className="flex flex-col items-center">
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(255,215,0,0.6)", boxShadow: "0 0 12px rgba(255,215,0,0.3)", marginBottom: 8 }} />
+          <span className="font-mono font-bold tracking-[0.4em] sm:tracking-[0.6em]" style={{ fontSize: isMobile ? 14 : 20, color: "rgba(255,248,220,0.85)", textShadow: "0 0 30px rgba(255,215,0,0.15)" }}>
             {t("header.title")}
           </span>
         </div>
-
-        {/* Right: Mode badges */}
-        <div className="flex items-center gap-2 pointer-events-auto" style={{ paddingTop: isMobile ? 2 : 6 }}>
-          <button onClick={() => setViewMode("hunter")}
-            className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
-            style={{
-              fontSize: isMobile ? 9 : 11,
-              fontWeight: 700,
-              background: viewMode === "hunter" ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.03)",
-              color: viewMode === "hunter" ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)",
-              border: `1px solid ${viewMode === "hunter" ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.06)"}`,
-              boxShadow: viewMode === "hunter" ? "0 0 15px rgba(255,215,0,0.08)" : "none",
-            }}>
-            <span>🔥</span> {t("mode.hunter")} ×10
+        {/* Mode toggles */}
+        <div className="flex items-center gap-2" style={{ paddingTop: isMobile ? 2 : 6 }}>
+          <button onClick={() => setViewMode("hunter")} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+            style={{ fontSize: isMobile ? 9 : 11, fontWeight: 700, background: viewMode === "hunter" ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.03)", color: viewMode === "hunter" ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)", border: `1px solid ${viewMode === "hunter" ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.06)"}` }}>
+            <span>🔥</span> {t("mode.hunter")}
           </button>
-          <button onClick={() => setViewMode("defensive")}
-            className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
-            style={{
-              fontSize: isMobile ? 9 : 11,
-              fontWeight: 700,
-              background: viewMode === "defensive" ? "rgba(229,57,53,0.1)" : "rgba(255,255,255,0.03)",
-              color: viewMode === "defensive" ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.3)",
-              border: `1px solid ${viewMode === "defensive" ? "rgba(229,57,53,0.25)" : "rgba(255,255,255,0.06)"}`,
-            }}>
+          <button onClick={() => setViewMode("defensive")} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+            style={{ fontSize: isMobile ? 9 : 11, fontWeight: 700, background: viewMode === "defensive" ? "rgba(229,57,53,0.1)" : "rgba(255,255,255,0.03)", color: viewMode === "defensive" ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.3)", border: `1px solid ${viewMode === "defensive" ? "rgba(229,57,53,0.25)" : "rgba(255,255,255,0.06)"}` }}>
             <span>🛡</span> {t("mode.defensive")}
           </button>
           <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.08)" }} />
-          <button onClick={() => setBagBuilder(b => !b)}
-            className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
-            style={{
-              fontSize: isMobile ? 9 : 11,
-              fontWeight: 700,
-              background: bagBuilder ? "rgba(0,220,180,0.1)" : "rgba(255,255,255,0.03)",
-              color: bagBuilder ? "rgba(0,220,180,0.9)" : "rgba(255,255,255,0.3)",
-              border: `1px solid ${bagBuilder ? "rgba(0,220,180,0.3)" : "rgba(255,255,255,0.06)"}`,
-              boxShadow: bagBuilder ? "0 0 15px rgba(0,220,180,0.08)" : "none",
-            }}>
+          <button onClick={() => setBagBuilder(b => !b)} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+            style={{ fontSize: isMobile ? 9 : 11, fontWeight: 700, background: bagBuilder ? "rgba(0,220,180,0.1)" : "rgba(255,255,255,0.03)", color: bagBuilder ? "rgba(0,220,180,0.9)" : "rgba(255,255,255,0.3)", border: `1px solid ${bagBuilder ? "rgba(0,220,180,0.3)" : "rgba(255,255,255,0.06)"}` }}>
             <span>💎</span> {t("mode.bag_builder")}
           </button>
         </div>
       </div>
 
-      {/* Notification permission */}
-      {typeof Notification !== "undefined" && Notification.permission !== "granted" && (
-        <button onClick={() => Notification.requestPermission()}
-          className="absolute bottom-4 left-4 z-20 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all"
-          style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          🔔 {t("gauge.notif")}
-        </button>
-      )}
+      {/* ═══ MAIN CONTENT ═══ */}
+      <div className="relative z-10 flex flex-col items-center px-4 sm:px-8 pb-32" style={{ paddingTop: isMobile ? 12 : 24 }}>
 
-      {/* Demo toggle */}
-      <button onClick={() => setDemoMode(d => !d)}
-        className="absolute bottom-4 right-4 z-30 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all pointer-events-auto"
-        style={{
-          background: demoMode ? "rgba(0,255,200,0.12)" : "rgba(255,255,255,0.03)",
-          color: demoMode ? "rgba(0,255,200,0.8)" : "rgba(255,255,255,0.25)",
-          border: `1px solid ${demoMode ? "rgba(0,255,200,0.3)" : "rgba(255,255,255,0.06)"}`,
-        }}>
-        {demoMode ? "⬤ DEMO ON" : "◯ DEMO"}
-      </button>
-
-      {/* GAUGE */}
-      <div className="absolute z-10" style={{
-        width: isMobile ? "min(95vw, 560px)" : SIZE,
-        height: isMobile ? "min(95vw, 560px)" : SIZE,
-        aspectRatio: "1 / 1",
-        top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-      }}>
-        {showHalo && (
+        {/* ─── GAUGE + CENTER HUD ─── */}
+        <div className="relative" style={{ width: SIZE, height: SIZE }}>
+          {/* Ambient glow */}
           <div className="absolute inset-0 rounded-full pointer-events-none" style={{
-            background: `radial-gradient(circle, rgba(255,215,0,0.06) 0%, transparent 70%)`,
-            transform: "scale(1.4)",
+            background: `radial-gradient(circle, rgba(255,180,50,0.05) 0%, transparent 60%)`,
+            transform: "scale(1.3)",
           }} />
-        )}
 
-        {(globalState === "IMMINENT" || globalState === "EXIT") && (
-          <div className="absolute inset-0 rounded-full pointer-events-none" style={{
-            background: `radial-gradient(circle, ${glow} 0%, transparent 70%)`,
-            opacity: globalState === "IMMINENT" ? 0.4 : 0.2,
-            transform: "scale(1.35)",
-            transition: "opacity 800ms ease",
-          }} />
-        )}
+          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}>
+            {/* Outer ticks */}
+            {Array.from({ length: 54 }, (_, i) => {
+              const angleDeg = (i * 5) - 135;
+              if (angleDeg > 135) return null;
+              const rad = ((angleDeg - 90) * Math.PI) / 180;
+              const isMajor = i % 9 === 0;
+              const r1 = R_OUTER + 4;
+              const r2 = R_OUTER + (isMajor ? 14 : 8);
+              return (
+                <line key={`ot-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)}
+                  x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)}
+                  stroke={isMajor ? "rgba(255,215,0,0.2)" : "rgba(255,215,0,0.06)"} strokeWidth={isMajor ? 1.5 : 0.7} strokeLinecap="round" />
+              );
+            })}
+            {/* Inner ticks */}
+            {Array.from({ length: 54 }, (_, i) => {
+              const angleDeg = (i * 5) - 135;
+              if (angleDeg > 135) return null;
+              const rad = ((angleDeg - 90) * Math.PI) / 180;
+              const isMajor = i % 9 === 0;
+              const r1 = R_INNER - 4;
+              const r2 = R_INNER - (isMajor ? 12 : 7);
+              return (
+                <line key={`it-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)}
+                  x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)}
+                  stroke={isMajor ? "rgba(229,57,53,0.18)" : "rgba(229,57,53,0.05)"} strokeWidth={isMajor ? 1.2 : 0.5} strokeLinecap="round" />
+              );
+            })}
 
-        <svg width={SIZE} height={SIZE}
-          viewBox={`${CX - SVG_SIZE / 2} ${CY - SVG_SIZE / 2} ${SVG_SIZE} ${SVG_SIZE}`}
-          style={{ overflow: "visible" }}>
+            {/* OUTER RING = OPPORTUNITY */}
+            <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,215,0,0.04)" strokeWidth={isMobile ? 6 : 10} />
+            {oppAngle > 0 && (
+              <path d={describeArc(CX, CY, R_OUTER, -135, -135 + oppAngle)} fill="none"
+                stroke={oppGlobal} strokeWidth={isMobile ? 6 : 10} strokeLinecap="round"
+                style={{ opacity: 0.55, animation: "opp-sweep 4s ease-in-out infinite" }} />
+            )}
 
-          <defs>
-            <style>{`
-              @keyframes ray-breathe {
-                0%, 100% { opacity: 0.15; }
-                50% { opacity: 0.5; }
-              }
-              @keyframes ring-pulse {
-                0%, 100% { opacity: 0.15; stroke-width: 8; }
-                50% { opacity: 0.35; stroke-width: 12; }
-              }
-              @keyframes particle-float {
-                0%, 100% { opacity: 0; transform: translate(0, 0) scale(0.6); }
-                20% { opacity: 0.7; transform: translate(2px, -3px) scale(1); }
-                50% { opacity: 0.4; transform: translate(-1px, -6px) scale(0.9); }
-                80% { opacity: 0.6; transform: translate(3px, -2px) scale(1.1); }
-              }
-            `}</style>
-          </defs>
+            {/* INNER RING = RISK */}
+            <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(229,57,53,0.04)" strokeWidth={isMobile ? 8 : 12} />
+            {riskAngle > 0 && (
+              <path d={describeArc(CX, CY, R_INNER, -135, -135 + riskAngle)} fill="none"
+                stroke={rskGlobal} strokeWidth={isMobile ? 8 : 12} strokeLinecap="round"
+                style={{ opacity: 0.55 }} />
+            )}
 
-          {/* Fine ornamental ticks around outer ring */}
-          {Array.from({ length: 72 }, (_, i) => {
-            const angleDeg = (i * 5) - 135;
-            if (angleDeg > 135) return null;
-            const rad = ((angleDeg - 90) * Math.PI) / 180;
-            const isMajor = i % 9 === 0;
-            const r1 = R_OUTER + (isMobile ? 5 : 8);
-            const r2 = R_OUTER + (isMobile ? (isMajor ? 16 : 10) : (isMajor ? 24 : 14));
-            return (
-              <line key={`otick-${i}`}
-                x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)}
-                x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)}
-                stroke={isMajor ? "rgba(255,215,0,0.25)" : "rgba(255,215,0,0.08)"}
-                strokeWidth={isMajor ? 1.5 : 0.7} strokeLinecap="round"
-              />
-            );
-          })}
+            {/* Labels */}
+            <text x={CX + R_OUTER + 18} y={CY - R_OUTER + 30} fill="rgba(255,215,0,0.3)" fontSize={isMobile ? 7 : 10}
+              fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em" textAnchor="start">{t("gauge.opportunity")}</text>
+            <text x={CX + R_INNER + 14} y={CY - R_INNER + 28} fill="rgba(229,57,53,0.25)" fontSize={isMobile ? 7 : 10}
+              fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em" textAnchor="start">{t("gauge.risk")}</text>
+          </svg>
 
-          {/* Fine ticks around inner ring */}
-          {Array.from({ length: 54 }, (_, i) => {
-            const angleDeg = (i * 5) - 135;
-            if (angleDeg > 135) return null;
-            const rad = ((angleDeg - 90) * Math.PI) / 180;
-            const r1 = R_INNER - (isMobile ? 5 : 8);
-            const r2 = R_INNER - (isMobile ? 12 : 18);
-            const isMajor = i % 9 === 0;
-            return (
-              <line key={`itick-${i}`}
-                x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)}
-                x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)}
-                stroke={isMajor ? "rgba(229,57,53,0.2)" : "rgba(229,57,53,0.06)"}
-                strokeWidth={isMajor ? 1.2 : 0.5} strokeLinecap="round"
-              />
-            );
-          })}
-
-          {/* OUTER RING = OPPORTUNITY (golden) */}
-          <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,215,0,0.04)" strokeWidth={isMobile ? 8 : 12} />
-          {oppAngle > 0 && (
-            <path d={describeArc(CX, CY, R_OUTER, -135, -135 + oppAngle)} fill="none"
-              stroke={oppGlobal} strokeWidth={isMobile ? 8 : 12} strokeLinecap="round"
-              style={{ opacity: 0.55, transition: "d 600ms ease", animation: "opp-sweep 4s ease-in-out infinite" }} />
-          )}
-          <text x={CX + R_OUTER + (isMobile ? 14 : 30)} y={CY - R_OUTER + (isMobile ? 30 : 50)}
-            fill="rgba(255,215,0,0.3)" fontSize={isMobile ? 8 : 11}
-            fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em" textAnchor="start">
-            {t("gauge.opportunity")}
-          </text>
-
-          {/* INNER RING = RISK (red/amber) */}
-          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(229,57,53,0.04)" strokeWidth={isMobile ? 10 : 14} />
-          {riskAngle > 0 && (
-            <path d={describeArc(CX, CY, R_INNER, -135, -135 + riskAngle)} fill="none"
-              stroke={rskGlobal} strokeWidth={isMobile ? 10 : 14} strokeLinecap="round"
-              style={{ opacity: innerOpacity, transition: "d 600ms ease, opacity 400ms ease" }} />
-          )}
-          <text x={CX + R_INNER + (isMobile ? 14 : 30)} y={CY - R_INNER + (isMobile ? 30 : 50)}
-            fill="rgba(229,57,53,0.25)" fontSize={isMobile ? 8 : 11}
-            fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em" textAnchor="start">
-            {t("gauge.risk")}
-          </text>
-
-          {/* Trigger ticks */}
-          <circle cx={CX} cy={CY} r={R_TRIGGER} fill="none" stroke="rgba(255,255,255,0.015)" strokeWidth="2" />
-          {triggerTicks.map((tick, i) => {
-            const rad = ((tick.angle - 90) * Math.PI) / 180;
-            const r1 = R_TRIGGER - 7, r2 = R_TRIGGER + 7;
-            return (
-              <line key={i}
-                x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)}
-                x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)}
-                stroke={color} strokeWidth={1} strokeLinecap="round"
-                style={{ opacity: globalState === "IMMINENT" ? 0.7 : 0.35 }} />
-            );
-          })}
-
-          {/* State transition sweep */}
-          {stateTransition && (() => {
-            const toColor = stateColor(stateTransition.to);
-            const eased = 1 - Math.pow(1 - stateTransition.progress, 3);
-            const sweepAngle = eased * 270;
-            const fadeOpacity = stateTransition.progress < 0.7 ? 0.5 : 0.5 * (1 - (stateTransition.progress - 0.7) / 0.3);
-            return (
-              <g style={{ pointerEvents: "none" }}>
-                <path d={describeArc(CX, CY, R_OUTER, -135, -135 + sweepAngle)}
-                  fill="none" stroke={toColor} strokeWidth={16 + eased * 8} strokeLinecap="round"
-                  style={{ opacity: fadeOpacity * 0.6, filter: "blur(6px)" }} />
-              </g>
-            );
-          })()}
-
-          {/* Micro-pulse on ring for hovered ray */}
-          {hoveredIdx !== null && signals[hoveredIdx] && (() => {
-            const hAngleDeg = (hoveredIdx * (360 / Math.max(signals.length, 1))) - 90;
-            const spread = 14;
-            const hColor = signals[hoveredIdx].dominant === "opportunity" ? opportunityColor(signals[hoveredIdx].opportunity) : riskColor(signals[hoveredIdx].risk);
-            return (
-              <path
-                d={describeArc(CX, CY, R_OUTER, hAngleDeg - spread, hAngleDeg + spread)}
-                fill="none" stroke={hColor} strokeWidth="12" strokeLinecap="round"
-                style={{ opacity: 0.35, transition: "opacity 200ms ease" }}
-              />
-            );
-          })()}
-
-          {/* Time Ring */}
-          <TimeRing cx={CX} cy={CY} outerR={R_OUTER} isMobile={isMobile} />
-
-          {/* Sacred Rays */}
-          {(() => {
-            const displaySignals = isMobile ? signals.slice(0, 5) : signals;
-            return (
-              <>
-                <SacredRays signals={displaySignals} cx={CX} cy={CY} outerR={R_OUTER}
-                  hoveredIdx={hoveredIdx} setHoveredIdx={setHoveredIdx} onClickRay={handleClickRay} />
-                {hoveredIdx !== null && displaySignals[hoveredIdx] && (
-                  <RayTooltip signal={displaySignals[hoveredIdx]} cx={CX} cy={CY} outerR={R_OUTER} index={hoveredIdx} svgSize={SVG_SIZE} total={displaySignals.length} />
-                )}
-              </>
-            );
-          })()}
-        </svg>
-      </div>
-
-      {/* ═══════════════════════════════════════ */}
-      {/* CENTER HUD — FENÊTRE D'OPPORTUNITÉ      */}
-      {/* ═══════════════════════════════════════ */}
-      <div className="fixed inset-0 pointer-events-none z-20" style={{ display: "grid", placeItems: "center" }}>
-        <div style={{
-          maxWidth: isMobile ? "min(70vw, 280px)" : 480,
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          textAlign: "center",
-          lineHeight: 0.95,
-        }}>
-          {/* Line 1: FENÊTRE D'OPPORTUNITÉ */}
-          <span className="font-mono tracking-[0.3em] sm:tracking-[0.4em] uppercase" style={{
-            fontSize: isMobile ? 9 : 14,
-            color: "rgba(255,215,0,0.55)",
-            letterSpacing: isMobile ? "0.2em" : "0.35em",
-          }}>
-            {t("gauge.window")}
-          </span>
-
-          {/* Line 2: TIMER (very large, high contrast) */}
-          <span className="font-mono font-bold leading-none mt-2 sm:mt-4" style={{
-            fontSize: "clamp(50px, 14vw, 110px)",
-            color: "rgba(255,248,220,0.95)",
-            transition: "color 800ms ease",
-            letterSpacing: "0.04em",
-            textShadow: `0 0 60px rgba(255,215,0,0.25), 0 0 120px rgba(255,215,0,0.08)`,
-          }}>
-            {formatTimeClear(globalTMinus)}
-          </span>
-
-          {/* Line 3: "avant zone de bascule" */}
-          <span className="font-mono tracking-[0.15em] sm:tracking-[0.2em] mt-1 sm:mt-3" style={{
-            fontSize: isMobile ? 9 : 14,
-            color: "rgba(255,248,220,0.4)",
-            fontStyle: "italic",
-          }}>
-            {t("gauge.before")}
-          </span>
-
-          {/* Decorative separator */}
-          <div className="flex items-center gap-3 mt-4 sm:mt-8" style={{ opacity: 0.25 }}>
-            <div style={{ width: 20, height: 1, background: "rgba(255,215,0,0.5)" }} />
-            <div style={{ width: 5, height: 5, borderRadius: "50%", border: "1px solid rgba(255,215,0,0.4)" }} />
-            <div style={{ width: 8, height: 1, background: "rgba(255,215,0,0.5)" }} />
-            <div style={{ width: 20, height: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 10, color: "rgba(255,215,0,0.6)" }}>◈</span>
-            </div>
-            <div style={{ width: 8, height: 1, background: "rgba(255,215,0,0.5)" }} />
-            <div style={{ width: 5, height: 5, borderRadius: "50%", border: "1px solid rgba(255,215,0,0.4)" }} />
-            <div style={{ width: 20, height: 1, background: "rgba(255,215,0,0.5)" }} />
-          </div>
-
-          {/* Opportunity + Risk scores below separator */}
-          <div className="flex items-center mt-3 sm:mt-5" style={{ gap: isMobile ? 16 : 40 }}>
-            <div className="flex flex-col items-center">
-              <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(255,215,0,0.35)", fontSize: isMobile ? 8 : 11,
-              }}>
-                {t("gauge.opportunity")}
+          {/* CENTER HUD — overlaid on gauge */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center text-center" style={{ maxWidth: isMobile ? 180 : 300 }}>
+              {/* Window label */}
+              <span className="font-mono tracking-[0.2em] uppercase" style={{ fontSize: isMobile ? 7 : 10, color: "rgba(255,215,0,0.45)" }}>
+                {t("gauge.window")}
               </span>
-              <span className="font-mono font-bold mt-0.5" style={{
-                color: oppGlobal, fontSize: isMobile ? 20 : 28,
+              {/* Timer */}
+              <span className="font-mono font-bold leading-none mt-1" style={{
+                fontSize: isMobile ? 36 : 64, color: "rgba(255,248,220,0.95)",
+                textShadow: "0 0 40px rgba(255,215,0,0.2)",
               }}>
-                {globalOpp}
+                {formatTimeClear(globalTMinus)}
               </span>
-            </div>
-            <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.08)" }} />
-            <div className="flex flex-col items-center">
-              <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: "rgba(229,57,53,0.3)", fontSize: isMobile ? 8 : 11,
-              }}>
-                {t("gauge.risk")}
+              <span className="font-mono tracking-wider mt-1" style={{ fontSize: isMobile ? 7 : 10, color: "rgba(255,248,220,0.3)", fontStyle: "italic" }}>
+                {t("gauge.before")}
               </span>
-              <span className="font-mono font-bold mt-0.5" style={{
-                color: rskGlobal, fontSize: isMobile ? 20 : 28,
-              }}>
-                {globalRisk}
-              </span>
-            </div>
-            <div style={{ width: 1, height: isMobile ? 24 : 36, background: "rgba(255,255,255,0.08)" }} />
-            <div className="flex flex-col items-center">
-              <span className="font-mono tracking-[0.2em] uppercase" style={{
-                color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.5)" :
-                       smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.5)" :
-                       "rgba(255,255,255,0.25)",
-                fontSize: isMobile ? 8 : 11,
-              }}>
-                {t("sc.label")}
-              </span>
-              <span className="font-mono font-bold mt-0.5" style={{
-                color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" :
-                       smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" :
-                       "rgba(255,248,220,0.55)",
-                fontSize: isMobile ? 12 : 16,
-              }}>
-                {t(`sc.${smartCapital.state.toLowerCase()}` as any)}
-              </span>
-              <span className="font-mono mt-0.5" style={{
-                color: "rgba(255,255,255,0.25)", fontSize: isMobile ? 9 : 11,
-              }}>
-                {smartCapital.score}/100
-              </span>
+              {/* Opp / Risk / Smart Capital in gauge */}
+              <div className="flex items-center mt-3" style={{ gap: isMobile ? 10 : 18 }}>
+                <div className="flex flex-col items-center">
+                  <span className="font-mono" style={{ color: "rgba(255,215,0,0.3)", fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em" }}>OPP</span>
+                  <span className="font-mono font-bold" style={{ color: oppGlobal, fontSize: isMobile ? 16 : 22 }}>{globalOpp}</span>
+                </div>
+                <div style={{ width: 1, height: isMobile ? 18 : 28, background: "rgba(255,255,255,0.06)" }} />
+                <div className="flex flex-col items-center">
+                  <span className="font-mono" style={{ color: "rgba(229,57,53,0.3)", fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em" }}>RISK</span>
+                  <span className="font-mono font-bold" style={{ color: rskGlobal, fontSize: isMobile ? 16 : 22 }}>{globalRisk}</span>
+                </div>
+                <div style={{ width: 1, height: isMobile ? 18 : 28, background: "rgba(255,255,255,0.06)" }} />
+                <div className="flex flex-col items-center">
+                  <span className="font-mono" style={{
+                    color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.4)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.4)" : "rgba(255,255,255,0.2)",
+                    fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em",
+                  }}>SC</span>
+                  <span className="font-mono font-bold" style={{
+                    color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "rgba(255,248,220,0.5)",
+                    fontSize: isMobile ? 10 : 13,
+                  }}>
+                    {t(`sc.${smartCapital.state.toLowerCase()}` as any)}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          {/* Dual Core allocation */}
-          <div className="flex items-center mt-3 sm:mt-4" style={{ gap: isMobile ? 12 : 24 }}>
-            <div className="flex items-center gap-1.5">
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(255,215,0,0.6)" }} />
-              <span className="font-mono" style={{ color: "rgba(255,215,0,0.45)", fontSize: isMobile ? 8 : 10, letterSpacing: "0.1em" }}>
-                {t("dc.structure")} {dualCore.structurePct}%
-              </span>
+        {/* ═══ STRATEGIC RECOMMENDATION ═══ */}
+        <div className="mt-4 sm:mt-6 flex flex-col items-center gap-3">
+          <span className="font-mono tracking-[0.2em] uppercase" style={{ fontSize: isMobile ? 7 : 9, color: "rgba(255,255,255,0.2)" }}>
+            {t("strat.label")}
+          </span>
+          <StrategicBadge
+            action={strategicAction}
+            label={t(`strat.${strategicAction.toLowerCase()}` as any)}
+            isMobile={isMobile}
+          />
+        </div>
+
+        {/* ═══ SENTINEL INDEX + FLOW BADGES ═══ */}
+        <div className="mt-5 sm:mt-8 flex flex-col sm:flex-row items-center gap-4 sm:gap-10">
+          <SentinelIndexDisplay score={sentinelIndex} label={sentinelLabel} isMobile={isMobile} />
+          <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.05)" }} className="hidden sm:block" />
+          <div className="flex items-center gap-2">
+            <FlowBadge label={t("flow.dominance")} direction={flowData.dominance} isMobile={isMobile} />
+            <FlowBadge label={t("flow.emission")} direction={flowData.emission} isMobile={isMobile} />
+            <FlowBadge label={t("flow.inflow")} direction={flowData.inflow} isMobile={isMobile} />
+          </div>
+        </div>
+
+        {/* ═══ DUAL CORE ═══ */}
+        <div className="flex items-center gap-4 mt-4">
+          <div className="flex items-center gap-1.5">
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(255,215,0,0.6)" }} />
+            <span className="font-mono" style={{ color: "rgba(255,215,0,0.45)", fontSize: isMobile ? 8 : 10, letterSpacing: "0.1em" }}>
+              {t("dc.structure")} {dualCore.structurePct}%
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(0,200,255,0.6)" }} />
+            <span className="font-mono" style={{ color: "rgba(0,200,255,0.45)", fontSize: isMobile ? 8 : 10, letterSpacing: "0.1em" }}>
+              {t("dc.sniper")} {dualCore.sniperPct}%
+            </span>
+          </div>
+        </div>
+
+        {/* ═══ BEST ASYMMETRY SUBNET ═══ */}
+        {bestSubnet && (
+          <div className="mt-6 sm:mt-10 w-full" style={{ maxWidth: isMobile ? "100%" : 600 }}>
+            <span className="font-mono tracking-[0.2em] uppercase block mb-3" style={{ fontSize: isMobile ? 8 : 10, color: "rgba(255,215,0,0.3)" }}>
+              {t("top.best")}
+            </span>
+            <BestSubnetCard signal={bestSubnet} isMobile={isMobile} t={t} onClick={() => setPanelSignal(bestSubnet)} />
+          </div>
+        )}
+
+        {/* ═══ TOP OPPORTUNITIES + TOP RISKS ═══ */}
+        <div className="mt-6 sm:mt-8 w-full grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8" style={{ maxWidth: 900 }}>
+          {/* Top 5 Opportunities */}
+          <div>
+            <span className="font-mono tracking-[0.2em] uppercase block mb-3" style={{ fontSize: isMobile ? 8 : 10, color: "rgba(255,215,0,0.3)" }}>
+              {t("top.opportunities")}
+            </span>
+            <div className="rounded-xl" style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)" }}>
+              {topOpportunities.map((s, i) => (
+                <SubnetRow key={s.netuid} signal={s} rank={i + 1} type="opp" isMobile={isMobile} t={t} onClick={() => setPanelSignal(s)} />
+              ))}
             </div>
-            <div className="flex items-center gap-1.5">
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(0,200,255,0.6)" }} />
-              <span className="font-mono" style={{ color: "rgba(0,200,255,0.45)", fontSize: isMobile ? 8 : 10, letterSpacing: "0.1em" }}>
-                {t("dc.sniper")} {dualCore.sniperPct}%
-              </span>
+          </div>
+          {/* Top 3 Risks */}
+          <div>
+            <span className="font-mono tracking-[0.2em] uppercase block mb-3" style={{ fontSize: isMobile ? 8 : 10, color: "rgba(229,57,53,0.3)" }}>
+              {t("top.risks")}
+            </span>
+            <div className="rounded-xl" style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)" }}>
+              {topRisks.length > 0 ? topRisks.map((s, i) => (
+                <SubnetRow key={s.netuid} signal={s} rank={i + 1} type="risk" isMobile={isMobile} t={t} onClick={() => setPanelSignal(s)} />
+              )) : (
+                <div className="py-6 text-center font-mono text-xs" style={{ color: "rgba(255,255,255,0.15)" }}>—</div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* POSITION BAR or OPEN BUTTON */}
-      <div className="fixed left-0 right-0 z-20 flex flex-col items-center"
-        style={{ bottom: isMobile ? 12 : 20 }}>
+      {/* ═══ BOTTOM BAR ═══ */}
+      <div className="fixed left-0 right-0 z-20 flex flex-col items-center" style={{ bottom: isMobile ? 12 : 20 }}>
         {hasPosition ? (
           <PositionBar position={activePosition!} isMobile={isMobile} t={t}
             onClose={activePosition?.id ? handleClosePosition : undefined}
@@ -1714,35 +933,36 @@ export default function AlienGauge() {
               smartCapital.state === "DISTRIBUTION" ? t("pos.exit_warn_sc") :
               globalRisk > 70 ? t("pos.exit_warn_risk") : null
             } />
+        ) : user ? (
+          <button onClick={() => { setPreselectedNetuid(undefined); setOpenPosDialog(true); }}
+            className="font-mono tracking-wider px-7 py-3 rounded-xl transition-all pointer-events-auto flex items-center gap-2"
+            style={{ background: "linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.04))", color: "rgba(255,215,0,0.9)", border: "1px solid rgba(255,215,0,0.25)", fontSize: isMobile ? 12 : 15, fontWeight: 700, boxShadow: "0 0 30px rgba(255,215,0,0.06)", letterSpacing: "0.08em" }}>
+            + {t("pos.open")}
+          </button>
         ) : (
-          user ? (
-            <button
-              onClick={() => { setPreselectedNetuid(undefined); setOpenPosDialog(true); }}
-              className="font-mono tracking-wider px-7 py-3 rounded-xl transition-all pointer-events-auto flex items-center gap-2"
-              style={{
-                background: "linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.04))",
-                color: "rgba(255,215,0,0.9)",
-                border: "1px solid rgba(255,215,0,0.25)",
-                fontSize: isMobile ? 12 : 15,
-                fontWeight: 700,
-                boxShadow: "0 0 30px rgba(255,215,0,0.06)",
-                letterSpacing: "0.08em",
-              }}
-            >
-              + {t("pos.open")}
-            </button>
-          ) : (
-            <span className="font-mono text-[10px] tracking-wider px-3 py-2 rounded-md pointer-events-auto"
-              style={{ color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              {t("pos.login_required")}
-            </span>
-          )
+          <span className="font-mono text-[10px] tracking-wider px-3 py-2 rounded-md pointer-events-auto"
+            style={{ color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            {t("pos.login_required")}
+          </span>
         )}
       </div>
 
+      {/* Notification + Demo toggles */}
+      {typeof Notification !== "undefined" && Notification.permission !== "granted" && (
+        <button onClick={() => Notification.requestPermission()}
+          className="fixed bottom-4 left-4 z-20 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all"
+          style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          🔔 {t("gauge.notif")}
+        </button>
+      )}
+      <button onClick={() => setDemoMode(d => !d)}
+        className="fixed bottom-4 right-4 z-30 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all pointer-events-auto"
+        style={{ background: demoMode ? "rgba(0,255,200,0.12)" : "rgba(255,255,255,0.03)", color: demoMode ? "rgba(0,255,200,0.8)" : "rgba(255,255,255,0.25)", border: `1px solid ${demoMode ? "rgba(0,255,200,0.3)" : "rgba(255,255,255,0.06)"}` }}>
+        {demoMode ? "⬤ DEMO ON" : "◯ DEMO"}
+      </button>
+
       {/* Dialogs */}
-      <OpenPositionDialog open={openPosDialog} onClose={() => setOpenPosDialog(false)}
-        signals={signals} t={t} preselectedNetuid={preselectedNetuid} />
+      <OpenPositionDialog open={openPosDialog} onClose={() => setOpenPosDialog(false)} signals={signals} t={t} preselectedNetuid={preselectedNetuid} />
       <SubnetPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} />
     </div>
   );
