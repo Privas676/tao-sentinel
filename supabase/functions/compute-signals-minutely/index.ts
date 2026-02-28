@@ -82,9 +82,9 @@ Deno.serve(async (req) => {
       sb.from("subnet_metrics_ts").select("netuid, price")
         .gte("ts", ago7d).order("ts", { ascending: true }).limit(1000),
       sb.from("signals").select("*"),
-      sb.from("subnet_metrics_ts").select("netuid, price, cap, vol_24h, ts")
+      sb.from("subnet_metrics_ts").select("netuid, price, cap, vol_24h, liquidity, ts")
         .eq("source", "taostats").order("ts", { ascending: false }).limit(200),
-      sb.from("subnet_metrics_ts").select("netuid, price, cap, vol_24h, ts")
+      sb.from("subnet_metrics_ts").select("netuid, price, cap, vol_24h, liquidity, ts")
         .eq("source", "taomarketcap").order("ts", { ascending: false }).limit(200),
       sb.from("events").select("netuid").eq("type", "DATA_DIVERGENCE").gte("ts", ago30m),
       // Existing RISK_OVERRIDE events (1 per subnet max)
@@ -112,59 +112,84 @@ Deno.serve(async (req) => {
       if (p > cur) priceMax7dMap.set(r.netuid, p);
     }
 
-    // ============= DATA DIVERGENCE DETECTION (tiered tolerances) =============
+    // ============= DATA DIVERGENCE DETECTION (v2: per-metric tolerances + gravity score) =============
     const tsMap = dedupeLatest(taostatsRows || []);
     const tmcMap = dedupeLatest(tmcRows || []);
     const recentDivNetuids = new Set((recentDivEvents || []).map((e: any) => e.netuid));
 
+    // Fetch FX rate for LiquidityUSD recalc
+    const { data: fxRows } = await sb.from("fx_latest").select("tao_usd").limit(1);
+    const taoUsd = Number(fxRows?.[0]?.tao_usd) || 0;
+
     const divInserts: any[] = [];
-    // Track persistent divergences for 2-cycle requirement
-    const PRICE_WARN = 0.005; // 0.5%
-    const PRICE_CRIT = 0.01;  // 1%
-    const MC_WARN = 0.02;     // 2%
-    const MC_CRIT = 0.05;     // 5%
+
+    // Per-metric tolerances (only alert above these thresholds)
+    const METRIC_CONFIG: Record<string, { threshold: number; weight: number; label: string }> = {
+      price:     { threshold: 1.0,  weight: 35, label: "price" },
+      cap:       { threshold: 2.0,  weight: 25, label: "mc" },
+      vol_24h:   { threshold: 10.0, weight: 15, label: "vol" },
+      liquidity: { threshold: 5.0,  weight: 20, label: "liq" },
+    };
 
     for (const [netuid, ts] of tsMap) {
-      if (recentDivNetuids.has(netuid)) continue; // Already reported in last 30min (2-cycle persistence)
+      if (recentDivNetuids.has(netuid)) continue;
       const tmc = tmcMap.get(netuid);
       if (!tmc) continue;
 
-      const fields = [
-        { name: "price", a: Number(ts.price) || 0, b: Number(tmc.price) || 0, warnThresh: PRICE_WARN, critThresh: PRICE_CRIT },
-        { name: "cap", a: Number(ts.cap) || 0, b: Number(tmc.cap) || 0, warnThresh: MC_WARN, critThresh: MC_CRIT },
-        { name: "vol_24h", a: Number(ts.vol_24h) || 0, b: Number(tmc.vol_24h) || 0, warnThresh: 0.10, critThresh: 0.20 },
-      ];
+      // Recalculate LiquidityUSD: TAO_in_pool * TAO_USD * 2
+      const liqTs  = Number(ts.liquidity) || 0;
+      const liqTmc = Number(tmc.liquidity) || 0;
 
-      let hasCritical = false;
-      let hasWarning = false;
-      const divergent: any[] = [];
+      const rawFields: Record<string, { a: number; b: number }> = {
+        price:     { a: Number(ts.price) || 0,    b: Number(tmc.price) || 0 },
+        cap:       { a: Number(ts.cap) || 0,      b: Number(tmc.cap) || 0 },
+        vol_24h:   { a: Number(ts.vol_24h) || 0,  b: Number(tmc.vol_24h) || 0 },
+        liquidity: { a: liqTs > 0 && taoUsd > 0 ? liqTs * taoUsd * 2 : liqTs,
+                     b: liqTmc > 0 && taoUsd > 0 ? liqTmc * taoUsd * 2 : liqTmc },
+      };
 
-      for (const f of fields) {
-        if (f.a <= 0 || f.b <= 0) continue;
-        const div = pctDiff(f.a, f.b) / 100; // as ratio
-        if (div > f.critThresh) {
-          hasCritical = true;
-          divergent.push({ field: f.name, taostats: Math.round(f.a * 1e6) / 1e6, taomarketcap: Math.round(f.b * 1e6) / 1e6, pct_diff: Math.round(div * 1000) / 10, severity: "critical" });
-        } else if (div > f.warnThresh) {
-          hasWarning = true;
-          divergent.push({ field: f.name, taostats: Math.round(f.a * 1e6) / 1e6, taomarketcap: Math.round(f.b * 1e6) / 1e6, pct_diff: Math.round(div * 1000) / 10, severity: "warning" });
-        }
+      const chips: { metric: string; diff_pct: number; severity: "warn" | "critical" }[] = [];
+      let gravityWeightedSum = 0;
+      let gravityTotalWeight = 0;
+
+      for (const [field, cfg] of Object.entries(METRIC_CONFIG)) {
+        const { a, b } = rawFields[field];
+        if (a <= 0 || b <= 0) continue;
+        const diffPct = pctDiff(a, b);
+        if (diffPct < cfg.threshold) continue;
+
+        // How far above threshold (capped at 5x for gravity calc)
+        const ratio = Math.min(diffPct / cfg.threshold, 5);
+        gravityWeightedSum += ratio * cfg.weight;
+        gravityTotalWeight += cfg.weight;
+
+        chips.push({
+          metric: cfg.label,
+          diff_pct: Math.round(diffPct * 10) / 10,
+          severity: diffPct >= cfg.threshold * 2.5 ? "critical" : "warn",
+        });
       }
 
-      if (!hasCritical && !hasWarning) continue;
+      if (chips.length === 0) continue;
 
-      // Compute confidence_data
-      const divValues = fields.filter(f => f.a > 0 && f.b > 0).map(f => Math.abs(f.a - f.b) / ((Math.abs(f.a) + Math.abs(f.b)) / 2));
+      // Gravity score: 0-100
+      const gravity = gravityTotalWeight > 0
+        ? Math.round(clamp((gravityWeightedSum / gravityTotalWeight) * 40, 0, 100))
+        : 0;
+
+      // Confidence data (same formula)
+      const divValues = Object.entries(rawFields)
+        .filter(([, v]) => v.a > 0 && v.b > 0)
+        .map(([, v]) => Math.abs(v.a - v.b) / ((Math.abs(v.a) + Math.abs(v.b)) / 2));
       const meanDiv = divValues.length > 0 ? divValues.reduce((a, b) => a + b, 0) / divValues.length : 0;
       const confidenceData = Math.round(100 - Math.min(meanDiv * 150, 60));
 
-      // Only alert if Warning/Critical AND confidence < 85
-      if (confidenceData >= 85) continue;
-
       divInserts.push({
-        netuid, ts: nowIso, type: "DATA_DIVERGENCE", severity: hasCritical ? 3 : 2,
+        netuid, ts: nowIso, type: "DATA_DIVERGENCE",
+        severity: chips.some(c => c.severity === "critical") ? 3 : 2,
         evidence: {
-          divergences: divergent,
+          chips,
+          gravity,
           confidence_data: confidenceData,
           sources: { taostats_ts: ts.ts, tmc_ts: tmc.ts },
         },
@@ -173,7 +198,7 @@ Deno.serve(async (req) => {
     if (divInserts.length > 0) {
       const { error: divErr } = await sb.from("events").insert(divInserts);
       if (divErr) console.error("DATA_DIVERGENCE insert error:", divErr.message);
-      else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts (tiered thresholds)`);
+      else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts (v2 gravity)`);
     }
 
     // ============= PASS 1: Compute raw scores (no DB calls, all from maps) =============

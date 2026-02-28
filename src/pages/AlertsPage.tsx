@@ -376,6 +376,51 @@ function renderWhaleContent(ev: EventRow, fr: boolean) {
 
 function renderDivergenceContent(ev: EventRow, fr: boolean) {
   const e = ev.evidence as any;
+
+  // V2 format with chips + gravity
+  const chips = e?.chips as { metric: string; diff_pct: number; severity: string }[] | undefined;
+  const gravity = e?.gravity as number | undefined;
+  const confidenceData = e?.confidence_data as number | undefined;
+
+  if (chips && chips.length > 0) {
+    const metricColors: Record<string, string> = {
+      price: "rgba(229,57,53,0.8)",
+      mc:    "rgba(255,152,0,0.8)",
+      fdv:   "rgba(255,152,0,0.7)",
+      liq:   "rgba(255,193,7,0.8)",
+      vol:   "rgba(158,158,158,0.7)",
+      supply: "rgba(100,181,246,0.7)",
+    };
+    return (
+      <div className="font-mono text-[10px] flex-1 flex flex-wrap items-center gap-1">
+        {chips.map((c, i) => {
+          const col = metricColors[c.metric] || "rgba(255,255,255,0.4)";
+          return (
+            <span key={i} className="px-1.5 py-0.5 rounded font-bold"
+              style={{
+                color: col,
+                background: col.replace(/[\d.]+\)$/, "0.08)"),
+                border: `1px solid ${col.replace(/[\d.]+\)$/, "0.2)")}`,
+              }}>
+              {c.metric} {c.diff_pct}%
+            </span>
+          );
+        })}
+        {gravity != null && (
+          <span className="text-white/25 ml-1" title={fr ? "Score de gravité" : "Gravity score"}>
+            G:{gravity}
+          </span>
+        )}
+        {confidenceData != null && (
+          <span className="text-white/20 ml-0.5" title={fr ? "Confiance données" : "Data confidence"}>
+            C:{confidenceData}%
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // Legacy format fallback
   const divs = e?.divergences as { field: string; pct_diff: number }[] || [];
   return (
     <div className="font-mono text-[10px] text-white/40 flex-1 flex flex-wrap gap-1">
@@ -441,6 +486,9 @@ export default function AlertsPage() {
   const { t, lang } = useI18n();
   const [filter, setFilter] = useState<FilterType>("UNIQUE");
   const [showOverrideNoise, setShowOverrideNoise] = useState(false);
+  const [showMinorDivergences, setShowMinorDivergences] = useState(() => {
+    try { return localStorage.getItem("show-minor-divergences") === "true"; } catch { return false; }
+  });
   const fr = lang === "fr";
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
@@ -466,9 +514,29 @@ export default function AlertsPage() {
   }, [events]);
 
   // Separate OVERRIDE alerts into gated vs noise (strict mode only)
+  // Also filter DATA_DIVERGENCE by gravity/confidence unless showMinorDivergences
   const { gatedOverrides, noiseOverrides, otherGrouped } = useMemo(() => {
+    // Filter divergences by gravity/confidence
+    const filterDiv = (g: GroupedEvent): boolean => {
+      if (g.latest.type !== "DATA_DIVERGENCE") return true;
+      if (showMinorDivergences) return true;
+      const e = g.latest.evidence as any;
+      const gravity = e?.gravity as number | undefined;
+      const confidence = e?.confidence_data as number | undefined;
+      // Show if gravity ≥ 60 OR confidence_data ≥ 70
+      if (gravity != null && gravity >= 60) return true;
+      if (confidence != null && confidence >= 70) return true;
+      // Legacy events without gravity: show them
+      if (gravity == null && e?.divergences) return true;
+      return false;
+    };
+
     if (overrideMode === "permissive") {
-      return { gatedOverrides: grouped.filter(g => g.latest.type === "RISK_OVERRIDE"), noiseOverrides: [] as GroupedEvent[], otherGrouped: grouped.filter(g => g.latest.type !== "RISK_OVERRIDE") };
+      return {
+        gatedOverrides: grouped.filter(g => g.latest.type === "RISK_OVERRIDE"),
+        noiseOverrides: [] as GroupedEvent[],
+        otherGrouped: grouped.filter(g => g.latest.type !== "RISK_OVERRIDE").filter(filterDiv),
+      };
     }
 
     const overrides: GroupedEvent[] = [];
@@ -481,7 +549,6 @@ export default function AlertsPage() {
       }
     }
 
-    // Apply strict gating
     const gated: GroupedEvent[] = [];
     const noise: GroupedEvent[] = [];
     for (const g of overrides) {
@@ -492,8 +559,8 @@ export default function AlertsPage() {
       }
     }
 
-    return { gatedOverrides: gated, noiseOverrides: noise, otherGrouped: others };
-  }, [grouped, overrideMode, scores]);
+    return { gatedOverrides: gated, noiseOverrides: noise, otherGrouped: others.filter(filterDiv) };
+  }, [grouped, overrideMode, scores, showMinorDivergences]);
 
   // Apply filters with quota
   const filtered = useMemo(() => {
