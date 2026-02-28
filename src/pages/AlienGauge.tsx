@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import {
-  SubnetSignal, RawSignal,
+  SubnetSignal, RawSignal, clamp,
   processSignals,
   computeGlobalOpportunity, computeGlobalRisk,
   computeGlobalConfidence,
@@ -392,8 +392,36 @@ export default function AlienGauge() {
   const scLabel = t(`sc.${smartCapital.state.toLowerCase()}` as any);
   const macroRecLabel = t(`macro.${macroRec.toLowerCase()}` as any);
 
+  /* ─── Gauge geometry ─── */
+  const SIZE = isMobile ? 300 : 440;
+  const CX = SIZE / 2, CY = SIZE / 2;
+  const R_OUTER = isMobile ? 120 : 190;
+  const R_INNER = isMobile ? 95 : 155;
+  const oppGlobal = opportunityColor(globalOpp);
+  const rskGlobal = riskColor(globalRisk);
+  const oppAngle = (globalOpp / 100) * 270;
+  const riskAngle = (globalRisk / 100) * 270;
+
+  function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
+    const rad = (a: number) => ((a - 90) * Math.PI) / 180;
+    const x1 = cx + r * Math.cos(rad(startAngle));
+    const y1 = cy + r * Math.sin(rad(startAngle));
+    const x2 = cx + r * Math.cos(rad(endAngle));
+    const y2 = cy + r * Math.sin(rad(endAngle));
+    const large = endAngle - startAngle > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+  }
+
   return (
     <div className="h-full w-full select-none overflow-y-auto overflow-x-hidden" style={{ background: "#000" }}>
+      <style>{`
+        @keyframes opp-sweep {
+          0% { opacity: 0.3; }
+          50% { opacity: 0.6; }
+          100% { opacity: 0.3; }
+        }
+      `}</style>
+
       {/* ═══ HEADER ═══ */}
       <div className="flex items-center justify-center px-4 pt-6 pb-2">
         <div className="flex flex-col items-center">
@@ -407,64 +435,90 @@ export default function AlienGauge() {
       <div className="px-4 sm:px-8 pb-20 max-w-[900px] mx-auto">
 
         {/* ═══ BLOC 1: VISION MACRO ═══ */}
-        <div className="mt-6 rounded-2xl p-5 sm:p-7" style={{ background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div className="flex items-center gap-2 mb-5">
+        <div className="mt-4 rounded-2xl p-5 sm:p-7" style={{ background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="flex items-center gap-2 mb-4">
             <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
               VISION MACRO
             </span>
             <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
           </div>
 
-          {/* Metrics row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <MetricCard
-              label={t("macro.global_index")}
-              value={sentinelIndex}
-              color={sentinelIndexColor(sentinelIndex)}
-              sub={sentinelLabel}
-            />
-            <MetricCard
-              label={t("macro.stability")}
-              value={`${globalStability}%`}
-              color={stabilityColor(globalStability)}
-            />
-            <MetricCard
-              label={t("data.confiance")}
-              value={`${confianceData.score}%`}
-              color={confianceColor(confianceData.score)}
-            />
-            <MetricCard
-              label={t("sc.label")}
-              value={scLabel}
-              color={smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "rgba(255,248,220,0.5)"}
-            />
+          {/* ─── CIRCULAR GAUGE ─── */}
+          <div className="flex justify-center">
+            <div className="relative" style={{ width: SIZE, height: SIZE }}>
+              <div className="absolute inset-0 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(255,180,50,0.04) 0%, transparent 60%)", transform: "scale(1.2)" }} />
+              <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+                {/* Outer ticks */}
+                {Array.from({ length: 54 }, (_, i) => {
+                  const angleDeg = (i * 5) - 135;
+                  if (angleDeg > 135) return null;
+                  const rad = ((angleDeg - 90) * Math.PI) / 180;
+                  const isMajor = i % 9 === 0;
+                  const r1 = R_OUTER + 4; const r2 = R_OUTER + (isMajor ? 12 : 7);
+                  return <line key={`ot-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)} x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)} stroke={isMajor ? "rgba(255,215,0,0.2)" : "rgba(255,215,0,0.06)"} strokeWidth={isMajor ? 1.5 : 0.7} strokeLinecap="round" />;
+                })}
+                {/* Inner ticks */}
+                {Array.from({ length: 54 }, (_, i) => {
+                  const angleDeg = (i * 5) - 135;
+                  if (angleDeg > 135) return null;
+                  const rad = ((angleDeg - 90) * Math.PI) / 180;
+                  const isMajor = i % 9 === 0;
+                  const r1 = R_INNER - 4; const r2 = R_INNER - (isMajor ? 10 : 6);
+                  return <line key={`it-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)} x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)} stroke={isMajor ? "rgba(229,57,53,0.18)" : "rgba(229,57,53,0.05)"} strokeWidth={isMajor ? 1.2 : 0.5} strokeLinecap="round" />;
+                })}
+                {/* Track arcs */}
+                <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,215,0,0.04)" strokeWidth={isMobile ? 6 : 8} />
+                {oppAngle > 0 && <path d={describeArc(CX, CY, R_OUTER, -135, -135 + oppAngle)} fill="none" stroke={oppGlobal} strokeWidth={isMobile ? 6 : 8} strokeLinecap="round" style={{ opacity: 0.55, animation: "opp-sweep 4s ease-in-out infinite" }} />}
+                <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(229,57,53,0.04)" strokeWidth={isMobile ? 8 : 10} />
+                {riskAngle > 0 && <path d={describeArc(CX, CY, R_INNER, -135, -135 + riskAngle)} fill="none" stroke={rskGlobal} strokeWidth={isMobile ? 8 : 10} strokeLinecap="round" style={{ opacity: 0.55 }} />}
+              </svg>
+
+              {/* CENTER HUD */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="flex flex-col items-center text-center" style={{ maxWidth: isMobile ? 160 : 240 }}>
+                  {/* Sentinel Index */}
+                  <span className="font-mono tracking-[0.2em] uppercase" style={{ fontSize: isMobile ? 7 : 9, color: "rgba(255,255,255,0.3)" }}>
+                    {t("macro.global_index")}
+                  </span>
+                  <span className="font-mono font-bold leading-none mt-1" style={{
+                    fontSize: isMobile ? 40 : 64, color: sentinelIndexColor(sentinelIndex),
+                    textShadow: "0 0 40px rgba(255,215,0,0.15)",
+                  }}>
+                    {sentinelIndex}
+                  </span>
+                  <span className="font-mono font-bold tracking-wider mt-0.5" style={{ fontSize: isMobile ? 10 : 13, color: sentinelIndexColor(sentinelIndex), opacity: 0.7 }}>
+                    {sentinelLabel}
+                  </span>
+
+                  {/* Core metrics */}
+                  <div className="flex items-center mt-3" style={{ gap: isMobile ? 6 : 12 }}>
+                    <div className="flex flex-col items-center">
+                      <span className="font-mono" style={{ color: "rgba(255,215,0,0.3)", fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em" }}>OPP</span>
+                      <span className="font-mono font-bold" style={{ color: oppGlobal, fontSize: isMobile ? 14 : 18 }}>{globalOpp}</span>
+                    </div>
+                    <div style={{ width: 1, height: isMobile ? 14 : 20, background: "rgba(255,255,255,0.06)" }} />
+                    <div className="flex flex-col items-center">
+                      <span className="font-mono" style={{ color: "rgba(229,57,53,0.3)", fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em" }}>RISK</span>
+                      <span className="font-mono font-bold" style={{ color: rskGlobal, fontSize: isMobile ? 14 : 18 }}>{globalRisk}</span>
+                    </div>
+                    <div style={{ width: 1, height: isMobile ? 14 : 20, background: "rgba(255,255,255,0.06)" }} />
+                    <div className="flex flex-col items-center">
+                      <span className="font-mono" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em" }}>SC</span>
+                      <span className="font-mono font-bold" style={{
+                        color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "rgba(255,248,220,0.5)",
+                        fontSize: isMobile ? 8 : 11,
+                      }}>
+                        {scLabel}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* OPP / RISK / ASYM row */}
-          <div className="flex items-center justify-center gap-6 sm:gap-10 mb-6">
-            <div className="flex flex-col items-center">
-              <span className="font-mono" style={{ color: "rgba(255,215,0,0.3)", fontSize: 8, letterSpacing: "0.15em" }}>OPP</span>
-              <span className="font-mono font-bold" style={{ color: opportunityColor(globalOpp), fontSize: isMobile ? 20 : 28 }}>{globalOpp}</span>
-            </div>
-            <div style={{ width: 1, height: 30, background: "rgba(255,255,255,0.06)" }} />
-            <div className="flex flex-col items-center">
-              <span className="font-mono" style={{ color: "rgba(229,57,53,0.3)", fontSize: 8, letterSpacing: "0.15em" }}>RISK</span>
-              <span className="font-mono font-bold" style={{ color: riskColor(globalRisk), fontSize: isMobile ? 20 : 28 }}>{globalRisk}</span>
-            </div>
-            <div style={{ width: 1, height: 30, background: "rgba(255,255,255,0.06)" }} />
-            <div className="flex flex-col items-center">
-              <span className="font-mono" style={{ color: "rgba(255,255,255,0.2)", fontSize: 8, letterSpacing: "0.15em" }}>ASYM</span>
-              <span className="font-mono font-bold" style={{
-                color: (globalOpp - globalRisk) > 20 ? "rgba(76,175,80,0.85)" : (globalOpp - globalRisk) > 0 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)",
-                fontSize: isMobile ? 20 : 28,
-              }}>
-                {(globalOpp - globalRisk) > 0 ? "+" : ""}{globalOpp - globalRisk}
-              </span>
-            </div>
-          </div>
-
-          {/* Macro Recommendation */}
-          <div className="flex flex-col items-center">
+          {/* ─── Macro Recommendation ─── */}
+          <div className="flex flex-col items-center mt-2">
             <span className="font-mono tracking-[0.15em] uppercase mb-2" style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>
               {t("macro.label")}
             </span>
@@ -477,6 +531,19 @@ export default function AlienGauge() {
               <span className="font-mono font-bold tracking-[0.2em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 14 : 20 }}>
                 {macroRecLabel}
               </span>
+            </div>
+          </div>
+
+          {/* ─── Sub-metrics row ─── */}
+          <div className="flex items-center justify-center gap-4 sm:gap-8 mt-5">
+            <div className="flex flex-col items-center">
+              <span className="font-mono" style={{ fontSize: 8, color: "rgba(255,255,255,0.25)", letterSpacing: "0.12em" }}>{t("macro.stability")}</span>
+              <span className="font-mono font-bold" style={{ color: stabilityColor(globalStability), fontSize: isMobile ? 16 : 20 }}>{globalStability}%</span>
+            </div>
+            <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.06)" }} />
+            <div className="flex flex-col items-center">
+              <span className="font-mono" style={{ fontSize: 8, color: "rgba(255,255,255,0.25)", letterSpacing: "0.12em" }}>{t("data.confiance")}</span>
+              <span className="font-mono font-bold" style={{ color: confianceColor(confianceData.score), fontSize: isMobile ? 16 : 20 }}>{confianceData.score}%</span>
             </div>
           </div>
 
