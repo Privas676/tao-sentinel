@@ -103,6 +103,57 @@ export function normalizeWithVariance(rawScores: number[], steepness = 3): numbe
   });
 }
 
+/**
+ * Percentile-to-score mapping for Opportunity scores.
+ * Maps percentile ranks to target scores using linear interpolation
+ * between anchor points, producing a realistic spread (median ≈ 65).
+ * 
+ * Anchor points: p10→35, p25→50, p50→65, p75→78, p90→88, p97→94, p99→97
+ */
+const OPP_ANCHORS: [number, number][] = [
+  [0, 20], [10, 35], [25, 50], [50, 65], [75, 78], [90, 88], [97, 94], [99, 97], [100, 99],
+];
+
+function percentileToOppScore(pctile: number): number {
+  if (pctile <= OPP_ANCHORS[0][0]) return OPP_ANCHORS[0][1];
+  for (let j = 1; j < OPP_ANCHORS.length; j++) {
+    const [p0, s0] = OPP_ANCHORS[j - 1];
+    const [p1, s1] = OPP_ANCHORS[j];
+    if (pctile <= p1) {
+      const t = (pctile - p0) / (p1 - p0);
+      return Math.round(s0 + t * (s1 - s0));
+    }
+  }
+  return OPP_ANCHORS[OPP_ANCHORS.length - 1][1];
+}
+
+/** Normalize Opportunity scores using percentile mapping with anchor points */
+export function normalizeOpportunity(rawScores: number[]): number[] {
+  const ranks = percentileRank(rawScores);
+  const mapped = ranks.map(r => percentileToOppScore(r));
+
+  // Anti-100: only unique strict max gets 99 (never 100 for opportunity)
+  const maxRaw = Math.max(...rawScores);
+  const maxCount = rawScores.filter(v => v === maxRaw).length;
+
+  const result = mapped.map((score, i) => {
+    if (score > 97) {
+      if (maxCount === 1 && rawScores[i] === maxRaw) return 98;
+      return 97;
+    }
+    return score;
+  });
+
+  // Distribution audit log
+  if (result.length >= 5) {
+    const sorted = [...result].sort((a, b) => a - b);
+    const p = (f: number) => sorted[Math.floor(f * (sorted.length - 1))];
+    console.log(`[OPP-DIST] n=${result.length} min=${sorted[0]} p25=${p(0.25)} median=${p(0.5)} p75=${p(0.75)} max=${sorted[sorted.length - 1]}`);
+  }
+
+  return result;
+}
+
 /* PSI thresholds */
 export const PSI_THRESHOLDS = {
   BUILD_MIN: 35,
@@ -415,9 +466,9 @@ export function processSignals(
     return { raw: s, psi, conf, quality, oppRaw, riskRaw, dataUncertain, confianceData: consensus?.confianceData ?? 50 };
   });
 
-  // Step 2: Percentile + S-curve with different k values (Section 2.1)
-  const oppNormalized = normalizeWithVariance(rawData.map(d => d.oppRaw), 3);   // k=3 mild curve
-  const riskNormalized = normalizeWithVariance(rawData.map(d => d.riskRaw), 3);  // k=3 mild curve
+  // Step 2: Percentile mapping for Opp, S-curve for Risk
+  const oppNormalized = normalizeOpportunity(rawData.map(d => d.oppRaw));
+  const riskNormalized = normalizeWithVariance(rawData.map(d => d.riskRaw), 3);
 
   // Step 3: Build SubnetSignals
   const signals = rawData.map((d, i) => {
