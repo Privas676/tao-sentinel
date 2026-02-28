@@ -381,11 +381,10 @@ export default function SubnetsPage() {
       const override = evaluateRiskOverride({ state: r.state, psi: r.psi, risk: riskBlend, quality: r.quality });
       if (override.isOverridden) oppBlend = 0;
 
-      // ── CALIBRATION: floor + critical override ──
-      const isTopRank = i < 5; // top 5 by sort order get stricter floor
+      // ── CALIBRATION: floor + critical override (top-rank applied post-sort) ──
       const cal = calibrateScores({
         risk: riskBlend, opportunity: oppBlend,
-        state: r.state, isTopRank, isOverridden: override.isOverridden,
+        state: r.state, isTopRank: false, isOverridden: override.isOverridden,
       });
       const opp = cal.opportunity;
       const risk = cal.risk;
@@ -429,6 +428,17 @@ export default function SubnetsPage() {
         return b.risk - a.risk;
       }
       return b.asymmetry - a.asymmetry;
+    })
+    // ── PASS 2: Apply top-rank floor (Risk ≥ 25 for top 5 after sort) ──
+    .map((r, i) => {
+      if (i < 5 && !r.isOverridden) {
+        const flooredRisk = Math.max(r.risk, 25);
+        if (flooredRisk !== r.risk) {
+          const newAsym = r.opp - flooredRisk - (r.dataUncertain ? 15 : 0);
+          return { ...r, risk: flooredRisk, asymmetry: newAsym };
+        }
+      }
+      return r;
     });
   }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines, subnetLatest, consensusMap, rawPayloads, taoUsd]);
 
