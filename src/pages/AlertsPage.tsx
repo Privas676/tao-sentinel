@@ -401,13 +401,13 @@ function renderStandardContent(ev: EventRow, fr: boolean) {
 function DelistWatchlistView({ fr }: { fr: boolean }) {
   const { scores, scoresList, sparklines, taoUsd } = useSubnetScores();
   const { delistMode } = useDelistMode();
+  const [compareMode, setCompareMode] = useState(false);
 
-  const delistResults = useMemo(() => {
+  const metricsForDelist: SubnetMetricsForDelist[] = useMemo(() => {
     if (!scoresList.length) return [];
-
-    const metricsForDelist: SubnetMetricsForDelist[] = scoresList.map(s => ({
+    return scoresList.map(s => ({
       netuid: s.netuid,
-      minersActive: 10, // placeholder — auto mode in hook uses real miners_active
+      minersActive: 10,
       liqTao: s.displayedLiq > 0 && taoUsd > 0 ? s.displayedLiq / taoUsd : 0,
       liqUsd: s.displayedLiq,
       capTao: s.displayedCap > 0 && taoUsd > 0 ? s.displayedCap / taoUsd : 0,
@@ -424,9 +424,37 @@ function DelistWatchlistView({ fr }: { fr: boolean }) {
       confianceData: s.confianceScore,
       liqHaircut: s.recalc?.liqHaircut ?? 0,
     }));
+  }, [scoresList, sparklines, taoUsd]);
 
+  const delistResults = useMemo(() => {
+    if (!metricsForDelist.length) return [];
     return evaluateAllDelistRisks(delistMode, metricsForDelist);
-  }, [scoresList, delistMode, sparklines, taoUsd]);
+  }, [metricsForDelist, delistMode]);
+
+  // Comparison data: Manual vs Auto side by side
+  const comparisonData = useMemo(() => {
+    if (!compareMode || !metricsForDelist.length) return [];
+    const manualResults = evaluateAllDelistRisks("manual", metricsForDelist);
+    const autoResults = evaluateAllDelistRisks("auto_taostats", metricsForDelist);
+
+    const manualMap = new Map(manualResults.map(r => [r.netuid, r]));
+    const autoMap = new Map(autoResults.map(r => [r.netuid, r]));
+
+    // Union of all netuids flagged by either mode
+    const allNetuids = new Set([...manualMap.keys(), ...autoMap.keys()]);
+    const rows = Array.from(allNetuids).map(netuid => ({
+      netuid,
+      manual: manualMap.get(netuid) ?? null,
+      auto: autoMap.get(netuid) ?? null,
+    }));
+    // Sort by max score descending
+    rows.sort((a, b) => {
+      const maxA = Math.max(a.manual?.score ?? 0, a.auto?.score ?? 0);
+      const maxB = Math.max(b.manual?.score ?? 0, b.auto?.score ?? 0);
+      return maxB - maxA;
+    });
+    return rows;
+  }, [compareMode, metricsForDelist]);
 
   const depegPriority = delistResults.filter(r => r.category === "DEPEG_PRIORITY");
   const nearDelist = delistResults.filter(r => r.category === "HIGH_RISK_NEAR_DELIST");
@@ -435,18 +463,30 @@ function DelistWatchlistView({ fr }: { fr: boolean }) {
     ? "Manual (Taoflute)"
     : delistMode === "auto_taostats" ? "Auto (Taostats)" : "Auto (TMC)";
 
-  if (depegPriority.length === 0 && nearDelist.length === 0) {
+  if (!compareMode && depegPriority.length === 0 && nearDelist.length === 0) {
     return (
-      <div className="text-center text-white/20 font-mono mt-10">
-        {fr ? "Aucun subnet en risque de delist détecté." : "No delist risk detected."}
+      <div>
+        <CompareToggle compareMode={compareMode} setCompareMode={setCompareMode} fr={fr} />
+        <div className="text-center text-white/20 font-mono mt-10">
+          {fr ? "Aucun subnet en risque de delist détecté." : "No delist risk detected."}
+        </div>
+      </div>
+    );
+  }
+
+  if (compareMode) {
+    return (
+      <div className="space-y-4">
+        <CompareToggle compareMode={compareMode} setCompareMode={setCompareMode} fr={fr} />
+        <ComparisonTable data={comparisonData} fr={fr} scores={scores} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Source badge */}
-      <div className="flex items-center gap-2">
+      {/* Source badge + Compare toggle */}
+      <div className="flex items-center gap-2 flex-wrap">
         <span className="font-mono text-[9px] px-2 py-0.5 rounded"
           style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.08)" }}>
           {fr ? "Source" : "Source"}: {modeLabel}
@@ -454,6 +494,7 @@ function DelistWatchlistView({ fr }: { fr: boolean }) {
         <span className="font-mono text-[9px] text-white/20">
           {depegPriority.length + nearDelist.length} subnets
         </span>
+        <CompareToggle compareMode={compareMode} setCompareMode={setCompareMode} fr={fr} />
       </div>
 
       {/* DEPEG PRIORITAIRE */}
@@ -483,6 +524,113 @@ function DelistWatchlistView({ fr }: { fr: boolean }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── Compare Toggle Button ─── */
+function CompareToggle({ compareMode, setCompareMode, fr }: { compareMode: boolean; setCompareMode: (v: boolean) => void; fr: boolean }) {
+  return (
+    <button
+      onClick={() => setCompareMode(!compareMode)}
+      className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider"
+      style={{
+        background: compareMode ? "rgba(156,39,176,0.12)" : "rgba(255,255,255,0.04)",
+        color: compareMode ? "rgba(156,39,176,0.9)" : "rgba(255,255,255,0.35)",
+        border: `1px solid ${compareMode ? "rgba(156,39,176,0.3)" : "rgba(255,255,255,0.08)"}`,
+      }}>
+      {compareMode ? "✕" : "⚖"} {fr ? "Comparaison" : "Compare"}
+    </button>
+  );
+}
+
+/* ─── Comparison Table ─── */
+function ComparisonTable({ data, fr, scores }: {
+  data: { netuid: number; manual: DelistRiskResult | null; auto: DelistRiskResult | null }[];
+  fr: boolean;
+  scores: Map<number, any>;
+}) {
+  const catBadge = (r: DelistRiskResult | null) => {
+    if (!r) return <span className="font-mono text-[9px] text-white/15">—</span>;
+    const col = delistCategoryColor(r.category);
+    return (
+      <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
+        style={{ color: col, background: col.replace(/[\d.]+\)$/, "0.1)"), border: `1px solid ${col.replace(/[\d.]+\)$/, "0.2)")}` }}>
+        {r.category === "DEPEG_PRIORITY" ? "DEPEG" : r.category === "HIGH_RISK_NEAR_DELIST" ? (fr ? "PROCHE" : "NEAR") : "OK"}
+      </span>
+    );
+  };
+
+  const scoreBadge = (r: DelistRiskResult | null) => {
+    if (!r) return <span className="font-mono text-sm text-white/10">—</span>;
+    const col = delistCategoryColor(r.category);
+    return <span className="font-mono text-sm font-bold" style={{ color: col }}>{r.score}</span>;
+  };
+
+  const matchIcon = (m: DelistRiskResult | null, a: DelistRiskResult | null) => {
+    if (!m && !a) return null;
+    if (m && a && m.category === a.category) return <span className="text-[10px]" title="Match">✅</span>;
+    if (m && !a) return <span className="text-[10px]" title={fr ? "Manuel uniquement" : "Manual only"}>📋</span>;
+    if (!m && a) return <span className="text-[10px]" title={fr ? "Auto uniquement" : "Auto only"}>🤖</span>;
+    return <span className="text-[10px]" title={fr ? "Différent" : "Mismatch"}>⚠️</span>;
+  };
+
+  // Stats
+  const matchCount = data.filter(d => d.manual && d.auto && d.manual.category === d.auto.category).length;
+  const manualOnly = data.filter(d => d.manual && !d.auto).length;
+  const autoOnly = data.filter(d => !d.manual && d.auto).length;
+  const mismatch = data.filter(d => d.manual && d.auto && d.manual.category !== d.auto.category).length;
+
+  return (
+    <div className="space-y-4">
+      {/* Stats bar */}
+      <div className="flex flex-wrap gap-2 font-mono text-[9px]">
+        <span className="px-2 py-0.5 rounded" style={{ background: "rgba(76,175,80,0.08)", color: "rgba(76,175,80,0.7)", border: "1px solid rgba(76,175,80,0.15)" }}>
+          ✅ {fr ? "Accord" : "Match"}: {matchCount}
+        </span>
+        <span className="px-2 py-0.5 rounded" style={{ background: "rgba(255,152,0,0.08)", color: "rgba(255,152,0,0.7)", border: "1px solid rgba(255,152,0,0.15)" }}>
+          ⚠️ {fr ? "Différent" : "Mismatch"}: {mismatch}
+        </span>
+        <span className="px-2 py-0.5 rounded" style={{ background: "rgba(156,39,176,0.08)", color: "rgba(156,39,176,0.7)", border: "1px solid rgba(156,39,176,0.15)" }}>
+          📋 {fr ? "Manuel seul" : "Manual only"}: {manualOnly}
+        </span>
+        <span className="px-2 py-0.5 rounded" style={{ background: "rgba(100,181,246,0.08)", color: "rgba(100,181,246,0.7)", border: "1px solid rgba(100,181,246,0.15)" }}>
+          🤖 {fr ? "Auto seul" : "Auto only"}: {autoOnly}
+        </span>
+      </div>
+
+      {/* Table header */}
+      <div className="grid grid-cols-[30px_80px_1fr_60px_70px_60px_70px] gap-1 font-mono text-[8px] tracking-widest text-white/25 px-2 pb-1"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <span></span>
+        <span>SUBNET</span>
+        <span>NAME</span>
+        <span className="text-center" style={{ color: "rgba(156,39,176,0.6)" }}>📋 SCORE</span>
+        <span className="text-center" style={{ color: "rgba(156,39,176,0.6)" }}>{fr ? "CATÉG." : "CATEG."}</span>
+        <span className="text-center" style={{ color: "rgba(100,181,246,0.6)" }}>🤖 SCORE</span>
+        <span className="text-center" style={{ color: "rgba(100,181,246,0.6)" }}>{fr ? "CATÉG." : "CATEG."}</span>
+      </div>
+
+      {/* Rows */}
+      <div className="space-y-0.5 max-h-[60vh] overflow-auto">
+        {data.map(({ netuid, manual, auto }) => {
+          const subnet = scores.get(netuid);
+          const name = subnet?.name || "";
+          return (
+            <div key={netuid}
+              className="grid grid-cols-[30px_80px_1fr_60px_70px_60px_70px] gap-1 items-center px-2 py-1.5 rounded-md transition-colors hover:bg-white/[0.02]"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
+              {matchIcon(manual, auto)}
+              <span className="font-mono text-[11px] text-white/60 font-bold">SN-{netuid}</span>
+              <span className="font-mono text-[9px] text-white/25 truncate">{name}</span>
+              <div className="text-center">{scoreBadge(manual)}</div>
+              <div className="text-center">{catBadge(manual)}</div>
+              <div className="text-center">{scoreBadge(auto)}</div>
+              <div className="text-center">{catBadge(auto)}</div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
