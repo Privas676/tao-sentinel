@@ -720,11 +720,11 @@ export default function AlienGauge() {
         </div>
         {/* Mode toggles */}
         <div className="flex items-center gap-2" style={{ paddingTop: isMobile ? 2 : 6 }}>
-          <button onClick={() => setViewMode("hunter")} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+          <button onClick={() => { setViewMode("hunter"); setBagBuilder(false); }} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
             style={{ fontSize: isMobile ? 9 : 11, fontWeight: 700, background: viewMode === "hunter" ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.03)", color: viewMode === "hunter" ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)", border: `1px solid ${viewMode === "hunter" ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.06)"}` }}>
             <span>🔥</span> {t("mode.hunter")}
           </button>
-          <button onClick={() => setViewMode("defensive")} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+          <button onClick={() => { setViewMode("defensive"); setBagBuilder(false); }} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
             style={{ fontSize: isMobile ? 9 : 11, fontWeight: 700, background: viewMode === "defensive" ? "rgba(229,57,53,0.1)" : "rgba(255,255,255,0.03)", color: viewMode === "defensive" ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.3)", border: `1px solid ${viewMode === "defensive" ? "rgba(229,57,53,0.25)" : "rgba(255,255,255,0.06)"}` }}>
             <span>🛡</span> {t("mode.defensive")}
           </button>
