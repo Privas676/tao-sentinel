@@ -1,6 +1,6 @@
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import {
@@ -33,7 +33,7 @@ import {
 /* ═══════════════════════════════════════ */
 /*        SPARKLINE COMPONENT              */
 /* ═══════════════════════════════════════ */
-function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: number; height?: number }) {
+const Sparkline = React.forwardRef<HTMLDivElement, { data: number[]; width?: number; height?: number }>(function Sparkline({ data, width = 64, height = 20 }, ref) {
   if (data.length < 2) return <span className="text-white/10 text-[9px]">—</span>;
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
@@ -62,7 +62,7 @@ function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: 
       </div>
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════ */
 /*        HEALTH PANEL COMPONENT            */
@@ -438,8 +438,8 @@ export default function SubnetsPage() {
   };
 
   return (
-    <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
-      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-5 sm:mb-7">{t("sub.title")}</h1>
+    <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14 pl-4 sm:pl-6">
+      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-5 sm:mb-7 ml-28">{t("sub.title")}</h1>
 
       {/* Filter row */}
       <div className="flex items-center gap-3 mb-6">
