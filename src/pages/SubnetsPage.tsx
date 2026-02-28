@@ -366,7 +366,7 @@ export default function SubnetsPage() {
     const oppPercentile = normalizeOpportunity(allRows.map(r => r.oppRaw));
     const riskPercentile = normalizeWithVariance(allRows.map(r => r.riskRaw), 3);
 
-    return allRows.map((r, i) => {
+    const finalRows = allRows.map((r, i) => {
       // Blend: 60% raw (clamped 0-100) + 40% percentile rank
       let oppBlend = clamp(Math.round(r.oppRaw * 0.6 + oppPercentile[i] * 0.4), 5, 98);
       let riskBlend = clamp(Math.round(r.riskRaw * 0.6 + riskPercentile[i] * 0.4), 0, 100);
@@ -377,8 +377,15 @@ export default function SubnetsPage() {
         oppBlend = 0;
       }
 
-      // Risk Override
-      const override = evaluateRiskOverride({ state: r.state, psi: r.psi, risk: riskBlend, quality: r.quality });
+      // Risk Override v2: pass hard-condition metrics
+      const slMetrics = subnetLatest?.get(r.netuid);
+      const volMcRatio = (slMetrics?.volCap != null) ? slMetrics.volCap : undefined;
+      const override = evaluateRiskOverride({
+        netuid: r.netuid, state: r.state, psi: r.psi, risk: riskBlend, quality: r.quality,
+        liquidityUsd: r.displayedLiq > 0 ? r.displayedLiq : undefined,
+        volumeMcRatio: volMcRatio,
+        taoInPool: slMetrics?.liq,
+      });
       if (override.isOverridden) oppBlend = 0;
 
       // ── CALIBRATION: floor + critical override (top-rank applied post-sort) ──
@@ -408,6 +415,7 @@ export default function SubnetsPage() {
         dataUncertain: r.dataUncertain,
         spark: sparklines?.get(r.netuid) || [],
         isOverridden: override.isOverridden,
+        isWarning: override.isWarning,
         systemStatus: override.systemStatus,
         overrideReasons: override.overrideReasons,
         healthScores: r.healthScores,
@@ -440,6 +448,16 @@ export default function SubnetsPage() {
       }
       return r;
     });
+
+    // Override distribution audit
+    if (finalRows.length >= 5) {
+      const overrideCount = finalRows.filter(r => r.isOverridden).length;
+      const warningCount = finalRows.filter(r => r.isWarning && !r.isOverridden).length;
+      const pct = Math.round((overrideCount / finalRows.length) * 100);
+      console.log(`[OVERRIDE-DIST] n=${finalRows.length} overrides=${overrideCount} (${pct}%) warnings=${warningCount}`);
+    }
+
+    return finalRows;
   }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines, subnetLatest, consensusMap, rawPayloads, taoUsd]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
@@ -521,8 +539,16 @@ export default function SubnetsPage() {
                     <span>{r.name}</span>
                     {r.isOverridden && (
                       <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider"
-                        style={{ background: "rgba(229,57,53,0.12)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.25)" }}>
-                        ⛔ CRITIQUE – Override
+                        style={{ background: "rgba(229,57,53,0.12)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.25)" }}
+                        title={r.overrideReasons.join(' • ')}>
+                        ⛔ OVERRIDE ({r.overrideReasons.length} raisons)
+                      </span>
+                    )}
+                    {r.isWarning && !r.isOverridden && (
+                      <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] tracking-wider"
+                        style={{ background: "rgba(255,193,7,0.10)", color: "rgba(255,193,7,0.9)", border: "1px solid rgba(255,193,7,0.25)" }}
+                        title={r.overrideReasons.join(' • ')}>
+                        ⚠ Warning
                       </span>
                     )}
                     {r.dataUncertain && !r.isOverridden && (

@@ -375,7 +375,7 @@ export default function PortfolioPage() {
       const isBreak = state === "BREAK" || state === "EXIT_FAST";
       if (isBreak || state === "DEPEG_WARNING" || state === "DEPEG_CRITICAL") oppRaw = 0;
 
-      const override = evaluateRiskOverride({ state, psi, risk: riskRaw, quality });
+      const override = evaluateRiskOverride({ netuid, state, psi, risk: riskRaw, quality });
       if (override.isOverridden) oppRaw = 0;
 
       // ── CALIBRATION: floor + critical override ──
