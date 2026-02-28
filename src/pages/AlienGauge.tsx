@@ -53,19 +53,64 @@ function TooltipSparkline({ data, width, height, color }: { data: number[]; widt
 /*     STRATEGIC RECOMMENDATION BADGE      */
 /* ═══════════════════════════════════════ */
 function StrategicBadge({ action, label, isMobile }: { action: "ENTER" | "WATCH" | "EXIT"; label: string; isMobile: boolean }) {
+  const prevActionRef = useRef(action);
+  const [morphing, setMorphing] = useState(false);
+  const [displayAction, setDisplayAction] = useState(action);
+  const [displayLabel, setDisplayLabel] = useState(label);
+
+  useEffect(() => {
+    if (action !== prevActionRef.current) {
+      // Start morph-out
+      setMorphing(true);
+      const timer = setTimeout(() => {
+        // Swap to new state mid-animation
+        setDisplayAction(action);
+        setDisplayLabel(label);
+        prevActionRef.current = action;
+        // Morph-in after a brief flash
+        const timer2 = setTimeout(() => setMorphing(false), 80);
+        return () => clearTimeout(timer2);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setDisplayAction(action);
+      setDisplayLabel(label);
+    }
+  }, [action, label]);
+
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all" style={{
-      background: actionBg(action),
-      border: `1.5px solid ${actionBorder(action)}`,
-      boxShadow: `0 0 25px ${actionBg(action)}, 0 0 50px ${actionBg(action)}`,
-      animation: action === "EXIT" ? "priority-pulse 2s ease-in-out infinite" : action === "ENTER" ? "priority-pulse 3s ease-in-out infinite" : "none",
-    }}>
-      <span style={{ fontSize: isMobile ? 16 : 22 }}>{actionIcon(action)}</span>
-      <span className="font-mono font-bold tracking-[0.2em]" style={{
-        color: actionColor(action),
-        fontSize: isMobile ? 14 : 20,
+    <div
+      className="flex items-center gap-2 px-4 py-2.5 rounded-xl"
+      style={{
+        background: actionBg(displayAction),
+        border: `1.5px solid ${actionBorder(displayAction)}`,
+        boxShadow: `0 0 25px ${actionBg(displayAction)}, 0 0 50px ${actionBg(displayAction)}`,
+        animation: displayAction === "EXIT" ? "priority-pulse 2s ease-in-out infinite" : displayAction === "ENTER" ? "priority-pulse 3s ease-in-out infinite" : "none",
+        transition: "background 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease",
+        transform: morphing ? "scale(0.88)" : "scale(1)",
+        opacity: morphing ? 0 : 1,
+        filter: morphing ? "blur(4px) brightness(1.8)" : "blur(0) brightness(1)",
+        transitionProperty: "background, border-color, box-shadow, transform, opacity, filter",
+        transitionDuration: "0.5s, 0.5s, 0.5s, 0.3s, 0.3s, 0.3s",
+        transitionTimingFunction: "ease, ease, ease, cubic-bezier(0.34,1.56,0.64,1), ease, ease",
+      }}
+    >
+      <span style={{
+        fontSize: isMobile ? 16 : 22,
+        transition: "transform 0.4s cubic-bezier(0.34,1.56,0.64,1)",
+        transform: morphing ? "rotate(180deg) scale(0)" : "rotate(0deg) scale(1)",
+        display: "inline-block",
       }}>
-        {label}
+        {actionIcon(displayAction)}
+      </span>
+      <span className="font-mono font-bold tracking-[0.2em]" style={{
+        color: actionColor(displayAction),
+        fontSize: isMobile ? 14 : 20,
+        transition: "color 0.5s ease, transform 0.3s ease, opacity 0.3s ease",
+        transform: morphing ? "translateY(6px)" : "translateY(0)",
+        opacity: morphing ? 0 : 1,
+      }}>
+        {displayLabel}
       </span>
     </div>
   );
@@ -133,10 +178,12 @@ function BestSubnetCard({ signal, isMobile, t, onClick, mode }: { signal: Subnet
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md" style={{
           background: actionBg(action),
           border: `1px solid ${actionBorder(action)}`,
+          transition: "all 0.5s ease",
         }}>
-          <span style={{ fontSize: isMobile ? 10 : 12 }}>{actionIcon(action)}</span>
+          <span style={{ fontSize: isMobile ? 10 : 12, transition: "transform 0.4s cubic-bezier(0.34,1.56,0.64,1)", display: "inline-block" }}>{actionIcon(action)}</span>
           <span className="font-mono font-bold tracking-wider" style={{
             color: actionColor(action), fontSize: isMobile ? 9 : 11,
+            transition: "color 0.5s ease",
           }}>
             {t(`strat.${action.toLowerCase()}` as any)}
           </span>
