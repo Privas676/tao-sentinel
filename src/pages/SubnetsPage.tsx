@@ -372,7 +372,7 @@ export default function SubnetsPage() {
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: r.asymmetry > 20 ? "rgba(76,175,80,0.8)" : r.asymmetry > 0 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)" }}>
                     {r.asymmetry > 0 ? "+" : ""}{r.asymmetry}
                   </td>
-                  <td className="py-3 px-2 text-center">
+                  <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] tracking-wider font-bold"
                       style={{
                         color: actionColor(r.action),
@@ -406,7 +406,7 @@ export default function SubnetsPage() {
                       🔬
                     </button>
                   </td>
-                  <td className="py-3 px-2 text-center">
+                  <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
                     {r.owned ? (
                       <span style={{ color: "rgba(76,175,80,0.8)", fontSize: 14 }}>✔</span>
                     ) : (
