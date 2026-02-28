@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
-import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
+import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import {
   deriveMomentumLabel, momentumColor, computeMomentumScore,
   opportunityColor, riskColor, clamp,
@@ -310,6 +310,8 @@ export default function SubnetsPage() {
                 ? "STAKER"
                 : r.action === "NEUTRAL"
                 ? "NEUTRE"
+                : r.action === "HOLD"
+                ? "HOLD"
                 : t(`strat.${r.action.toLowerCase()}` as any);
               return (
                 <tr key={r.netuid}
@@ -322,10 +324,10 @@ export default function SubnetsPage() {
                   <td className="py-3 px-2 text-white/55 text-sm">{r.netuid}</td>
                   <td className="py-3 px-2 text-sm" style={{ color: isTop1 ? "rgba(255,248,220,0.95)" : r.isOverridden ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.75)", fontWeight: isTop1 ? 700 : 400 }}>
                     <span>{r.name}</span>
-                    {r.assetType === "CORE_NETWORK" && (
+                    {SPECIAL_SUBNETS[r.netuid] && (
                       <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider"
                         style={{ background: "rgba(100,181,246,0.10)", color: "rgba(100,181,246,0.9)", border: "1px solid rgba(100,181,246,0.25)" }}>
-                        🏗 CORE NETWORK
+                        🔷 {SPECIAL_SUBNETS[r.netuid].label}
                       </span>
                     )}
                     {r.isOverridden && (
