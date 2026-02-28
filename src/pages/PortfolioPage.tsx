@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
@@ -13,7 +13,7 @@ import { toast } from "sonner";
 /* ═══════════════════════════════════════ */
 /*        SPARKLINE COMPONENT              */
 /* ═══════════════════════════════════════ */
-function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: number; height?: number }) {
+const Sparkline = React.forwardRef<HTMLDivElement, { data: number[]; width?: number; height?: number }>(function Sparkline({ data, width = 64, height = 20 }, ref) {
   if (data.length < 2) return <span className="text-white/10 text-[9px]">—</span>;
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
@@ -42,7 +42,7 @@ function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: 
       </div>
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════ */
 /*        TYPES                            */
