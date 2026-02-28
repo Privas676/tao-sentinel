@@ -43,6 +43,8 @@ export type RecalculatedMetrics = {
   emissionToMc: number;
   liquidityRecalc: number;
   liquidityToMc: number;
+  liqHaircut: number;      // % difference: (poolPrice - spotPrice) / spotPrice * 100
+  poolPrice: number;       // implied price from pool reserves (taoInPool / alphaInPool)
 };
 
 export type HealthScores = {
@@ -144,24 +146,27 @@ export function recalculate(data: SubnetHealthData): RecalculatedMetrics {
     ? data.circulatingSupply * data.alphaPrice * data.taoUsd
     : data.marketCap * data.taoUsd;
 
-  // FDV recalc: totalSupply * alphaPrice * taoUsd
   const fdvRecalc = data.totalSupply > 0
     ? data.totalSupply * data.alphaPrice * data.taoUsd
-    : mcRecalc; // fallback to MC if no total supply
+    : mcRecalc;
 
   const dilutionRatio = mcRecalc > 0 ? fdvRecalc / mcRecalc : 1;
-  // Volume in USD / MC in USD
   const volumeToMc = mcRecalc > 0 ? (data.vol24h * data.taoUsd) / mcRecalc : 0;
   const emissionToMc = mcRecalc > 0
     ? (data.emissionPerDay * data.alphaPrice * data.taoUsd) / mcRecalc
     : 0;
-  // Liquidity recalc: TAO in pool * taoUsd * 2 (standard AMM)
   const liquidityRecalc = data.taoInPool > 0
     ? data.taoInPool * data.taoUsd * 2
     : data.liquidityUsd;
   const liquidityToMc = mcRecalc > 0 ? liquidityRecalc / mcRecalc : 0;
 
-  return { mcRecalc, fdvRecalc, dilutionRatio, volumeToMc, emissionToMc, liquidityRecalc, liquidityToMc };
+  // Liq Haircut: pool implied price vs spot price
+  const poolPrice = data.alphaInPool > 0 ? data.taoInPool / data.alphaInPool : 0;
+  const liqHaircut = data.alphaPrice > 0 && poolPrice > 0
+    ? ((poolPrice - data.alphaPrice) / data.alphaPrice) * 100
+    : 0;
+
+  return { mcRecalc, fdvRecalc, dilutionRatio, volumeToMc, emissionToMc, liquidityRecalc, liquidityToMc, liqHaircut, poolPrice };
 }
 
 /* ─── Health Metrics (Section 4) ─── */

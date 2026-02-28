@@ -83,6 +83,7 @@ function HealthPanel({ health, onClose }: {
           <Row label="Volume/MC" value={`${(recalc.volumeToMc * 100).toFixed(2)}%`} />
           <Row label="Emission/MC" value={`${(recalc.emissionToMc * 100).toFixed(3)}%/j`} warn={recalc.emissionToMc > 0.005} />
           <Row label="Liq/MC" value={`${(recalc.liquidityToMc * 100).toFixed(2)}%`} warn={recalc.liquidityToMc < 0.003} />
+          <Row label="Liq Haircut" value={`${recalc.liqHaircut > 0 ? "+" : ""}${recalc.liqHaircut.toFixed(2)}%`} sub={recalc.poolPrice > 0 ? `Pool: ${recalc.poolPrice.toFixed(5)}τ` : undefined} warn={Math.abs(recalc.liqHaircut) > 5} />
           {liqDiv > 5 && <Row label="Liq divergence" value={`${liqDiv.toFixed(1)}%`} warn={true} />}
         </div>
         <div className="space-y-1.5 pt-2 border-t border-white/5">
