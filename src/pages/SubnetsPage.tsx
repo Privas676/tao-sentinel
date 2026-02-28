@@ -17,6 +17,27 @@ import {
 import { usePositions } from "@/hooks/use-positions";
 import { useAuth } from "@/hooks/use-auth";
 
+/* ═══════════════════════════════════════ */
+/*        SPARKLINE COMPONENT              */
+/* ═══════════════════════════════════════ */
+function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: number; height?: number }) {
+  if (data.length < 2) return <span className="text-white/10 text-[9px]">—</span>;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const trend = data[data.length - 1] - data[0];
+  const color = trend > 0 ? "rgba(76,175,80,0.7)" : trend < 0 ? "rgba(229,57,53,0.7)" : "rgba(255,255,255,0.3)";
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - 1 - ((v - min) / range) * (height - 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return (
+    <svg width={width} height={height} className="inline-block">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 type SignalRow = {
   netuid: number | null;
   subnet_name: string | null;
@@ -152,6 +173,28 @@ export default function SubnetsPage() {
     refetchInterval: 120_000,
   });
 
+  // 7-day price sparklines
+  const { data: sparklines } = useQuery({
+    queryKey: ["sparklines-7d"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 8 * 86400_000).toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from("subnet_price_daily")
+        .select("netuid, date, price_close")
+        .gte("date", since)
+        .order("date", { ascending: true });
+      if (error) throw error;
+      const map = new Map<number, number[]>();
+      for (const r of data || []) {
+        if (r.price_close == null) continue;
+        if (!map.has(r.netuid)) map.set(r.netuid, []);
+        map.get(r.netuid)!.push(Number(r.price_close));
+      }
+      return map;
+    },
+    refetchInterval: 300_000,
+  });
+
   const rows = useMemo(() => {
     if (!signals) return [];
     return signals
@@ -195,6 +238,7 @@ export default function SubnetsPage() {
           state: s.state,
           psi, conf, opp, risk, asymmetry,
           momentumLabel, action, sc, owned, confianceScore,
+          spark: sparklines?.get(s.netuid!) || [],
         };
       })
       .filter(r => {
@@ -204,7 +248,7 @@ export default function SubnetsPage() {
         return true;
       })
       .sort((a, b) => b.asymmetry - a.asymmetry);
-  }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids]);
+  }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
@@ -250,6 +294,7 @@ export default function SubnetsPage() {
             <tr className="border-b border-white/10 text-white/40">
               <th className="text-left py-3 px-2">SN</th>
               <th className="text-left py-3 px-2">{t("sub.name")}</th>
+              <th className="text-center py-3 px-2">{t("tip.price7d")}</th>
               <th className="text-right py-3 px-2">{t("sub.opp")}</th>
               <th className="text-right py-3 px-2">{t("sub.risk")}</th>
               <th className="text-right py-3 px-2">AS</th>
@@ -276,6 +321,7 @@ export default function SubnetsPage() {
                   onClick={() => window.open(`https://taostats.io/subnets/${r.netuid}`, "_blank")}>
                   <td className="py-3 px-2 text-white/55 text-sm">{r.netuid}</td>
                   <td className="py-3 px-2 text-sm" style={{ color: isTop1 ? "rgba(255,248,220,0.95)" : "rgba(255,255,255,0.75)", fontWeight: isTop1 ? 700 : 400 }}>{r.name}</td>
+                  <td className="py-3 px-2 text-center"><Sparkline data={r.spark} /></td>
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: oppC }}>{r.opp}</td>
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: rskC }}>{r.risk}</td>
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: r.asymmetry > 20 ? "rgba(76,175,80,0.8)" : r.asymmetry > 0 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)" }}>
