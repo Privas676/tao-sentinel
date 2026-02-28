@@ -205,14 +205,14 @@ export function useSubnetScores(): UnifiedScoresResult {
   const { data: subnetLatest } = useQuery({
     queryKey: ["unified-subnet-latest"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("subnet_latest").select("netuid, vol_cap, top_miners_share, liquidity, cap");
+      const { data, error } = await supabase.from("subnet_latest").select("netuid, vol_cap, top_miners_share, liquidity, cap, miners_active, price");
       if (error) throw error;
-      const map = new Map<number, { volCap: number; topMinersShare: number; liqRatio: number; cap: number; liq: number }>();
+      const map = new Map<number, { volCap: number; topMinersShare: number; liqRatio: number; cap: number; liq: number; minersActive: number; price: number }>();
       for (const r of data || []) {
         if (r.netuid == null) continue;
         const cap = Number(r.cap) || 0;
         const liq = Number(r.liquidity) || 0;
-        map.set(r.netuid, { volCap: Number(r.vol_cap) || 0, topMinersShare: Number(r.top_miners_share) || 0, liqRatio: cap > 0 ? liq / cap : 0, cap, liq });
+        map.set(r.netuid, { volCap: Number(r.vol_cap) || 0, topMinersShare: Number(r.top_miners_share) || 0, liqRatio: cap > 0 ? liq / cap : 0, cap, liq, minersActive: Number(r.miners_active) || 0, price: Number(r.price) || 0 });
       }
       return map;
     },
@@ -465,9 +465,11 @@ export function useSubnetScores(): UnifiedScoresResult {
             : null;
           const autoResult = computeDelistRiskScore({
             netuid: r.netuid,
-            minersActive: slm ? (r.healthScores.activityHealth > 50 ? 20 : r.healthScores.activityHealth > 20 ? 5 : 0) : 10,
+            minersActive: slm?.minersActive ?? 10,
             liqTao,
             liqUsd: r.displayedLiq,
+            capTao: slm?.cap ?? 0,
+            alphaPrice: slm?.price ?? 0,
             volMcRatio: volMcRatioAuto,
             psi: r.psi, quality: r.quality, state: r.state,
             priceChange7d,

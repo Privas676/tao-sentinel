@@ -47,6 +47,9 @@ const REASON_DEFS: Record<string, Omit<DelistReason, "value" | "weight"> & { wei
   DATA_DIVERGENCE:     { code: "DATA_DIVERGENCE",     label: "Extreme divergence",   labelFr: "Divergence extrême",   weight: 7,  color: "rgba(255,152,0,0.7)" },
   SLIPPAGE_HIGH:       { code: "SLIPPAGE_HIGH",       label: "Slippage high",        labelFr: "Slippage élevé",       weight: 8,  color: "rgba(229,57,53,0.7)" },
   SPREAD_HIGH:         { code: "SPREAD_HIGH",         label: "Spread high",          labelFr: "Spread élevé",         weight: 6,  color: "rgba(255,152,0,0.7)" },
+  MICRO_PRICE:         { code: "MICRO_PRICE",         label: "Micro price",          labelFr: "Prix micro",           weight: 15, color: "rgba(229,57,53,0.85)" },
+  CAP_CONCENTRATED:    { code: "CAP_CONCENTRATED",    label: "Cap = Pool",           labelFr: "Cap ≈ Pool",           weight: 10, color: "rgba(255,152,0,0.8)" },
+  SMALL_CAP:           { code: "SMALL_CAP",           label: "Small cap",            labelFr: "Cap faible",           weight: 8,  color: "rgba(255,193,7,0.8)" },
 };
 
 function makeReason(code: string, value?: number): DelistReason {
@@ -61,6 +64,8 @@ export type SubnetMetricsForDelist = {
   minersActive: number;
   liqTao: number;         // TAO in pool
   liqUsd: number;         // liquidity in USD
+  capTao: number;         // market cap in TAO
+  alphaPrice: number;     // alpha token price in TAO
   volMcRatio: number;     // vol_24h / cap
   psi: number;            // MPI/PSI score
   quality: number;        // quality score
@@ -151,6 +156,36 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
   // 10. Combined weakness: low quality + low PSI = zombie subnet
   if (sn.psi < 30 && sn.quality < 30) {
     totalWeight += 8;
+  }
+
+  // 11. Micro price: alpha token nearly worthless (< 0.005 TAO ≈ $0.90)
+  if (sn.alphaPrice > 0 && sn.alphaPrice < 0.005) {
+    reasons.push(makeReason("MICRO_PRICE", sn.alphaPrice));
+    totalWeight += 15;
+  } else if (sn.alphaPrice > 0 && sn.alphaPrice < 0.008) {
+    reasons.push(makeReason("MICRO_PRICE", sn.alphaPrice));
+    totalWeight += 8;
+  }
+
+  // 12. Cap concentration: pool IS the market (liq/cap > 0.75)
+  if (sn.capTao > 0 && sn.liqTao > 0) {
+    const liqCapRatio = sn.liqTao / sn.capTao;
+    if (liqCapRatio > 0.85) {
+      reasons.push(makeReason("CAP_CONCENTRATED", Math.round(liqCapRatio * 100)));
+      totalWeight += 12;
+    } else if (liqCapRatio > 0.7) {
+      reasons.push(makeReason("CAP_CONCENTRATED", Math.round(liqCapRatio * 100)));
+      totalWeight += 8;
+    }
+  }
+
+  // 13. Small cap (< 20,000 TAO ≈ $3.7M)
+  if (sn.capTao > 0 && sn.capTao < 10_000) {
+    reasons.push(makeReason("SMALL_CAP", Math.round(sn.capTao)));
+    totalWeight += 10;
+  } else if (sn.capTao > 0 && sn.capTao < 20_000) {
+    reasons.push(makeReason("SMALL_CAP", Math.round(sn.capTao)));
+    totalWeight += 6;
   }
 
   // Score: clamp to 0–100
