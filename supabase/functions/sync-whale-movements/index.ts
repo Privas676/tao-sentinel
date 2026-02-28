@@ -6,9 +6,10 @@ const corsHeaders = {
 };
 
 const RAO = 1e9;
-const MIN_TAO = 100; // alert threshold
-const MAX_RETRIES = 4;
-const REQUEST_DELAY_MS = 2000; // 2s between each sequential request
+const MIN_TAO = 100;
+const MAX_RETRIES = 3;
+const KEYS_PER_RUN = 5; // process 5 coldkeys per invocation (round-robin)
+const REQUEST_DELAY_MS = 3000; // 3s between requests
 
 /** Fetch with exponential backoff retry on 429 */
 async function fetchWithRetry(
@@ -19,19 +20,20 @@ async function fetchWithRetry(
   for (let attempt = 0; attempt <= retries; attempt++) {
     const res = await fetch(url, options);
     if (res.status === 429 && attempt < retries) {
-      await res.text(); // consume body
-      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 15000);
+      await res.text();
+      const retryAfter = res.headers.get("retry-after");
+      const delay = retryAfter
+        ? Number(retryAfter) * 1000
+        : Math.min(2000 * Math.pow(2, attempt) + Math.random() * 1000, 20000);
       console.log(`429 rate-limited, retry ${attempt + 1}/${retries} in ${Math.round(delay)}ms`);
       await new Promise((r) => setTimeout(r, delay));
       continue;
     }
     return res;
   }
-  // unreachable, but TS needs it
   return await fetch(url, options);
 }
 
-/** Sleep helper */
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 Deno.serve(async (req) => {
@@ -45,10 +47,11 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("TAOSTATS_API_KEY")!;
     const headers = { Authorization: apiKey, Accept: "application/json" };
 
-    // Get all tracked coldkeys
+    // Get all tracked coldkeys ordered by id for stable round-robin
     const { data: coldkeys, error: ckErr } = await sb
       .from("whale_coldkeys")
-      .select("address, label");
+      .select("id, address, label")
+      .order("id", { ascending: true });
     if (ckErr) throw new Error(`Failed to fetch coldkeys: ${ckErr.message}`);
     if (!coldkeys || coldkeys.length === 0) {
       return new Response(JSON.stringify({ ok: true, message: "No coldkeys to track" }), {
@@ -56,16 +59,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Look back 10 minutes
-    const since = Math.floor((Date.now() - 20 * 60_000) / 1000); // 20min lookback (cron every 15min)
+    // Round-robin: use minute-of-hour to pick a rotating slice
+    const minuteOfHour = new Date().getMinutes();
+    const totalSlices = Math.ceil(coldkeys.length / KEYS_PER_RUN);
+    const sliceIndex = Math.floor(minuteOfHour / 15) % totalSlices; // changes every 15min
+    const start = sliceIndex * KEYS_PER_RUN;
+    const batch = coldkeys.slice(start, start + KEYS_PER_RUN);
+
+    console.log(`Processing slice ${sliceIndex + 1}/${totalSlices}: ${batch.length} coldkeys (ids ${batch.map(c => c.id).join(",")})`);
+
+    // Look back 90 minutes to cover full rotation (5 slices × 15min + margin)
+    const since = Math.floor((Date.now() - 90 * 60_000) / 1000);
     const minRao = String(MIN_TAO * RAO);
 
     let totalInserted = 0;
     let totalEvents = 0;
 
-    // Process coldkeys sequentially to respect rate limits
-    for (let i = 0; i < coldkeys.length; i++) {
-      const ck = coldkeys[i];
+    for (let i = 0; i < batch.length; i++) {
+      const ck = batch[i];
       if (i > 0) await sleep(REQUEST_DELAY_MS);
 
       try {
@@ -73,13 +84,14 @@ Deno.serve(async (req) => {
         const res = await fetchWithRetry(url, { headers });
 
         if (!res.ok) {
-          console.error(`Taostats error ${ck.address}: ${res.status} after retries`);
+          console.error(`Taostats error ${ck.label || ck.address.slice(0, 8)}: ${res.status}`);
           await res.text();
           continue;
         }
 
         const json = await res.json();
         const transfers = json.data || [];
+        console.log(`${ck.label || ck.address.slice(0, 8)}: ${transfers.length} transfers`);
 
         for (const tx of transfers) {
           const txHash = tx.extrinsic_id || tx.id || null;
@@ -128,13 +140,13 @@ Deno.serve(async (req) => {
           else totalEvents++;
         }
       } catch (e) {
-        console.error(`Error processing ${ck.address}:`, e);
+        console.error(`Error processing ${ck.label || ck.address.slice(0, 8)}:`, e);
       }
     }
 
-    console.log(`Whale sync done: ${totalInserted} movements, ${totalEvents} events`);
+    console.log(`Whale sync done: ${totalInserted} movements, ${totalEvents} events (slice ${sliceIndex + 1}/${totalSlices})`);
     return new Response(
-      JSON.stringify({ ok: true, movements: totalInserted, events: totalEvents }),
+      JSON.stringify({ ok: true, movements: totalInserted, events: totalEvents, slice: sliceIndex + 1, totalSlices }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
