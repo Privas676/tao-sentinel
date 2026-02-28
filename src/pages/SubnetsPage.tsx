@@ -72,35 +72,31 @@ type SignalRow = {
 
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
 
-/* ─── Scoring functions (Section 3) ─── */
+/* ─── Scoring functions (Section 3 — LINEAR for spread) ─── */
 function deriveOpp(psi: number, conf: number, quality: number, state: string | null): number {
   let opp = 0;
-  opp += (psi / 100) * (psi / 100) * 30;
-  opp += clamp(quality * 0.25, 0, 25);
-  opp += clamp(conf * 0.20, 0, 20);
-  opp += clamp(psi * 0.15, 0, 15);
-  if (state === "GO") opp += 10;
-  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 7;
+  opp += psi * 0.35;
+  opp += quality * 0.25;
+  opp += conf * 0.20;
+  if (state === "GO") opp += 15;
+  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 8;
   else if (state === "WATCH") opp += 3;
-  if (state === "BREAK" || state === "EXIT_FAST") opp -= 15;
-  if (psi >= 60 && quality >= 60) opp += 5;
-  if (psi < 30) opp -= 8;
+  else if (state === "HOLD") opp -= 3;
+  if (state === "BREAK" || state === "EXIT_FAST") opp -= 25;
+  if (psi < 30) opp -= 10;
   return Math.round(clamp(opp, 0, 100));
 }
 
 function deriveRisk(psi: number, conf: number, quality: number, state: string | null, dataUncertain = false): number {
   let risk = 0;
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 35;
+  risk += (100 - quality) * 0.30;
+  risk += (100 - conf) * 0.25;
+  risk += (100 - psi) * 0.15;
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 25;
   else if (state === "HOLD") risk += 5;
-  const qualDeficit = (100 - quality) / 100;
-  risk += qualDeficit * qualDeficit * 25;
-  const confDeficit = (100 - conf) / 100;
-  risk += confDeficit * confDeficit * 20;
-  if (psi >= 80 && quality < 50) risk += 15;
-  if (psi >= 90 && quality < 40) risk += 8;
-  if (psi < 25) risk += 8;
+  if (psi >= 80 && quality < 50) risk += 12;
+  if (psi < 25) risk += 10;
   if (psi >= 40 && psi <= 60 && conf < 40) risk += 5;
-  // DATA_UNCERTAIN penalty (Section 3.2)
   if (dataUncertain) risk += 10;
   return Math.round(clamp(risk, 0, 100));
 }
@@ -266,8 +262,8 @@ export default function SubnetsPage() {
     // Batch normalize (Section 2)
     const oppRaws = allRows.map(r => deriveOpp(r.psi, r.conf, r.quality, r.state));
     const riskRaws = allRows.map(r => deriveRisk(r.psi, r.conf, r.quality, r.state, r.dataUncertain));
-    const oppNorm = normalizeWithVariance(oppRaws, 6);
-    const riskNorm = normalizeWithVariance(riskRaws, 6);
+    const oppNorm = normalizeWithVariance(oppRaws, 3);
+    const riskNorm = normalizeWithVariance(riskRaws, 3);
 
     return allRows.map((r, i) => {
       let opp = oppNorm[i];
