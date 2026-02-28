@@ -5,8 +5,8 @@ import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
 import {
-  deriveGaugeState, derivePhase, deriveTMinus, formatTimeClear, stateColor,
-  GaugeState, GaugePhase, opportunityColor, riskColor, clamp,
+  deriveGaugeState, derivePhase, deriveMomentumLabel, momentumColor,
+  opportunityColor, riskColor, clamp,
 } from "@/lib/gauge-engine";
 import {
   deriveStrategicAction, actionColor, actionBg, actionBorder, actionIcon,
@@ -75,15 +75,12 @@ export default function SubnetsPage() {
         const psi = s.mpi ?? s.score ?? 0;
         const conf = s.confidence_pct ?? 0;
         const quality = s.quality_score ?? 0;
-        const isBreak = s.state === "BREAK" || s.state === "EXIT_FAST";
-        const state = deriveGaugeState(psi, conf, isBreak);
-        const phase = derivePhase(psi);
-        const tMinus = deriveTMinus(psi);
         const opp = deriveOpp(psi, conf, quality, s.state);
         const risk = deriveRisk(psi, conf, quality, s.state);
         const asymmetry = opp - risk;
+        const momentumLabel = deriveMomentumLabel(psi);
         const action = deriveStrategicAction(opp, risk, "ACCUMULATION", conf, strategyMode);
-        return { netuid: s.netuid!, name: s.subnet_name || `SN-${s.netuid}`, psi, conf, state, phase, tMinus, opp, risk, asymmetry, action };
+        return { netuid: s.netuid!, name: s.subnet_name || `SN-${s.netuid}`, psi, conf, opp, risk, asymmetry, momentumLabel, action };
       })
       .filter(r => {
         if (mode === "opportunities") return r.opp > r.risk;
@@ -105,7 +102,6 @@ export default function SubnetsPage() {
 
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        {/* View mode selector */}
         <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {modeOptions.map(opt => (
             <button key={opt.value}
@@ -121,7 +117,6 @@ export default function SubnetsPage() {
           ))}
         </div>
 
-        {/* Strategy mode selector */}
         <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {STRATEGY_MODES.map(sm => (
             <button key={sm.value}
@@ -150,7 +145,7 @@ export default function SubnetsPage() {
               <th className="text-right py-3 px-3">{t("sub.risk")}</th>
               <th className="text-right py-3 px-3">ASYM</th>
               <th className="text-center py-3 px-3">ACTION</th>
-              <th className="text-right py-3 px-3">{t("sub.tminus")}</th>
+              <th className="text-center py-3 px-3">{t("sub.momentum")}</th>
               <th className="text-right py-3 px-3">{t("sub.confidence")}</th>
               {user && <th className="text-center py-3 px-3"></th>}
             </tr>
@@ -160,6 +155,7 @@ export default function SubnetsPage() {
               const oppC = opportunityColor(r.opp);
               const rskC = riskColor(r.risk);
               const isTop1 = idx === 0;
+              const momColor = momentumColor(r.momentumLabel);
               return (
                 <tr key={r.netuid}
                   className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors cursor-pointer"
@@ -186,7 +182,11 @@ export default function SubnetsPage() {
                       {t(`strat.${r.action.toLowerCase()}` as any)}
                     </span>
                   </td>
-                  <td className="py-3 px-3 text-right text-white/55 text-sm">{formatTimeClear(r.tMinus)}</td>
+                  <td className="py-3 px-3 text-center">
+                    <span className="font-mono text-[11px] font-bold" style={{ color: momColor }}>
+                      {r.momentumLabel}
+                    </span>
+                  </td>
                   <td className="py-3 px-3 text-right text-white/55 text-sm">{r.conf}%</td>
                   {user && (
                     <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>

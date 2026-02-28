@@ -5,14 +5,14 @@
 export type GaugeState = "CALM" | "ALERT" | "IMMINENT" | "EXIT";
 export type GaugePhase = "BUILD" | "ARMED" | "TRIGGER" | "NONE";
 export type Asymmetry = "HIGH" | "MED" | "LOW";
+export type MomentumLabel = "FORT" | "MODÉRÉ" | "STABLE" | "DÉTÉRIORATION";
 
 export type SubnetSignal = {
   netuid: number;
   name: string;
   psi: number;
-  opportunity: number;      // 0-100
-  risk: number;             // 0-100
-  t_minus_minutes: number;
+  opportunity: number;
+  risk: number;
   confidence: number;
   state: GaugeState;
   phase: GaugePhase;
@@ -20,8 +20,15 @@ export type SubnetSignal = {
   sparkline_7d: number[];
   liquidity: number;
   momentum: number;
-  reasons: string[];        // max 3
+  momentumLabel: MomentumLabel;
+  reasons: string[];
   dominant: "opportunity" | "risk" | "neutral";
+  // Micro-cap fields
+  isMicroCap: boolean;
+  asMicro: number;
+  preHype: boolean;
+  preHypeIntensity: number;
+  stabilitySetup: number;
 };
 
 export type RawSignal = {
@@ -64,91 +71,85 @@ export function derivePhase(psi: number): GaugePhase {
   return "NONE";
 }
 
-export function deriveTMinus(psi: number): number {
-  if (psi >= 95) return 2;
-  if (psi >= 85) return Math.max(2, Math.round(12 - (psi - 85) * 1));
-  if (psi >= 70) return Math.round(35 - (psi - 70) * 1.5);
-  if (psi >= 55) return Math.round(90 - (psi - 55) * 3.5);
-  if (psi >= 35) return Math.round(240 - (psi - 35) * 7.5);
-  return Math.min(1440, Math.round(360 + (35 - psi) * 10));
+/* Momentum label from PSI */
+export function deriveMomentumLabel(psi: number, prevPsi?: number): MomentumLabel {
+  const delta = prevPsi != null ? psi - prevPsi : 0;
+  if (psi >= 70 && delta >= 0) return "FORT";
+  if (psi >= 45 && delta >= -5) return "MODÉRÉ";
+  if (delta < -10) return "DÉTÉRIORATION";
+  return "STABLE";
 }
 
-export function formatTMinus(minutes: number): string {
-  if (minutes < 60) return `T-${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `T-${h}h${m}m` : `T-${h}h`;
+export function momentumColor(label: MomentumLabel): string {
+  switch (label) {
+    case "FORT": return "rgba(76,175,80,0.85)";
+    case "MODÉRÉ": return "rgba(255,193,7,0.8)";
+    case "STABLE": return "rgba(255,255,255,0.4)";
+    case "DÉTÉRIORATION": return "rgba(229,57,53,0.8)";
+  }
 }
 
-export function formatTimeClear(minutes: number): string {
-  if (minutes < 60) return `${minutes}min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+/* Stabilité Setup (0-100%) — stability of asymmetry/risk/volatility */
+export function computeStabilitySetup(
+  opportunity: number,
+  risk: number,
+  confidence: number,
+  momentum: number,
+  quality: number
+): number {
+  // Higher stability = less volatile, more consistent signals
+  const asymStability = clamp(100 - Math.abs(opportunity - risk) * 0.3, 0, 40);
+  const confStability = clamp(confidence * 0.3, 0, 30);
+  const momentumStability = momentum >= 35 && momentum <= 75 ? 20 : clamp(20 - Math.abs(momentum - 55) * 0.4, 0, 20);
+  const qualityBonus = clamp(quality * 0.1, 0, 10);
+  return Math.round(clamp(asymStability + confStability + momentumStability + qualityBonus, 0, 100));
+}
+
+export function stabilityColor(pct: number): string {
+  if (pct >= 75) return "rgba(76,175,80,0.85)";
+  if (pct >= 50) return "rgba(255,193,7,0.8)";
+  if (pct >= 30) return "rgba(255,109,0,0.8)";
+  return "rgba(229,57,53,0.7)";
 }
 
 /* ═══════════════════════════════════════ */
 /*   OPPORTUNITY / RISK ENGINE              */
 /* ═══════════════════════════════════════ */
 
-/** Derive opportunity score from raw signal data */
 function deriveOpportunity(psi: number, conf: number, quality: number, state: string | null): number {
   let opp = 0;
-  // Momentum component (PSI-based) — higher PSI = more opportunity signal
   opp += clamp(psi * 0.45, 0, 45);
-  // Confidence/consensus component
   opp += clamp(conf * 0.25, 0, 25);
-  // Quality/adoption component
   opp += clamp(quality * 0.20, 0, 20);
-  // Bond/traction bonus for high-signal states
   if (state === "GO" || state === "GO_SPECULATIVE") opp += 10;
   return Math.round(clamp(opp, 0, 100));
 }
 
-/** Derive risk score from raw signal data */
 function deriveRisk(psi: number, conf: number, quality: number, state: string | null): number {
   let risk = 0;
-  // Break/exit states carry high risk
   if (state === "BREAK" || state === "EXIT_FAST") risk += 45;
-  // Inverse quality = higher risk (low adoption = risky)
   risk += clamp((100 - quality) * 0.25, 0, 25);
-  // Low confidence = uncertain = risky
   risk += clamp((100 - conf) * 0.15, 0, 15);
-  // Very high PSI can also signal overheated/volatile
   if (psi >= 85) risk += clamp((psi - 85) * 1.5, 0, 15);
-  // Low PSI = low activity = low risk but also low signal
   if (psi < 20) risk = Math.max(risk - 10, 5);
   return Math.round(clamp(risk, 0, 100));
 }
 
-/** Generate explainable reasons (max 3) */
 function deriveReasons(
   psi: number, conf: number, quality: number,
   state: string | null, lang: "fr" | "en" = "fr"
 ): string[] {
   const reasons: string[] = [];
   const fr = lang === "fr";
-
-  // Momentum
   if (psi >= 70) reasons.push(fr ? "Momentum fort ↑" : "Strong momentum ↑");
   else if (psi >= 45) reasons.push(fr ? "Momentum modéré →" : "Moderate momentum →");
-
-  // Consensus / Confidence
   if (conf >= 75) reasons.push(fr ? "Consensus élevé ✓" : "High consensus ✓");
   else if (conf < 40) reasons.push(fr ? "Consensus faible ⚠" : "Low consensus ⚠");
-
-  // Quality / Adoption
   if (quality >= 70) reasons.push(fr ? "Adoption réelle détectée" : "Real adoption detected");
   else if (quality < 30) reasons.push(fr ? "Hype > Adoption" : "Hype > Adoption");
-
-  // Break/exit
-  if (state === "BREAK" || state === "EXIT_FAST") {
-    reasons.unshift(fr ? "Signal de rupture ⛔" : "Break signal ⛔");
-  }
-  // GO states
+  if (state === "BREAK" || state === "EXIT_FAST") reasons.unshift(fr ? "Signal de rupture ⛔" : "Break signal ⛔");
   if (state === "GO") reasons.push(fr ? "Signal d'entrée actif" : "Active entry signal");
   if (state === "GO_SPECULATIVE") reasons.push(fr ? "Spéculatif · cap faible" : "Speculative · low cap");
-
   return reasons.slice(0, 3);
 }
 
@@ -180,7 +181,6 @@ export function rayColor(state: GaugeState, alpha = 0.6): string {
   }
 }
 
-/** Opportunity color (gold tones) */
 export function opportunityColor(score: number, alpha = 1): string {
   if (score >= 75) return `rgba(255,215,0,${alpha})`;
   if (score >= 50) return `rgba(251,192,45,${alpha})`;
@@ -188,7 +188,6 @@ export function opportunityColor(score: number, alpha = 1): string {
   return `rgba(140,130,90,${alpha * 0.6})`;
 }
 
-/** Risk color (red tones) */
 export function riskColor(score: number, alpha = 1): string {
   if (score >= 75) return `rgba(229,57,53,${alpha})`;
   if (score >= 50) return `rgba(255,109,0,${alpha})`;
@@ -196,18 +195,105 @@ export function riskColor(score: number, alpha = 1): string {
   return `rgba(100,90,80,${alpha * 0.5})`;
 }
 
+/* ═══════════════════════════════════════ */
+/*   MICRO-CAP + PRE-HYPE ENGINE            */
+/* ═══════════════════════════════════════ */
+
+/** Determine if a subnet is micro-cap (bottom 40% by cap proxy) */
+export function classifyMicroCaps(signals: SubnetSignal[]): void {
+  // Use inverse of opportunity+confidence as cap proxy (lower = smaller cap)
+  const sorted = [...signals].sort((a, b) => (a.confidence + a.psi) - (b.confidence + b.psi));
+  const cutoff = Math.ceil(sorted.length * 0.4);
+  const microNetuids = new Set(sorted.slice(0, cutoff).map(s => s.netuid));
+  for (const s of signals) {
+    s.isMicroCap = microNetuids.has(s.netuid);
+  }
+}
+
+/** Compute AS_micro = AS + BonusCroissance + BonusFlux - PénalitéRisqueExtrême */
+export function computeASMicro(
+  signal: SubnetSignal,
+  smartCapitalState: string,
+  flowDominance: "up" | "down" | "stable",
+  flowEmission: "up" | "down" | "stable"
+): number {
+  const asStandard = signal.opportunity - signal.risk;
+  let bonus = 0;
+  let penalty = 0;
+
+  // BonusCroissance
+  if (signal.momentumLabel === "FORT") bonus += 8;
+  if (smartCapitalState === "ACCUMULATION") bonus += 7;
+  if (signal.opportunity > 55 && signal.momentumLabel !== "DÉTÉRIORATION") bonus += 5;
+
+  // BonusFlux
+  if (flowDominance === "up") bonus += 5;
+  if (flowEmission === "up") bonus += 4;
+  if (signal.opportunity > 50 && signal.risk < 40) bonus += 3;
+
+  // PénalitéRisqueExtrême
+  if (signal.risk > 60) penalty += 15;
+  if (smartCapitalState === "DISTRIBUTION") penalty += 12;
+  if (signal.momentumLabel === "DÉTÉRIORATION" && signal.risk > 50) penalty += 8;
+
+  return Math.round(clamp(asStandard + bonus - penalty, -100, 100));
+}
+
+/** Detect Pré-Hype condition (≥3 of 6 criteria met) */
+export function detectPreHype(
+  signal: SubnetSignal,
+  smartCapitalState: string,
+  flowDominance: "up" | "down" | "stable",
+  flowEmission: "up" | "down" | "stable"
+): { active: boolean; intensity: number } {
+  let score = 0;
+
+  // 1. Accélération rapide du score asymétrie
+  if (signal.opportunity - signal.risk > 20 && signal.momentumLabel === "FORT") score += 20;
+
+  // 2. Smart Capital passe de Neutre à Accumulation
+  if (smartCapitalState === "ACCUMULATION") score += 18;
+
+  // 3. Momentum passe de Stable à Fort
+  if (signal.momentumLabel === "FORT") score += 15;
+
+  // 4. Augmentation dominance faible mais croissante
+  if (flowDominance === "up") score += 15;
+
+  // 5. Hausse émission relative avant hausse volume
+  if (flowEmission === "up" && signal.psi < 70) score += 17;
+
+  // 6. Volatilité contenue malgré hausse opportunité
+  if (signal.opportunity > 50 && signal.risk < 35 && signal.stabilitySetup > 55) score += 15;
+
+  const intensity = Math.round(clamp(score, 0, 100));
+  const active = score >= 45; // Roughly 3+ conditions met
+
+  return { active, intensity };
+}
+
+/** Compute Saturation Index — % of subnets with AS > 40 */
+export function computeSaturationIndex(signals: SubnetSignal[]): number {
+  if (!signals.length) return 0;
+  const highAS = signals.filter(s => (s.opportunity - s.risk) > 40).length;
+  return Math.round((highAS / signals.length) * 100);
+}
+
+export function saturationAlert(pct: number): boolean {
+  return pct > 60;
+}
+
 /* Process raw signals into SubnetSignals */
 export function processSignals(
   raw: RawSignal[],
   sparklines: Record<number, number[]>
 ): SubnetSignal[] {
-  return raw
+  const signals = raw
     .filter(s => s.netuid != null)
     .map(s => {
       const psi = s.mpi ?? s.score ?? 0;
       const conf = s.confidence_pct ?? 0;
       const quality = s.quality_score ?? 0;
-      const tMinus = deriveTMinus(psi);
       const isBreak = s.state === "BREAK" || s.state === "EXIT_FAST";
       const asymScore = conf * 0.6 + quality * 0.4;
       const asymmetry: Asymmetry = asymScore >= 75 ? "HIGH" : asymScore >= 55 ? "MED" : "LOW";
@@ -215,26 +301,38 @@ export function processSignals(
       const risk = deriveRisk(psi, conf, quality, s.state);
       const dominant = opportunity > risk + 10 ? "opportunity" as const :
                        risk > opportunity + 10 ? "risk" as const : "neutral" as const;
+      const momentum = clamp(psi - 40, 0, 60) / 60 * 100;
+      const momentumLabel = deriveMomentumLabel(psi);
+      const stabilitySetup = computeStabilitySetup(opportunity, risk, conf, momentum, quality);
       return {
         netuid: s.netuid!,
         name: s.subnet_name || `SN-${s.netuid}`,
         psi,
         opportunity,
         risk,
-        t_minus_minutes: tMinus,
         confidence: conf,
         state: deriveGaugeState(psi, conf, isBreak),
         phase: derivePhase(psi),
         asymmetry,
         sparkline_7d: (sparklines[s.netuid!] ?? []).slice(-7),
         liquidity: 50,
-        momentum: clamp(psi - 40, 0, 60) / 60 * 100,
+        momentum,
+        momentumLabel,
         reasons: deriveReasons(psi, conf, quality, s.state),
         dominant,
+        isMicroCap: false,
+        asMicro: 0,
+        preHype: false,
+        preHypeIntensity: 0,
+        stabilitySetup,
       };
     })
-    .sort((a, b) => b.psi - a.psi)
-    .slice(0, 7);
+    .sort((a, b) => b.psi - a.psi);
+
+  // Classify micro-caps
+  classifyMicroCaps(signals);
+
+  return signals;
 }
 
 /* ═══════════════════════════════════════ */
@@ -244,39 +342,29 @@ export function processSignals(
 export type SmartCapitalState = "ACCUMULATION" | "STABLE" | "DISTRIBUTION";
 
 export type SmartCapitalData = {
-  score: number;          // 0-100
+  score: number;
   state: SmartCapitalState;
 };
 
-/** Derive Smart Capital from available metrics (flow, volume, miners, quality) */
 export function computeSmartCapital(raw: RawSignal[]): SmartCapitalData {
   if (!raw?.length) return { score: 50, state: "STABLE" };
-
-  // Aggregate signals to detect capital flow patterns
   const scores = raw.map(s => {
     const psi = s.mpi ?? s.score ?? 0;
     const conf = s.confidence_pct ?? 0;
     const quality = s.quality_score ?? 0;
-    // High quality + rising momentum = accumulation signal
-    // Low quality + high PSI = distribution signal (hype > adoption)
     const accumulationSignal = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
     const distributionSignal = clamp((100 - quality) * 0.4, 0, 40) + 
       (psi >= 80 && quality < 50 ? 30 : 0) +
       (s.state === "BREAK" || s.state === "EXIT_FAST" ? 25 : 0);
     return { acc: accumulationSignal, dist: distributionSignal };
   });
-
   const avgAcc = scores.reduce((a, s) => a + s.acc, 0) / scores.length;
   const avgDist = scores.reduce((a, s) => a + s.dist, 0) / scores.length;
-  
-  // Smart Capital Score: higher = more accumulation detected
   const scScore = Math.round(clamp(avgAcc - avgDist * 0.5 + 30, 0, 100));
-  
   let state: SmartCapitalState;
   if (scScore >= 65) state = "ACCUMULATION";
   else if (scScore <= 35) state = "DISTRIBUTION";
   else state = "STABLE";
-
   return { score: scScore, state };
 }
 
@@ -285,43 +373,27 @@ export function computeSmartCapital(raw: RawSignal[]): SmartCapitalData {
 /* ═══════════════════════════════════════ */
 
 export type DualCoreAllocation = {
-  structurePct: number;   // 60-70% recommended for solid subnets
-  sniperPct: number;      // 30-40% recommended for low-cap opportunities
+  structurePct: number;
+  sniperPct: number;
   structureNetuids: number[];
   sniperNetuids: number[];
 };
 
-/** Compute Dual Core allocation from processed signals */
 export function computeDualCore(signals: SubnetSignal[], smartCapital: SmartCapitalData): DualCoreAllocation {
   if (!signals.length) return { structurePct: 65, sniperPct: 35, structureNetuids: [], sniperNetuids: [] };
-
-  // Structure: high quality, stable, moderate opportunity
   const structure = signals
     .filter(s => s.confidence >= 60 && s.risk < 50 && s.asymmetry !== "HIGH")
     .sort((a, b) => (b.opportunity * 0.6 + b.confidence * 0.4) - (a.opportunity * 0.6 + a.confidence * 0.4))
     .slice(0, 4);
-
-  // Sniper: high asymmetry, low cap potential, strong momentum
   const sniper = signals
     .filter(s => s.asymmetry === "HIGH" || (s.opportunity >= 65 && s.confidence < 70))
     .sort((a, b) => b.opportunity - a.opportunity)
     .slice(0, 3);
-
-  // Adjust allocation based on Smart Capital state
   let structurePct = 65;
   let sniperPct = 35;
-  if (smartCapital.state === "ACCUMULATION") {
-    structurePct = 55; sniperPct = 45; // More aggressive
-  } else if (smartCapital.state === "DISTRIBUTION") {
-    structurePct = 75; sniperPct = 25; // More defensive
-  }
-
-  return {
-    structurePct,
-    sniperPct,
-    structureNetuids: structure.map(s => s.netuid),
-    sniperNetuids: sniper.map(s => s.netuid),
-  };
+  if (smartCapital.state === "ACCUMULATION") { structurePct = 55; sniperPct = 45; }
+  else if (smartCapital.state === "DISTRIBUTION") { structurePct = 75; sniperPct = 25; }
+  return { structurePct, sniperPct, structureNetuids: structure.map(s => s.netuid), sniperNetuids: sniper.map(s => s.netuid) };
 }
 
 /* Compute global scores */
