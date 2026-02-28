@@ -23,7 +23,7 @@ function percentileRank(values: number[]): number[] {
   });
 }
 
-function applySCurve(percentile: number, steepness = 8): number {
+function applySCurve(percentile: number, steepness = 6): number {
   const n = percentile / 100;
   const curved = sigmoid(n, steepness, 0.5);
   const min = sigmoid(0, steepness, 0.5);
@@ -31,7 +31,7 @@ function applySCurve(percentile: number, steepness = 8): number {
   return Math.round(((curved - min) / (max - min)) * 100);
 }
 
-function normalizeWithVariance(rawScores: number[], steepness = 8): number[] {
+function normalizeWithVariance(rawScores: number[], steepness = 6): number[] {
   const ranks = percentileRank(rawScores);
   return ranks.map(r => applySCurve(r, steepness));
 }
@@ -118,13 +118,14 @@ Deno.serve(async (req) => {
       else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts`);
     }
 
-    // ============= PASS 1: Compute raw scores for all subnets =============
+    // ============= PASS 1: Collect raw metrics for all subnets =============
     type SubnetRaw = {
       netuid: number; mpiRaw: number; M: number; A: number; L: number; B: number; Q: number;
       gatingFail: boolean; breakReasons: string[]; breakout: boolean;
       priceNow: number; price5m: number; price1h: number;
       liqNow: number; liq1h: number; minersNow: number; minersDelta: number;
-      priceMax7d: number; confidencePct: number;
+      priceMax7d: number; confidenceRaw: number;
+      cap: number; volCap: number; liqRatio: number;
     };
     const subnetRaws: SubnetRaw[] = [];
 
@@ -146,10 +147,12 @@ Deno.serve(async (req) => {
       const minersNow = Number(latest.miners_active) || 0;
       const miners1h = Number(snap1h?.miners_active) || minersNow;
       const liqNow = Number(latest.liquidity) || 0;
-      const topMinersShare = Number(latest.top_miners_share) || 0;
+      const cap = Number(latest.cap) || 0;
+      const vol24h = Number(latest.vol_24h) || 0;
+      const volCap = cap > 0 ? vol24h / cap : 0;
+      const liqRatio = cap > 0 ? liqNow / cap : 0;
+      const flow1m = Number(latest.flow_1m) || 0;
 
-      const whaleImpactPct = topMinersShare * 100;
-      const gini = Math.min(topMinersShare * 1.2, 1);
       const liq1h = Number(snap1h?.liquidity) || liqNow;
       const liqHaircut = liq1h > 0 ? ((liqNow - liq1h) / liq1h) * 100 : 0;
 
@@ -158,11 +161,31 @@ Deno.serve(async (req) => {
       if (minersNow === 0) breakReasons.push("Zero miners");
       if (liqHaircut <= -60) breakReasons.push("Liquidity collapse");
 
-      let penalty = 0;
-      if (whaleImpactPct >= 30) penalty += 25;
-      if (gini >= 0.75) penalty += 20;
-      const Q = clamp(100 - penalty, 0, 100);
+      // ── Quality from REAL data: miners diversity, liquidity depth, vol/cap health ──
+      let Q = 50; // base
+      // Miner diversity (more miners = higher quality)
+      if (minersNow >= 100) Q += 15;
+      else if (minersNow >= 30) Q += 10;
+      else if (minersNow >= 10) Q += 5;
+      else if (minersNow <= 2) Q -= 15;
+      // Liquidity depth ratio (liq/cap)
+      if (liqRatio > 0.5) Q += 12;
+      else if (liqRatio > 0.2) Q += 6;
+      else if (liqRatio < 0.05) Q -= 10;
+      // Volume/Cap ratio: healthy trading
+      if (volCap > 0.1) Q += 8;
+      else if (volCap > 0.02) Q += 4;
+      else if (volCap < 0.005) Q -= 8;
+      // Flow activity
+      if (flow1m > 0) Q += 8;
+      else Q -= 5;
+      // Cap size bonus (larger = more established)
+      if (cap > 100000) Q += 7;
+      else if (cap > 10000) Q += 3;
+      else if (cap < 500) Q -= 8;
+      Q = clamp(Q, 0, 100);
 
+      // ── Momentum ──
       const r5m = priceNow > 0 && price5m > 0 ? Math.log(priceNow / price5m) : 0;
       const r1h = priceNow > 0 && price1h > 0 ? Math.log(priceNow / price1h) : 0;
       const M = 0.4 * scoreClip(r1h, -0.02, 0.04) + 0.6 * scoreClip(r5m, -0.004, 0.010);
@@ -174,19 +197,26 @@ Deno.serve(async (req) => {
       const B = breakout ? 100 : 0;
 
       const mpiRaw = clamp(Math.round(0.30 * M + 0.20 * A + 0.15 * L + 0.15 * B + 0.20 * Q), 0, 100);
-      const confSignal = clamp((mpiRaw - 60) / 40, 0, 1);
+
+      // Raw confidence before cross-subnet normalization
+      const confSignal = clamp((mpiRaw - 40) / 60, 0, 1); // wider range
       const confQuality = Q / 100;
-      const confidencePct = Math.round(100 * (0.55 * confSignal + 0.45 * confQuality));
+      const confidenceRaw = Math.round(100 * (0.50 * confSignal + 0.30 * confQuality + 0.20 * clamp(liqRatio, 0, 1)));
 
       subnetRaws.push({
         netuid, mpiRaw, M, A, L, B, Q, gatingFail, breakReasons, breakout,
-        priceNow, price5m, price1h, liqNow, liq1h, minersNow, minersDelta, priceMax7d, confidencePct,
+        priceNow, price5m, price1h, liqNow, liq1h, minersNow, minersDelta, priceMax7d,
+        confidenceRaw, cap, volCap, liqRatio,
       });
     }
 
     // ============= PASS 2: Percentile + S-curve normalization =============
     const rawMpis = subnetRaws.map(s => s.mpiRaw);
-    const normalizedMpis = normalizeWithVariance(rawMpis, 8);
+    const rawQs = subnetRaws.map(s => s.Q);
+    const rawConfs = subnetRaws.map(s => s.confidenceRaw);
+    const normalizedMpis = normalizeWithVariance(rawMpis, 6);
+    const normalizedQs = normalizeWithVariance(rawQs, 6);
+    const normalizedConfs = normalizeWithVariance(rawConfs, 6);
 
     // Scoring stuck detection
     const mpiStdDev = (() => {
@@ -202,7 +232,9 @@ Deno.serve(async (req) => {
     // ============= PASS 3: Decision logic + upsert with normalized scores =============
     for (let i = 0; i < subnetRaws.length; i++) {
       const s = subnetRaws[i];
-      const mpi = normalizedMpis[i]; // S-curve normalized MPI
+      const mpi = normalizedMpis[i];
+      const normQ = normalizedQs[i];
+      const confidencePct = normalizedConfs[i];
 
       const { data: existingSignal } = await sb.from("signals").select("*")
         .eq("netuid", s.netuid).maybeSingle();
@@ -220,18 +252,18 @@ Deno.serve(async (req) => {
           (now.getTime() - new Date(existingSignal.last_notified_at).getTime() > 15 * 60000);
         if (canNotify && prevState !== "BREAK") { eventType = "BREAK"; severity = 3; }
       }
-      else if (mpi >= 85 && s.M >= 65 && s.Q >= 60) {
+      else if (mpi >= 85 && s.M >= 65 && normQ >= 60) {
         newState = "GO";
-        reasons = ["High MPI", `Momentum ${Math.round(s.M)}`, `Quality ${s.Q}`];
+        reasons = ["High MPI", `Momentum ${Math.round(s.M)}`, `Quality ${normQ}`];
         if (s.breakout) reasons.push("7d breakout");
         reasons = reasons.slice(0, 3);
         const canGo = !existingSignal?.last_notified_at ||
           (now.getTime() - new Date(existingSignal.last_notified_at).getTime() > 30 * 60000);
         if (canGo) { eventType = "GO"; severity = 2; }
       }
-      else if (mpi >= 72 && s.M >= 55 && s.Q >= 55) {
+      else if (mpi >= 72 && s.M >= 55 && normQ >= 55) {
         newState = "EARLY";
-        reasons = ["Early momentum detected", `MPI ${mpi}`, `Quality ${s.Q}`];
+        reasons = ["Early momentum detected", `MPI ${mpi}`, `Quality ${normQ}`];
         if (s.breakout) reasons.push("Approaching breakout");
         reasons = reasons.slice(0, 3);
         const lastChange = existingSignal?.last_state_change_at;
@@ -272,7 +304,7 @@ Deno.serve(async (req) => {
       // Upsert signal with normalized MPI
       const signalData: any = {
         netuid: s.netuid, ts: nowIso, state: newState, score: mpi, mpi,
-        confidence_pct: s.confidencePct, quality_score: s.Q, reasons,
+        confidence_pct: confidencePct, quality_score: normQ, reasons,
         miner_filter: s.minersNow > 0 ? (s.minersDelta >= 0 ? "PASS" : "WARN") : "FAIL",
       };
       if (newState !== prevState) signalData.last_state_change_at = nowIso;
@@ -283,7 +315,7 @@ Deno.serve(async (req) => {
       if (eventType) {
         await sb.from("events").insert({
           netuid: s.netuid, ts: nowIso, type: eventType, severity,
-          evidence: { mpi, mpiRaw: s.mpiRaw, confidencePct: s.confidencePct, M: Math.round(s.M), A: Math.round(s.A), L: Math.round(s.L), B: s.B, Q: s.Q, reasons },
+          evidence: { mpi, mpiRaw: s.mpiRaw, confidencePct, M: Math.round(s.M), A: Math.round(s.A), L: Math.round(s.L), B: s.B, Q: normQ, reasons },
         });
       }
 
