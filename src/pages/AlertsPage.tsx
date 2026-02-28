@@ -407,9 +407,11 @@ function DelistWatchlistView({ fr }: { fr: boolean }) {
 
     const metricsForDelist: SubnetMetricsForDelist[] = scoresList.map(s => ({
       netuid: s.netuid,
-      minersActive: s.healthScores?.activityHealth != null ? (s.healthScores.activityHealth > 50 ? 20 : s.healthScores.activityHealth > 20 ? 5 : 0) : 10,
+      minersActive: 10, // placeholder — auto mode in hook uses real miners_active
       liqTao: s.displayedLiq > 0 && taoUsd > 0 ? s.displayedLiq / taoUsd : 0,
       liqUsd: s.displayedLiq,
+      capTao: s.displayedCap > 0 && taoUsd > 0 ? s.displayedCap / taoUsd : 0,
+      alphaPrice: s.alphaPrice ?? 0,
       volMcRatio: s.healthScores?.volumeHealth != null ? s.healthScores.volumeHealth / 1000 : 0.01,
       psi: s.psi,
       quality: s.quality,
