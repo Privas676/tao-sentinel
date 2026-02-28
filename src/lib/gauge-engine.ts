@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════ */
 /*     ALIEN GAUGE — OPPORTUNITY/RISK ENGINE */
+/*     v2: ANTI-100 + CONSENSUS DATA        */
 /* ═══════════════════════════════════════ */
 import { evaluateRiskOverride, capOpportunity } from "./risk-override";
-
 
 export type GaugeState = "CALM" | "ALERT" | "IMMINENT" | "EXIT";
 export type GaugePhase = "BUILD" | "ARMED" | "TRIGGER" | "NONE";
@@ -23,18 +23,19 @@ export type SubnetSignal = {
   liquidity: number;
   momentum: number;
   momentumLabel: MomentumLabel;
+  momentumScore: number;
   reasons: string[];
   dominant: "opportunity" | "risk" | "neutral";
-  // Micro-cap fields
   isMicroCap: boolean;
   asMicro: number;
   preHype: boolean;
   preHypeIntensity: number;
   stabilitySetup: number;
-  // Risk Override fields
   isOverridden: boolean;
   systemStatus: import("./risk-override").SystemStatus;
   overrideReasons: string[];
+  dataUncertain: boolean;
+  confianceData: number;
 };
 
 export type RawSignal = {
@@ -56,14 +57,13 @@ export function clamp(v: number, lo: number, hi: number) {
 
 /* ═══════════════════════════════════════ */
 /*   PERCENTILE + SIGMOID NORMALIZATION     */
+/*   Section 2: Anti-100                    */
 /* ═══════════════════════════════════════ */
 
-/** Sigmoid S-curve: amplifies extremes, compresses middle */
 function sigmoid(x: number, steepness = 10, midpoint = 0.5): number {
   return 1 / (1 + Math.exp(-steepness * (x - midpoint)));
 }
 
-/** Convert raw scores to percentile ranks (0-100) */
 function percentileRank(values: number[]): number[] {
   if (values.length <= 1) return values.map(() => 50);
   const sorted = [...values].sort((a, b) => a - b);
@@ -74,8 +74,6 @@ function percentileRank(values: number[]): number[] {
   });
 }
 
-/** Apply S-curve to percentile-normalized scores for high variance.
- *  steepness=6 gives a gentler curve that preserves mid-range differentiation */
 function applySCurve(percentile: number, steepness = 6): number {
   const normalized = percentile / 100;
   const curved = sigmoid(normalized, steepness, 0.5);
@@ -84,10 +82,24 @@ function applySCurve(percentile: number, steepness = 6): number {
   return Math.round(((curved - min) / (max - min)) * 100);
 }
 
-/** Normalize an array of scores using percentile + S-curve */
+/** Normalize scores using percentile + S-curve, enforcing anti-100 rule (Section 2.2) */
 export function normalizeWithVariance(rawScores: number[], steepness = 6): number[] {
   const ranks = percentileRank(rawScores);
-  return ranks.map(r => applySCurve(r, steepness));
+  const normalized = ranks.map(r => applySCurve(r, steepness));
+
+  // Anti-100: only allow 100 if unique strict max (Section 2.2)
+  const maxRaw = Math.max(...rawScores);
+  const maxCount = rawScores.filter(v => v === maxRaw).length;
+  const uniqueMax = maxCount === 1;
+
+  return normalized.map((score, i) => {
+    if (score >= 100) {
+      // Only the single unique maximum gets 100, all others capped at 99
+      if (uniqueMax && rawScores[i] === maxRaw) return 100;
+      return 99;
+    }
+    return score;
+  });
 }
 
 /* PSI thresholds */
@@ -113,13 +125,25 @@ export function derivePhase(psi: number): GaugePhase {
   return "NONE";
 }
 
-/* Momentum label from PSI */
-export function deriveMomentumLabel(psi: number, prevPsi?: number): MomentumLabel {
+/* ═══════════════════════════════════════ */
+/*   MOMENTUM (Section 6)                   */
+/* ═══════════════════════════════════════ */
+
+/** Compute momentum score (0-100) from PSI + delta */
+export function computeMomentumScore(psi: number, prevPsi?: number): number {
+  const base = clamp(psi, 0, 100);
   const delta = prevPsi != null ? psi - prevPsi : 0;
-  if (psi >= 70 && delta >= 0) return "FORT";
-  if (psi >= 45 && delta >= -5) return "MODÉRÉ";
-  if (delta < -10) return "DÉTÉRIORATION";
-  return "STABLE";
+  const accel = clamp(delta * 2, -20, 20);
+  return clamp(Math.round(base * 0.7 + 50 * 0.1 + accel + 10), 0, 100);
+}
+
+/** Derive momentum label from momentum score (Section 6) */
+export function deriveMomentumLabel(psi: number, prevPsi?: number): MomentumLabel {
+  const score = computeMomentumScore(psi, prevPsi);
+  if (score >= 70) return "FORT";
+  if (score >= 55) return "MODÉRÉ";
+  if (score >= 40) return "STABLE";
+  return "DÉTÉRIORATION";
 }
 
 export function momentumColor(label: MomentumLabel): string {
@@ -131,20 +155,35 @@ export function momentumColor(label: MomentumLabel): string {
   }
 }
 
-/* Stabilité Setup (0-100%) — stability of asymmetry/risk/volatility */
+/* ═══════════════════════════════════════ */
+/*   STABILITÉ SETUP (Section 5)            */
+/* ═══════════════════════════════════════ */
+
 export function computeStabilitySetup(
   opportunity: number,
   risk: number,
   confidence: number,
   momentum: number,
-  quality: number
+  quality: number,
+  dataUncertain = false
 ): number {
-  // Higher stability = less volatile, more consistent signals
+  // Stability from asymmetry variance proxy
   const asymStability = clamp(100 - Math.abs(opportunity - risk) * 0.3, 0, 40);
+  // Confidence stability
   const confStability = clamp(confidence * 0.3, 0, 30);
+  // Momentum stability (mid-range = more stable)
   const momentumStability = momentum >= 35 && momentum <= 75 ? 20 : clamp(20 - Math.abs(momentum - 55) * 0.4, 0, 20);
+  // Quality bonus
   const qualityBonus = clamp(quality * 0.1, 0, 10);
-  return Math.round(clamp(asymStability + confStability + momentumStability + qualityBonus, 0, 100));
+
+  let result = Math.round(clamp(asymStability + confStability + momentumStability + qualityBonus, 0, 100));
+
+  // DATA_UNCERTAIN penalty (Section 5)
+  if (dataUncertain) {
+    result = Math.max(0, result - 10);
+  }
+
+  return result;
 }
 
 export function stabilityColor(pct: number): string {
@@ -155,54 +194,60 @@ export function stabilityColor(pct: number): string {
 }
 
 /* ═══════════════════════════════════════ */
-/*   OPPORTUNITY / RISK ENGINE              */
+/*   OPPORTUNITY / RISK ENGINE (Section 3)  */
 /* ═══════════════════════════════════════ */
 
 function deriveOpportunity(psi: number, conf: number, quality: number, state: string | null): number {
-  // Use non-linear components to maximize differentiation
   let opp = 0;
-  // PSI contribution with quadratic boost for high values
-  opp += (psi / 100) * (psi / 100) * 35; // 0-35, quadratic
-  // Confidence: linear but wider range
-  opp += clamp(conf * 0.30, 0, 30);
-  // Quality with threshold bonus
-  opp += clamp(quality * 0.20, 0, 20);
-  // State bonuses (significant differentiation)
-  if (state === "GO") opp += 15;
-  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 10;
+  // Momentum_score weight: 30%
+  opp += (psi / 100) * (psi / 100) * 30;
+  // SmartCapital_accumulation proxy (quality): 25%
+  opp += clamp(quality * 0.25, 0, 25);
+  // Dominance_change proxy (confidence): 20%
+  opp += clamp(conf * 0.20, 0, 20);
+  // Emission_change proxy: 15%
+  const emissionProxy = clamp(psi * 0.15, 0, 15);
+  opp += emissionProxy;
+  // PreHype proxy: 10%
+  if (state === "GO") opp += 10;
+  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 7;
   else if (state === "WATCH") opp += 3;
-  else if (state === "BREAK" || state === "EXIT_FAST") opp -= 10;
-  // Interaction term: high PSI + high quality = extra boost
-  if (psi >= 60 && quality >= 60) opp += 8;
-  // Low PSI penalty
-  if (psi < 30) opp -= 5;
+  // Penalties
+  if (state === "BREAK" || state === "EXIT_FAST") opp -= 15;
+  if (psi >= 60 && quality >= 60) opp += 5;
+  if (psi < 30) opp -= 8;
   return Math.round(clamp(opp, 0, 100));
 }
 
 function deriveRisk(psi: number, conf: number, quality: number, state: string | null): number {
   let risk = 0;
-  // State is the strongest risk differentiator
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 40;
+  // Volatilité_courte: 30%
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 35;
   else if (state === "HOLD") risk += 5;
-  // Quality deficit: quadratic to amplify low quality
+  // Liquidity_risk proxy (quality deficit): 25%
   const qualDeficit = (100 - quality) / 100;
-  risk += qualDeficit * qualDeficit * 30; // 0-30, quadratic
-  // Confidence deficit
+  risk += qualDeficit * qualDeficit * 25;
+  // Emission_spike_risk: 20%
   const confDeficit = (100 - conf) / 100;
-  risk += confDeficit * confDeficit * 20; // 0-20, quadratic
-  // Overheated: very high PSI with low quality = speculative risk
+  risk += confDeficit * confDeficit * 20;
+  // SmartCapital_distribution proxy: 15%
   if (psi >= 80 && quality < 50) risk += 15;
-  if (psi >= 90 && quality < 40) risk += 10;
-  // Low PSI can mean stagnation risk
+  if (psi >= 90 && quality < 40) risk += 8;
+  // Low PSI stagnation
   if (psi < 25) risk += 8;
-  // Moderate PSI with low confidence
   if (psi >= 40 && psi <= 60 && conf < 40) risk += 5;
   return Math.round(clamp(risk, 0, 100));
 }
 
+/** Apply DATA_UNCERTAIN penalty to risk (Section 3.2: 10% binary) */
+function applyDataUncertaintyToRisk(risk: number, dataUncertain: boolean): number {
+  if (dataUncertain) return clamp(risk + 10, 0, 100);
+  return risk;
+}
+
 function deriveReasons(
   psi: number, conf: number, quality: number,
-  state: string | null, lang: "fr" | "en" = "fr"
+  state: string | null, dataUncertain: boolean, lang: "fr" | "en" = "fr"
 ): string[] {
   const reasons: string[] = [];
   const fr = lang === "fr";
@@ -215,7 +260,8 @@ function deriveReasons(
   if (state === "BREAK" || state === "EXIT_FAST") reasons.unshift(fr ? "Signal de rupture ⛔" : "Break signal ⛔");
   if (state === "GO") reasons.push(fr ? "Signal d'entrée actif" : "Active entry signal");
   if (state === "GO_SPECULATIVE") reasons.push(fr ? "Spéculatif · cap faible" : "Speculative · low cap");
-  return reasons.slice(0, 3);
+  if (dataUncertain) reasons.push(fr ? "Data incertaine ⚠" : "Uncertain data ⚠");
+  return reasons.slice(0, 4);
 }
 
 /* Colors */
@@ -264,9 +310,7 @@ export function riskColor(score: number, alpha = 1): string {
 /*   MICRO-CAP + PRE-HYPE ENGINE            */
 /* ═══════════════════════════════════════ */
 
-/** Determine if a subnet is micro-cap (bottom 40% by cap proxy) */
 export function classifyMicroCaps(signals: SubnetSignal[]): void {
-  // Use inverse of opportunity+confidence as cap proxy (lower = smaller cap)
   const sorted = [...signals].sort((a, b) => (a.confidence + a.psi) - (b.confidence + b.psi));
   const cutoff = Math.ceil(sorted.length * 0.4);
   const microNetuids = new Set(sorted.slice(0, cutoff).map(s => s.netuid));
@@ -275,7 +319,6 @@ export function classifyMicroCaps(signals: SubnetSignal[]): void {
   }
 }
 
-/** Compute AS_micro = AS + BonusCroissance + BonusFlux - PénalitéRisqueExtrême */
 export function computeASMicro(
   signal: SubnetSignal,
   smartCapitalState: string,
@@ -286,17 +329,12 @@ export function computeASMicro(
   let bonus = 0;
   let penalty = 0;
 
-  // BonusCroissance
   if (signal.momentumLabel === "FORT") bonus += 8;
   if (smartCapitalState === "ACCUMULATION") bonus += 7;
   if (signal.opportunity > 55 && signal.momentumLabel !== "DÉTÉRIORATION") bonus += 5;
-
-  // BonusFlux
   if (flowDominance === "up") bonus += 5;
   if (flowEmission === "up") bonus += 4;
   if (signal.opportunity > 50 && signal.risk < 40) bonus += 3;
-
-  // PénalitéRisqueExtrême
   if (signal.risk > 60) penalty += 15;
   if (smartCapitalState === "DISTRIBUTION") penalty += 12;
   if (signal.momentumLabel === "DÉTÉRIORATION" && signal.risk > 50) penalty += 8;
@@ -304,7 +342,6 @@ export function computeASMicro(
   return Math.round(clamp(asStandard + bonus - penalty, -100, 100));
 }
 
-/** Detect Pré-Hype condition (≥3 of 6 criteria met) */
 export function detectPreHype(
   signal: SubnetSignal,
   smartCapitalState: string,
@@ -312,32 +349,17 @@ export function detectPreHype(
   flowEmission: "up" | "down" | "stable"
 ): { active: boolean; intensity: number } {
   let score = 0;
-
-  // 1. Accélération rapide du score asymétrie
   if (signal.opportunity - signal.risk > 20 && signal.momentumLabel === "FORT") score += 20;
-
-  // 2. Smart Capital passe de Neutre à Accumulation
   if (smartCapitalState === "ACCUMULATION") score += 18;
-
-  // 3. Momentum passe de Stable à Fort
   if (signal.momentumLabel === "FORT") score += 15;
-
-  // 4. Augmentation dominance faible mais croissante
   if (flowDominance === "up") score += 15;
-
-  // 5. Hausse émission relative avant hausse volume
   if (flowEmission === "up" && signal.psi < 70) score += 17;
-
-  // 6. Volatilité contenue malgré hausse opportunité
   if (signal.opportunity > 50 && signal.risk < 35 && signal.stabilitySetup > 55) score += 15;
-
   const intensity = Math.round(clamp(score, 0, 100));
-  const active = score >= 45; // Roughly 3+ conditions met
-
-  return { active, intensity };
+  return { active: score >= 45, intensity };
 }
 
-/** Compute Saturation Index — % of subnets with AS > 40 */
+/** Compute Saturation Index (Section 9) */
 export function computeSaturationIndex(signals: SubnetSignal[]): number {
   if (!signals.length) return 0;
   const highAS = signals.filter(s => (s.opportunity - s.risk) > 40).length;
@@ -348,37 +370,54 @@ export function saturationAlert(pct: number): boolean {
   return pct > 60;
 }
 
+/* ═══════════════════════════════════════ */
+/*   PROCESS SIGNALS (MAIN PIPELINE)        */
+/* ═══════════════════════════════════════ */
+
+export type ConsensusDataMap = Map<number, { confianceData: number; dataUncertain: boolean }>;
+
 export function processSignals(
   raw: RawSignal[],
-  sparklines: Record<number, number[]>
+  sparklines: Record<number, number[]>,
+  consensusMap?: ConsensusDataMap
 ): SubnetSignal[] {
   const filtered = raw.filter(s => s.netuid != null);
   if (!filtered.length) return [];
 
-  // Step 1: Compute raw opportunity & risk for all subnets
+  // Step 1: Compute raw opportunity & risk
   const rawData = filtered.map(s => {
     const psi = s.mpi ?? s.score ?? 0;
     const conf = s.confidence_pct ?? 0;
     const quality = s.quality_score ?? 0;
-    return {
-      raw: s, psi, conf, quality,
-      oppRaw: deriveOpportunity(psi, conf, quality, s.state),
-      riskRaw: deriveRisk(psi, conf, quality, s.state),
-    };
+    const consensus = consensusMap?.get(s.netuid!);
+    const dataUncertain = consensus?.dataUncertain ?? false;
+
+    let oppRaw = deriveOpportunity(psi, conf, quality, s.state);
+    let riskRaw = deriveRisk(psi, conf, quality, s.state);
+
+    // DATA_UNCERTAIN penalty on risk (Section 3.2)
+    riskRaw = applyDataUncertaintyToRisk(riskRaw, dataUncertain);
+
+    return { raw: s, psi, conf, quality, oppRaw, riskRaw, dataUncertain, confianceData: consensus?.confianceData ?? 50 };
   });
 
-  // Step 2: Percentile + S-curve normalization for high variance
-  const oppNormalized = capOpportunity(normalizeWithVariance(rawData.map(d => d.oppRaw), 8));
-  const riskNormalized = normalizeWithVariance(rawData.map(d => d.riskRaw), 8);
+  // Step 2: Percentile + S-curve with different k values (Section 2.1)
+  const oppNormalized = normalizeWithVariance(rawData.map(d => d.oppRaw), 6);   // k=6
+  const riskNormalized = normalizeWithVariance(rawData.map(d => d.riskRaw), 6);  // k=6
 
-  // Step 3: Build SubnetSignals with normalized scores + risk override
+  // Step 3: Build SubnetSignals
   const signals = rawData.map((d, i) => {
     const s = d.raw;
     let opportunity = oppNormalized[i];
-    const risk = riskNormalized[i];
+    let risk = riskNormalized[i];
     const isBreak = s.state === "BREAK" || s.state === "EXIT_FAST";
 
-    // Risk Override Engine — AFTER score calculation
+    // Section 7: DEPEG/ZONE_CRITIQUE coherence
+    if (isBreak || s.state === "DEPEG_WARNING" || s.state === "DEPEG_CRITICAL") {
+      opportunity = 0;
+    }
+
+    // Risk Override Engine
     const override = evaluateRiskOverride({
       state: s.state,
       psi: d.psi,
@@ -386,19 +425,26 @@ export function processSignals(
       quality: d.quality,
     });
 
-    // If overridden: AS_final = 0 (opportunity zeroed)
     if (override.isOverridden) {
       opportunity = 0;
     }
+
+    // AS signed (Section 4)
+    const asRaw = opportunity - risk;
+
+    // DATA_UNCERTAIN penalty on AS (Section 4)
+    const asFinal = d.dataUncertain ? asRaw - 15 : asRaw;
 
     const asymScore = d.conf * 0.6 + d.quality * 0.4;
     const asymmetry: Asymmetry = asymScore >= 75 ? "HIGH" : asymScore >= 55 ? "MED" : "LOW";
     const dominant = override.isOverridden ? "risk" as const :
                      opportunity > risk + 15 ? "opportunity" as const :
                      risk > opportunity + 15 ? "risk" as const : "neutral" as const;
-    const momentum = clamp(d.psi - 40, 0, 60) / 60 * 100;
+    const momentumScore = computeMomentumScore(d.psi);
     const momentumLabel = deriveMomentumLabel(d.psi);
-    const stabilitySetup = computeStabilitySetup(opportunity, risk, d.conf, momentum, d.quality);
+    const momentum = clamp(d.psi - 40, 0, 60) / 60 * 100;
+    const stabilitySetup = computeStabilitySetup(opportunity, risk, d.conf, momentum, d.quality, d.dataUncertain);
+
     return {
       netuid: s.netuid!,
       name: s.subnet_name || `SN-${s.netuid}`,
@@ -413,7 +459,8 @@ export function processSignals(
       liquidity: 50,
       momentum,
       momentumLabel,
-      reasons: override.isOverridden ? override.overrideReasons : deriveReasons(d.psi, d.conf, d.quality, s.state),
+      momentumScore,
+      reasons: override.isOverridden ? override.overrideReasons : deriveReasons(d.psi, d.conf, d.quality, s.state, d.dataUncertain),
       dominant,
       isMicroCap: false,
       asMicro: 0,
@@ -423,12 +470,12 @@ export function processSignals(
       isOverridden: override.isOverridden,
       systemStatus: override.systemStatus,
       overrideReasons: override.overrideReasons,
+      dataUncertain: d.dataUncertain,
+      confianceData: d.confianceData,
     };
   }).sort((a, b) => b.psi - a.psi);
 
-  // Classify micro-caps
   classifyMicroCaps(signals);
-
   return signals;
 }
 
@@ -450,7 +497,7 @@ export function computeSmartCapital(raw: RawSignal[]): SmartCapitalData {
     const conf = s.confidence_pct ?? 0;
     const quality = s.quality_score ?? 0;
     const accumulationSignal = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
-    const distributionSignal = clamp((100 - quality) * 0.4, 0, 40) + 
+    const distributionSignal = clamp((100 - quality) * 0.4, 0, 40) +
       (psi >= 80 && quality < 50 ? 30 : 0) +
       (s.state === "BREAK" || s.state === "EXIT_FAST" ? 25 : 0);
     return { acc: accumulationSignal, dist: distributionSignal };
@@ -518,8 +565,7 @@ export function computeGlobalOpportunity(raw: RawSignal[]): number {
     return deriveOpportunity(psi, conf, quality, s.state);
   });
   if (!scores.length) return 0;
-  const normalized = normalizeWithVariance(scores, 8);
-  // Global = weighted average favoring top quartile
+  const normalized = normalizeWithVariance(scores, 6);
   const sorted = [...normalized].sort((a, b) => b - a);
   const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
   const topAvg = top25.reduce((a, b) => a + b, 0) / top25.length;
@@ -536,8 +582,7 @@ export function computeGlobalRisk(raw: RawSignal[]): number {
     return deriveRisk(psi, conf, quality, s.state);
   });
   if (!scores.length) return 0;
-  const normalized = normalizeWithVariance(scores, 8);
-  // Global risk = weighted average favoring highest risks
+  const normalized = normalizeWithVariance(scores, 6);
   const sorted = [...normalized].sort((a, b) => b - a);
   const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
   const topAvg = top25.reduce((a, b) => a + b, 0) / top25.length;

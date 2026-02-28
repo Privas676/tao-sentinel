@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import {
-  deriveMomentumLabel, momentumColor,
-  opportunityColor, riskColor, clamp,
+  deriveMomentumLabel, momentumColor, computeMomentumScore,
+  opportunityColor, riskColor, clamp, normalizeWithVariance,
   computeSmartCapital, type SmartCapitalState,
+  computeSaturationIndex, saturationAlert,
+  computeStabilitySetup, stabilityColor,
 } from "@/lib/gauge-engine";
 import {
   deriveSubnetAction, actionColor, actionBg, actionBorder, actionIcon,
@@ -13,6 +15,7 @@ import {
 import {
   confianceColor,
   type SourceMetrics,
+  fuseMetrics,
 } from "@/lib/data-fusion";
 import {
   evaluateRiskOverride, checkCoherence,
@@ -69,36 +72,39 @@ type SignalRow = {
 
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
 
+/* ─── Scoring functions (Section 3) ─── */
 function deriveOpp(psi: number, conf: number, quality: number, state: string | null): number {
   let opp = 0;
-  opp += (psi / 100) * (psi / 100) * 35;
-  opp += clamp(conf * 0.30, 0, 30);
-  opp += clamp(quality * 0.20, 0, 20);
-  if (state === "GO") opp += 15;
-  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 10;
+  opp += (psi / 100) * (psi / 100) * 30;
+  opp += clamp(quality * 0.25, 0, 25);
+  opp += clamp(conf * 0.20, 0, 20);
+  opp += clamp(psi * 0.15, 0, 15);
+  if (state === "GO") opp += 10;
+  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 7;
   else if (state === "WATCH") opp += 3;
-  else if (state === "BREAK" || state === "EXIT_FAST") opp -= 10;
-  if (psi >= 60 && quality >= 60) opp += 8;
-  if (psi < 30) opp -= 5;
-  return Math.round(clamp(opp, 0, 99)); // Cap at 99
+  if (state === "BREAK" || state === "EXIT_FAST") opp -= 15;
+  if (psi >= 60 && quality >= 60) opp += 5;
+  if (psi < 30) opp -= 8;
+  return Math.round(clamp(opp, 0, 100));
 }
 
-function deriveRisk(psi: number, conf: number, quality: number, state: string | null): number {
+function deriveRisk(psi: number, conf: number, quality: number, state: string | null, dataUncertain = false): number {
   let risk = 0;
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 40;
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 35;
   else if (state === "HOLD") risk += 5;
   const qualDeficit = (100 - quality) / 100;
-  risk += qualDeficit * qualDeficit * 30;
+  risk += qualDeficit * qualDeficit * 25;
   const confDeficit = (100 - conf) / 100;
   risk += confDeficit * confDeficit * 20;
   if (psi >= 80 && quality < 50) risk += 15;
-  if (psi >= 90 && quality < 40) risk += 10;
+  if (psi >= 90 && quality < 40) risk += 8;
   if (psi < 25) risk += 8;
   if (psi >= 40 && psi <= 60 && conf < 40) risk += 5;
+  // DATA_UNCERTAIN penalty (Section 3.2)
+  if (dataUncertain) risk += 10;
   return Math.round(clamp(risk, 0, 100));
 }
 
-/** Per-subnet Smart Capital state derived from individual metrics */
 function deriveSubnetSC(psi: number, quality: number, conf: number, state: string | null): SmartCapitalState {
   const accSignal = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
   const distSignal = clamp((100 - quality) * 0.4, 0, 40) +
@@ -118,7 +124,6 @@ function scColor(state: SmartCapitalState): string {
   }
 }
 
-/** Map state to display label — BREAK → ZONE CRITIQUE */
 function stateDisplayLabel(state: string | null): string {
   switch (state) {
     case "BREAK": return "ZONE CRITIQUE";
@@ -191,7 +196,6 @@ export default function SubnetsPage() {
     refetchInterval: 120_000,
   });
 
-  // 7-day price sparklines
   const { data: sparklines } = useQuery({
     queryKey: ["sparklines-7d"],
     queryFn: async () => {
@@ -213,88 +217,120 @@ export default function SubnetsPage() {
     refetchInterval: 300_000,
   });
 
+  // Consensus data from fusion
+  const consensusMap = useMemo(() => {
+    if (!primaryMetrics && !secondaryMetrics) return new Map<number, { confianceData: number; dataUncertain: boolean }>();
+    const primaryArr = primaryMetrics ? [...primaryMetrics.values()] : [];
+    const secondaryArr = secondaryMetrics ? [...secondaryMetrics.values()] : [];
+    const fused = fuseMetrics(primaryArr, secondaryArr);
+    const map = new Map<number, { confianceData: number; dataUncertain: boolean }>();
+    for (const f of fused) {
+      map.set(f.netuid, { confianceData: f.confianceData, dataUncertain: f.dataUncertain });
+    }
+    return map;
+  }, [primaryMetrics, secondaryMetrics]);
+
+  // Saturation index
+  const saturationIndex = useMemo(() => {
+    if (!signals) return 0;
+    const valid = signals.filter(s => s.netuid != null);
+    const withScores = valid.map(s => {
+      const psi = s.mpi ?? s.score ?? 0;
+      const conf = s.confidence_pct ?? 0;
+      const quality = s.quality_score ?? 0;
+      const opp = deriveOpp(psi, conf, quality, s.state);
+      const risk = deriveRisk(psi, conf, quality, s.state);
+      return opp - risk;
+    });
+    const highAS = withScores.filter(as => as > 40).length;
+    return valid.length > 0 ? Math.round((highAS / valid.length) * 100) : 0;
+  }, [signals]);
+  const isSaturated = saturationAlert(saturationIndex);
+
   const rows = useMemo(() => {
     if (!signals) return [];
-    return signals
+
+    const allRows = signals
       .filter(s => s.netuid != null)
       .map(s => {
         const psi = s.mpi ?? s.score ?? 0;
         const conf = s.confidence_pct ?? 0;
         const quality = s.quality_score ?? 0;
-        let opp = deriveOpp(psi, conf, quality, s.state);
-        const risk = deriveRisk(psi, conf, quality, s.state);
+        const consensus = consensusMap.get(s.netuid!);
+        const dataUncertain = consensus?.dataUncertain ?? false;
+        const confianceScore = consensus?.confianceData ?? 50;
 
-        // Risk Override Engine
-        const override = evaluateRiskOverride({ state: s.state, psi, risk, quality });
-        if (override.isOverridden) {
-          opp = 0; // AS_final = 0
-        }
-
-        const asymmetry = opp - risk;
-        const momentumLabel = deriveMomentumLabel(psi);
-
-        // Action: if overridden → always EXIT
-        let action = override.isOverridden ? "EXIT" as const : deriveSubnetAction(opp, risk, conf);
-
-        // If system status ≠ OK, never allow ENTER
-        if (override.systemStatus !== "OK" && action === "ENTER") {
-          action = "WATCH";
-        }
-
-        // Coherence check
-        checkCoherence(override.isOverridden, action);
-
-        const sc = deriveSubnetSC(psi, quality, conf, s.state);
-        const owned = ownedNetuids.has(s.netuid!);
-
-        // Per-subnet confiance
-        const pm = primaryMetrics?.get(s.netuid!);
-        const sm = secondaryMetrics?.get(s.netuid!);
-        let confianceScore = 50;
-        if (pm && sm) {
-          let conc = 0, n = 0;
-          for (const f of ["price", "cap", "vol24h"] as const) {
-            const pv = pm[f] as number | null;
-            const sv = sm[f] as number | null;
-            if (pv && pv > 0 && sv && sv > 0) {
-              const avg = (Math.abs(pv) + Math.abs(sv)) / 2;
-              const diff = avg > 0 ? Math.abs(pv - sv) / avg * 100 : 0;
-              conc += Math.max(0, 100 - diff * 5);
-              n++;
-            }
-          }
-          confianceScore = n > 0 ? Math.round(conc / n * 0.6 + 40) : 60;
-        } else if (pm || sm) {
-          confianceScore = 45;
-        }
-
-        return {
-          netuid: s.netuid!,
-          name: s.subnet_name || `SN-${s.netuid}`,
-          state: s.state,
-          psi, conf, opp, risk, asymmetry,
-          momentumLabel, action, sc, owned, confianceScore,
-          spark: sparklines?.get(s.netuid!) || [],
-          isOverridden: override.isOverridden,
-          systemStatus: override.systemStatus,
-          overrideReasons: override.overrideReasons,
-        };
-      })
-      .filter(r => {
-        if (mode === "opportunities") return !r.isOverridden && r.opp > r.risk;
-        if (mode === "risks") return r.risk >= r.opp;
-        if (mode === "mine") return r.owned;
-        return true;
-      })
-      .sort((a, b) => {
-        // In risks mode: overridden first, then by risk desc
-        if (mode === "risks") {
-          if (a.isOverridden !== b.isOverridden) return a.isOverridden ? -1 : 1;
-          return b.risk - a.risk;
-        }
-        return b.asymmetry - a.asymmetry;
+        return { netuid: s.netuid!, psi, conf, quality, state: s.state, name: s.subnet_name || `SN-${s.netuid}`, dataUncertain, confianceScore };
       });
-  }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines]);
+
+    // Batch normalize (Section 2)
+    const oppRaws = allRows.map(r => deriveOpp(r.psi, r.conf, r.quality, r.state));
+    const riskRaws = allRows.map(r => deriveRisk(r.psi, r.conf, r.quality, r.state, r.dataUncertain));
+    const oppNorm = normalizeWithVariance(oppRaws, 6);
+    const riskNorm = normalizeWithVariance(riskRaws, 6);
+
+    return allRows.map((r, i) => {
+      let opp = oppNorm[i];
+      const risk = riskNorm[i];
+
+      // Section 7: DEPEG coherence
+      const isBreak = r.state === "BREAK" || r.state === "EXIT_FAST";
+      if (isBreak || r.state === "DEPEG_WARNING" || r.state === "DEPEG_CRITICAL") {
+        opp = 0;
+      }
+
+      // Risk Override
+      const override = evaluateRiskOverride({ state: r.state, psi: r.psi, risk, quality: r.quality });
+      if (override.isOverridden) opp = 0;
+
+      // AS signed (Section 4) with DATA_UNCERTAIN penalty
+      let asymmetry = opp - risk;
+      if (r.dataUncertain) asymmetry -= 15;
+
+      const momentumLabel = deriveMomentumLabel(r.psi);
+      const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
+
+      let action = override.isOverridden ? "EXIT" as const : deriveSubnetAction(opp, risk, r.conf);
+      if (override.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
+
+      // Saturation gating (Section 9): stricter ENTER
+      if (isSaturated && action === "ENTER") {
+        const stability = computeStabilitySetup(opp, risk, r.conf, momentum, r.quality, r.dataUncertain);
+        if (stability <= 70) action = "WATCH";
+      }
+
+      checkCoherence(override.isOverridden, action);
+      const sc = deriveSubnetSC(r.psi, r.quality, r.conf, r.state);
+      const owned = ownedNetuids.has(r.netuid);
+
+      return {
+        netuid: r.netuid,
+        name: r.name,
+        state: r.state,
+        psi: r.psi, conf: r.conf, opp, risk, asymmetry,
+        momentumLabel, action, sc, owned,
+        confianceScore: r.confianceScore,
+        dataUncertain: r.dataUncertain,
+        spark: sparklines?.get(r.netuid) || [],
+        isOverridden: override.isOverridden,
+        systemStatus: override.systemStatus,
+        overrideReasons: override.overrideReasons,
+      };
+    })
+    .filter(r => {
+      if (mode === "opportunities") return !r.isOverridden && r.opp > r.risk;
+      if (mode === "risks") return r.risk >= r.opp;
+      if (mode === "mine") return r.owned;
+      return true;
+    })
+    .sort((a, b) => {
+      if (mode === "risks") {
+        if (a.isOverridden !== b.isOverridden) return a.isOverridden ? -1 : 1;
+        return b.risk - a.risk;
+      }
+      return b.asymmetry - a.asymmetry;
+    });
+  }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines, consensusMap, isSaturated]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
@@ -331,6 +367,11 @@ export default function SubnetsPage() {
             </button>
           ))}
         </div>
+        {isSaturated && (
+          <span className="font-mono text-[9px] px-2 py-1 rounded" style={{ background: "rgba(255,109,0,0.08)", color: "rgba(255,109,0,0.8)", border: "1px solid rgba(255,109,0,0.15)" }}>
+            ⚠ {lang === "fr" ? "MARCHÉ SATURÉ" : "MARKET SATURATED"} ({saturationIndex}%)
+          </span>
+        )}
       </div>
 
       {/* Table */}
@@ -376,6 +417,12 @@ export default function SubnetsPage() {
                       <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider"
                         style={{ background: "rgba(229,57,53,0.12)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.25)" }}>
                         ⛔ CRITIQUE – Override
+                      </span>
+                    )}
+                    {r.dataUncertain && !r.isOverridden && (
+                      <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded text-[7px] tracking-wider"
+                        style={{ background: "rgba(255,152,0,0.08)", color: "rgba(255,152,0,0.7)", border: "1px solid rgba(255,152,0,0.15)" }}>
+                        ⚠ DATA
                       </span>
                     )}
                   </td>
