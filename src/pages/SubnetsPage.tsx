@@ -6,7 +6,7 @@ import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import {
   deriveMomentumLabel, momentumColor, computeMomentumScore,
-  opportunityColor, riskColor, clamp, normalizeWithVariance,
+  opportunityColor, riskColor, clamp, normalizeWithVariance, normalizeOpportunity,
   computeSmartCapital, type SmartCapitalState,
   computeSaturationIndex, saturationAlert,
   computeStabilitySetup, stabilityColor,
@@ -362,8 +362,8 @@ export default function SubnetsPage() {
         };
       });
 
-    // Normalize: blend raw score (60%) + percentile (40%) to preserve absolute meaning
-    const oppPercentile = normalizeWithVariance(allRows.map(r => r.oppRaw), 3);
+    // Normalize: percentile mapping for Opp, S-curve for Risk
+    const oppPercentile = normalizeOpportunity(allRows.map(r => r.oppRaw));
     const riskPercentile = normalizeWithVariance(allRows.map(r => r.riskRaw), 3);
 
     return allRows.map((r, i) => {
