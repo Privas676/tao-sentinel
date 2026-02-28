@@ -3,6 +3,7 @@
 /*     v2: ANTI-100 + CONSENSUS DATA        */
 /* ═══════════════════════════════════════ */
 import { evaluateRiskOverride, capOpportunity } from "./risk-override";
+import { calibrateScores } from "./risk-calibration";
 
 export type GaugeState = "CALM" | "ALERT" | "IMMINENT" | "EXIT";
 export type GaugePhase = "BUILD" | "ARMED" | "TRIGGER" | "NONE";
@@ -442,8 +443,16 @@ export function processSignals(
       opportunity = 0;
     }
 
+    // ── CALIBRATION: floor + critical override ──
+    const cal = calibrateScores({
+      risk, opportunity,
+      state: s.state, isTopRank: false, isOverridden: override.isOverridden,
+    });
+    opportunity = cal.opportunity;
+    risk = cal.risk;
+
     // AS signed (Section 4)
-    const asRaw = opportunity - risk;
+    const asRaw = cal.asymmetry;
 
     // DATA_UNCERTAIN penalty on AS (Section 4)
     const asFinal = d.dataUncertain ? asRaw - 15 : asRaw;

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { clamp } from "@/lib/gauge-engine";
+import { calibrateScores } from "@/lib/risk-calibration";
 import { deriveSubnetAction, actionColor, actionBg, actionBorder, actionIcon } from "@/lib/strategy-engine";
 import { evaluateRiskOverride, systemStatusLabel, systemStatusColor } from "@/lib/risk-override";
 import { fuseMetrics, confianceColor, type SourceMetrics } from "@/lib/data-fusion";
@@ -369,17 +370,25 @@ export default function PortfolioPage() {
         volCap: sl.volCap, topMinersShare: sl.topMinersShare, liqRatio: sl.liqRatio, priceVol7d: 0,
       } : undefined;
 
-      let opp = deriveOpp(psi, conf, quality, state);
-      const risk = deriveRisk(psi, conf, quality, state, dataUncertain, market);
+      let oppRaw = deriveOpp(psi, conf, quality, state);
+      const riskRaw = deriveRisk(psi, conf, quality, state, dataUncertain, market);
       const isBreak = state === "BREAK" || state === "EXIT_FAST";
-      if (isBreak || state === "DEPEG_WARNING" || state === "DEPEG_CRITICAL") opp = 0;
+      if (isBreak || state === "DEPEG_WARNING" || state === "DEPEG_CRITICAL") oppRaw = 0;
 
-      const override = evaluateRiskOverride({ state, psi, risk, quality });
-      if (override.isOverridden) opp = 0;
+      const override = evaluateRiskOverride({ state, psi, risk: riskRaw, quality });
+      if (override.isOverridden) oppRaw = 0;
 
-      let asymmetry = opp - risk;
+      // ── CALIBRATION: floor + critical override ──
+      const cal = calibrateScores({
+        risk: riskRaw, opportunity: oppRaw,
+        state, isTopRank: false, isOverridden: override.isOverridden,
+      });
+      const opp = cal.opportunity;
+      const risk = cal.risk;
+
+      let asymmetry = cal.asymmetry;
       if (dataUncertain) asymmetry -= 15;
-
+      
       const sc = deriveSC(psi, quality, conf, state);
       const momentum = clamp(psi - 40, 0, 60) / 60 * 100;
       const stability = computeStabilitySetup(opp, risk, conf, momentum, quality, dataUncertain);
