@@ -24,7 +24,9 @@ function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: 
   if (data.length < 2) return <span className="text-white/10 text-[9px]">—</span>;
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
-  const trend = data[data.length - 1] - data[0];
+  const first = data[0], last = data[data.length - 1];
+  const trend = last - first;
+  const pctChange = first > 0 ? ((last - first) / first) * 100 : 0;
   const color = trend > 0 ? "rgba(76,175,80,0.7)" : trend < 0 ? "rgba(229,57,53,0.7)" : "rgba(255,255,255,0.3)";
   const pts = data.map((v, i) => {
     const x = (i / (data.length - 1)) * width;
@@ -32,9 +34,20 @@ function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: 
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
   return (
-    <svg width={width} height={height} className="inline-block">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className="relative group inline-block">
+      <svg width={width} height={height} className="inline-block">
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
+        style={{ width: 130 }}>
+        <div className="rounded-lg px-3 py-2 font-mono text-[10px] space-y-1"
+          style={{ background: "rgba(10,10,14,0.95)", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 4px 20px rgba(0,0,0,0.6)" }}>
+          <div className="flex justify-between"><span className="text-white/35">Min</span><span className="text-white/70">{min.toFixed(4)}</span></div>
+          <div className="flex justify-between"><span className="text-white/35">Max</span><span className="text-white/70">{max.toFixed(4)}</span></div>
+          <div className="flex justify-between"><span className="text-white/35">7j</span><span style={{ color }} className="font-bold">{pctChange > 0 ? "+" : ""}{pctChange.toFixed(1)}%</span></div>
+        </div>
+      </div>
+    </div>
   );
 }
 
