@@ -11,6 +11,40 @@ import { computeStabilitySetup, stabilityColor } from "@/lib/gauge-engine";
 import { toast } from "sonner";
 
 /* ═══════════════════════════════════════ */
+/*        SPARKLINE COMPONENT              */
+/* ═══════════════════════════════════════ */
+function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: number; height?: number }) {
+  if (data.length < 2) return <span className="text-white/10 text-[9px]">—</span>;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const first = data[0], last = data[data.length - 1];
+  const trend = last - first;
+  const pctChange = first > 0 ? ((last - first) / first) * 100 : 0;
+  const color = trend > 0 ? "rgba(76,175,80,0.7)" : trend < 0 ? "rgba(229,57,53,0.7)" : "rgba(255,255,255,0.3)";
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - 1 - ((v - min) / range) * (height - 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return (
+    <div className="relative group inline-block">
+      <svg width={width} height={height} className="inline-block">
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
+        style={{ width: 130 }}>
+        <div className="rounded-lg px-3 py-2 font-mono text-[10px] space-y-1"
+          style={{ background: "rgba(10,10,14,0.95)", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 4px 20px rgba(0,0,0,0.6)" }}>
+          <div className="flex justify-between"><span className="text-white/35">Min</span><span className="text-white/70">{min.toFixed(4)}</span></div>
+          <div className="flex justify-between"><span className="text-white/35">Max</span><span className="text-white/70">{max.toFixed(4)}</span></div>
+          <div className="flex justify-between"><span className="text-white/35">7j</span><span style={{ color }} className="font-bold">{pctChange > 0 ? "+" : ""}{pctChange.toFixed(1)}%</span></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════ */
 /*        TYPES                            */
 /* ═══════════════════════════════════════ */
 type SignalRow = {
@@ -140,6 +174,28 @@ export default function PortfolioPage() {
       return map;
     },
     refetchInterval: 30_000,
+  });
+
+  // Sparkline data (7 days)
+  const { data: sparklines } = useQuery({
+    queryKey: ["portfolio-sparklines-7d"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 8 * 86400_000).toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from("subnet_price_daily")
+        .select("netuid, date, price_close")
+        .gte("date", since)
+        .order("date", { ascending: true });
+      if (error) throw error;
+      const map = new Map<number, number[]>();
+      for (const r of data || []) {
+        if (r.price_close == null) continue;
+        if (!map.has(r.netuid)) map.set(r.netuid, []);
+        map.get(r.netuid)!.push(Number(r.price_close));
+      }
+      return map;
+    },
+    refetchInterval: 300_000,
   });
 
   const { data: signals } = useQuery({
@@ -457,6 +513,7 @@ export default function PortfolioPage() {
             <thead>
               <tr className="border-b border-white/[0.06]">
                 {["SN", fr ? "Nom" : "Name", "TAO", fr ? "Prix" : "Price", fr ? "Valeur" : "Value",
+                  fr ? "Prix 7j" : "Price 7d",
                   "Opp", fr ? "Risque" : "Risk", "AS", fr ? "Stabilité" : "Stability",
                   "Smart Capital", fr ? "Statut" : "Status", "Action", ""].map((h, i) => (
                   <th key={i} className="py-2 px-2 font-mono text-[8px] tracking-[0.15em] uppercase text-white/25 font-normal">{h}</th>
@@ -497,6 +554,7 @@ export default function PortfolioPage() {
                     <td className="py-3 px-2 text-sm font-mono text-white/70">{r.quantity.toFixed(2)}</td>
                     <td className="py-3 px-2 text-sm font-mono text-white/50">{r.price > 0 ? r.price.toFixed(6) : "—"}</td>
                     <td className="py-3 px-2 text-sm font-mono" style={{ color: "rgba(255,215,0,0.7)" }}>{r.currentValue > 0 ? r.currentValue.toFixed(4) : "—"}</td>
+                    <td className="py-3 px-2 text-center"><Sparkline data={sparklines?.get(r.netuid) || []} /></td>
                     <td className="py-3 px-2 text-sm font-mono font-bold" style={{ color: `rgba(76,175,80,${r.opp > 60 ? 0.9 : 0.5})` }}>{r.opp}</td>
                     <td className="py-3 px-2 text-sm font-mono font-bold" style={{ color: r.risk >= 60 ? "rgba(229,57,53,0.9)" : r.risk >= 40 ? "rgba(255,193,7,0.8)" : "rgba(255,255,255,0.4)" }}>{r.risk}</td>
                     <td className="py-3 px-2 text-sm font-mono font-bold" style={{
