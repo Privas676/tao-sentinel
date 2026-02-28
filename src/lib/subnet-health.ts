@@ -265,17 +265,24 @@ export function computeAllHealthScores(data: SubnetHealthData, recalc: Recalcula
 
 /* ─── Composite Risk (Section 5) ─── */
 
-export function computeHealthRisk(scores: HealthScores, dataConsistencyRisk: number): number {
+export function computeHealthRisk(scores: HealthScores, dataConsistencyRisk: number, recalc?: RecalculatedMetrics): number {
   // Invert health scores to risk: high health = low risk
   const liquidityRisk = 100 - scores.liquidityHealth;
   const activityRisk = 100 - scores.activityHealth;
 
-  const risk =
+  let risk =
     liquidityRisk * 0.25 +
     scores.emissionPressure * 0.20 +
     scores.dilutionRisk * 0.20 +
     activityRisk * 0.20 +
     dataConsistencyRisk * 0.15;
+
+  // Liq Haircut penalty: large pool/spot divergence signals structural risk
+  if (recalc) {
+    const absHaircut = Math.abs(recalc.liqHaircut);
+    if (absHaircut > 20) risk += 15;
+    else if (absHaircut > 10) risk += 8;
+  }
 
   return clamp(Math.round(risk), 0, 100);
 }
@@ -324,7 +331,7 @@ export function computeSubnetHealth(
   const data = extractHealthData(netuid, rawPayload, chainData, taoUsd);
   const recalc = recalculate(data);
   const scores = computeAllHealthScores(data, recalc);
-  const riskComposite = computeHealthRisk(scores, dataConsistencyRisk);
+  const riskComposite = computeHealthRisk(scores, dataConsistencyRisk, recalc);
   const opportunityRaw = computeHealthOpportunity(momentumScore, scores, smartCapitalScore, preHypeIntensity, recalc);
 
   return { data, recalc, scores, riskComposite, opportunityRaw };

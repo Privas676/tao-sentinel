@@ -322,7 +322,7 @@ export function useSubnetScores(): UnifiedScoresResult {
         const preHypeIntensity = (psi > 50 && quality > 40 && sc === "ACCUMULATION") ? clamp(psi - 30, 0, 70) : 0;
 
         // Health-based risk & opportunity
-        const riskRaw = computeHealthRisk(healthScores, dataConsistencyRisk);
+        const riskRaw = computeHealthRisk(healthScores, dataConsistencyRisk, recalc);
         const oppRaw = computeHealthOpportunity(momentumScore, healthScores, scScore, preHypeIntensity, recalc);
 
         return {
