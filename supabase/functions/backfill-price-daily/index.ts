@@ -14,30 +14,51 @@ Deno.serve(async (req) => {
     const headers = { Authorization: apiKey, Accept: "application/json" };
 
     const url = new URL(req.url);
-    const offset = Number(url.searchParams.get("offset") || "0");
-    const chunkSize = Number(url.searchParams.get("chunk") || "20");
-
     const since = new Date(Date.now() - 31 * 86400_000).toISOString();
 
-    const poolRes = await fetch("https://api.taostats.io/api/dtao/pool/latest/v1?limit=200", { headers });
-    if (!poolRes.ok) throw new Error(`Taostats pools error: ${poolRes.status}`);
-    const poolJson = await poolRes.json();
-    const allNetuids = (poolJson.data || []).map((p: any) => Number(p.netuid)).filter((n: number) => !isNaN(n) && n > 0).sort((a: number, b: number) => a - b);
+    // Get netuids that still need backfilling from DB (those with < 10 days of data in last 30d)
+    const { data: coveredRows } = await sb
+      .from("subnet_price_daily")
+      .select("netuid")
+      .gte("date", new Date(Date.now() - 31 * 86400_000).toISOString().slice(0, 10));
+    
+    const coverageCount = new Map<number, number>();
+    for (const r of coveredRows || []) {
+      coverageCount.set(r.netuid, (coverageCount.get(r.netuid) || 0) + 1);
+    }
 
-    const netuids = allNetuids.slice(offset, offset + chunkSize);
-    console.log(`Backfilling chunk offset=${offset} size=${netuids.length}/${allNetuids.length}`);
+    // Get all known netuids from subnets table
+    const { data: allSubnets } = await sb.from("subnets").select("netuid").order("netuid");
+    const allNetuids = (allSubnets || []).map(s => s.netuid);
+    
+    // Filter to netuids needing backfill (< 15 days coverage)
+    const needsBackfill = allNetuids.filter(n => (coverageCount.get(n) || 0) < 15);
+    
+    const chunkSize = Number(url.searchParams.get("chunk") || "4");
+    const chunk = needsBackfill.slice(0, chunkSize);
+
+    if (chunk.length === 0) {
+      return new Response(JSON.stringify({ ok: true, message: "All subnets fully backfilled", total: allNetuids.length }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`Backfilling ${chunk.length} subnets needing data: ${chunk.join(",")}`);
 
     let totalInserted = 0;
     const errors: string[] = [];
 
-    // Sequential to respect rate limits
-    for (const netuid of netuids) {
+    for (const netuid of chunk) {
       try {
         const histUrl = `https://api.taostats.io/api/dtao/pool/history/v1?netuid=${netuid}&start_date=${since}&limit=1000`;
         const res = await fetch(histUrl, { headers });
         if (!res.ok) {
           const text = await res.text();
           errors.push(`SN-${netuid}: HTTP ${res.status}`);
+          if (res.status === 429) {
+            // Stop immediately on rate limit, don't waste more requests
+            break;
+          }
           continue;
         }
         const json = await res.json();
@@ -71,18 +92,16 @@ Deno.serve(async (req) => {
         if (error) errors.push(`SN-${netuid}: ${error.message}`);
         else totalInserted += rows.length;
 
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 2500));
       } catch (e) {
         errors.push(`SN-${netuid}: ${String(e)}`);
       }
     }
 
-    const hasMore = offset + chunkSize < allNetuids.length;
-    console.log(`Chunk done: ${totalInserted} rows, ${errors.length} errors, hasMore=${hasMore}`);
+    const remaining = needsBackfill.length - chunk.length;
     return new Response(JSON.stringify({
-      ok: true, inserted: totalInserted, processed: netuids.length, total: allNetuids.length,
-      hasMore, nextOffset: hasMore ? offset + chunkSize : null,
-      errors: errors.slice(0, 10),
+      ok: true, inserted: totalInserted, processed: chunk.join(","),
+      remaining, errors: errors.slice(0, 10),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("backfill-price-daily error:", e);
