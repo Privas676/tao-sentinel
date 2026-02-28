@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
+import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import {
   deriveMomentumLabel, momentumColor, computeMomentumScore,
   opportunityColor, riskColor, clamp, normalizeWithVariance,
@@ -22,8 +23,6 @@ import {
   systemStatusColor, systemStatusLabel,
   type SystemStatus,
 } from "@/lib/risk-override";
-import { usePositions } from "@/hooks/use-positions";
-import { useAuth } from "@/hooks/use-auth";
 
 /* ═══════════════════════════════════════ */
 /*        SPARKLINE COMPONENT              */
@@ -179,13 +178,7 @@ function stateDisplayLabel(state: string | null): string {
 export default function SubnetsPage() {
   const { t, lang } = useI18n();
   const [mode, setMode] = useState<ViewMode>("all");
-  const { user } = useAuth();
-  const { data: positions } = usePositions();
-
-  const ownedNetuids = useMemo(() => {
-    if (!positions?.length) return new Set<number>();
-    return new Set(positions.map(p => p.netuid));
-  }, [positions]);
+  const { ownedNetuids, addPosition, isOwned } = useLocalPortfolio();
 
   const { data: signals } = useQuery({
     queryKey: ["signals-latest-table"],
@@ -428,7 +421,7 @@ export default function SubnetsPage() {
     { value: "all", label: t("sub.mode_all") },
     { value: "opportunities", label: t("sub.mode_opp") },
     { value: "risks", label: t("sub.mode_risk") },
-    ...(user ? [{ value: "mine" as ViewMode, label: lang === "fr" ? "Mes subnets" : "My subnets" }] : []),
+    ...(ownedNetuids.size > 0 ? [{ value: "mine" as ViewMode, label: lang === "fr" ? "Mes subnets" : "My subnets" }] : []),
   ];
 
   const scLabelFn = (state: SmartCapitalState): string => {
@@ -482,7 +475,7 @@ export default function SubnetsPage() {
               <th className="text-center py-3 px-2">{t("sub.momentum")}</th>
               <th className="text-center py-3 px-2">{t("sc.label")}</th>
               <th className="text-right py-3 px-2">{t("data.confiance")}</th>
-              {user && <th className="text-center py-3 px-2">✔</th>}
+              <th className="text-center py-3 px-2">✔</th>
             </tr>
           </thead>
           <tbody>
@@ -556,13 +549,17 @@ export default function SubnetsPage() {
                       {r.confianceScore}%
                     </span>
                   </td>
-                  {user && (
-                    <td className="py-3 px-2 text-center">
-                      {r.owned && (
-                        <span style={{ color: "rgba(76,175,80,0.8)", fontSize: 14 }}>✔</span>
-                      )}
-                    </td>
-                  )}
+                  <td className="py-3 px-2 text-center">
+                    {r.owned ? (
+                      <span style={{ color: "rgba(76,175,80,0.8)", fontSize: 14 }}>✔</span>
+                    ) : (
+                      <button onClick={() => addPosition(r.netuid, 0)}
+                        className="font-mono text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ background: "rgba(76,175,80,0.08)", color: "rgba(76,175,80,0.6)", border: "1px solid rgba(76,175,80,0.15)" }}>
+                        +
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}
