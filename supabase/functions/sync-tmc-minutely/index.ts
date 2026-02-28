@@ -13,10 +13,16 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("TAOMARKETCAP_API_KEY");
     if (!apiKey) throw new Error("TAOMARKETCAP_API_KEY not configured");
 
-    const headers = { Authorization: `Api-Key ${apiKey}`, Accept: "application/json" };
+    // TMC docs: "Authorization: Api-Key <key>" — try both formats
+    let headers: Record<string, string> = { Authorization: `Api-Key ${apiKey}`, Accept: "application/json" };
 
-    // Fetch subnets table (main endpoint with price, volume, marketcap, variations)
-    const tableRes = await fetch("https://api.taomarketcap.com/public/v1/subnets/table/", { headers });
+    let tableRes = await fetch("https://api.taomarketcap.com/public/v1/subnets/table/", { headers });
+    if (tableRes.status === 401 || tableRes.status === 403) {
+      console.log("Api-Key format failed, trying raw key format...");
+      headers = { Authorization: apiKey, Accept: "application/json" };
+      tableRes = await fetch("https://api.taomarketcap.com/public/v1/subnets/table/", { headers });
+    }
+
     if (!tableRes.ok) {
       const body = await tableRes.text();
       throw new Error(`TMC subnets/table error ${tableRes.status}: ${body}`);
