@@ -1,18 +1,16 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
+import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import {
-  SubnetSignal, RawSignal, clamp,
-  processSignals,
-  computeGlobalOpportunity, computeGlobalRisk,
-  computeGlobalConfidence,
+  clamp,
   opportunityColor, riskColor,
   computeSmartCapital,
   computeASMicro, detectPreHype, computeSaturationIndex, saturationAlert,
   stabilityColor,
-  type ConsensusDataMap,
+  type SmartCapitalState, type RawSignal,
 } from "@/lib/gauge-engine";
 import {
   actionColor, actionBg, actionBorder, actionIcon,
@@ -21,12 +19,10 @@ import {
   deriveMacroRecommendation, macroColor, macroBg, macroBorder, macroIcon,
 } from "@/lib/strategy-engine";
 import {
-  computeGlobalConfianceData, confianceColor, shouldModerateRecommendation,
+  computeGlobalConfianceData, confianceColor,
   fuseMetrics,
-  type SourceMetrics,
 } from "@/lib/data-fusion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { computeStabilitySetup } from "@/lib/gauge-engine";
 
 /* ═══════════════════════════════════════ */
 /*          SPARKLINE HELPER               */
@@ -57,19 +53,31 @@ function MetricCard({ label, value, color, sub }: { label: string; value: string
 }
 
 /* ═══════════════════════════════════════ */
+/*    Dashboard signal type (adapter)      */
+/* ═══════════════════════════════════════ */
+type DashSignal = UnifiedSubnetScore & {
+  sparkline_7d: number[];
+  dominant: "opportunity" | "risk" | "neutral";
+  isMicroCap: boolean;
+  asMicro: number;
+  preHype: boolean;
+  preHypeIntensity: number;
+  reasons: string[];
+};
+
+/* ═══════════════════════════════════════ */
 /*     BEST SUBNET CARD                    */
 /* ═══════════════════════════════════════ */
 function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest, smartCapitalLabel }: {
-  signal: SubnetSignal; isMobile: boolean; t: (k: any) => string; onClick: () => void; isMicroBest?: boolean; smartCapitalLabel: string;
+  signal: DashSignal; isMobile: boolean; t: (k: any) => string; onClick: () => void; isMicroBest?: boolean; smartCapitalLabel: string;
 }) {
-  const action = deriveSubnetAction(signal.opportunity, signal.risk, signal.confidence);
-  const asymScore = signal.opportunity - signal.risk;
+  const action = signal.action;
+  const asymScore = signal.opp - signal.risk;
   return (
     <div onClick={onClick} className="cursor-pointer rounded-xl transition-all hover:scale-[1.01]" style={{
       background: "rgba(255,215,0,0.03)", border: "1px solid rgba(255,215,0,0.12)",
       padding: isMobile ? "14px 16px" : "20px 24px", boxShadow: "0 0 40px rgba(255,215,0,0.04)",
     }}>
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <span className="font-mono font-bold" style={{ color: "rgba(255,248,220,0.9)", fontSize: isMobile ? 16 : 20 }}>SN-{signal.netuid}</span>
@@ -84,7 +92,6 @@ function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest, smartCapita
             <span className="font-mono text-[8px] px-1.5 py-0.5 rounded" style={{ background: "rgba(255,152,0,0.08)", color: "rgba(255,152,0,0.7)", border: "1px solid rgba(255,152,0,0.15)" }}>⚠ DATA</span>
           )}
         </div>
-        {/* Subnet action badge */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{
           background: actionBg(action), border: `1px solid ${actionBorder(action)}`,
         }}>
@@ -94,12 +101,10 @@ function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest, smartCapita
           </span>
         </div>
       </div>
-
-      {/* Metrics grid */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
         <div className="flex flex-col">
           <span className="font-mono" style={{ color: "rgba(255,215,0,0.35)", fontSize: 8, letterSpacing: "0.12em" }}>{t("gauge.opportunity")}</span>
-          <span className="font-mono font-bold" style={{ color: opportunityColor(signal.opportunity), fontSize: isMobile ? 20 : 24 }}>{signal.opportunity}</span>
+          <span className="font-mono font-bold" style={{ color: opportunityColor(signal.opp), fontSize: isMobile ? 20 : 24 }}>{signal.opp}</span>
         </div>
         <div className="flex flex-col">
           <span className="font-mono" style={{ color: "rgba(229,57,53,0.3)", fontSize: 8, letterSpacing: "0.12em" }}>{t("gauge.risk")}</span>
@@ -119,7 +124,7 @@ function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest, smartCapita
         </div>
         <div className="flex flex-col">
           <span className="font-mono" style={{ color: "rgba(255,255,255,0.25)", fontSize: 8, letterSpacing: "0.12em" }}>{t("gauge.stability")}</span>
-          <span className="font-mono font-bold" style={{ color: stabilityColor(signal.stabilitySetup), fontSize: isMobile ? 14 : 16 }}>{signal.stabilitySetup}%</span>
+          <span className="font-mono font-bold" style={{ color: stabilityColor(signal.stability), fontSize: isMobile ? 14 : 16 }}>{signal.stability}%</span>
         </div>
         {signal.preHype && (
           <div className="flex flex-col">
@@ -136,10 +141,10 @@ function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest, smartCapita
 /*     MINI SUBNET ROW                     */
 /* ═══════════════════════════════════════ */
 function SubnetRow({ signal, rank, type, isMobile, t, onClick }: {
-  signal: SubnetSignal; rank: number; type: "opp" | "risk"; isMobile: boolean; t: (k: any) => string; onClick: () => void;
+  signal: DashSignal; rank: number; type: "opp" | "risk"; isMobile: boolean; t: (k: any) => string; onClick: () => void;
 }) {
-  const action = deriveSubnetAction(signal.opportunity, signal.risk, signal.confidence);
-  const mainScore = type === "opp" ? signal.opportunity : signal.risk;
+  const action = signal.action;
+  const mainScore = type === "opp" ? signal.opp : signal.risk;
   const mainColor = type === "opp" ? opportunityColor(mainScore) : riskColor(mainScore);
   return (
     <div onClick={onClick} className="flex items-center gap-3 py-2 px-3 rounded-lg cursor-pointer transition-all hover:bg-white/[0.03]"
@@ -163,7 +168,7 @@ function SubnetRow({ signal, rank, type, isMobile, t, onClick }: {
 /* ═══════════════════════════════════════ */
 /*     SUBNET SIDE PANEL                   */
 /* ═══════════════════════════════════════ */
-function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; open: boolean; onClose: () => void }) {
+function SubnetPanel({ signal, open, onClose }: { signal: DashSignal | null; open: boolean; onClose: () => void }) {
   const { t } = useI18n();
   if (!signal) return null;
   const { data: metrics } = useQuery({
@@ -174,9 +179,9 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
     },
     enabled: open,
   });
-  const oppC = opportunityColor(signal.opportunity);
+  const oppC = opportunityColor(signal.opp);
   const rskC = riskColor(signal.risk);
-  const action = deriveSubnetAction(signal.opportunity, signal.risk, signal.confidence);
+  const action = signal.action;
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -200,7 +205,7 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
           </div>
           <div className="flex items-center justify-center gap-8">
             <div className="text-center">
-              <div className="font-mono text-3xl font-bold" style={{ color: oppC }}>{signal.opportunity}</div>
+              <div className="font-mono text-3xl font-bold" style={{ color: oppC }}>{signal.opp}</div>
               <div className="font-mono text-[10px] text-white/40 tracking-widest mt-1">{t("gauge.opportunity")}</div>
             </div>
             <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.08)" }} />
@@ -211,11 +216,11 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
           </div>
           <div className="flex items-center justify-center gap-6">
             <div className="text-center">
-              <div className="font-mono text-lg font-bold" style={{ color: stabilityColor(signal.stabilitySetup) }}>{signal.stabilitySetup}%</div>
+              <div className="font-mono text-lg font-bold" style={{ color: stabilityColor(signal.stability) }}>{signal.stability}%</div>
               <div className="font-mono text-[9px] text-white/30 tracking-widest">{t("gauge.stability")}</div>
             </div>
             <div className="text-center">
-              <div className="font-mono text-lg font-bold" style={{ color: confianceColor(signal.confianceData) }}>{signal.confianceData}%</div>
+              <div className="font-mono text-lg font-bold" style={{ color: confianceColor(signal.confianceScore) }}>{signal.confianceScore}%</div>
               <div className="font-mono text-[9px] text-white/30 tracking-widest">{t("data.confiance")}</div>
             </div>
           </div>
@@ -268,9 +273,12 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
 export default function AlienGauge() {
   const { t, lang } = useI18n();
 
-  /* ─── data fetch ─── */
+  // ── UNIFIED SCORES (single source of truth) ──
+  const { scoresList, sparklines, scoreTimestamp, taoUsd } = useSubnetScores();
+
+  // Raw signals still needed for global Smart Capital computation
   const { data: rawSignals } = useQuery({
-    queryKey: ["signals-latest"],
+    queryKey: ["unified-signals"],
     queryFn: async () => {
       const { data, error } = await supabase.from("signals_latest").select("*");
       if (error) throw error;
@@ -279,119 +287,106 @@ export default function AlienGauge() {
     refetchInterval: 60_000,
   });
 
-  const { data: sparklines } = useQuery({
-    queryKey: ["sparklines-30d"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subnet_price_daily")
-        .select("netuid, date, price_close")
-        .gte("date", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
-        .order("date", { ascending: true });
-      if (error) throw error;
-      const map: Record<number, number[]> = {};
-      for (const row of data || []) {
-        if (!map[row.netuid]) map[row.netuid] = [];
-        map[row.netuid].push(Number(row.price_close) || 0);
-      }
-      return map;
-    },
-    refetchInterval: 300_000,
-  });
+  // Global metrics derived from UNIFIED scores
+  const globalOpp = useMemo(() => {
+    if (!scoresList.length) return 0;
+    const sorted = [...scoresList].sort((a, b) => b.opp - a.opp);
+    const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
+    const topAvg = top25.reduce((a, s) => a + s.opp, 0) / top25.length;
+    const allAvg = scoresList.reduce((a, s) => a + s.opp, 0) / scoresList.length;
+    return Math.round(topAvg * 0.6 + allAvg * 0.4);
+  }, [scoresList]);
 
-  /* ─── DataFusion sources ─── */
-  const { data: primaryMetricsRaw } = useQuery({
-    queryKey: ["metrics-primary"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subnet_metrics_ts")
-        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
-        .eq("source", "taostats")
-        .order("ts", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      const map = new Map<number, SourceMetrics>();
-      for (const r of data || []) {
-        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
-      }
-      return [...map.values()];
-    },
-    refetchInterval: 120_000,
-  });
+  const globalRisk = useMemo(() => {
+    if (!scoresList.length) return 0;
+    const sorted = [...scoresList].sort((a, b) => b.risk - a.risk);
+    const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
+    const topAvg = top25.reduce((a, s) => a + s.risk, 0) / top25.length;
+    const allAvg = scoresList.reduce((a, s) => a + s.risk, 0) / scoresList.length;
+    return Math.round(topAvg * 0.5 + allAvg * 0.5);
+  }, [scoresList]);
 
-  const { data: secondaryMetricsRaw } = useQuery({
-    queryKey: ["metrics-secondary"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subnet_metrics_ts")
-        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
-        .eq("source", "taomarketcap")
-        .order("ts", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      const map = new Map<number, SourceMetrics>();
-      for (const r of data || []) {
-        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taomarketcap" });
-      }
-      return [...map.values()];
-    },
-    refetchInterval: 120_000,
-  });
+  const globalConf = useMemo(() => {
+    if (!scoresList.length) return 0;
+    const confs = scoresList.map(s => s.conf).filter(c => c > 0);
+    return confs.length ? Math.round(confs.reduce((a, b) => a + b, 0) / confs.length) : 0;
+  }, [scoresList]);
 
-  /* ─── Consensus data ─── */
-  const confianceData = useMemo(() => computeGlobalConfianceData(primaryMetricsRaw ?? [], secondaryMetricsRaw ?? []), [primaryMetricsRaw, secondaryMetricsRaw]);
-
-  const consensusMap = useMemo<ConsensusDataMap>(() => {
-    const fused = fuseMetrics(primaryMetricsRaw ?? [], secondaryMetricsRaw ?? []);
-    const map: ConsensusDataMap = new Map();
-    for (const f of fused) {
-      map.set(f.netuid, { confianceData: f.confianceData, dataUncertain: f.dataUncertain });
-    }
-    return map;
-  }, [primaryMetricsRaw, secondaryMetricsRaw]);
-
-  const allSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}, consensusMap), [rawSignals, sparklines, consensusMap]);
-  const globalOpp = useMemo(() => computeGlobalOpportunity(rawSignals ?? []), [rawSignals]);
-  const globalRisk = useMemo(() => computeGlobalRisk(rawSignals ?? []), [rawSignals]);
-  const globalConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
   const smartCapital = useMemo(() => computeSmartCapital(rawSignals ?? []), [rawSignals]);
 
-  const flowData = useMemo(() => {
-    if (!allSignals.length) return { dominance: "stable" as const, emission: "stable" as const, inflow: "stable" as const };
-    const oppSignals = allSignals.filter(s => s.dominant === "opportunity").length;
-    const riskSignals = allSignals.filter(s => s.dominant === "risk").length;
-    const avgMomentum = allSignals.reduce((a, s) => a + s.momentum, 0) / allSignals.length;
-    return {
-      dominance: oppSignals > riskSignals + 1 ? "up" as const : riskSignals > oppSignals + 1 ? "down" as const : "stable" as const,
-      emission: avgMomentum > 55 ? "up" as const : avgMomentum < 35 ? "down" as const : "stable" as const,
-      inflow: smartCapital.state === "ACCUMULATION" ? "up" as const : smartCapital.state === "DISTRIBUTION" ? "down" as const : "stable" as const,
-    };
-  }, [allSignals, smartCapital.state]);
+  // Build DashSignal[] from unified scores
+  const enrichedSignals = useMemo<DashSignal[]>(() => {
+    const flowDominance = (() => {
+      const oppSignals = scoresList.filter(s => s.opp > s.risk + 15).length;
+      const riskSignals = scoresList.filter(s => s.risk > s.opp + 15).length;
+      return oppSignals > riskSignals + 1 ? "up" as const : riskSignals > oppSignals + 1 ? "down" as const : "stable" as const;
+    })();
+    const avgMomentum = scoresList.length ? scoresList.reduce((a, s) => a + s.momentum, 0) / scoresList.length : 50;
+    const flowEmission = avgMomentum > 55 ? "up" as const : avgMomentum < 35 ? "down" as const : "stable" as const;
 
-  const enrichedSignals = useMemo(() => {
-    return allSignals.map(s => {
-      // If overridden: no pre-hype, no micro bonus
-      if (s.isOverridden) {
-        return { ...s, asMicro: 0, preHype: false, preHypeIntensity: 0 };
+    return scoresList.map(s => {
+      const spark7d = (sparklines?.get(s.netuid) ?? []).slice(-7);
+      const dominant = s.isOverridden ? "risk" as const :
+        s.opp > s.risk + 15 ? "opportunity" as const :
+        s.risk > s.opp + 15 ? "risk" as const : "neutral" as const;
+      
+      // Micro-cap detection (simplified: cap < $500k USD)
+      const isMicroCap = s.displayedCap > 0 && s.displayedCap < 500_000;
+      
+      let asMicro = s.asymmetry;
+      let preHype = false;
+      let preHypeIntensity = 0;
+
+      if (!s.isOverridden) {
+        if (isMicroCap) {
+          // Micro AS bonus
+          const microSignal = { opportunity: s.opp, risk: s.risk, confidence: s.conf, momentumScore: s.momentumScore, isMicroCap: true } as any;
+          asMicro = computeASMicro(microSignal, smartCapital.state, flowDominance, flowEmission);
+        }
+        // Pre-hype detection
+        if (s.psi > 50 && s.quality > 40 && s.sc === "ACCUMULATION") {
+          preHype = true;
+          preHypeIntensity = clamp(s.psi - 30, 0, 70);
+        }
       }
-      const asMicro = s.isMicroCap
-        ? computeASMicro(s, smartCapital.state, flowData.dominance, flowData.emission)
-        : s.opportunity - s.risk;
-      const ph = detectPreHype(s, smartCapital.state, flowData.dominance, flowData.emission);
-      return { ...s, asMicro, preHype: ph.active, preHypeIntensity: ph.intensity };
+
+      const reasons = s.overrideReasons.length > 0 ? s.overrideReasons : [];
+
+      return {
+        ...s,
+        sparkline_7d: spark7d,
+        dominant,
+        isMicroCap,
+        asMicro,
+        preHype,
+        preHypeIntensity,
+        reasons,
+      };
     });
-  }, [allSignals, smartCapital.state, flowData]);
+  }, [scoresList, sparklines, smartCapital.state]);
 
   const sentinelIndex = useMemo(() => computeSentinelIndex(globalOpp, globalRisk, smartCapital.score), [globalOpp, globalRisk, smartCapital.score]);
   const sentinelLabel = sentinelIndexLabel(sentinelIndex, lang);
 
   const globalStability = useMemo(() => {
-    if (!enrichedSignals.length) return 50;
-    return Math.round(enrichedSignals.reduce((a, s) => a + s.stabilitySetup, 0) / enrichedSignals.length);
-  }, [enrichedSignals]);
+    if (!scoresList.length) return 50;
+    return Math.round(scoresList.reduce((a, s) => a + s.stability, 0) / scoresList.length);
+  }, [scoresList]);
+
+  const confianceData = useMemo(() => {
+    if (!scoresList.length) return { score: 50 };
+    const avg = Math.round(scoresList.reduce((a, s) => a + s.confianceScore, 0) / scoresList.length);
+    return { score: avg };
+  }, [scoresList]);
 
   const macroRec = useMemo(() => deriveMacroRecommendation(sentinelIndex, smartCapital.state, globalStability, confianceData.score), [sentinelIndex, smartCapital.state, globalStability, confianceData.score]);
 
-  const saturationIndex = useMemo(() => computeSaturationIndex(enrichedSignals), [enrichedSignals]);
+  const saturationIndex = useMemo(() => {
+    // Simplified saturation from unified scores
+    if (!enrichedSignals.length) return 0;
+    const highOpp = enrichedSignals.filter(s => s.opp > 65).length;
+    return Math.round((highOpp / enrichedSignals.length) * 100);
+  }, [enrichedSignals]);
   const isSaturated = saturationAlert(saturationIndex);
 
   /* ─── Best subnet (exclude overridden) ─── */
@@ -403,21 +398,20 @@ export default function AlienGauge() {
   const bestSubnet = useMemo(() => {
     const valid = enrichedSignals.filter(s => !s.isOverridden);
     if (!valid.length) return null;
-    return [...valid].sort((a, b) => (b.opportunity - b.risk) - (a.opportunity - a.risk))[0];
+    return [...valid].sort((a, b) => (b.opp - b.risk) - (a.opp - a.risk))[0];
   }, [enrichedSignals]);
 
   const displayBest = bestMicroCap ?? bestSubnet;
   const isMicroBest = !!bestMicroCap;
 
   /* ─── Top 3 (exclude overridden from opportunities) ─── */
-  const topOpportunities = useMemo(() => [...enrichedSignals].filter(s => !s.isOverridden).sort((a, b) => b.opportunity - a.opportunity).slice(0, 3), [enrichedSignals]);
+  const topOpportunities = useMemo(() => [...enrichedSignals].filter(s => !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 3), [enrichedSignals]);
   const topRisks = useMemo(() => [...enrichedSignals].filter(s => s.risk > 40).sort((a, b) => {
-    // Overridden subnets first in risk ranking
     if (a.isOverridden !== b.isOverridden) return a.isOverridden ? -1 : 1;
     return b.risk - a.risk;
   }).slice(0, 3), [enrichedSignals]);
 
-  const [panelSignal, setPanelSignal] = useState<SubnetSignal | null>(null);
+  const [panelSignal, setPanelSignal] = useState<DashSignal | null>(null);
   const isMobile = useIsMobile();
 
   const scLabel = t(`sc.${smartCapital.state.toLowerCase()}` as any);
@@ -472,6 +466,11 @@ export default function AlienGauge() {
               VISION MACRO
             </span>
             <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
+            <span className="font-mono text-[8px] px-2 py-0.5 rounded cursor-help"
+              style={{ background: "rgba(255,215,0,0.06)", color: "rgba(255,215,0,0.4)", border: "1px solid rgba(255,215,0,0.1)" }}
+              title={`Score snapshot: ${scoreTimestamp}`}>
+              ⏱ {new Date(scoreTimestamp).toLocaleTimeString()}
+            </span>
           </div>
 
           {/* ─── CIRCULAR GAUGE ─── */}
@@ -479,7 +478,6 @@ export default function AlienGauge() {
             <div className="relative" style={{ width: SIZE, height: SIZE }}>
               <div className="absolute inset-0 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(255,180,50,0.04) 0%, transparent 60%)", transform: "scale(1.2)" }} />
               <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-                {/* Outer ticks */}
                 {Array.from({ length: 54 }, (_, i) => {
                   const angleDeg = (i * 5) - 135;
                   if (angleDeg > 135) return null;
@@ -488,7 +486,6 @@ export default function AlienGauge() {
                   const r1 = R_OUTER + 4; const r2 = R_OUTER + (isMajor ? 12 : 7);
                   return <line key={`ot-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)} x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)} stroke={isMajor ? "rgba(255,215,0,0.2)" : "rgba(255,215,0,0.06)"} strokeWidth={isMajor ? 1.5 : 0.7} strokeLinecap="round" />;
                 })}
-                {/* Inner ticks */}
                 {Array.from({ length: 54 }, (_, i) => {
                   const angleDeg = (i * 5) - 135;
                   if (angleDeg > 135) return null;
@@ -497,7 +494,6 @@ export default function AlienGauge() {
                   const r1 = R_INNER - 4; const r2 = R_INNER - (isMajor ? 10 : 6);
                   return <line key={`it-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)} x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)} stroke={isMajor ? "rgba(229,57,53,0.18)" : "rgba(229,57,53,0.05)"} strokeWidth={isMajor ? 1.2 : 0.5} strokeLinecap="round" />;
                 })}
-                {/* Track arcs */}
                 <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,215,0,0.04)" strokeWidth={isMobile ? 6 : 8} />
                 {oppAngle > 0 && <path d={describeArc(CX, CY, R_OUTER, -135, -135 + oppAngle)} fill="none" stroke={oppGlobal} strokeWidth={isMobile ? 6 : 8} strokeLinecap="round" style={{ opacity: 0.55, animation: "opp-sweep 4s ease-in-out infinite" }} />}
                 <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(229,57,53,0.04)" strokeWidth={isMobile ? 8 : 10} />
@@ -507,7 +503,6 @@ export default function AlienGauge() {
               {/* CENTER HUD */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="flex flex-col items-center text-center" style={{ maxWidth: isMobile ? 160 : 240 }}>
-                  {/* Sentinel Index */}
                   <span className="font-mono tracking-[0.2em] uppercase" style={{ fontSize: isMobile ? 7 : 9, color: "rgba(255,255,255,0.3)" }}>
                     {t("macro.global_index")}
                   </span>
@@ -521,7 +516,6 @@ export default function AlienGauge() {
                     {sentinelLabel}
                   </span>
 
-                  {/* Core metrics */}
                   <div className="flex items-center mt-3" style={{ gap: isMobile ? 6 : 12 }}>
                     <div className="flex flex-col items-center">
                       <span className="font-mono" style={{ color: "rgba(255,215,0,0.3)", fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em" }}>OPP</span>

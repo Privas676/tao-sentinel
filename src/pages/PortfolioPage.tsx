@@ -158,8 +158,8 @@ export default function PortfolioPage() {
       const price = s?.consensusPrice ?? 0;
 
       // Action: RENFORCER instead of ENTRER for owned subnets
-      let action = s?.action ?? "WATCH";
-      if (action === "ENTER") action = "REINFORCE";
+      const baseAction = s?.action ?? "WATCH";
+      const action: string = baseAction === "ENTER" ? "REINFORCE" : baseAction;
 
       const currentValue = pos.quantity_tao * price;
 
