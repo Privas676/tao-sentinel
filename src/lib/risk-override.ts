@@ -13,14 +13,7 @@ export type RiskOverrideResult = {
 
 /**
  * Evaluate if a subnet must be hard-overridden.
- * Runs AFTER score calculation, BEFORE display.
- *
- * Conditions (any one triggers override):
- * - state = BREAK or EXIT_FAST (ZONE_CRITIQUE)
- * - psi > 85 with quality < 30 (speculative overheating)
- * - risk > 75
- * - liquidityCollapse (liq change <= -60%)
- * - state indicates DEPEG or DEREGISTRATION
+ * Section 7: DEPEG coherence + existing rules.
  */
 export function evaluateRiskOverride(params: {
   state: string | null;
@@ -33,7 +26,7 @@ export function evaluateRiskOverride(params: {
   const reasons: string[] = [];
   let systemStatus: SystemStatus = "OK";
 
-  // DEPEG detection from event-driven states
+  // DEPEG detection
   if (state === "DEPEG" || state === "DEPEG_WARNING" || state === "DEPEG_CRITICAL") {
     reasons.push("Depeg détecté");
     systemStatus = "DEPEG";
@@ -72,7 +65,6 @@ export function evaluateRiskOverride(params: {
 
   const isOverridden = reasons.length > 0;
 
-  // Derive status for moderate cases
   if (isOverridden && systemStatus === "OK") {
     systemStatus = "SURVEILLANCE";
   }
@@ -81,28 +73,29 @@ export function evaluateRiskOverride(params: {
 }
 
 /**
- * Apply override to scores: AS_final = 0, action = EXIT
- */
-export function applyOverride<T extends { opportunity: number; risk: number }>(
-  signal: T
-): T & { opportunity: number; risk: number } {
-  return { ...signal, opportunity: 0 };
-}
-
-/**
- * Cap opportunity score at 99 (100 only if truly unique max)
+ * Cap opportunity score: enforce anti-100 rule
  */
 export function capOpportunity(scores: number[]): number[] {
-  return scores.map(s => Math.min(s, 99));
+  // Find unique max
+  const maxScore = Math.max(...scores);
+  const maxCount = scores.filter(s => s === maxScore).length;
+  const uniqueMax = maxCount === 1;
+
+  return scores.map(s => {
+    if (s >= 100) {
+      return uniqueMax && s === maxScore ? 100 : 99;
+    }
+    return Math.min(s, 99);
+  });
 }
 
 /**
- * Coherence check: if override is active but action is ENTER → logic error
+ * Coherence check: override active but action is ENTER → error
  */
 export function checkCoherence(isOverridden: boolean, action: string): boolean {
   if (isOverridden && action === "ENTER") {
     console.error(`[RISK_OVERRIDE] ERREUR LOGIQUE: subnet overridden mais action=ENTER`);
-    return false; // incoherent
+    return false;
   }
   return true;
 }

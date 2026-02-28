@@ -112,14 +112,14 @@ Deno.serve(async (req) => {
       if (p > cur) priceMax7dMap.set(r.netuid, p);
     }
 
-    // ============= DATA DIVERGENCE DETECTION (batch) =============
+    // ============= DATA DIVERGENCE DETECTION (Section 8: stricter gating) =============
     const tsMap = dedupeLatest(taostatsRows || []);
     const tmcMap = dedupeLatest(tmcRows || []);
     const recentDivNetuids = new Set((recentDivEvents || []).map((e: any) => e.netuid));
 
     const divInserts: any[] = [];
     for (const [netuid, ts] of tsMap) {
-      if (recentDivNetuids.has(netuid)) continue;
+      if (recentDivNetuids.has(netuid)) continue; // Already reported in last 30min
       const tmc = tmcMap.get(netuid);
       if (!tmc) continue;
       const fields = [
@@ -127,25 +127,36 @@ Deno.serve(async (req) => {
         { name: "cap", a: Number(ts.cap) || 0, b: Number(tmc.cap) || 0 },
         { name: "vol_24h", a: Number(ts.vol_24h) || 0, b: Number(tmc.vol_24h) || 0 },
       ];
-      const divergent = fields.filter(f => f.a > 0 && f.b > 0 && pctDiff(f.a, f.b) > 8);
-      if (divergent.length > 0) {
-        divInserts.push({
-          netuid, ts: nowIso, type: "DATA_DIVERGENCE", severity: 2,
-          evidence: {
-            divergences: divergent.map(f => ({
-              field: f.name, taostats: Math.round(f.a * 1e6) / 1e6,
-              taomarketcap: Math.round(f.b * 1e6) / 1e6,
-              pct_diff: Math.round(pctDiff(f.a, f.b) * 10) / 10,
-            })),
-            sources: { taostats_ts: ts.ts, tmc_ts: tmc.ts },
-          },
-        });
-      }
+      // Section 8: Only trigger if divergence > 18% on major field
+      const divergent = fields.filter(f => f.a > 0 && f.b > 0 && pctDiff(f.a, f.b) > 18);
+      if (divergent.length === 0) continue;
+
+      // Section 8: Compute confidence_data and only alert if < 85
+      const divValues = fields
+        .filter(f => f.a > 0 && f.b > 0)
+        .map(f => Math.abs(f.a - f.b) / ((Math.abs(f.a) + Math.abs(f.b)) / 2));
+      const meanDiv = divValues.length > 0 ? divValues.reduce((a, b) => a + b, 0) / divValues.length : 0;
+      const confidenceData = Math.round(100 - Math.min(meanDiv * 120, 60));
+
+      if (confidenceData >= 85) continue; // Not alarming enough
+
+      divInserts.push({
+        netuid, ts: nowIso, type: "DATA_DIVERGENCE", severity: 2,
+        evidence: {
+          divergences: divergent.map(f => ({
+            field: f.name, taostats: Math.round(f.a * 1e6) / 1e6,
+            taomarketcap: Math.round(f.b * 1e6) / 1e6,
+            pct_diff: Math.round(pctDiff(f.a, f.b) * 10) / 10,
+          })),
+          confidence_data: confidenceData,
+          sources: { taostats_ts: ts.ts, tmc_ts: tmc.ts },
+        },
+      });
     }
     if (divInserts.length > 0) {
       const { error: divErr } = await sb.from("events").insert(divInserts);
       if (divErr) console.error("DATA_DIVERGENCE insert error:", divErr.message);
-      else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts`);
+      else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts (gated: >18% div, conf<85)`);
     }
 
     // ============= PASS 1: Compute raw scores (no DB calls, all from maps) =============

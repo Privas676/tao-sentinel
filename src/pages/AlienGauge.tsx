@@ -12,6 +12,7 @@ import {
   computeSmartCapital,
   computeASMicro, detectPreHype, computeSaturationIndex, saturationAlert,
   stabilityColor,
+  type ConsensusDataMap,
 } from "@/lib/gauge-engine";
 import {
   actionColor, actionBg, actionBorder, actionIcon,
@@ -21,9 +22,11 @@ import {
 } from "@/lib/strategy-engine";
 import {
   computeGlobalConfianceData, confianceColor, shouldModerateRecommendation,
+  fuseMetrics,
   type SourceMetrics,
 } from "@/lib/data-fusion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { computeStabilitySetup } from "@/lib/gauge-engine";
 
 /* ═══════════════════════════════════════ */
 /*          SPARKLINE HELPER               */
@@ -76,6 +79,9 @@ function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest, smartCapita
           )}
           {signal.preHype && (
             <span className="font-mono text-[8px] px-1.5 py-0.5 rounded" style={{ background: "rgba(255,100,255,0.08)", color: "rgba(255,100,255,0.7)", border: "1px solid rgba(255,100,255,0.15)" }}>PRÉ-HYPE</span>
+          )}
+          {signal.dataUncertain && (
+            <span className="font-mono text-[8px] px-1.5 py-0.5 rounded" style={{ background: "rgba(255,152,0,0.08)", color: "rgba(255,152,0,0.7)", border: "1px solid rgba(255,152,0,0.15)" }}>⚠ DATA</span>
           )}
         </div>
         {/* Subnet action badge */}
@@ -142,6 +148,7 @@ function SubnetRow({ signal, rank, type, isMobile, t, onClick }: {
       <span className="font-mono font-bold" style={{ color: "rgba(255,248,220,0.75)", fontSize: isMobile ? 11 : 13, width: isMobile ? 50 : 60 }}>SN-{signal.netuid}</span>
       <span className="font-mono truncate" style={{ color: "rgba(255,255,255,0.35)", fontSize: isMobile ? 9 : 11, flex: 1 }}>{signal.name}</span>
       {signal.preHype && <span style={{ fontSize: 8, color: "rgba(255,100,255,0.6)" }}>⚡</span>}
+      {signal.dataUncertain && <span style={{ fontSize: 8, color: "rgba(255,152,0,0.6)" }}>⚠</span>}
       <span className="font-mono font-bold" style={{ color: mainColor, fontSize: isMobile ? 14 : 16, width: 36, textAlign: "right" }}>{mainScore}</span>
       <div className="flex items-center gap-1 px-2 py-0.5 rounded" style={{ background: actionBg(action), border: `1px solid ${actionBorder(action)}` }}>
         <span style={{ fontSize: 8 }}>{actionIcon(action)}</span>
@@ -184,6 +191,7 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
             <div className="flex items-center justify-center gap-2 mt-2">
               {signal.isMicroCap && <span className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: "rgba(0,200,255,0.1)", color: "rgba(0,200,255,0.7)" }}>MICRO-CAP</span>}
               {signal.preHype && <span className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: "rgba(255,100,255,0.08)", color: "rgba(255,100,255,0.7)" }}>PRÉ-HYPE {signal.preHypeIntensity}%</span>}
+              {signal.dataUncertain && <span className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: "rgba(255,152,0,0.08)", color: "rgba(255,152,0,0.7)" }}>⚠ DATA INCERTAINE</span>}
             </div>
             <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: actionBg(action), border: `1px solid ${actionBorder(action)}` }}>
               <span>{actionIcon(action)}</span>
@@ -205,6 +213,10 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
             <div className="text-center">
               <div className="font-mono text-lg font-bold" style={{ color: stabilityColor(signal.stabilitySetup) }}>{signal.stabilitySetup}%</div>
               <div className="font-mono text-[9px] text-white/30 tracking-widest">{t("gauge.stability")}</div>
+            </div>
+            <div className="text-center">
+              <div className="font-mono text-lg font-bold" style={{ color: confianceColor(signal.confianceData) }}>{signal.confianceData}%</div>
+              <div className="font-mono text-[9px] text-white/30 tracking-widest">{t("data.confiance")}</div>
             </div>
           </div>
           <div className="bg-white/[0.02] rounded-lg p-4">
@@ -325,9 +337,19 @@ export default function AlienGauge() {
     refetchInterval: 120_000,
   });
 
-  /* ─── Computed values ─── */
+  /* ─── Consensus data ─── */
   const confianceData = useMemo(() => computeGlobalConfianceData(primaryMetricsRaw ?? [], secondaryMetricsRaw ?? []), [primaryMetricsRaw, secondaryMetricsRaw]);
-  const allSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
+
+  const consensusMap = useMemo<ConsensusDataMap>(() => {
+    const fused = fuseMetrics(primaryMetricsRaw ?? [], secondaryMetricsRaw ?? []);
+    const map: ConsensusDataMap = new Map();
+    for (const f of fused) {
+      map.set(f.netuid, { confianceData: f.confianceData, dataUncertain: f.dataUncertain });
+    }
+    return map;
+  }, [primaryMetricsRaw, secondaryMetricsRaw]);
+
+  const allSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}, consensusMap), [rawSignals, sparklines, consensusMap]);
   const globalOpp = useMemo(() => computeGlobalOpportunity(rawSignals ?? []), [rawSignals]);
   const globalRisk = useMemo(() => computeGlobalRisk(rawSignals ?? []), [rawSignals]);
   const globalConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
