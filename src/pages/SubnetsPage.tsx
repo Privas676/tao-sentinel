@@ -72,6 +72,14 @@ type SignalRow = {
 
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
 
+/* ─── Extra market data for risk discrimination ─── */
+type MarketRiskData = {
+  volCap: number;          // vol_24h / cap ratio
+  topMinersShare: number;  // concentration 0-1
+  priceVol7d: number;      // 7d price volatility (stddev/mean)
+  liqRatio: number;        // liquidity / cap
+};
+
 /* ─── Scoring functions (Section 3 — LINEAR for spread) ─── */
 function deriveOpp(psi: number, conf: number, quality: number, state: string | null): number {
   let opp = 0;
@@ -87,29 +95,52 @@ function deriveOpp(psi: number, conf: number, quality: number, state: string | n
   return Math.round(clamp(opp, 0, 100));
 }
 
-function deriveRisk(psi: number, conf: number, quality: number, state: string | null, dataUncertain = false): number {
-  // Base risk floor — even healthy subnets carry inherent risk
-  let risk = 15;
-  // Core deficits (larger coefficients for spread)
-  risk += (100 - quality) * 0.35;
-  risk += (100 - conf) * 0.30;
-  risk += (100 - psi) * 0.20;
-  // Concentration risk: high momentum + mediocre quality = fragile
-  if (psi >= 70 && quality < 60) risk += 8;
-  if (psi >= 80 && quality < 50) risk += 10;
-  // Volatility proxy: extreme momentum in either direction
-  if (psi >= 85) risk += 5; // overheated
-  if (psi < 40) risk += 8;
+function deriveRisk(
+  psi: number, conf: number, quality: number, state: string | null,
+  dataUncertain = false, market?: MarketRiskData
+): number {
+  // Base risk floor
+  let risk = 20;
+  // Core deficits (LINEAR)
+  risk += (100 - quality) * 0.25;
+  risk += (100 - conf) * 0.20;
+  risk += (100 - psi) * 0.10;
+
+  // ── CONTINUOUS MARKET DATA FACTORS (up to ~35 pts total) ──
+  if (market) {
+    // Vol/Cap: continuous — ideal range 0.02-0.15, penalize outside
+    const vc = market.volCap;
+    const vcIdeal = 0.08;
+    const vcDist = Math.abs(Math.log((vc + 0.001) / vcIdeal));
+    risk += clamp(vcDist * 8, 0, 15);  // 0-15 pts continuous
+
+    // Miner concentration: linear 0-10 pts
+    risk += clamp(market.topMinersShare * 12, 0, 10);
+
+    // Liquidity ratio: inverse — lower = riskier, continuous
+    const lrScore = clamp(1 - market.liqRatio * 5, 0, 1); // 0 if liqRatio>0.2, 1 if liqRatio=0
+    risk += lrScore * 10;  // 0-10 pts continuous
+
+    // 7d price volatility: linear 0-10 pts
+    risk += clamp(market.priceVol7d * 20, 0, 10);
+  } else {
+    risk += 15; // no data = significant uncertainty
+  }
+
+  // Concentration risk combos
+  if (psi >= 70 && quality < 60) risk += 5;
+  if (psi >= 80 && quality < 50) risk += 8;
+  if (psi >= 85) risk += 3;
+  if (psi < 40) risk += 5;
   // Confidence gap
-  if (conf < 50) risk += 6;
-  if (conf < 30) risk += 6;
+  if (conf < 50) risk += 4;
+  if (conf < 30) risk += 4;
   // State-based
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 20;
-  else if (state === "HOLD") risk += 5;
-  else if (state === "WATCH") risk += 3;
-  // Stagnation zone
-  if (psi >= 40 && psi <= 60 && conf < 40) risk += 5;
-  if (dataUncertain) risk += 10;
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 15;
+  else if (state === "HOLD") risk += 3;
+  else if (state === "WATCH") risk += 2;
+  if (psi >= 40 && psi <= 60 && conf < 40) risk += 3;
+  if (dataUncertain) risk += 8;
   return Math.round(clamp(risk, 0, 100));
 }
 
@@ -204,7 +235,7 @@ export default function SubnetsPage() {
     refetchInterval: 120_000,
   });
 
-  const { data: sparklines } = useQuery({
+   const { data: sparklines } = useQuery({
     queryKey: ["sparklines-7d"],
     queryFn: async () => {
       const since = new Date(Date.now() - 8 * 86400_000).toISOString().slice(0, 10);
@@ -223,6 +254,30 @@ export default function SubnetsPage() {
       return map;
     },
     refetchInterval: 300_000,
+  });
+
+  // Fetch real market metrics for risk discrimination
+  const { data: subnetLatest } = useQuery({
+    queryKey: ["subnet-latest-risk"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subnet_latest")
+        .select("netuid, vol_cap, top_miners_share, liquidity, cap");
+      if (error) throw error;
+      const map = new Map<number, { volCap: number; topMinersShare: number; liqRatio: number }>();
+      for (const r of data || []) {
+        if (r.netuid == null) continue;
+        const cap = Number(r.cap) || 0;
+        const liq = Number(r.liquidity) || 0;
+        map.set(r.netuid, {
+          volCap: Number(r.vol_cap) || 0,
+          topMinersShare: Number(r.top_miners_share) || 0,
+          liqRatio: cap > 0 ? liq / cap : 0,
+        });
+      }
+      return map;
+    },
+    refetchInterval: 120_000,
   });
 
   // Consensus data from fusion
@@ -271,11 +326,40 @@ export default function SubnetsPage() {
         return { netuid: s.netuid!, psi, conf, quality, state: s.state, name: s.subnet_name || `SN-${s.netuid}`, dataUncertain, confianceScore };
       });
 
-    // Batch normalize (Section 2)
+    // Compute 7d price volatility per subnet
+    const priceVolMap = new Map<number, number>();
+    for (const r of allRows) {
+      const prices = sparklines?.get(r.netuid);
+      if (prices && prices.length >= 2) {
+        const mean = prices.reduce((a, b) => a + b, 0) / prices.length;
+        if (mean > 0) {
+          const variance = prices.reduce((a, p) => a + (p - mean) ** 2, 0) / prices.length;
+          priceVolMap.set(r.netuid, Math.sqrt(variance) / mean); // coefficient of variation
+        }
+      }
+    }
+
+    // Build market risk data per subnet
+    const getMarketRisk = (netuid: number): MarketRiskData | undefined => {
+      const sl = subnetLatest?.get(netuid);
+      if (!sl) return undefined;
+      return {
+        volCap: sl.volCap,
+        topMinersShare: sl.topMinersShare,
+        liqRatio: sl.liqRatio,
+        priceVol7d: priceVolMap.get(netuid) ?? 0,
+      };
+    };
+
+    // Batch normalize opportunity (Section 2), but use RAW risk for spread
     const oppRaws = allRows.map(r => deriveOpp(r.psi, r.conf, r.quality, r.state));
-    const riskRaws = allRows.map(r => deriveRisk(r.psi, r.conf, r.quality, r.state, r.dataUncertain));
+    const riskRaws = allRows.map(r => deriveRisk(r.psi, r.conf, r.quality, r.state, r.dataUncertain, getMarketRisk(r.netuid)));
     const oppNorm = normalizeWithVariance(oppRaws, 3);
-    const riskNorm = normalizeWithVariance(riskRaws, 3);
+    // Risk: use raw scores directly (natural 20-80 range from market data)
+    // Only apply anti-100 cap
+    const riskMax = Math.max(...riskRaws);
+    const riskMaxCount = riskRaws.filter(v => v === riskMax).length;
+    const riskNorm = riskRaws.map(v => Math.min(v, riskMaxCount === 1 && v === riskMax ? 100 : 99));
 
     return allRows.map((r, i) => {
       let opp = oppNorm[i];
@@ -338,7 +422,7 @@ export default function SubnetsPage() {
       }
       return b.asymmetry - a.asymmetry;
     });
-  }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines, consensusMap, isSaturated]);
+  }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines, subnetLatest, consensusMap, isSaturated]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
