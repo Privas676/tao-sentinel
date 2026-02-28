@@ -14,6 +14,11 @@ import {
   confianceColor,
   type SourceMetrics,
 } from "@/lib/data-fusion";
+import {
+  evaluateRiskOverride, checkCoherence,
+  systemStatusColor, systemStatusLabel,
+  type SystemStatus,
+} from "@/lib/risk-override";
 import { usePositions } from "@/hooks/use-positions";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -75,7 +80,7 @@ function deriveOpp(psi: number, conf: number, quality: number, state: string | n
   else if (state === "BREAK" || state === "EXIT_FAST") opp -= 10;
   if (psi >= 60 && quality >= 60) opp += 8;
   if (psi < 30) opp -= 5;
-  return Math.round(clamp(opp, 0, 100));
+  return Math.round(clamp(opp, 0, 99)); // Cap at 99
 }
 
 function deriveRisk(psi: number, conf: number, quality: number, state: string | null): number {
@@ -216,11 +221,29 @@ export default function SubnetsPage() {
         const psi = s.mpi ?? s.score ?? 0;
         const conf = s.confidence_pct ?? 0;
         const quality = s.quality_score ?? 0;
-        const opp = deriveOpp(psi, conf, quality, s.state);
+        let opp = deriveOpp(psi, conf, quality, s.state);
         const risk = deriveRisk(psi, conf, quality, s.state);
+
+        // Risk Override Engine
+        const override = evaluateRiskOverride({ state: s.state, psi, risk, quality });
+        if (override.isOverridden) {
+          opp = 0; // AS_final = 0
+        }
+
         const asymmetry = opp - risk;
         const momentumLabel = deriveMomentumLabel(psi);
-        const action = deriveSubnetAction(opp, risk, conf);
+
+        // Action: if overridden → always EXIT
+        let action = override.isOverridden ? "EXIT" as const : deriveSubnetAction(opp, risk, conf);
+
+        // If system status ≠ OK, never allow ENTER
+        if (override.systemStatus !== "OK" && action === "ENTER") {
+          action = "WATCH";
+        }
+
+        // Coherence check
+        checkCoherence(override.isOverridden, action);
+
         const sc = deriveSubnetSC(psi, quality, conf, s.state);
         const owned = ownedNetuids.has(s.netuid!);
 
@@ -252,15 +275,25 @@ export default function SubnetsPage() {
           psi, conf, opp, risk, asymmetry,
           momentumLabel, action, sc, owned, confianceScore,
           spark: sparklines?.get(s.netuid!) || [],
+          isOverridden: override.isOverridden,
+          systemStatus: override.systemStatus,
+          overrideReasons: override.overrideReasons,
         };
       })
       .filter(r => {
-        if (mode === "opportunities") return r.opp > r.risk;
+        if (mode === "opportunities") return !r.isOverridden && r.opp > r.risk;
         if (mode === "risks") return r.risk >= r.opp;
         if (mode === "mine") return r.owned;
         return true;
       })
-      .sort((a, b) => b.asymmetry - a.asymmetry);
+      .sort((a, b) => {
+        // In risks mode: overridden first, then by risk desc
+        if (mode === "risks") {
+          if (a.isOverridden !== b.isOverridden) return a.isOverridden ? -1 : 1;
+          return b.risk - a.risk;
+        }
+        return b.asymmetry - a.asymmetry;
+      });
   }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
@@ -307,6 +340,7 @@ export default function SubnetsPage() {
             <tr className="border-b border-white/10 text-white/40">
               <th className="text-left py-3 px-2">SN</th>
               <th className="text-left py-3 px-2">{t("sub.name")}</th>
+              <th className="text-center py-3 px-2">STATUT</th>
               <th className="text-center py-3 px-2">{t("tip.price7d")}</th>
               <th className="text-right py-3 px-2">{t("sub.opp")}</th>
               <th className="text-right py-3 px-2">{t("sub.risk")}</th>
@@ -320,9 +354,9 @@ export default function SubnetsPage() {
           </thead>
           <tbody>
             {rows.map((r, idx) => {
-              const oppC = opportunityColor(r.opp);
+              const oppC = r.isOverridden ? "rgba(229,57,53,0.4)" : opportunityColor(r.opp);
               const rskC = riskColor(r.risk);
-              const isTop1 = idx === 0;
+              const isTop1 = idx === 0 && !r.isOverridden;
               const momColor = momentumColor(r.momentumLabel);
               const actionLabel = r.action === "EXIT"
                 ? (lang === "fr" ? "SORTIR" : "EXIT")
@@ -330,10 +364,27 @@ export default function SubnetsPage() {
               return (
                 <tr key={r.netuid}
                   className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors cursor-pointer"
-                  style={isTop1 ? { background: "rgba(255,215,0,0.02)", borderLeft: "2px solid rgba(255,215,0,0.3)" } : undefined}
+                  style={{
+                    ...(isTop1 ? { background: "rgba(255,215,0,0.02)", borderLeft: "2px solid rgba(255,215,0,0.3)" } : {}),
+                    ...(r.isOverridden ? { background: "rgba(229,57,53,0.03)", borderLeft: "2px solid rgba(229,57,53,0.4)" } : {}),
+                  }}
                   onClick={() => window.open(`https://taostats.io/subnets/${r.netuid}`, "_blank")}>
                   <td className="py-3 px-2 text-white/55 text-sm">{r.netuid}</td>
-                  <td className="py-3 px-2 text-sm" style={{ color: isTop1 ? "rgba(255,248,220,0.95)" : "rgba(255,255,255,0.75)", fontWeight: isTop1 ? 700 : 400 }}>{r.name}</td>
+                  <td className="py-3 px-2 text-sm" style={{ color: isTop1 ? "rgba(255,248,220,0.95)" : r.isOverridden ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.75)", fontWeight: isTop1 ? 700 : 400 }}>
+                    <span>{r.name}</span>
+                    {r.isOverridden && (
+                      <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider"
+                        style={{ background: "rgba(229,57,53,0.12)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.25)" }}>
+                        ⛔ CRITIQUE – Override
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-2 text-center">
+                    <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
+                      style={{ color: systemStatusColor(r.systemStatus), background: `${systemStatusColor(r.systemStatus)}15`, border: `1px solid ${systemStatusColor(r.systemStatus)}30` }}>
+                      {systemStatusLabel(r.systemStatus)}
+                    </span>
+                  </td>
                   <td className="py-3 px-2 text-center"><Sparkline data={r.spark} /></td>
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: oppC }}>{r.opp}</td>
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: rskC }}>{r.risk}</td>

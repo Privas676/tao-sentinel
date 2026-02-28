@@ -347,6 +347,10 @@ export default function AlienGauge() {
 
   const enrichedSignals = useMemo(() => {
     return allSignals.map(s => {
+      // If overridden: no pre-hype, no micro bonus
+      if (s.isOverridden) {
+        return { ...s, asMicro: 0, preHype: false, preHypeIntensity: 0 };
+      }
       const asMicro = s.isMicroCap
         ? computeASMicro(s, smartCapital.state, flowData.dominance, flowData.emission)
         : s.opportunity - s.risk;
@@ -368,23 +372,28 @@ export default function AlienGauge() {
   const saturationIndex = useMemo(() => computeSaturationIndex(enrichedSignals), [enrichedSignals]);
   const isSaturated = saturationAlert(saturationIndex);
 
-  /* ─── Best subnet ─── */
+  /* ─── Best subnet (exclude overridden) ─── */
   const bestMicroCap = useMemo(() => {
-    const micros = enrichedSignals.filter(s => s.isMicroCap && s.asMicro > 0);
+    const micros = enrichedSignals.filter(s => !s.isOverridden && s.isMicroCap && s.asMicro > 0);
     return micros.length ? micros.sort((a, b) => b.asMicro - a.asMicro)[0] : null;
   }, [enrichedSignals]);
 
   const bestSubnet = useMemo(() => {
-    if (!enrichedSignals.length) return null;
-    return [...enrichedSignals].sort((a, b) => (b.opportunity - b.risk) - (a.opportunity - a.risk))[0];
+    const valid = enrichedSignals.filter(s => !s.isOverridden);
+    if (!valid.length) return null;
+    return [...valid].sort((a, b) => (b.opportunity - b.risk) - (a.opportunity - a.risk))[0];
   }, [enrichedSignals]);
 
   const displayBest = bestMicroCap ?? bestSubnet;
   const isMicroBest = !!bestMicroCap;
 
-  /* ─── Top 3 ─── */
-  const topOpportunities = useMemo(() => [...enrichedSignals].sort((a, b) => b.opportunity - a.opportunity).slice(0, 3), [enrichedSignals]);
-  const topRisks = useMemo(() => [...enrichedSignals].filter(s => s.risk > 40).sort((a, b) => b.risk - a.risk).slice(0, 3), [enrichedSignals]);
+  /* ─── Top 3 (exclude overridden from opportunities) ─── */
+  const topOpportunities = useMemo(() => [...enrichedSignals].filter(s => !s.isOverridden).sort((a, b) => b.opportunity - a.opportunity).slice(0, 3), [enrichedSignals]);
+  const topRisks = useMemo(() => [...enrichedSignals].filter(s => s.risk > 40).sort((a, b) => {
+    // Overridden subnets first in risk ranking
+    if (a.isOverridden !== b.isOverridden) return a.isOverridden ? -1 : 1;
+    return b.risk - a.risk;
+  }).slice(0, 3), [enrichedSignals]);
 
   const [panelSignal, setPanelSignal] = useState<SubnetSignal | null>(null);
   const isMobile = useIsMobile();

@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════ */
 /*     ALIEN GAUGE — OPPORTUNITY/RISK ENGINE */
 /* ═══════════════════════════════════════ */
+import { evaluateRiskOverride, capOpportunity } from "./risk-override";
+
 
 export type GaugeState = "CALM" | "ALERT" | "IMMINENT" | "EXIT";
 export type GaugePhase = "BUILD" | "ARMED" | "TRIGGER" | "NONE";
@@ -29,6 +31,10 @@ export type SubnetSignal = {
   preHype: boolean;
   preHypeIntensity: number;
   stabilitySetup: number;
+  // Risk Override fields
+  isOverridden: boolean;
+  systemStatus: import("./risk-override").SystemStatus;
+  overrideReasons: string[];
 };
 
 export type RawSignal = {
@@ -342,7 +348,6 @@ export function saturationAlert(pct: number): boolean {
   return pct > 60;
 }
 
-/* Process raw signals into SubnetSignals */
 export function processSignals(
   raw: RawSignal[],
   sparklines: Record<number, number[]>
@@ -363,18 +368,33 @@ export function processSignals(
   });
 
   // Step 2: Percentile + S-curve normalization for high variance
-  const oppNormalized = normalizeWithVariance(rawData.map(d => d.oppRaw), 8);
+  const oppNormalized = capOpportunity(normalizeWithVariance(rawData.map(d => d.oppRaw), 8));
   const riskNormalized = normalizeWithVariance(rawData.map(d => d.riskRaw), 8);
 
-  // Step 3: Build SubnetSignals with normalized scores
+  // Step 3: Build SubnetSignals with normalized scores + risk override
   const signals = rawData.map((d, i) => {
     const s = d.raw;
-    const opportunity = oppNormalized[i];
+    let opportunity = oppNormalized[i];
     const risk = riskNormalized[i];
     const isBreak = s.state === "BREAK" || s.state === "EXIT_FAST";
+
+    // Risk Override Engine — AFTER score calculation
+    const override = evaluateRiskOverride({
+      state: s.state,
+      psi: d.psi,
+      risk,
+      quality: d.quality,
+    });
+
+    // If overridden: AS_final = 0 (opportunity zeroed)
+    if (override.isOverridden) {
+      opportunity = 0;
+    }
+
     const asymScore = d.conf * 0.6 + d.quality * 0.4;
     const asymmetry: Asymmetry = asymScore >= 75 ? "HIGH" : asymScore >= 55 ? "MED" : "LOW";
-    const dominant = opportunity > risk + 15 ? "opportunity" as const :
+    const dominant = override.isOverridden ? "risk" as const :
+                     opportunity > risk + 15 ? "opportunity" as const :
                      risk > opportunity + 15 ? "risk" as const : "neutral" as const;
     const momentum = clamp(d.psi - 40, 0, 60) / 60 * 100;
     const momentumLabel = deriveMomentumLabel(d.psi);
@@ -386,20 +406,23 @@ export function processSignals(
       opportunity,
       risk,
       confidence: d.conf,
-      state: deriveGaugeState(d.psi, d.conf, isBreak),
+      state: deriveGaugeState(d.psi, d.conf, isBreak || override.isOverridden),
       phase: derivePhase(d.psi),
       asymmetry,
       sparkline_7d: (sparklines[s.netuid!] ?? []).slice(-7),
       liquidity: 50,
       momentum,
       momentumLabel,
-      reasons: deriveReasons(d.psi, d.conf, d.quality, s.state),
+      reasons: override.isOverridden ? override.overrideReasons : deriveReasons(d.psi, d.conf, d.quality, s.state),
       dominant,
       isMicroCap: false,
       asMicro: 0,
       preHype: false,
       preHypeIntensity: 0,
       stabilitySetup,
+      isOverridden: override.isOverridden,
+      systemStatus: override.systemStatus,
+      overrideReasons: override.overrideReasons,
     };
   }).sort((a, b) => b.psi - a.psi);
 
