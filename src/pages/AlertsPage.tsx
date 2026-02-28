@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useDelistMode } from "@/hooks/use-delist-mode";
@@ -25,7 +25,67 @@ type EventRow = {
 type FilterType = "ALL" | "UNIQUE" | "OVERRIDE" | "DATA" | "WHALE" | "STATE" | "SMART";
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const OVERRIDE_QUOTA = 10;
+const DISMISSED_KEY = "alerts-dismissed";
+
+/* ─── Dismissed alerts helpers (localStorage, 24h TTL) ─── */
+function getDismissedAlerts(): Map<string, number> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    if (!raw) return new Map();
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    const now = Date.now();
+    const valid = new Map<string, number>();
+    for (const [key, ts] of Object.entries(parsed)) {
+      if (now - ts < TWENTY_FOUR_HOURS_MS) valid.set(key, ts);
+    }
+    return valid;
+  } catch { return new Map(); }
+}
+
+function dismissAlert(key: string) {
+  const map = getDismissedAlerts();
+  map.set(key, Date.now());
+  const obj: Record<string, number> = {};
+  map.forEach((v, k) => { obj[k] = v; });
+  try { localStorage.setItem(DISMISSED_KEY, JSON.stringify(obj)); } catch {}
+}
+
+function isDismissed(key: string, dismissed: Map<string, number>): boolean {
+  return dismissed.has(key);
+}
+
+function alertKey(g: GroupedEvent): string {
+  return `${g.latest.type}::${g.latest.netuid}::${g.lastTs?.slice(0, 13) ?? ""}`;
+}
+
+/* ─── Essential mode: classify events ─── */
+function isEssentialEvent(g: GroupedEvent, scores: Map<number, any> | undefined): boolean {
+  const ev = g.latest;
+  // State transitions: BREAK, EXIT_FAST, DEPEG_CRITICAL always essential
+  if (ev.type === "BREAK" || ev.type === "EXIT_FAST" || ev.type === "DEPEG_CRITICAL") return true;
+  // DEPEG_WARNING is essential
+  if (ev.type === "DEPEG_WARNING") return true;
+  // Overrides: only if passes strict gating
+  if (ev.type === "RISK_OVERRIDE") return passesStrictGating(ev, scores);
+  // Data divergence: only if gravity ≥ 60
+  if (ev.type === "DATA_DIVERGENCE") {
+    const e = ev.evidence as any;
+    const gravity = e?.gravity as number | undefined;
+    return gravity != null && gravity >= 60;
+  }
+  // Whale moves with large amounts
+  if (ev.type === "WHALE_MOVE") {
+    const e = ev.evidence as any;
+    const amount = e?.amount_tao as number | undefined;
+    return amount != null && amount >= 1000;
+  }
+  // Smart signals always essential
+  if (ev.type === "PRE_HYPE" || ev.type === "SMART_ACCUMULATION") return true;
+  // Other state events: GO, EARLY are not essential noise
+  return false;
+}
 
 /** Grouped event: one line per (type, netuid) within a 6h window */
 type GroupedEvent = {
@@ -225,7 +285,7 @@ function OverrideChips({ evidence, fr }: { evidence: any; fr: boolean }) {
   );
 }
 
-function ExpandableEventRow({ group, lang }: { group: GroupedEvent; lang: string }) {
+function ExpandableEventRow({ group, lang, onDismiss }: { group: GroupedEvent; lang: string; onDismiss?: (key: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const fr = lang === "fr";
   const ev = group.latest;
@@ -252,6 +312,15 @@ function ExpandableEventRow({ group, lang }: { group: GroupedEvent; lang: string
         <div className="font-mono text-xs text-white/50 min-w-[60px]">SN-{ev.netuid} {subnetLinks(ev.netuid)}</div>
         {renderMainContent()}
         <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          {onDismiss && (
+            <button
+              onClick={e => { e.stopPropagation(); onDismiss(alertKey(group)); }}
+              className="font-mono text-[8px] px-1.5 py-0.5 rounded transition-all hover:bg-white/10"
+              style={{ color: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.06)" }}
+              title={fr ? "Masquer 24h" : "Dismiss 24h"}>
+              ✓ {fr ? "Traité" : "Done"}
+            </button>
+          )}
           {isMultiple && (
             <span className="font-mono text-[10px] px-2 py-0.5 rounded-full font-bold"
               style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>×{group.count}</span>
@@ -703,12 +772,20 @@ export default function AlertsPage() {
   const { t, lang } = useI18n();
   const [filter, setFilter] = useState<FilterType>("UNIQUE");
   const [showOverrideNoise, setShowOverrideNoise] = useState(false);
-  const [showMinorDivergences, setShowMinorDivergences] = useState(() => {
+  const [showNoise, setShowNoise] = useState(false);
+  const [confidenceFilter, setConfidenceFilter] = useState(false);
+  const [dismissed, setDismissed] = useState<Map<string, number>>(() => getDismissedAlerts());
+  const [showMinorDivergences] = useState(() => {
     try { return localStorage.getItem("show-minor-divergences") === "true"; } catch { return false; }
   });
   const fr = lang === "fr";
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
+
+  const handleDismiss = useCallback((key: string) => {
+    dismissAlert(key);
+    setDismissed(getDismissedAlerts());
+  }, []);
 
   const { data: events } = useQuery({
     queryKey: ["events-log"],
@@ -763,32 +840,60 @@ export default function AlertsPage() {
     return { gatedOverrides: gated, noiseOverrides: noise, otherGrouped: others.filter(filterDiv) };
   }, [grouped, overrideMode, scores, showMinorDivergences]);
 
+  // Apply confidence filter
+  const applyConfidenceFilter = useCallback((g: GroupedEvent): boolean => {
+    if (!confidenceFilter) return true;
+    if (g.latest.netuid == null || !scores) return true;
+    const subnet = scores.get(g.latest.netuid);
+    if (!subnet) return true;
+    return (subnet.confianceScore ?? 0) >= 70;
+  }, [confidenceFilter, scores]);
+
+  // Apply dismissed filter
+  const applyDismissedFilter = useCallback((g: GroupedEvent): boolean => {
+    return !isDismissed(alertKey(g), dismissed);
+  }, [dismissed]);
+
   const filtered = useMemo(() => {
+    let result: GroupedEvent[];
+
     if (filter === "ALL") {
-      return (events || []).map(ev => ({
+      result = (events || []).map(ev => ({
         key: `single-${ev.id}`, latest: ev, occurrences: [ev], count: 1,
         firstTs: ev.ts || "", lastTs: ev.ts || "",
       } as GroupedEvent));
-    }
-    if (filter === "OVERRIDE") {
+    } else if (filter === "OVERRIDE") {
       const visible = overrideMode === "strict"
         ? gatedOverrides.slice(0, showOverrideNoise ? Infinity : OVERRIDE_QUOTA)
         : gatedOverrides;
-      if (showOverrideNoise && overrideMode === "strict") return [...visible, ...noiseOverrides];
-      return visible;
-    }
-    if (filter === "UNIQUE") {
+      result = showOverrideNoise && overrideMode === "strict" ? [...visible, ...noiseOverrides] : visible;
+    } else if (filter === "UNIQUE") {
       const visibleOverrides = overrideMode === "strict" ? gatedOverrides.slice(0, OVERRIDE_QUOTA) : gatedOverrides;
       const merged = [...visibleOverrides, ...otherGrouped];
       merged.sort((a, b) => new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime());
-      return merged;
+      result = merged;
+    } else if (filter === "STATE") {
+      result = grouped.filter(g => eventCategory(g.latest.type) === "STATE");
+    } else {
+      result = grouped.filter(g => eventCategory(g.latest.type) === filter);
     }
-    if (filter === "STATE") {
-      // STATE filter: show only state-change events (not delist watchlist which is separate)
-      return grouped.filter(g => eventCategory(g.latest.type) === "STATE");
+
+    // Apply confidence + dismissed filters
+    return result.filter(applyConfidenceFilter).filter(applyDismissedFilter);
+  }, [grouped, events, filter, gatedOverrides, noiseOverrides, otherGrouped, overrideMode, showOverrideNoise, applyConfidenceFilter, applyDismissedFilter]);
+
+  // Essential vs noise split
+  const { essential, noise: noiseEvents } = useMemo(() => {
+    const ess: GroupedEvent[] = [];
+    const noi: GroupedEvent[] = [];
+    for (const g of filtered) {
+      if (isEssentialEvent(g, scores)) ess.push(g);
+      else noi.push(g);
     }
-    return grouped.filter(g => eventCategory(g.latest.type) === filter);
-  }, [grouped, events, filter, gatedOverrides, noiseOverrides, otherGrouped, overrideMode, showOverrideNoise]);
+    return { essential: ess, noise: noi };
+  }, [filtered, scores]);
+
+  const displayedEvents = showNoise ? filtered : essential;
 
   const stats = useMemo(() => {
     const total = events?.length || 0;
@@ -796,8 +901,9 @@ export default function AlertsPage() {
     const overrides = gatedOverrides.length;
     const noiseCount = noiseOverrides.length;
     const compressionPct = total > 0 ? Math.round((1 - uniqueGroups / total) * 100) : 0;
-    return { total, uniqueGroups, overrides, noiseCount, compressionPct };
-  }, [events, grouped, gatedOverrides, noiseOverrides]);
+    const dismissedCount = dismissed.size;
+    return { total, uniqueGroups, overrides, noiseCount, compressionPct, essentialCount: essential.length, noiseEventsCount: noiseEvents.length, dismissedCount };
+  }, [events, grouped, gatedOverrides, noiseOverrides, essential, noiseEvents, dismissed]);
 
   const filterOptions: { value: FilterType; label: string; count?: number }[] = [
     { value: "UNIQUE", label: fr ? "Groupés" : "Grouped", count: stats.uniqueGroups },
@@ -811,7 +917,8 @@ export default function AlertsPage() {
 
   return (
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
-      <div className="flex items-center gap-3 mb-4 sm:mb-6">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4 sm:mb-6 flex-wrap">
         <h1 className="font-mono text-base sm:text-lg tracking-widest text-white/80">{t("alerts.title")}</h1>
         {stats.compressionPct > 0 && (
           <span className="font-mono text-[9px] px-2 py-0.5 rounded"
@@ -828,7 +935,7 @@ export default function AlertsPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {filterOptions.map(opt => (
             <button key={opt.value}
@@ -844,9 +951,52 @@ export default function AlertsPage() {
             </button>
           ))}
         </div>
-        <span className="font-mono text-[10px] text-white/20 ml-2">
-          {filter === "STATE" ? "" : `${filtered.length} ${fr ? "lignes" : "rows"}`}
+      </div>
+
+      {/* Essential controls bar */}
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        {/* Essential / Total counters */}
+        <span className="font-mono text-[9px] px-2 py-0.5 rounded font-bold"
+          style={{ background: "rgba(76,175,80,0.08)", color: "rgba(76,175,80,0.8)", border: "1px solid rgba(76,175,80,0.15)" }}>
+          {fr ? "Essentiel" : "Essential"} ({stats.essentialCount})
         </span>
+        <span className="font-mono text-[9px] px-2 py-0.5 rounded"
+          style={{ background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          Total ({filtered.length})
+        </span>
+
+        {/* Show noise toggle */}
+        <button
+          onClick={() => setShowNoise(!showNoise)}
+          className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider"
+          style={{
+            background: showNoise ? "rgba(255,152,0,0.1)" : "rgba(255,255,255,0.03)",
+            color: showNoise ? "rgba(255,152,0,0.8)" : "rgba(255,255,255,0.25)",
+            border: `1px solid ${showNoise ? "rgba(255,152,0,0.25)" : "rgba(255,255,255,0.06)"}`,
+          }}>
+          {showNoise
+            ? (fr ? `✕ Masquer bruit (${stats.noiseEventsCount})` : `✕ Hide noise (${stats.noiseEventsCount})`)
+            : (fr ? `👁 Afficher le bruit (${stats.noiseEventsCount})` : `👁 Show noise (${stats.noiseEventsCount})`)}
+        </button>
+
+        {/* Confidence filter */}
+        <button
+          onClick={() => setConfidenceFilter(!confidenceFilter)}
+          className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider"
+          style={{
+            background: confidenceFilter ? "rgba(100,181,246,0.1)" : "rgba(255,255,255,0.03)",
+            color: confidenceFilter ? "rgba(100,181,246,0.8)" : "rgba(255,255,255,0.25)",
+            border: `1px solid ${confidenceFilter ? "rgba(100,181,246,0.25)" : "rgba(255,255,255,0.06)"}`,
+          }}>
+          {fr ? "Confiance ≥ 70%" : "Confidence ≥ 70%"} {confidenceFilter ? "✓" : ""}
+        </button>
+
+        {/* Dismissed count */}
+        {stats.dismissedCount > 0 && (
+          <span className="font-mono text-[9px] text-white/20">
+            {stats.dismissedCount} {fr ? "traités" : "dismissed"}
+          </span>
+        )}
       </div>
 
       {/* STATE filter: show DEPEG/DELIST WATCHLIST + state events */}
@@ -859,12 +1009,12 @@ export default function AlertsPage() {
             <h3 className="font-mono text-xs tracking-widest text-white/40 mb-3">
               {fr ? "CHANGEMENTS D'ÉTAT RÉCENTS" : "RECENT STATE CHANGES"}
             </h3>
-            {filtered.length === 0 ? (
+            {displayedEvents.length === 0 ? (
               <div className="text-center text-white/20 font-mono mt-4">{t("alerts.empty")}</div>
             ) : (
               <div className="space-y-1.5">
-                {filtered.map(group => (
-                  <ExpandableEventRow key={group.key} group={group} lang={lang} />
+                {displayedEvents.map(group => (
+                  <ExpandableEventRow key={group.key} group={group} lang={lang} onDismiss={handleDismiss} />
                 ))}
               </div>
             )}
@@ -872,12 +1022,12 @@ export default function AlertsPage() {
         </div>
       ) : (
         <>
-          {(!filtered || filtered.length === 0) ? (
+          {(!displayedEvents || displayedEvents.length === 0) ? (
             <div className="text-center text-white/20 font-mono mt-20">{t("alerts.empty")}</div>
           ) : (
             <div className="space-y-1.5">
-              {filtered.map(group => (
-                <ExpandableEventRow key={group.key} group={group} lang={lang} />
+              {displayedEvents.map(group => (
+                <ExpandableEventRow key={group.key} group={group} lang={lang} onDismiss={handleDismiss} />
               ))}
             </div>
           )}
