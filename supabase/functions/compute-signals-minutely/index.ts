@@ -127,8 +127,8 @@ Deno.serve(async (req) => {
         { name: "cap", a: Number(ts.cap) || 0, b: Number(tmc.cap) || 0 },
         { name: "vol_24h", a: Number(ts.vol_24h) || 0, b: Number(tmc.vol_24h) || 0 },
       ];
-      // Section 8: Only trigger if divergence > 18% on major field
-      const divergent = fields.filter(f => f.a > 0 && f.b > 0 && pctDiff(f.a, f.b) > 18);
+      // Section 8: Only trigger if divergence > 25% on major field
+      const divergent = fields.filter(f => f.a > 0 && f.b > 0 && pctDiff(f.a, f.b) > 25);
       if (divergent.length === 0) continue;
 
       // Section 8: Compute confidence_data and only alert if < 85
@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
     if (divInserts.length > 0) {
       const { error: divErr } = await sb.from("events").insert(divInserts);
       if (divErr) console.error("DATA_DIVERGENCE insert error:", divErr.message);
-      else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts (gated: >18% div, conf<85)`);
+      else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts (gated: >25% div, conf<85)`);
     }
 
     // ============= PASS 1: Compute raw scores (no DB calls, all from maps) =============
