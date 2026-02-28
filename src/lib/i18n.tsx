@@ -19,6 +19,7 @@ const translations = {
   "nav.gauge": { fr: "Alien Gauge", en: "Alien Gauge" },
   "nav.subnets": { fr: "Subnets", en: "Subnets" },
   "nav.alerts": { fr: "Alertes", en: "Alerts" },
+  "nav.portfolio": { fr: "Portefeuille", en: "Portfolio" },
   "nav.settings": { fr: "Réglages", en: "Settings" },
 
   // Gauge labels

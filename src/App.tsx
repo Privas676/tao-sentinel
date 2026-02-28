@@ -10,6 +10,7 @@ import SubnetsPage from "./pages/SubnetsPage";
 import AlertsPage from "./pages/AlertsPage";
 import SettingsPage from "./pages/SettingsPage";
 import AuthPage from "./pages/AuthPage";
+import PortfolioPage from "./pages/PortfolioPage";
 import { Toaster } from "@/components/ui/sonner";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ function AppLayout() {
   const navItems = [
     { path: "/", label: t("nav.gauge"), icon: "◎" },
     { path: "/subnets", label: t("nav.subnets"), icon: "⊞" },
+    { path: "/portfolio", label: t("nav.portfolio"), icon: "💼" },
     { path: "/alerts", label: t("nav.alerts"), icon: "⚡", badge: unreadCount },
     { path: "/settings", label: t("nav.settings"), icon: "⚙" },
   ];
@@ -126,6 +128,7 @@ function AppLayout() {
         <Routes>
           <Route path="/" element={<AlienGauge />} />
           <Route path="/subnets" element={<SubnetsPage />} />
+          <Route path="/portfolio" element={<PortfolioPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/auth" element={user ? <AlienGauge /> : <AuthPage />} />
