@@ -484,6 +484,7 @@ export function processSignals(
 
     // Risk Override Engine
     const override = evaluateRiskOverride({
+      netuid: s.netuid!,
       state: s.state,
       psi: d.psi,
       risk,
