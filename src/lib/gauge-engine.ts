@@ -194,23 +194,21 @@ export function stabilityColor(pct: number): string {
 }
 
 /* ═══════════════════════════════════════ */
-/*   OPPORTUNITY / RISK ENGINE (Section 3)  */
+/*   OPPORTUNITY / RISK ENGINE (v2 HEALTH)  */
 /* ═══════════════════════════════════════ */
 
+/** Legacy deriveOpportunity — kept for processSignals pipeline when no health data */
 function deriveOpportunity(psi: number, conf: number, quality: number, state: string | null): number {
   let opp = 0;
-  // LINEAR terms for maximum spread
-  opp += psi * 0.35;           // Momentum: 35%
-  opp += quality * 0.25;       // Quality/Adoption: 25%
-  opp += conf * 0.20;          // Confidence: 20%
-  // State bonuses
-  if (state === "GO") opp += 15;
-  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 8;
-  else if (state === "WATCH") opp += 3;
+  opp += psi * 0.30;
+  opp += quality * 0.20;
+  opp += conf * 0.15;
+  if (state === "GO") opp += 12;
+  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 6;
+  else if (state === "WATCH") opp += 2;
   else if (state === "HOLD") opp -= 3;
-  // Penalties
   if (state === "BREAK" || state === "EXIT_FAST") opp -= 25;
-  if (psi < 30) opp -= 10;
+  if (psi < 30) opp -= 8;
   return Math.round(clamp(opp, 0, 100));
 }
 
@@ -221,6 +219,7 @@ export type MarketRiskData = {
   liqRatio: number;
 };
 
+/** Legacy deriveRisk — kept for processSignals pipeline when no health data */
 function deriveRisk(psi: number, conf: number, quality: number, state: string | null, market?: MarketRiskData): number {
   let risk = 20;
   risk += (100 - quality) * 0.25;

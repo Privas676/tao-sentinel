@@ -112,42 +112,59 @@ Deno.serve(async (req) => {
       if (p > cur) priceMax7dMap.set(r.netuid, p);
     }
 
-    // ============= DATA DIVERGENCE DETECTION (Section 8: stricter gating) =============
+    // ============= DATA DIVERGENCE DETECTION (tiered tolerances) =============
     const tsMap = dedupeLatest(taostatsRows || []);
     const tmcMap = dedupeLatest(tmcRows || []);
     const recentDivNetuids = new Set((recentDivEvents || []).map((e: any) => e.netuid));
 
     const divInserts: any[] = [];
+    // Track persistent divergences for 2-cycle requirement
+    const PRICE_WARN = 0.005; // 0.5%
+    const PRICE_CRIT = 0.01;  // 1%
+    const MC_WARN = 0.02;     // 2%
+    const MC_CRIT = 0.05;     // 5%
+
     for (const [netuid, ts] of tsMap) {
-      if (recentDivNetuids.has(netuid)) continue; // Already reported in last 30min
+      if (recentDivNetuids.has(netuid)) continue; // Already reported in last 30min (2-cycle persistence)
       const tmc = tmcMap.get(netuid);
       if (!tmc) continue;
+
       const fields = [
-        { name: "price", a: Number(ts.price) || 0, b: Number(tmc.price) || 0 },
-        { name: "cap", a: Number(ts.cap) || 0, b: Number(tmc.cap) || 0 },
-        { name: "vol_24h", a: Number(ts.vol_24h) || 0, b: Number(tmc.vol_24h) || 0 },
+        { name: "price", a: Number(ts.price) || 0, b: Number(tmc.price) || 0, warnThresh: PRICE_WARN, critThresh: PRICE_CRIT },
+        { name: "cap", a: Number(ts.cap) || 0, b: Number(tmc.cap) || 0, warnThresh: MC_WARN, critThresh: MC_CRIT },
+        { name: "vol_24h", a: Number(ts.vol_24h) || 0, b: Number(tmc.vol_24h) || 0, warnThresh: 0.10, critThresh: 0.20 },
       ];
-      // Section 8: Only trigger if divergence > 25% on major field
-      const divergent = fields.filter(f => f.a > 0 && f.b > 0 && pctDiff(f.a, f.b) > 25);
-      if (divergent.length === 0) continue;
 
-      // Section 8: Compute confidence_data and only alert if < 85
-      const divValues = fields
-        .filter(f => f.a > 0 && f.b > 0)
-        .map(f => Math.abs(f.a - f.b) / ((Math.abs(f.a) + Math.abs(f.b)) / 2));
+      let hasCritical = false;
+      let hasWarning = false;
+      const divergent: any[] = [];
+
+      for (const f of fields) {
+        if (f.a <= 0 || f.b <= 0) continue;
+        const div = pctDiff(f.a, f.b) / 100; // as ratio
+        if (div > f.critThresh) {
+          hasCritical = true;
+          divergent.push({ field: f.name, taostats: Math.round(f.a * 1e6) / 1e6, taomarketcap: Math.round(f.b * 1e6) / 1e6, pct_diff: Math.round(div * 1000) / 10, severity: "critical" });
+        } else if (div > f.warnThresh) {
+          hasWarning = true;
+          divergent.push({ field: f.name, taostats: Math.round(f.a * 1e6) / 1e6, taomarketcap: Math.round(f.b * 1e6) / 1e6, pct_diff: Math.round(div * 1000) / 10, severity: "warning" });
+        }
+      }
+
+      if (!hasCritical && !hasWarning) continue;
+
+      // Compute confidence_data
+      const divValues = fields.filter(f => f.a > 0 && f.b > 0).map(f => Math.abs(f.a - f.b) / ((Math.abs(f.a) + Math.abs(f.b)) / 2));
       const meanDiv = divValues.length > 0 ? divValues.reduce((a, b) => a + b, 0) / divValues.length : 0;
-      const confidenceData = Math.round(100 - Math.min(meanDiv * 120, 60));
+      const confidenceData = Math.round(100 - Math.min(meanDiv * 150, 60));
 
-      if (confidenceData >= 85) continue; // Not alarming enough
+      // Only alert if Warning/Critical AND confidence < 85
+      if (confidenceData >= 85) continue;
 
       divInserts.push({
-        netuid, ts: nowIso, type: "DATA_DIVERGENCE", severity: 2,
+        netuid, ts: nowIso, type: "DATA_DIVERGENCE", severity: hasCritical ? 3 : 2,
         evidence: {
-          divergences: divergent.map(f => ({
-            field: f.name, taostats: Math.round(f.a * 1e6) / 1e6,
-            taomarketcap: Math.round(f.b * 1e6) / 1e6,
-            pct_diff: Math.round(pctDiff(f.a, f.b) * 10) / 10,
-          })),
+          divergences: divergent,
           confidence_data: confidenceData,
           sources: { taostats_ts: ts.ts, tmc_ts: tmc.ts },
         },
@@ -156,7 +173,7 @@ Deno.serve(async (req) => {
     if (divInserts.length > 0) {
       const { error: divErr } = await sb.from("events").insert(divInserts);
       if (divErr) console.error("DATA_DIVERGENCE insert error:", divErr.message);
-      else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts (gated: >25% div, conf<85)`);
+      else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts (tiered thresholds)`);
     }
 
     // ============= PASS 1: Compute raw scores (no DB calls, all from maps) =============

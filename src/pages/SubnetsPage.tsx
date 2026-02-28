@@ -23,6 +23,12 @@ import {
   systemStatusColor, systemStatusLabel,
   type SystemStatus,
 } from "@/lib/risk-override";
+import {
+  extractHealthData, recalculate, computeAllHealthScores,
+  computeHealthRisk, computeHealthOpportunity,
+  healthColor, dilutionLabel, formatUsd,
+  type SubnetHealthResult, type HealthScores, type RecalculatedMetrics,
+} from "@/lib/subnet-health";
 
 /* ═══════════════════════════════════════ */
 /*        SPARKLINE COMPONENT              */
@@ -58,6 +64,78 @@ function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: 
   );
 }
 
+/* ═══════════════════════════════════════ */
+/*        HEALTH PANEL COMPONENT            */
+/* ═══════════════════════════════════════ */
+function HealthPanel({ health, onClose }: {
+  health: { netuid: number; name: string; recalc: RecalculatedMetrics; scores: HealthScores; displayedCap: number; displayedLiq: number };
+  onClose: () => void;
+}) {
+  const { recalc, scores } = health;
+  const capDiv = health.displayedCap > 0 ? Math.abs(recalc.mcRecalc - health.displayedCap) / health.displayedCap * 100 : 0;
+  const liqDiv = health.displayedLiq > 0 ? Math.abs(recalc.liquidityRecalc - health.displayedLiq) / health.displayedLiq * 100 : 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70" />
+      <div className="relative rounded-xl p-5 font-mono text-[11px] max-w-md w-full mx-4 space-y-4"
+        style={{ background: "rgba(10,10,14,0.98)", border: "1px solid rgba(255,215,0,0.15)", boxShadow: "0 8px 40px rgba(0,0,0,0.8)" }}
+        onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-white/90 text-sm font-bold tracking-wider">🔬 HEALTH — SN-{health.netuid} {health.name}</h3>
+          <button onClick={onClose} className="text-white/30 hover:text-white/60 text-lg">✕</button>
+        </div>
+
+        {/* Recalculated vs displayed */}
+        <div className="space-y-1.5">
+          <div className="text-white/40 text-[9px] tracking-widest mb-1">RECALCULS</div>
+          <Row label="MC recalc" value={formatUsd(recalc.mcRecalc)} sub={capDiv > 2 ? `△ ${capDiv.toFixed(1)}%` : "✓"} warn={capDiv > 5} />
+          <Row label="FDV recalc" value={formatUsd(recalc.fdvRecalc)} />
+          <Row label="Dilution" value={`${recalc.dilutionRatio.toFixed(2)}x — ${dilutionLabel(recalc.dilutionRatio)}`} warn={recalc.dilutionRatio > 3} />
+          <Row label="Volume/MC" value={`${(recalc.volumeToMc * 100).toFixed(2)}%`} />
+          <Row label="Emission/MC" value={`${(recalc.emissionToMc * 100).toFixed(3)}%/j`} warn={recalc.emissionToMc > 0.005} />
+          <Row label="Liq/MC" value={`${(recalc.liquidityToMc * 100).toFixed(2)}%`} warn={recalc.liquidityToMc < 0.003} />
+          {liqDiv > 5 && <Row label="Liq divergence" value={`${liqDiv.toFixed(1)}%`} warn={true} />}
+        </div>
+
+        {/* Health scores */}
+        <div className="space-y-1.5 pt-2 border-t border-white/5">
+          <div className="text-white/40 text-[9px] tracking-widest mb-1">SCORES SANTÉ</div>
+          <ScoreBar label="Liquidité" score={scores.liquidityHealth} />
+          <ScoreBar label="Volume" score={scores.volumeHealth} />
+          <ScoreBar label="Émission" score={100 - scores.emissionPressure} inverted />
+          <ScoreBar label="Dilution" score={100 - scores.dilutionRisk} inverted />
+          <ScoreBar label="Activité" score={scores.activityHealth} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, sub, warn }: { label: string; value: string; sub?: string; warn?: boolean }) {
+  return (
+    <div className="flex justify-between items-center">
+      <span className="text-white/40">{label}</span>
+      <span className="flex items-center gap-2">
+        <span className={warn ? "text-orange-400" : "text-white/70"}>{value}</span>
+        {sub && <span className={`text-[9px] ${warn ? "text-red-400" : "text-green-400/60"}`}>{sub}</span>}
+      </span>
+    </div>
+  );
+}
+
+function ScoreBar({ label, score, inverted }: { label: string; score: number; inverted?: boolean }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-white/40 w-16">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, background: healthColor(score) }} />
+      </div>
+      <span className="text-white/60 w-8 text-right">{score}</span>
+    </div>
+  );
+}
+
 type SignalRow = {
   netuid: number | null;
   subnet_name: string | null;
@@ -70,78 +148,6 @@ type SignalRow = {
 };
 
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
-
-/* ─── Extra market data for risk discrimination ─── */
-type MarketRiskData = {
-  volCap: number;          // vol_24h / cap ratio
-  topMinersShare: number;  // concentration 0-1
-  priceVol7d: number;      // 7d price volatility (stddev/mean)
-  liqRatio: number;        // liquidity / cap
-};
-
-/* ─── Scoring functions (Section 3 — LINEAR for spread) ─── */
-function deriveOpp(psi: number, conf: number, quality: number, state: string | null): number {
-  let opp = 0;
-  opp += psi * 0.35;
-  opp += quality * 0.25;
-  opp += conf * 0.20;
-  if (state === "GO") opp += 15;
-  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 8;
-  else if (state === "WATCH") opp += 3;
-  else if (state === "HOLD") opp -= 3;
-  if (state === "BREAK" || state === "EXIT_FAST") opp -= 25;
-  if (psi < 30) opp -= 10;
-  return Math.round(clamp(opp, 0, 100));
-}
-
-function deriveRisk(
-  psi: number, conf: number, quality: number, state: string | null,
-  dataUncertain = false, market?: MarketRiskData
-): number {
-  // Base risk floor
-  let risk = 20;
-  // Core deficits (LINEAR)
-  risk += (100 - quality) * 0.25;
-  risk += (100 - conf) * 0.20;
-  risk += (100 - psi) * 0.10;
-
-  // ── CONTINUOUS MARKET DATA FACTORS (up to ~35 pts total) ──
-  if (market) {
-    // Vol/Cap: continuous — ideal range 0.02-0.15, penalize outside
-    const vc = market.volCap;
-    const vcIdeal = 0.08;
-    const vcDist = Math.abs(Math.log((vc + 0.001) / vcIdeal));
-    risk += clamp(vcDist * 8, 0, 15);  // 0-15 pts continuous
-
-    // Miner concentration: linear 0-10 pts
-    risk += clamp(market.topMinersShare * 12, 0, 10);
-
-    // Liquidity ratio: inverse — lower = riskier, continuous
-    const lrScore = clamp(1 - market.liqRatio * 5, 0, 1); // 0 if liqRatio>0.2, 1 if liqRatio=0
-    risk += lrScore * 10;  // 0-10 pts continuous
-
-    // 7d price volatility: linear 0-10 pts
-    risk += clamp(market.priceVol7d * 20, 0, 10);
-  } else {
-    risk += 15; // no data = significant uncertainty
-  }
-
-  // Concentration risk combos
-  if (psi >= 70 && quality < 60) risk += 5;
-  if (psi >= 80 && quality < 50) risk += 8;
-  if (psi >= 85) risk += 3;
-  if (psi < 40) risk += 5;
-  // Confidence gap
-  if (conf < 50) risk += 4;
-  if (conf < 30) risk += 4;
-  // State-based
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 15;
-  else if (state === "HOLD") risk += 3;
-  else if (state === "WATCH") risk += 2;
-  if (psi >= 40 && psi <= 60 && conf < 40) risk += 3;
-  if (dataUncertain) risk += 8;
-  return Math.round(clamp(risk, 0, 100));
-}
 
 function deriveSubnetSC(psi: number, quality: number, conf: number, state: string | null): SmartCapitalState {
   const accSignal = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
@@ -162,22 +168,10 @@ function scColor(state: SmartCapitalState): string {
   }
 }
 
-function stateDisplayLabel(state: string | null): string {
-  switch (state) {
-    case "BREAK": return "ZONE CRITIQUE";
-    case "EXIT_FAST": return "ZONE CRITIQUE";
-    case "GO": return "GO";
-    case "GO_SPECULATIVE": return "SPÉCULATIF";
-    case "EARLY": return "EARLY";
-    case "WATCH": return "WATCH";
-    case "HOLD": return "HOLD";
-    default: return state || "—";
-  }
-}
-
 export default function SubnetsPage() {
   const { t, lang } = useI18n();
   const [mode, setMode] = useState<ViewMode>("all");
+  const [healthPanel, setHealthPanel] = useState<null | any>(null);
   const { ownedNetuids, addPosition, isOwned } = useLocalPortfolio();
 
   const { data: signals } = useQuery({
@@ -188,6 +182,36 @@ export default function SubnetsPage() {
       return (data || []) as SignalRow[];
     },
     refetchInterval: 60_000,
+  });
+
+  // Fetch raw_payload for health engine
+  const { data: rawPayloads } = useQuery({
+    queryKey: ["raw-payloads-health"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subnet_metrics_ts")
+        .select("netuid, raw_payload, source, ts")
+        .eq("source", "taostats")
+        .order("ts", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      const map = new Map<number, any>();
+      for (const r of data || []) {
+        if (!map.has(r.netuid) && r.raw_payload) map.set(r.netuid, r.raw_payload);
+      }
+      return map;
+    },
+    refetchInterval: 120_000,
+  });
+
+  // TAO USD rate
+  const { data: taoUsd } = useQuery({
+    queryKey: ["tao-usd-health"],
+    queryFn: async () => {
+      const { data } = await supabase.from("fx_latest").select("tao_usd").limit(1).maybeSingle();
+      return Number(data?.tao_usd) || 450;
+    },
+    refetchInterval: 300_000,
   });
 
   const { data: primaryMetrics } = useQuery({
@@ -228,7 +252,7 @@ export default function SubnetsPage() {
     refetchInterval: 120_000,
   });
 
-   const { data: sparklines } = useQuery({
+  const { data: sparklines } = useQuery({
     queryKey: ["sparklines-7d"],
     queryFn: async () => {
       const since = new Date(Date.now() - 8 * 86400_000).toISOString().slice(0, 10);
@@ -249,7 +273,6 @@ export default function SubnetsPage() {
     refetchInterval: 300_000,
   });
 
-  // Fetch real market metrics for risk discrimination
   const { data: subnetLatest } = useQuery({
     queryKey: ["subnet-latest-risk"],
     queryFn: async () => {
@@ -257,7 +280,7 @@ export default function SubnetsPage() {
         .from("subnet_latest")
         .select("netuid, vol_cap, top_miners_share, liquidity, cap");
       if (error) throw error;
-      const map = new Map<number, { volCap: number; topMinersShare: number; liqRatio: number }>();
+      const map = new Map<number, { volCap: number; topMinersShare: number; liqRatio: number; cap: number; liq: number }>();
       for (const r of data || []) {
         if (r.netuid == null) continue;
         const cap = Number(r.cap) || 0;
@@ -266,6 +289,7 @@ export default function SubnetsPage() {
           volCap: Number(r.vol_cap) || 0,
           topMinersShare: Number(r.top_miners_share) || 0,
           liqRatio: cap > 0 ? liq / cap : 0,
+          cap, liq,
         });
       }
       return map;
@@ -286,25 +310,9 @@ export default function SubnetsPage() {
     return map;
   }, [primaryMetrics, secondaryMetrics]);
 
-  // Saturation index
-  const saturationIndex = useMemo(() => {
-    if (!signals) return 0;
-    const valid = signals.filter(s => s.netuid != null);
-    const withScores = valid.map(s => {
-      const psi = s.mpi ?? s.score ?? 0;
-      const conf = s.confidence_pct ?? 0;
-      const quality = s.quality_score ?? 0;
-      const opp = deriveOpp(psi, conf, quality, s.state);
-      const risk = deriveRisk(psi, conf, quality, s.state);
-      return opp - risk;
-    });
-    const highAS = withScores.filter(as => as > 40).length;
-    return valid.length > 0 ? Math.round((highAS / valid.length) * 100) : 0;
-  }, [signals]);
-  const isSaturated = saturationAlert(saturationIndex);
-
   const rows = useMemo(() => {
     if (!signals) return [];
+    const rate = taoUsd || 450;
 
     const allRows = signals
       .filter(s => s.netuid != null)
@@ -315,50 +323,53 @@ export default function SubnetsPage() {
         const consensus = consensusMap.get(s.netuid!);
         const dataUncertain = consensus?.dataUncertain ?? false;
         const confianceScore = consensus?.confianceData ?? 50;
+        const dataConsistencyRisk = clamp(100 - confianceScore, 0, 100);
 
-        return { netuid: s.netuid!, psi, conf, quality, state: s.state, name: s.subnet_name || `SN-${s.netuid}`, dataUncertain, confianceScore };
+        // Health engine: extract from raw_payload
+        const payload = rawPayloads?.get(s.netuid!);
+        const chainData = payload?._chain || {};
+        const healthData = extractHealthData(s.netuid!, payload || {}, chainData, rate);
+        const recalc = recalculate(healthData);
+        const healthScores = computeAllHealthScores(healthData, recalc);
+
+        // Smart Capital
+        const sc = deriveSubnetSC(psi, quality, conf, s.state);
+        const scScore = sc === "ACCUMULATION" ? 70 : sc === "DISTRIBUTION" ? 20 : 45;
+
+        // Momentum
+        const momentumScore = computeMomentumScore(psi);
+        const momentumLabel = deriveMomentumLabel(psi);
+
+        // Pre-hype intensity (simplified)
+        const preHypeIntensity = (psi > 50 && quality > 40 && sc === "ACCUMULATION") ? clamp(psi - 30, 0, 70) : 0;
+
+        // NEW RISK: health-based composite (Section 5)
+        const riskRaw = computeHealthRisk(healthScores, dataConsistencyRisk);
+
+        // NEW OPPORTUNITY: health-based composite (Section 6)
+        const oppRaw = computeHealthOpportunity(momentumScore, healthScores, scScore, preHypeIntensity, recalc);
+
+        return {
+          netuid: s.netuid!, psi, conf, quality, state: s.state,
+          name: s.subnet_name || `SN-${s.netuid}`,
+          dataUncertain, confianceScore,
+          oppRaw, riskRaw,
+          momentumLabel, momentumScore, sc, scScore,
+          healthScores, recalc, healthData,
+          displayedCap: (subnetLatest?.get(s.netuid!)?.cap || 0) * rate,
+          displayedLiq: (subnetLatest?.get(s.netuid!)?.liq || 0) * rate,
+        };
       });
 
-    // Compute 7d price volatility per subnet
-    const priceVolMap = new Map<number, number>();
-    for (const r of allRows) {
-      const prices = sparklines?.get(r.netuid);
-      if (prices && prices.length >= 2) {
-        const mean = prices.reduce((a, b) => a + b, 0) / prices.length;
-        if (mean > 0) {
-          const variance = prices.reduce((a, p) => a + (p - mean) ** 2, 0) / prices.length;
-          priceVolMap.set(r.netuid, Math.sqrt(variance) / mean); // coefficient of variation
-        }
-      }
-    }
-
-    // Build market risk data per subnet
-    const getMarketRisk = (netuid: number): MarketRiskData | undefined => {
-      const sl = subnetLatest?.get(netuid);
-      if (!sl) return undefined;
-      return {
-        volCap: sl.volCap,
-        topMinersShare: sl.topMinersShare,
-        liqRatio: sl.liqRatio,
-        priceVol7d: priceVolMap.get(netuid) ?? 0,
-      };
-    };
-
-    // Batch normalize opportunity (Section 2), but use RAW risk for spread
-    const oppRaws = allRows.map(r => deriveOpp(r.psi, r.conf, r.quality, r.state));
-    const riskRaws = allRows.map(r => deriveRisk(r.psi, r.conf, r.quality, r.state, r.dataUncertain, getMarketRisk(r.netuid)));
-    const oppNorm = normalizeWithVariance(oppRaws, 3);
-    // Risk: use raw scores directly (natural 20-80 range from market data)
-    // Only apply anti-100 cap
-    const riskMax = Math.max(...riskRaws);
-    const riskMaxCount = riskRaws.filter(v => v === riskMax).length;
-    const riskNorm = riskRaws.map(v => Math.min(v, riskMaxCount === 1 && v === riskMax ? 100 : 99));
+    // Normalize with percentile + sigmoid (Section 7)
+    const oppNorm = normalizeWithVariance(allRows.map(r => r.oppRaw), 3);
+    const riskNorm = normalizeWithVariance(allRows.map(r => r.riskRaw), 3);
 
     return allRows.map((r, i) => {
       let opp = oppNorm[i];
       const risk = riskNorm[i];
 
-      // Section 7: DEPEG coherence
+      // DEPEG coherence
       const isBreak = r.state === "BREAK" || r.state === "EXIT_FAST";
       if (isBreak || r.state === "DEPEG_WARNING" || r.state === "DEPEG_CRITICAL") {
         opp = 0;
@@ -368,38 +379,31 @@ export default function SubnetsPage() {
       const override = evaluateRiskOverride({ state: r.state, psi: r.psi, risk, quality: r.quality });
       if (override.isOverridden) opp = 0;
 
-      // AS signed (Section 4) with DATA_UNCERTAIN penalty
+      // AS signed with DATA_UNCERTAIN penalty
       let asymmetry = opp - risk;
       if (r.dataUncertain) asymmetry -= 15;
 
-      const momentumLabel = deriveMomentumLabel(r.psi);
       const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
-
       let action = override.isOverridden ? "EXIT" as const : deriveSubnetAction(opp, risk, r.conf);
       if (override.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
 
-      // Saturation gating (Section 9): stricter ENTER
-      if (isSaturated && action === "ENTER") {
-        const stability = computeStabilitySetup(opp, risk, r.conf, momentum, r.quality, r.dataUncertain);
-        if (stability <= 70) action = "WATCH";
-      }
-
       checkCoherence(override.isOverridden, action);
-      const sc = deriveSubnetSC(r.psi, r.quality, r.conf, r.state);
       const owned = ownedNetuids.has(r.netuid);
 
       return {
-        netuid: r.netuid,
-        name: r.name,
-        state: r.state,
+        netuid: r.netuid, name: r.name, state: r.state,
         psi: r.psi, conf: r.conf, opp, risk, asymmetry,
-        momentumLabel, action, sc, owned,
+        momentumLabel: r.momentumLabel, action, sc: r.sc, owned,
         confianceScore: r.confianceScore,
         dataUncertain: r.dataUncertain,
         spark: sparklines?.get(r.netuid) || [],
         isOverridden: override.isOverridden,
         systemStatus: override.systemStatus,
         overrideReasons: override.overrideReasons,
+        healthScores: r.healthScores,
+        recalc: r.recalc,
+        displayedCap: r.displayedCap,
+        displayedLiq: r.displayedLiq,
       };
     })
     .filter(r => {
@@ -415,7 +419,7 @@ export default function SubnetsPage() {
       }
       return b.asymmetry - a.asymmetry;
     });
-  }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines, subnetLatest, consensusMap, isSaturated]);
+  }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines, subnetLatest, consensusMap, rawPayloads, taoUsd]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
@@ -452,11 +456,6 @@ export default function SubnetsPage() {
             </button>
           ))}
         </div>
-        {isSaturated && (
-          <span className="font-mono text-[9px] px-2 py-1 rounded" style={{ background: "rgba(255,109,0,0.08)", color: "rgba(255,109,0,0.8)", border: "1px solid rgba(255,109,0,0.15)" }}>
-            ⚠ {lang === "fr" ? "MARCHÉ SATURÉ" : "MARKET SATURATED"} ({saturationIndex}%)
-          </span>
-        )}
       </div>
 
       {/* Table */}
@@ -475,6 +474,7 @@ export default function SubnetsPage() {
               <th className="text-center py-3 px-2">{t("sub.momentum")}</th>
               <th className="text-center py-3 px-2">{t("sc.label")}</th>
               <th className="text-right py-3 px-2">{t("data.confiance")}</th>
+              <th className="text-center py-3 px-2">🔬</th>
               <th className="text-center py-3 px-2">✔</th>
             </tr>
           </thead>
@@ -550,11 +550,19 @@ export default function SubnetsPage() {
                     </span>
                   </td>
                   <td className="py-3 px-2 text-center">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setHealthPanel({ netuid: r.netuid, name: r.name, recalc: r.recalc, scores: r.healthScores, displayedCap: r.displayedCap, displayedLiq: r.displayedLiq }); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded transition-colors hover:bg-white/5"
+                      style={{ color: "rgba(255,215,0,0.5)", border: "1px solid rgba(255,215,0,0.1)" }}>
+                      🔬
+                    </button>
+                  </td>
+                  <td className="py-3 px-2 text-center">
                     {r.owned ? (
                       <span style={{ color: "rgba(76,175,80,0.8)", fontSize: 14 }}>✔</span>
                     ) : (
-                      <button onClick={() => addPosition(r.netuid, 0)}
-                        className="font-mono text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      <button onClick={(e) => { e.stopPropagation(); addPosition(r.netuid, 0); }}
+                        className="font-mono text-[8px] px-1.5 py-0.5 rounded opacity-40 hover:opacity-100 transition-opacity"
                         style={{ background: "rgba(76,175,80,0.08)", color: "rgba(76,175,80,0.6)", border: "1px solid rgba(76,175,80,0.15)" }}>
                         +
                       </button>
@@ -566,6 +574,9 @@ export default function SubnetsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Health Panel Modal */}
+      {healthPanel && <HealthPanel health={healthPanel} onClose={() => setHealthPanel(null)} />}
     </div>
   );
 }
