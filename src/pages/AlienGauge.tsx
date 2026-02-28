@@ -717,7 +717,7 @@ export default function AlienGauge() {
   const riskAngle = (globalRisk / 100) * 270;
 
   return (
-    <div className="fixed inset-0 select-none overflow-y-auto" style={{ background: "#000" }}>
+    <div className="fixed inset-0 select-none overflow-y-auto overflow-x-hidden" style={{ background: "#000" }}>
       <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.75) 100%)" }} />
 
       <style>{`
