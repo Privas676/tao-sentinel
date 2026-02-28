@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     }
 
     // Look back 10 minutes
-    const since = Math.floor((Date.now() - 10 * 60_000) / 1000);
+    const since = Math.floor((Date.now() - 20 * 60_000) / 1000); // 20min lookback (cron every 15min)
     const minRao = String(MIN_TAO * RAO);
 
     let totalInserted = 0;
