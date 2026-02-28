@@ -123,7 +123,7 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
   );
 }
 
-type SortCol = "price" | "var30d" | "opp" | "risk" | "asymmetry" | "confiance" | null;
+type SortCol = "netuid" | "name" | "status" | "price" | "var30d" | "spark" | "opp" | "risk" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | null;
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
 
 function scColor(state: SmartCapitalState): string {
@@ -170,13 +170,29 @@ export default function SubnetsPage() {
       })
       .sort((a, b) => {
         if (sortCol) {
+          const actionRank = (a: string) => ["EXIT","SELL","WATCH","HOLD","ACCUMULATE","ENTER"].indexOf(a);
+          const scRank = (s: SmartCapitalState) => s === "ACCUMULATION" ? 2 : s === "STABLE" ? 1 : 0;
+          const momRank = (m: string) => ["COLD","COOL","WARM","HOT","FIRE"].indexOf(m);
+          const statusRank = (s: string) => ["CRITICAL","DEGRADED","WARNING","OK"].indexOf(s);
           let av = 0, bv = 0;
           switch (sortCol) {
+            case "netuid": av = a.netuid; bv = b.netuid; break;
+            case "name": return sortDir === "desc" ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
+            case "status": av = statusRank(a.systemStatus); bv = statusRank(b.systemStatus); break;
             case "price": av = a.alphaPrice || 0; bv = b.alphaPrice || 0; break;
             case "var30d": av = a.priceVar30d ?? -9999; bv = b.priceVar30d ?? -9999; break;
+            case "spark": {
+              const sa = a.spark, sb = b.spark;
+              const pctA = sa.length >= 2 && sa[0] > 0 ? (sa[sa.length-1] - sa[0]) / sa[0] : -9999;
+              const pctB = sb.length >= 2 && sb[0] > 0 ? (sb[sb.length-1] - sb[0]) / sb[0] : -9999;
+              av = pctA; bv = pctB; break;
+            }
             case "opp": av = a.opp; bv = b.opp; break;
             case "risk": av = a.risk; bv = b.risk; break;
             case "asymmetry": av = a.asymmetry; bv = b.asymmetry; break;
+            case "action": av = actionRank(a.action); bv = actionRank(b.action); break;
+            case "momentum": av = momRank(a.momentumLabel); bv = momRank(b.momentumLabel); break;
+            case "sc": av = scRank(a.sc); bv = scRank(b.sc); break;
             case "confiance": av = a.confianceScore; bv = b.confianceScore; break;
           }
           return sortDir === "desc" ? bv - av : av - bv;
@@ -239,16 +255,24 @@ export default function SubnetsPage() {
         <table className="w-full font-mono text-xs">
           <thead>
             <tr className="border-b border-white/10 text-white/40">
-              <th className="text-left py-3 px-2">SN</th>
-              <th className="text-left py-3 px-2">{t("sub.name")}</th>
-              <th className="text-center py-3 px-2">STATUT</th>
+              <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("netuid")}>
+                SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
+              <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("name")}>
+                {t("sub.name")} {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
+              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("status")}>
+                STATUT {sortCol === "status" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
               <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("price")}>
                 Prix α {sortCol === "price" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
               <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("var30d")}>
                 Var 30j {sortCol === "var30d" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
-              <th className="text-center py-3 px-2">{t("tip.price7d")}</th>
+              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("spark")}>
+                {t("tip.price7d")} {sortCol === "spark" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
               <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("opp")}>
                 {t("sub.opp")} {sortCol === "opp" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
@@ -258,9 +282,15 @@ export default function SubnetsPage() {
               <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("asymmetry")}>
                 AS {sortCol === "asymmetry" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
-              <th className="text-center py-3 px-2">ACTION</th>
-              <th className="text-center py-3 px-2">{t("sub.momentum")}</th>
-              <th className="text-center py-3 px-2">{t("sc.label")}</th>
+              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("action")}>
+                ACTION {sortCol === "action" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
+              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("momentum")}>
+                {t("sub.momentum")} {sortCol === "momentum" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
+              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("sc")}>
+                {t("sc.label")} {sortCol === "sc" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
               <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("confiance")}>
                 {t("data.confiance")} {sortCol === "confiance" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
