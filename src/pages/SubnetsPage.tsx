@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { calibrateScores } from "@/lib/risk-calibration";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
@@ -367,21 +368,30 @@ export default function SubnetsPage() {
 
     return allRows.map((r, i) => {
       // Blend: 60% raw (clamped 0-100) + 40% percentile rank
-      let opp = clamp(Math.round(r.oppRaw * 0.6 + oppPercentile[i] * 0.4), 5, 98);
-      const risk = clamp(Math.round(r.riskRaw * 0.6 + riskPercentile[i] * 0.4), 10, 95);
+      let oppBlend = clamp(Math.round(r.oppRaw * 0.6 + oppPercentile[i] * 0.4), 5, 98);
+      let riskBlend = clamp(Math.round(r.riskRaw * 0.6 + riskPercentile[i] * 0.4), 0, 100);
 
       // DEPEG coherence
       const isBreak = r.state === "BREAK" || r.state === "EXIT_FAST";
       if (isBreak || r.state === "DEPEG_WARNING" || r.state === "DEPEG_CRITICAL") {
-        opp = 0;
+        oppBlend = 0;
       }
 
       // Risk Override
-      const override = evaluateRiskOverride({ state: r.state, psi: r.psi, risk, quality: r.quality });
-      if (override.isOverridden) opp = 0;
+      const override = evaluateRiskOverride({ state: r.state, psi: r.psi, risk: riskBlend, quality: r.quality });
+      if (override.isOverridden) oppBlend = 0;
+
+      // ── CALIBRATION: floor + critical override ──
+      const isTopRank = i < 5; // top 5 by sort order get stricter floor
+      const cal = calibrateScores({
+        risk: riskBlend, opportunity: oppBlend,
+        state: r.state, isTopRank, isOverridden: override.isOverridden,
+      });
+      const opp = cal.opportunity;
+      const risk = cal.risk;
 
       // AS signed with DATA_UNCERTAIN penalty
-      let asymmetry = opp - risk;
+      let asymmetry = cal.asymmetry;
       if (r.dataUncertain) asymmetry -= 15;
 
       const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
