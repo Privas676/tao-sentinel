@@ -117,18 +117,14 @@ Deno.serve(async (req) => {
     const tmcMap = dedupeLatest(tmcRows || []);
     const recentDivNetuids = new Set((recentDivEvents || []).map((e: any) => e.netuid));
 
-    // Fetch FX rate for LiquidityUSD recalc
-    const { data: fxRows } = await sb.from("fx_latest").select("tao_usd").limit(1);
-    const taoUsd = Number(fxRows?.[0]?.tao_usd) || 0;
-
     const divInserts: any[] = [];
 
     // Per-metric tolerances (only alert above these thresholds)
     const METRIC_CONFIG: Record<string, { threshold: number; weight: number; label: string }> = {
       price:     { threshold: 1.0,  weight: 35, label: "price" },
-      cap:       { threshold: 2.0,  weight: 25, label: "mc" },
-      vol_24h:   { threshold: 10.0, weight: 15, label: "vol" },
-      liquidity: { threshold: 5.0,  weight: 20, label: "liq" },
+      cap:       { threshold: 5.0,  weight: 25, label: "mc" },
+      vol_24h:   { threshold: 25.0, weight: 10, label: "vol" },
+      liquidity: { threshold: 10.0, weight: 20, label: "liq" },
     };
 
     for (const [netuid, ts] of tsMap) {
@@ -136,16 +132,16 @@ Deno.serve(async (req) => {
       const tmc = tmcMap.get(netuid);
       if (!tmc) continue;
 
-      // Recalculate LiquidityUSD: TAO_in_pool * TAO_USD * 2
-      const liqTs  = Number(ts.liquidity) || 0;
+      // Normalize liquidity: TaoStats reports total (both sides), TMC reports one side
+      // → Normalize both to single-side: divide TaoStats by 2
+      const liqTs  = (Number(ts.liquidity) || 0) / 2;
       const liqTmc = Number(tmc.liquidity) || 0;
 
       const rawFields: Record<string, { a: number; b: number }> = {
         price:     { a: Number(ts.price) || 0,    b: Number(tmc.price) || 0 },
         cap:       { a: Number(ts.cap) || 0,      b: Number(tmc.cap) || 0 },
         vol_24h:   { a: Number(ts.vol_24h) || 0,  b: Number(tmc.vol_24h) || 0 },
-        liquidity: { a: liqTs > 0 && taoUsd > 0 ? liqTs * taoUsd * 2 : liqTs,
-                     b: liqTmc > 0 && taoUsd > 0 ? liqTmc * taoUsd * 2 : liqTmc },
+        liquidity: { a: liqTs, b: liqTmc },
       };
 
       const chips: { metric: string; diff_pct: number; severity: "warn" | "critical" }[] = [];
