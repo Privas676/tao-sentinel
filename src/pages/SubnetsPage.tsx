@@ -123,6 +123,7 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
   );
 }
 
+type SortCol = "asymmetry" | "price" | "var30d" | null;
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
 
 function scColor(state: SmartCapitalState): string {
@@ -137,7 +138,19 @@ export default function SubnetsPage() {
   const { t, lang } = useI18n();
   const [mode, setMode] = useState<ViewMode>("all");
   const [healthPanel, setHealthPanel] = useState<null | any>(null);
+  const [sortCol, setSortCol] = useState<SortCol>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const { ownedNetuids, addPosition, isOwned } = useLocalPortfolio();
+
+  const toggleSort = (col: SortCol) => {
+    if (sortCol === col) {
+      if (sortDir === "desc") setSortDir("asc");
+      else { setSortCol(null); setSortDir("desc"); }
+    } else {
+      setSortCol(col);
+      setSortDir("desc");
+    }
+  };
 
   // ── UNIFIED SCORES (single source of truth) ──
   const { scoresList, sparklines, scoreTimestamp } = useSubnetScores();
@@ -156,13 +169,24 @@ export default function SubnetsPage() {
         return true;
       })
       .sort((a, b) => {
+        // Custom column sort takes priority
+        if (sortCol === "price") {
+          const diff = (a.alphaPrice || 0) - (b.alphaPrice || 0);
+          return sortDir === "desc" ? -diff : diff;
+        }
+        if (sortCol === "var30d") {
+          const av = a.priceVar30d ?? -9999;
+          const bv = b.priceVar30d ?? -9999;
+          return sortDir === "desc" ? bv - av : av - bv;
+        }
+        // Default sort
         if (mode === "risks") {
           if (a.isOverridden !== b.isOverridden) return a.isOverridden ? -1 : 1;
           return b.risk - a.risk;
         }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, mode, ownedNetuids, sparklines]);
+  }, [scoresList, mode, ownedNetuids, sparklines, sortCol, sortDir]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
@@ -216,8 +240,12 @@ export default function SubnetsPage() {
               <th className="text-left py-3 px-2">SN</th>
               <th className="text-left py-3 px-2">{t("sub.name")}</th>
               <th className="text-center py-3 px-2">STATUT</th>
-              <th className="text-right py-3 px-2">Prix α</th>
-              <th className="text-right py-3 px-2">Var 30j</th>
+              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("price")}>
+                Prix α {sortCol === "price" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
+              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("var30d")}>
+                Var 30j {sortCol === "var30d" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
               <th className="text-center py-3 px-2">{t("tip.price7d")}</th>
               <th className="text-right py-3 px-2">{t("sub.opp")}</th>
               <th className="text-right py-3 px-2">{t("sub.risk")}</th>
