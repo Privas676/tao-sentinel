@@ -98,9 +98,17 @@ function computeConsensusConfidence(
     return { score: Math.round(freshness * 0.4 + completeness * 0.4 + 10), divergences, dataUncertain: false, fieldDivergences };
   }
 
-  // Both sources: compute per-field divergence
+  // Both sources: compute per-field divergence with tiered tolerances (Section 3)
+  const fieldTolerances: Record<string, { ok: number; warn: number; critical: number }> = {
+    price:  { ok: 0.005, warn: 0.01, critical: 0.01 },   // <0.5% OK, 0.5-1% Warn, >1% Critical
+    cap:    { ok: 0.02, warn: 0.05, critical: 0.05 },     // <2% OK, 2-5% Warn, >5% Critical
+    vol24h: { ok: 0.05, warn: 0.15, critical: 0.15 },     // Volume more volatile
+  };
+
   const majorFields: (keyof SourceMetrics)[] = ["price", "cap", "vol24h"];
   const divergenceValues: number[] = [];
+  let warningCount = 0;
+  let criticalCount = 0;
 
   for (const field of majorFields) {
     const pVal = primary[field] as number | null;
@@ -110,35 +118,48 @@ function computeConsensusConfidence(
       fieldDivergences[field] = div;
       divergenceValues.push(div);
 
-      // Track divergent fields (>8% for detailed display)
-      if (div > 0.08) {
+      const tol = fieldTolerances[field] || { ok: 0.05, warn: 0.10, critical: 0.10 };
+
+      // Track divergent fields with severity
+      if (div > tol.critical) {
+        criticalCount++;
         divergences.push({
           netuid: primary.netuid, field,
           primaryValue: pVal, secondaryValue: sVal,
           pctDiff: Math.round(div * 1000) / 10,
         });
+      } else if (div > tol.ok) {
+        warningCount++;
+        if (div > 0.03) { // Only show in details if > 3%
+          divergences.push({
+            netuid: primary.netuid, field,
+            primaryValue: pVal, secondaryValue: sVal,
+            pctDiff: Math.round(div * 1000) / 10,
+          });
+        }
       }
 
-      // DATA_UNCERTAIN gating (Section 1.3): divergence > 0.35 on major field
-      if (div > 0.35) {
+      // DATA_UNCERTAIN: critical divergence on price or cap
+      if ((field === "price" || field === "cap") && div > tol.critical) {
         dataUncertain = true;
       }
     }
   }
 
-  // Confidence = 100 - clamp(mean(divergence)*120, 0, 60)
+  // Confidence = weighted by severity
   const meanDiv = divergenceValues.length > 0
     ? divergenceValues.reduce((a, b) => a + b, 0) / divergenceValues.length
     : 0;
-  const penalty = Math.min(meanDiv * 120, 60);
-  const baseConfidence = 100 - penalty;
+  const severityPenalty = criticalCount * 15 + warningCount * 5;
+  const divPenalty = Math.min(meanDiv * 150, 50);
+  const baseConfidence = 100 - divPenalty - severityPenalty;
 
   // Freshness bonus
   const freshP = Math.max(0, 100 - minutesAgo(primary.ts) * 2);
   const freshS = Math.max(0, 100 - minutesAgo(secondary.ts) * 2);
   const freshness = freshP * 0.6 + freshS * 0.4;
 
-  // Final score: base confidence weighted with freshness
+  // Final score
   const score = Math.round(baseConfidence * 0.75 + (freshness / 100) * 25);
 
   return {

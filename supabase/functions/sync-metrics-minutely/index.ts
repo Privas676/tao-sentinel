@@ -15,13 +15,15 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("TAOSTATS_API_KEY")!;
     const headers = { Authorization: apiKey, Accept: "application/json" };
 
-    const poolRes = await fetch("https://api.taostats.io/api/dtao/pool/latest/v1?limit=200", { headers });
+    const [poolRes, subnetRes] = await Promise.all([
+      fetch("https://api.taostats.io/api/dtao/pool/latest/v1?limit=200", { headers }),
+      fetch("https://api.taostats.io/api/subnet/latest/v1", { headers }),
+    ]);
     if (!poolRes.ok) throw new Error(`Taostats pools error: ${poolRes.status}`);
+    if (!subnetRes.ok) throw new Error(`Taostats subnet error: ${subnetRes.status}`);
+
     const poolJson = await poolRes.json();
     const pools = poolJson.data || [];
-
-    const subnetRes = await fetch("https://api.taostats.io/api/subnet/latest/v1", { headers });
-    if (!subnetRes.ok) throw new Error(`Taostats subnet error: ${subnetRes.status}`);
     const subnetJson = await subnetRes.json();
     const subnets = Array.isArray(subnetJson) ? subnetJson : subnetJson.data || [];
 
@@ -31,26 +33,32 @@ Deno.serve(async (req) => {
       if (!isNaN(nid)) chainMap.set(nid, s);
     }
 
+    // Batch fetch previous snapshots for all netuids
+    const netuidList = pools.map((p: any) => Number(p.netuid)).filter((n: number) => !isNaN(n));
+    const { data: prevRows } = await sb
+      .from("subnet_metrics_ts")
+      .select("netuid, flow_1m, flow_3m, flow_5m, flow_6m, flow_15m, daily_chain_buys_1m, daily_chain_buys_3m, daily_chain_buys_5m")
+      .in("netuid", netuidList)
+      .order("ts", { ascending: false })
+      .limit(500);
+
+    // Dedupe to latest per netuid
+    const prevMap = new Map<number, any>();
+    for (const r of (prevRows || [])) {
+      if (!prevMap.has(r.netuid)) prevMap.set(r.netuid, r);
+    }
+
     const now = new Date();
     const tsRounded = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes()).toISOString();
 
-    let inserted = 0;
-    let errors = 0;
+    const rows: any[] = [];
 
     for (const p of pools) {
       const netuid = Number(p.netuid);
       if (isNaN(netuid)) continue;
 
       const chain = chainMap.get(netuid);
-
-      // Get previous snapshot for EMA smoothing
-      const { data: prev } = await sb
-        .from("subnet_metrics_ts")
-        .select("flow_1m, flow_3m, flow_5m, flow_6m, flow_15m, daily_chain_buys_1m, daily_chain_buys_3m, daily_chain_buys_5m")
-        .eq("netuid", netuid)
-        .order("ts", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const prev = prevMap.get(netuid);
 
       const price = Number(p.price) || null;
       const cap = p.market_cap ? Number(p.market_cap) / RAO : null;
@@ -67,7 +75,7 @@ Deno.serve(async (req) => {
       const flowProxy = emission + registration;
       const buysProxy = Number(p.buys_24_hr ?? 0) || 0;
 
-      // EMA smoothing - multiple timeframes
+      // EMA smoothing
       const flow_1m = flowProxy;
       const flow_3m = prev?.flow_3m ? prev.flow_3m * 0.6 + flowProxy * 0.4 : flowProxy;
       const flow_5m = prev?.flow_5m ? prev.flow_5m * 0.7 + flowProxy * 0.3 : flowProxy;
@@ -77,7 +85,25 @@ Deno.serve(async (req) => {
       const buys_3m = prev?.daily_chain_buys_3m ? prev.daily_chain_buys_3m * 0.6 + buysProxy * 0.4 : buysProxy;
       const buys_5m = prev?.daily_chain_buys_5m ? prev.daily_chain_buys_5m * 0.7 + buysProxy * 0.3 : buysProxy;
 
-      const { error } = await sb.from("subnet_metrics_ts").insert({
+      // Merge pool + chain data into raw_payload for health engine
+      const mergedPayload = {
+        ...p,
+        // Chain data for health engine
+        _chain: chain ? {
+          emission: chain.emission,
+          emission_per_day: chain.emission_per_day,
+          registrations: chain.registrations ?? chain.neuron_registrations_this_interval,
+          active_uids: chain.active_miners ?? chain.active_uids,
+          max_n: chain.max_n ?? chain.max_uids,
+          total_neurons: chain.total_neurons,
+          total_stake: chain.total_stake,
+          alpha_staked: chain.alpha_staked,
+          validator_weight: chain.validator_weight,
+          miner_weight: chain.miner_weight,
+        } : null,
+      };
+
+      rows.push({
         netuid,
         ts: tsRounded,
         price,
@@ -96,15 +122,21 @@ Deno.serve(async (req) => {
         miners_active: minersActive,
         top_miners_share: topMinersShare,
         source: "taostats",
-        raw_payload: p,
+        raw_payload: mergedPayload,
       });
-
-      if (error) { console.error(`Insert netuid ${netuid}:`, error); errors++; }
-      else inserted++;
     }
 
-    console.log(`Done: ${pools.length} pools, ${inserted} inserted, ${errors} errors`);
-    return new Response(JSON.stringify({ ok: true, pools: pools.length, inserted, errors }), {
+    // Batch insert
+    const { error } = await sb.from("subnet_metrics_ts").insert(rows);
+    if (error) {
+      console.error("Batch insert error:", error.message);
+      return new Response(JSON.stringify({ ok: false, error: error.message }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`Done: ${pools.length} pools, ${rows.length} inserted (batched)`);
+    return new Response(JSON.stringify({ ok: true, pools: pools.length, inserted: rows.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
