@@ -82,75 +82,84 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
   const reasons: DelistReason[] = [];
   let totalWeight = 0;
 
-  // 1. Emission / miners = 0
+  // 1. Emission / miners — relaxed thresholds
   if (sn.minersActive === 0) {
     reasons.push(makeReason("EMISSION_ZERO", 0));
     totalWeight += 20;
-  } else if (sn.minersActive <= 3) {
+  } else if (sn.minersActive <= 5) {
     reasons.push(makeReason("UID_CRITICAL", sn.minersActive));
     totalWeight += 18;
-  } else if (sn.minersActive <= 10) {
+  } else if (sn.minersActive <= 20) {
     reasons.push(makeReason("UID_LOW", sn.minersActive));
+    totalWeight += 12;
+  }
+
+  // 2. Pool TAO — raised thresholds significantly
+  if (sn.liqTao < 10) {
+    reasons.push(makeReason("POOL_COLLAPSE", sn.liqTao));
+    totalWeight += 18;
+  } else if (sn.liqTao < 50) {
+    reasons.push(makeReason("POOL_THIN", sn.liqTao));
     totalWeight += 10;
   }
 
-  // 2. Pool TAO critical
-  if (sn.liqTao < 2) {
-    reasons.push(makeReason("POOL_COLLAPSE", sn.liqTao));
-    totalWeight += 15;
-  } else if (sn.liqTao < 5) {
-    reasons.push(makeReason("POOL_THIN", sn.liqTao));
-    totalWeight += 8;
-  }
-
-  // 3. Liquidity USD critical
-  if (sn.liqUsd < 200) {
+  // 3. Liquidity USD — raised threshold
+  if (sn.liqUsd < 5000) {
     reasons.push(makeReason("LIQ_CRITICAL", sn.liqUsd));
     totalWeight += 15;
   }
 
-  // 4. Volume/MC abnormally low
-  if (sn.volMcRatio < 0.003) {
+  // 4. Volume/MC abnormally low — relaxed
+  if (sn.volMcRatio < 0.01) {
     reasons.push(makeReason("VOL_MC_LOW", sn.volMcRatio * 100));
+    totalWeight += 10;
+  }
+
+  // 5. Price collapse over 7d — softer threshold
+  if (sn.priceChange7d != null && sn.priceChange7d <= -20) {
+    const severity = sn.priceChange7d <= -50 ? 15 : 12;
+    reasons.push(makeReason("PRICE_COLLAPSE", sn.priceChange7d));
+    totalWeight += severity;
+  }
+
+  // 6. Data divergence (low confidence) — raised threshold
+  if (sn.confianceData < 50) {
+    reasons.push(makeReason("DATA_DIVERGENCE", sn.confianceData));
     totalWeight += 8;
   }
 
-  // 5. Price collapse over 7d
-  if (sn.priceChange7d != null && sn.priceChange7d <= -40) {
-    reasons.push(makeReason("PRICE_COLLAPSE", sn.priceChange7d));
-    totalWeight += 12;
-  }
-
-  // 6. Data divergence extreme (low confidence)
-  if (sn.confianceData < 30) {
-    reasons.push(makeReason("DATA_DIVERGENCE", sn.confianceData));
-    totalWeight += 7;
-  }
-
-  // 7. Liquidity haircut severe
-  if (sn.liqHaircut <= -50) {
+  // 7. Liquidity haircut severe — softer
+  if (sn.liqHaircut <= -20) {
+    const severity = sn.liqHaircut <= -50 ? 15 : 10;
     reasons.push(makeReason("POOL_COLLAPSE", sn.liqHaircut));
-    totalWeight += 12;
+    totalWeight += severity;
   }
 
-  // 8. BREAK/EXIT_FAST state
+  // 8. BREAK/EXIT_FAST/DEPEG state — increased weight
   if (sn.state === "BREAK" || sn.state === "EXIT_FAST") {
-    totalWeight += 5;
+    totalWeight += 10;
+  } else if (sn.state === "DEPEG_WARNING" || sn.state === "DEPEG_CRITICAL") {
+    totalWeight += 15;
   }
 
-  // 9. PSI overheating + low quality
-  if (sn.psi > 85 && sn.quality < 25) {
+  // 9. PSI overheating + low quality — relaxed
+  if (sn.psi > 75 && sn.quality < 35) {
     reasons.push(makeReason("SLIPPAGE_HIGH", sn.psi));
+    totalWeight += 10;
+  }
+
+  // 10. Combined weakness: low quality + low PSI = zombie subnet
+  if (sn.psi < 30 && sn.quality < 30) {
     totalWeight += 8;
   }
 
   // Score: clamp to 0–100
   const score = Math.min(100, Math.round(totalWeight));
 
-  // Category
+  // Category — lowered thresholds for better correlation with manual list
   let category: DelistCategory = "NORMAL";
-  if (score >= 80) category = "DEPEG_PRIORITY";
-  else if (score >= 60) category = "HIGH_RISK_NEAR_DELIST";
+  if (score >= 50) category = "DEPEG_PRIORITY";
+  else if (score >= 30) category = "HIGH_RISK_NEAR_DELIST";
 
   return { netuid: sn.netuid, category, score, reasons, source: "" };
 }
