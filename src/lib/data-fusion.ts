@@ -78,8 +78,9 @@ function computeSubnetConfiance(
   let concordanceTotal = 0;
   let concordanceCount = 0;
 
-  const fields: (keyof SourceMetrics)[] = ["price", "cap", "vol24h", "liquidity"];
-  for (const field of fields) {
+  // Compare fields — liquidity excluded from concordance (structural 2:1 ratio between sources)
+  const concordanceFields: (keyof SourceMetrics)[] = ["price", "cap", "vol24h"];
+  for (const field of concordanceFields) {
     const pVal = primary[field] as number | null;
     const sVal = secondary[field] as number | null;
     if (pVal != null && pVal > 0 && sVal != null && sVal > 0) {
