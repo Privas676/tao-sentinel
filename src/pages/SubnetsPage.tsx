@@ -163,14 +163,14 @@ export default function SubnetsPage() {
         spark: sparklines?.get(r.netuid) || [],
       }))
       .filter(r => {
-        if (mode === "opportunities") return !r.isOverridden && r.opp > r.risk;
-        if (mode === "risks") return r.risk >= r.opp;
+        if (mode === "opportunities") return r.assetType !== "CORE_NETWORK" && !r.isOverridden && r.opp > r.risk;
+        if (mode === "risks") return r.assetType !== "CORE_NETWORK" && r.risk >= r.opp;
         if (mode === "mine") return r.owned;
         return true;
       })
       .sort((a, b) => {
         if (sortCol) {
-          const actionRank = (a: string) => ["EXIT","SELL","WATCH","HOLD","ACCUMULATE","ENTER"].indexOf(a);
+          const actionRank = (a: string) => ["EXIT","SELL","NEUTRAL","WATCH","HOLD","STAKE","ACCUMULATE","ENTER"].indexOf(a);
           const scRank = (s: SmartCapitalState) => s === "ACCUMULATION" ? 2 : s === "STABLE" ? 1 : 0;
           const momRank = (m: string) => ["COLD","COOL","WARM","HOT","FIRE"].indexOf(m);
           const statusRank = (s: string) => ["CRITICAL","DEGRADED","WARNING","OK"].indexOf(s);
@@ -302,10 +302,14 @@ export default function SubnetsPage() {
             {rows.map((r, idx) => {
               const oppC = r.isOverridden ? "rgba(229,57,53,0.4)" : opportunityColor(r.opp);
               const rskC = riskColor(r.risk);
-              const isTop1 = idx === 0 && !r.isOverridden;
+              const isTop1 = idx === 0 && !r.isOverridden && r.assetType !== "CORE_NETWORK";
               const momColor = momentumColor(r.momentumLabel);
               const actionLabel = r.action === "EXIT"
                 ? (lang === "fr" ? "SORTIR" : "EXIT")
+                : r.action === "STAKE"
+                ? "STAKER"
+                : r.action === "NEUTRAL"
+                ? "NEUTRE"
                 : t(`strat.${r.action.toLowerCase()}` as any);
               return (
                 <tr key={r.netuid}
@@ -318,6 +322,12 @@ export default function SubnetsPage() {
                   <td className="py-3 px-2 text-white/55 text-sm">{r.netuid}</td>
                   <td className="py-3 px-2 text-sm" style={{ color: isTop1 ? "rgba(255,248,220,0.95)" : r.isOverridden ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.75)", fontWeight: isTop1 ? 700 : 400 }}>
                     <span>{r.name}</span>
+                    {r.assetType === "CORE_NETWORK" && (
+                      <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider"
+                        style={{ background: "rgba(100,181,246,0.10)", color: "rgba(100,181,246,0.9)", border: "1px solid rgba(100,181,246,0.25)" }}>
+                        🏗 CORE NETWORK
+                      </span>
+                    )}
                     {r.isOverridden && (
                       <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider"
                         style={{ background: "rgba(229,57,53,0.12)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.25)" }}
