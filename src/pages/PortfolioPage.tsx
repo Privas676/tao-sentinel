@@ -1,14 +1,10 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
-import { clamp } from "@/lib/gauge-engine";
-import { calibrateScores } from "@/lib/risk-calibration";
-import { deriveSubnetAction, actionColor, actionBg, actionBorder, actionIcon } from "@/lib/strategy-engine";
-import { evaluateRiskOverride, systemStatusLabel, systemStatusColor } from "@/lib/risk-override";
-import { fuseMetrics, confianceColor, type SourceMetrics } from "@/lib/data-fusion";
-import { computeStabilitySetup, stabilityColor } from "@/lib/gauge-engine";
+import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
+import { stabilityColor } from "@/lib/gauge-engine";
+import { systemStatusLabel, systemStatusColor } from "@/lib/risk-override";
+import type { SmartCapitalState } from "@/lib/gauge-engine";
 import { toast } from "sonner";
 
 /* ═══════════════════════════════════════ */
@@ -44,94 +40,6 @@ const Sparkline = React.forwardRef<HTMLDivElement, { data: number[]; width?: num
     </div>
   );
 });
-
-/* ═══════════════════════════════════════ */
-/*        TYPES                            */
-/* ═══════════════════════════════════════ */
-type SignalRow = {
-  netuid: number | null;
-  subnet_name: string | null;
-  state: string | null;
-  mpi: number | null;
-  score: number | null;
-  confidence_pct: number | null;
-  quality_score: number | null;
-};
-
-type MarketRiskData = {
-  volCap: number;
-  topMinersShare: number;
-  priceVol7d: number;
-  liqRatio: number;
-};
-
-/* ═══════════════════════════════════════ */
-/*  SCORING (same as SubnetsPage)           */
-/* ═══════════════════════════════════════ */
-function deriveOpp(psi: number, conf: number, quality: number, state: string | null): number {
-  let opp = 0;
-  opp += psi * 0.35;
-  opp += quality * 0.25;
-  opp += conf * 0.20;
-  if (state === "GO") opp += 15;
-  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 8;
-  else if (state === "WATCH") opp += 3;
-  else if (state === "HOLD") opp -= 3;
-  if (state === "BREAK" || state === "EXIT_FAST") opp -= 25;
-  if (psi < 30) opp -= 10;
-  return Math.round(clamp(opp, 0, 100));
-}
-
-function deriveRisk(
-  psi: number, conf: number, quality: number, state: string | null,
-  dataUncertain = false, market?: MarketRiskData
-): number {
-  let risk = 20;
-  risk += (100 - quality) * 0.25;
-  risk += (100 - conf) * 0.20;
-  risk += (100 - psi) * 0.10;
-  if (market) {
-    const vc = market.volCap;
-    const vcIdeal = 0.08;
-    const vcDist = Math.abs(Math.log((vc + 0.001) / vcIdeal));
-    risk += clamp(vcDist * 8, 0, 15);
-    risk += clamp(market.topMinersShare * 12, 0, 10);
-    const lrScore = clamp(1 - market.liqRatio * 5, 0, 1);
-    risk += lrScore * 10;
-    risk += clamp(market.priceVol7d * 20, 0, 10);
-  } else {
-    risk += 15;
-  }
-  if (psi >= 70 && quality < 60) risk += 5;
-  if (psi >= 80 && quality < 50) risk += 8;
-  if (psi >= 85) risk += 3;
-  if (psi < 40) risk += 5;
-  if (conf < 50) risk += 4;
-  if (conf < 30) risk += 4;
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 15;
-  else if (state === "HOLD") risk += 3;
-  else if (state === "WATCH") risk += 2;
-  if (psi >= 40 && psi <= 60 && conf < 40) risk += 3;
-  if (dataUncertain) risk += 8;
-  return Math.round(clamp(risk, 0, 100));
-}
-
-function deriveSC(psi: number, quality: number, conf: number, state: string | null): "ACCUMULATION" | "STABLE" | "DISTRIBUTION" {
-  const acc = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
-  const dist = clamp((100 - quality) * 0.4, 0, 40) + (psi >= 80 && quality < 50 ? 30 : 0) + (state === "BREAK" || state === "EXIT_FAST" ? 25 : 0);
-  const score = clamp(acc - dist * 0.5 + 30, 0, 100);
-  if (score >= 65) return "ACCUMULATION";
-  if (score <= 35) return "DISTRIBUTION";
-  return "STABLE";
-}
-
-function scColor(state: "ACCUMULATION" | "STABLE" | "DISTRIBUTION"): string {
-  switch (state) {
-    case "ACCUMULATION": return "rgba(76,175,80,0.8)";
-    case "DISTRIBUTION": return "rgba(229,57,53,0.8)";
-    case "STABLE": return "rgba(255,248,220,0.4)";
-  }
-}
 
 /* ═══════════════════════════════════════ */
 /*        SUBNET DROPDOWN (dark theme)     */
@@ -208,6 +116,14 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: {
   );
 }
 
+function scColor(state: SmartCapitalState): string {
+  switch (state) {
+    case "ACCUMULATION": return "rgba(76,175,80,0.8)";
+    case "DISTRIBUTION": return "rgba(229,57,53,0.8)";
+    case "STABLE": return "rgba(255,248,220,0.4)";
+  }
+}
+
 /* ═══════════════════════════════════════ */
 /*        MAIN PAGE                        */
 /* ═══════════════════════════════════════ */
@@ -219,192 +135,37 @@ export default function PortfolioPage() {
   const [addNetuid, setAddNetuid] = useState<number>(1);
   const [addQty, setAddQty] = useState<number>(10);
 
-  // Live prices (consensus)
-  const { data: primaryMetrics } = useQuery({
-    queryKey: ["portfolio-primary"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("subnet_metrics_ts")
-        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
-        .eq("source", "taostats").order("ts", { ascending: false }).limit(200);
-      if (error) throw error;
-      const map = new Map<number, SourceMetrics>();
-      for (const r of data || []) {
-        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
-      }
-      return map;
-    },
-    refetchInterval: 30_000,
-  });
+  // ── UNIFIED SCORES (single source of truth) ──
+  const { scores, scoreTimestamp, sparklines, subnetList } = useSubnetScores();
 
-  const { data: secondaryMetrics } = useQuery({
-    queryKey: ["portfolio-secondary"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("subnet_metrics_ts")
-        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
-        .eq("source", "taomarketcap").order("ts", { ascending: false }).limit(200);
-      if (error) throw error;
-      const map = new Map<number, SourceMetrics>();
-      for (const r of data || []) {
-        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taomarketcap" });
-      }
-      return map;
-    },
-    refetchInterval: 30_000,
-  });
-
-  // Sparkline data (7 days)
-  const { data: sparklines } = useQuery({
-    queryKey: ["portfolio-sparklines-7d"],
-    queryFn: async () => {
-      const since = new Date(Date.now() - 8 * 86400_000).toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("subnet_price_daily")
-        .select("netuid, date, price_close")
-        .gte("date", since)
-        .order("date", { ascending: true });
-      if (error) throw error;
-      const map = new Map<number, number[]>();
-      for (const r of data || []) {
-        if (r.price_close == null) continue;
-        if (!map.has(r.netuid)) map.set(r.netuid, []);
-        map.get(r.netuid)!.push(Number(r.price_close));
-      }
-      return map;
-    },
-    refetchInterval: 300_000,
-  });
-
-  const { data: signals } = useQuery({
-    queryKey: ["portfolio-signals"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("signals_latest").select("netuid, subnet_name, state, mpi, score, confidence_pct, quality_score");
-      if (error) throw error;
-      return (data || []) as SignalRow[];
-    },
-    refetchInterval: 60_000,
-  });
-
-  const { data: subnetLatest } = useQuery({
-    queryKey: ["portfolio-subnet-latest"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("subnet_latest").select("netuid, vol_cap, top_miners_share, liquidity, cap");
-      if (error) throw error;
-      const map = new Map<number, { volCap: number; topMinersShare: number; liqRatio: number }>();
-      for (const r of data || []) {
-        if (r.netuid == null) continue;
-        const cap = Number(r.cap) || 0;
-        const liq = Number(r.liquidity) || 0;
-        map.set(r.netuid, { volCap: Number(r.vol_cap) || 0, topMinersShare: Number(r.top_miners_share) || 0, liqRatio: cap > 0 ? liq / cap : 0 });
-      }
-      return map;
-    },
-    refetchInterval: 120_000,
-  });
-
-  const { data: subnetList } = useQuery({
-    queryKey: ["subnet-names-portfolio"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("subnets").select("netuid, name").order("netuid");
-      if (error) throw error;
-      return (data || []).map(s => ({ netuid: s.netuid, name: s.name || `SN-${s.netuid}` }));
-    },
-  });
-
-  // Consensus prices
-  const consensusPrices = useMemo(() => {
-    if (!primaryMetrics) return new Map<number, number>();
-    const pa = [...primaryMetrics.values()];
-    const sa = secondaryMetrics ? [...secondaryMetrics.values()] : [];
-    const fused = fuseMetrics(pa, sa);
-    const map = new Map<number, number>();
-    for (const f of fused) {
-      if (f.price) map.set(f.netuid, f.price);
-    }
-    return map;
-  }, [primaryMetrics, secondaryMetrics]);
-
-  // Consensus data
-  const consensusMap = useMemo(() => {
-    if (!primaryMetrics && !secondaryMetrics) return new Map<number, { confianceData: number; dataUncertain: boolean }>();
-    const pa = primaryMetrics ? [...primaryMetrics.values()] : [];
-    const sa = secondaryMetrics ? [...secondaryMetrics.values()] : [];
-    const fused = fuseMetrics(pa, sa);
-    const map = new Map<number, { confianceData: number; dataUncertain: boolean }>();
-    for (const f of fused) {
-      map.set(f.netuid, { confianceData: f.confianceData, dataUncertain: f.dataUncertain });
-    }
-    return map;
-  }, [primaryMetrics, secondaryMetrics]);
-
-  const signalMap = useMemo(() => {
-    const m = new Map<number, SignalRow>();
-    for (const s of signals || []) { if (s.netuid) m.set(s.netuid, s); }
-    return m;
-  }, [signals]);
-
-  const subnetNameMap = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const s of subnetList || []) m.set(s.netuid, s.name);
-    // Also use signal names
-    for (const s of signals || []) {
-      if (s.netuid && s.subnet_name && !m.has(s.netuid)) m.set(s.netuid, s.subnet_name);
-    }
-    return m;
-  }, [subnetList, signals]);
-
-  // Build enriched rows for portfolio positions
+  // Build enriched rows for portfolio positions using UNIFIED scores
   const rows = useMemo(() => {
     return portfolio.positions.map(pos => {
       const netuid = pos.subnet_id;
-      const signal = signalMap.get(netuid);
-      const psi = signal?.mpi ?? signal?.score ?? 0;
-      const conf = signal?.confidence_pct ?? 0;
-      const quality = signal?.quality_score ?? 0;
-      const state = signal?.state ?? null;
-      const consensus = consensusMap.get(netuid);
-      const dataUncertain = consensus?.dataUncertain ?? false;
-      const confianceData = consensus?.confianceData ?? 50;
+      const s = scores.get(netuid);
 
-      const sl = subnetLatest?.get(netuid);
-      const market: MarketRiskData | undefined = sl ? {
-        volCap: sl.volCap, topMinersShare: sl.topMinersShare, liqRatio: sl.liqRatio, priceVol7d: 0,
-      } : undefined;
-
-      let oppRaw = deriveOpp(psi, conf, quality, state);
-      const riskRaw = deriveRisk(psi, conf, quality, state, dataUncertain, market);
-      const isBreak = state === "BREAK" || state === "EXIT_FAST";
-      if (isBreak || state === "DEPEG_WARNING" || state === "DEPEG_CRITICAL") oppRaw = 0;
-
-      const override = evaluateRiskOverride({ netuid, state, psi, risk: riskRaw, quality });
-      if (override.isOverridden) oppRaw = 0;
-
-      // ── CALIBRATION: floor + critical override ──
-      const cal = calibrateScores({
-        risk: riskRaw, opportunity: oppRaw,
-        state, isTopRank: false, isOverridden: override.isOverridden,
-      });
-      const opp = cal.opportunity;
-      const risk = cal.risk;
-
-      let asymmetry = cal.asymmetry;
-      if (dataUncertain) asymmetry -= 15;
-      
-      const sc = deriveSC(psi, quality, conf, state);
-      const momentum = clamp(psi - 40, 0, 60) / 60 * 100;
-      const stability = computeStabilitySetup(opp, risk, conf, momentum, quality, dataUncertain);
+      // Use unified scores directly — NO recalculation
+      const opp = s?.opp ?? 0;
+      const risk = s?.risk ?? 0;
+      const asymmetry = s?.asymmetry ?? 0;
+      const stability = s?.stability ?? 50;
+      const sc = s?.sc ?? "STABLE" as SmartCapitalState;
+      const isOverridden = s?.isOverridden ?? false;
+      const systemStatus = s?.systemStatus ?? "OK" as const;
+      const confianceData = s?.confianceScore ?? 50;
+      const dataUncertain = s?.dataUncertain ?? false;
+      const isBreak = s?.state === "BREAK" || s?.state === "EXIT_FAST";
+      const price = s?.consensusPrice ?? 0;
 
       // Action: RENFORCER instead of ENTRER for owned subnets
-      const rawAction = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, conf);
-      let action: string = rawAction;
-      if (override.systemStatus !== "OK" && rawAction === "ENTER") action = "WATCH";
-      if (action === "ENTER") action = "REINFORCE"; // Owned = RENFORCER
+      let action = s?.action ?? "WATCH";
+      if (action === "ENTER") action = "REINFORCE";
 
-      const price = consensusPrices.get(netuid) ?? 0;
       const currentValue = pos.quantity_tao * price;
 
       // Alert conditions
       const alerts: string[] = [];
-      if (override.isOverridden) alerts.push("Risque critique");
+      if (isOverridden) alerts.push("Risque critique");
       else if (risk > 70) alerts.push("Risque élevé");
       if (stability < 40) alerts.push("Stabilité faible");
       if (dataUncertain) alerts.push("Data incertaine");
@@ -412,24 +173,20 @@ export default function PortfolioPage() {
 
       return {
         netuid,
-        name: subnetNameMap.get(netuid) || `SN-${netuid}`,
+        name: s?.name || `SN-${netuid}`,
         quantity: pos.quantity_tao,
         entryPrice: pos.entry_price,
         price,
         currentValue,
         opp, risk, asymmetry,
-        stability,
-        sc,
-        action,
-        isOverridden: override.isOverridden,
-        systemStatus: override.systemStatus,
-        confianceData,
-        alerts,
+        stability, sc, action,
+        isOverridden, systemStatus,
+        confianceData, alerts,
       };
     });
-  }, [portfolio.positions, signalMap, consensusPrices, consensusMap, subnetLatest, subnetNameMap]);
+  }, [portfolio.positions, scores]);
 
-  // Portfolio totals
+  // Portfolio totals (weighted aggregates only)
   const totals = useMemo(() => {
     const totalTao = rows.reduce((a, r) => a + r.quantity, 0);
     const totalValue = rows.reduce((a, r) => a + r.currentValue, 0);
@@ -461,7 +218,7 @@ export default function PortfolioPage() {
 
   const handleAdd = () => {
     if (addQty <= 0) return;
-    const price = consensusPrices.get(addNetuid);
+    const price = scores.get(addNetuid)?.consensusPrice;
     portfolio.addPosition(addNetuid, addQty, price);
     toast.success(fr ? `SN-${addNetuid} ajouté au portefeuille ✓` : `SN-${addNetuid} added to portfolio ✓`);
     setShowAdd(false);
@@ -469,16 +226,22 @@ export default function PortfolioPage() {
   };
 
   const handleSell = (netuid: number) => {
-    const price = consensusPrices.get(netuid);
+    const price = scores.get(netuid)?.consensusPrice;
     portfolio.sellPosition(netuid, price);
     toast.success(fr ? `SN-${netuid} vendu et archivé ✓` : `SN-${netuid} sold and archived ✓`);
   };
 
+  const addPrice = scores.get(addNetuid)?.consensusPrice ?? 0;
+
   return (
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
-      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-5">
+      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-1">
         {fr ? "Portefeuille" : "Portfolio"}
       </h1>
+      {/* Score timestamp badge */}
+      <div className="mb-5 font-mono text-[8px] text-white/20" title={`Score snapshot: ${scoreTimestamp}`}>
+        📊 Scores unifiés — {new Date(scoreTimestamp).toLocaleTimeString()}
+      </div>
 
       {/* ── SUMMARY CARDS ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -554,11 +317,11 @@ export default function PortfolioPage() {
             <div className="rounded-lg p-3 space-y-1" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
               <div className="flex justify-between font-mono text-[10px]">
                 <span className="text-white/30">{fr ? "Prix consensus" : "Consensus price"}</span>
-                <span className="text-white/60">{(consensusPrices.get(addNetuid) ?? 0).toFixed(6)} τ</span>
+                <span className="text-white/60">{addPrice.toFixed(6)} τ</span>
               </div>
               <div className="flex justify-between font-mono text-[10px]">
                 <span className="text-white/30">{fr ? "Valeur estimée" : "Est. value"}</span>
-                <span className="text-white/60">{(addQty * (consensusPrices.get(addNetuid) ?? 0)).toFixed(4)} τ</span>
+                <span className="text-white/60">{(addQty * addPrice).toFixed(4)} τ</span>
               </div>
               {portfolio.isOwned(addNetuid) && (
                 <div className="flex justify-between font-mono text-[10px]">
@@ -630,7 +393,7 @@ export default function PortfolioPage() {
                       {r.isOverridden && (
                         <span className="ml-2 text-[8px] px-1.5 py-0.5 rounded" style={{
                           background: "rgba(229,57,53,0.15)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.3)",
-                        }}>CRITIQUE</span>
+                        }}>OVERRIDE</span>
                       )}
                     </td>
                     <td className="py-3 px-2 text-sm font-mono text-white/70">{r.quantity.toFixed(2)}</td>
