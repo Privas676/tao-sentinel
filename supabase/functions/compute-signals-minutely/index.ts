@@ -121,8 +121,8 @@ Deno.serve(async (req) => {
 
     // Per-metric tolerances (only alert above these thresholds)
     const METRIC_CONFIG: Record<string, { threshold: number; weight: number; label: string }> = {
-      price:     { threshold: 1.0,  weight: 35, label: "price" },
-      cap:       { threshold: 5.0,  weight: 25, label: "mc" },
+      price:     { threshold: 5.0,  weight: 35, label: "price" },
+      cap:       { threshold: 10.0, weight: 25, label: "mc" },
       vol_24h:   { threshold: 50.0, weight: 10, label: "vol" },
       liquidity: { threshold: 10.0, weight: 20, label: "liq" },
     };
