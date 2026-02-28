@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
@@ -130,6 +130,81 @@ function scColor(state: "ACCUMULATION" | "STABLE" | "DISTRIBUTION"): string {
     case "DISTRIBUTION": return "rgba(229,57,53,0.8)";
     case "STABLE": return "rgba(255,248,220,0.4)";
   }
+}
+
+/* ═══════════════════════════════════════ */
+/*        SUBNET DROPDOWN (dark theme)     */
+/* ═══════════════════════════════════════ */
+function SubnetDropdown({ subnets, value, onChange, isOwned }: {
+  subnets: { netuid: number; name: string }[];
+  value: number;
+  onChange: (v: number) => void;
+  isOwned: (n: number) => boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    if (open && inputRef.current) inputRef.current.focus();
+  }, [open]);
+
+  const selected = subnets.find(s => s.netuid === value);
+  const filtered = subnets.filter(s => {
+    const q = search.toLowerCase();
+    return s.name.toLowerCase().includes(q) || `sn-${s.netuid}`.includes(q) || String(s.netuid).includes(q);
+  });
+
+  return (
+    <div ref={ref} className="relative mt-1">
+      <button type="button" onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 font-mono text-xs text-white/80 hover:border-white/20 transition-colors">
+        <span>{selected ? `SN-${selected.netuid} — ${selected.name}` : "..."}</span>
+        <svg className={`w-3.5 h-3.5 text-white/30 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-lg overflow-hidden shadow-2xl"
+          style={{ background: "rgba(14,14,18,0.98)", border: "1px solid rgba(255,215,0,0.12)" }}>
+          <div className="px-2 pt-2 pb-1">
+            <input ref={inputRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Rechercher..."
+              className="w-full bg-white/5 border border-white/10 rounded px-2.5 py-1.5 font-mono text-[11px] text-white/80 placeholder:text-white/20 outline-none focus:border-white/25" />
+          </div>
+          <div className="max-h-52 overflow-y-auto scrollbar-thin">
+            {filtered.length === 0 && (
+              <div className="px-3 py-3 font-mono text-[10px] text-white/20 text-center">Aucun résultat</div>
+            )}
+            {filtered.map(s => {
+              const owned = isOwned(s.netuid);
+              const active = s.netuid === value;
+              return (
+                <button key={s.netuid} type="button"
+                  onClick={() => { onChange(s.netuid); setOpen(false); setSearch(""); }}
+                  className={`w-full text-left px-3 py-2 font-mono text-[11px] flex items-center gap-2 transition-colors ${
+                    active ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/[0.06] hover:text-white/90"
+                  }`}>
+                  <span className="text-white/30 w-8 shrink-0">SN-{s.netuid}</span>
+                  <span className="truncate flex-1">{s.name}</span>
+                  {owned && <span className="text-[8px] px-1.5 py-0.5 rounded shrink-0" style={{
+                    background: "rgba(255,215,0,0.1)", color: "rgba(255,215,0,0.6)", border: "1px solid rgba(255,215,0,0.15)",
+                  }}>possédé</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ═══════════════════════════════════════ */
@@ -454,14 +529,12 @@ export default function PortfolioPage() {
             <h2 className="font-mono text-sm tracking-widest text-white/80">{fr ? "AJOUTER AU PORTEFEUILLE" : "ADD TO PORTFOLIO"}</h2>
             <div>
               <label className="font-mono text-[9px] text-white/30 tracking-wider">SUBNET</label>
-              <select value={addNetuid} onChange={e => setAddNetuid(Number(e.target.value))}
-                className="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 font-mono text-xs text-white/80">
-                {(subnetList || []).map(s => (
-                  <option key={s.netuid} value={s.netuid}>
-                    SN-{s.netuid} — {s.name} {portfolio.isOwned(s.netuid) ? "(possédé)" : ""}
-                  </option>
-                ))}
-              </select>
+              <SubnetDropdown
+                subnets={subnetList || []}
+                value={addNetuid}
+                onChange={setAddNetuid}
+                isOwned={portfolio.isOwned}
+              />
             </div>
             <div>
               <label className="font-mono text-[9px] text-white/30 tracking-wider">{fr ? "QUANTITÉ TAO" : "QUANTITY TAO"}</label>
