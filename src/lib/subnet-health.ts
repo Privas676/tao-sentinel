@@ -73,33 +73,58 @@ export function extractHealthData(
   const p = rawPayload || {};
   const c = chainData || {};
 
-  const alphaPrice = Number(p.price) || 0;
-  const taoInPool = (Number(p.tao_in_pool ?? p.tao_reserve ?? 0)) / (p.tao_in_pool > 1e6 ? RAO : 1);
-  const alphaInPool = (Number(p.alpha_in_pool ?? p.alpha_reserve ?? 0)) / (p.alpha_in_pool > 1e6 ? RAO : 1);
-  const totalSupply = Number(p.total_supply ?? p.total_tokens ?? c.total_neurons ?? 0);
-  const circulatingSupply = Number(p.circulating_supply ?? p.circulating ?? totalSupply);
+  // TaoStats: price is already in TAO (not RAO)
+  const alphaPrice = Number(p.price ?? p.last_price) || 0;
+
+  // Pool reserves: always in RAO from TaoStats
+  const taoInPoolRaw = Number(p.protocol_provided_tao ?? p.tao_in_pool ?? 0);
+  const taoInPool = taoInPoolRaw > 1e6 ? taoInPoolRaw / RAO : taoInPoolRaw;
+  const alphaInPoolRaw = Number(p.protocol_provided_alpha ?? p.alpha_in_pool ?? 0);
+  const alphaInPool = alphaInPoolRaw > 1e6 ? alphaInPoolRaw / RAO : alphaInPoolRaw;
+
+  // Market cap: in RAO from TaoStats, convert to TAO
+  const marketCapRaw = Number(p.market_cap ?? 0);
+  const marketCap = marketCapRaw > 1e12 ? marketCapRaw / RAO : marketCapRaw;
+
+  // Derive circulating supply from MC / price (TaoStats doesn't provide it directly)
+  const circulatingSupply = alphaPrice > 0 ? marketCap / alphaPrice : 0;
+
+  // Total supply: estimate from alpha_in_pool + alpha_staked + circulating
+  // TaoStats doesn't expose total_supply directly; approximate via FDV if available
+  const alphaStakedRaw = Number(p.alpha_staked ?? c.alpha_staked ?? 0);
+  const alphaStaked = alphaStakedRaw > 1e6 ? alphaStakedRaw / RAO : alphaStakedRaw;
+  const totalSupply = circulatingSupply > 0 ? circulatingSupply + alphaStaked + alphaInPool : 0;
+
   const burned = Number(p.burned ?? 0);
-  const marketCap = Number(p.market_cap ?? 0) / (p.market_cap > 1e15 ? RAO : 1);
-  const fdv = Number(p.fully_diluted_valuation ?? p.fdv ?? 0) / (p.fdv > 1e15 ? RAO : 1);
-  const liquidityRaw = Number(p.liquidity ?? p.tao_liquidity ?? 0);
-  const liquidity = liquidityRaw > 1e6 ? liquidityRaw / RAO : liquidityRaw;
-  const vol24h = Number(p.tao_volume_24_hr ?? p.alpha_volume_24_hr ?? p.volume ?? p.volume_24h ?? 0) / (p.tao_volume_24_hr > 1e6 ? RAO : 1);
-  const buys24h = Number(p.buys_24_hr ?? p.chain_buys_per_block ?? 0);
+
+  // FDV: not always provided, derive from totalSupply * price
+  const fdv = totalSupply > 0 ? totalSupply * alphaPrice : marketCap;
+
+  // Liquidity: in RAO from TaoStats
+  const liquidityRaw = Number(p.liquidity ?? 0);
+  const liquidityTao = liquidityRaw > 1e6 ? liquidityRaw / RAO : liquidityRaw;
+  // Liquidity USD = taoInPool * 2 * taoUsd (standard AMM formula)
+  const liquidityUsd = taoInPool > 0 ? taoInPool * taoUsd * 2 : liquidityTao * taoUsd;
+
+  // Volume 24h: in RAO from TaoStats
+  const vol24hRaw = Number(p.tao_volume_24_hr ?? 0);
+  const vol24h = vol24hRaw > 1e6 ? vol24hRaw / RAO : vol24hRaw;
+
+  const buys24h = Number(p.buys_24_hr ?? 0);
   const sells24h = Number(p.sells_24_hr ?? 0);
 
-  // Chain data
-  const emissionPct = Number(c.emission ?? c.emission_pct ?? 0);
-  const emissionPerDay = Number(c.emission_per_day) || (emissionPct * 7200) || 0;
-  const uidCount = Number(c.active_uids ?? c.active_miners ?? c.total_neurons ?? 0);
-  const maxUids = Number(c.max_n ?? c.max_uids ?? 256);
-  const registrationCount = Number(c.registrations ?? c.neuron_registrations_this_interval ?? 0);
+  // Chain data (from _chain sub-object)
+  const emissionPct = Number(c.emission ?? 0);
+  const emissionPerDay = Number(c.emission_per_day) || (emissionPct > 0 ? emissionPct * 7200 : 0);
+  const uidCount = Number(c.active_uids ?? 0);
+  const maxUids = Number(c.max_n ?? 256);
+  const registrationCount = Number(c.registrations ?? 0);
   const validatorWeight = Number(c.validator_weight ?? 0);
   const minerWeight = Number(c.miner_weight ?? 0);
-  const alphaStaked = Number(c.alpha_staked ?? c.total_stake ?? 0);
 
   return {
     netuid, marketCap, fdv, circulatingSupply, totalSupply, burned,
-    alphaPrice, taoUsd, liquidityUsd: liquidity * taoUsd,
+    alphaPrice, taoUsd, liquidityUsd,
     taoInPool, alphaInPool,
     emissionPct, emissionPerDay, uidCount, maxUids, registrationCount,
     validatorWeight, minerWeight, alphaStaked,
@@ -110,19 +135,23 @@ export function extractHealthData(
 /* ─── Recalculations (Section 2) ─── */
 
 export function recalculate(data: SubnetHealthData): RecalculatedMetrics {
+  // MC recalc: circulatingSupply * alphaPrice * taoUsd (all derived from real data)
   const mcRecalc = data.circulatingSupply > 0
     ? data.circulatingSupply * data.alphaPrice * data.taoUsd
     : data.marketCap * data.taoUsd;
 
+  // FDV recalc: totalSupply * alphaPrice * taoUsd
   const fdvRecalc = data.totalSupply > 0
     ? data.totalSupply * data.alphaPrice * data.taoUsd
-    : data.fdv * data.taoUsd;
+    : mcRecalc; // fallback to MC if no total supply
 
   const dilutionRatio = mcRecalc > 0 ? fdvRecalc / mcRecalc : 1;
+  // Volume in USD / MC in USD
   const volumeToMc = mcRecalc > 0 ? (data.vol24h * data.taoUsd) / mcRecalc : 0;
   const emissionToMc = mcRecalc > 0
     ? (data.emissionPerDay * data.alphaPrice * data.taoUsd) / mcRecalc
     : 0;
+  // Liquidity recalc: TAO in pool * taoUsd * 2 (standard AMM)
   const liquidityRecalc = data.taoInPool > 0
     ? data.taoInPool * data.taoUsd * 2
     : data.liquidityUsd;
