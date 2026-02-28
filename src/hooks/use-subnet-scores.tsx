@@ -12,7 +12,7 @@ import {
   computeStabilitySetup, type SmartCapitalState, type MomentumLabel,
 } from "@/lib/gauge-engine";
 import { calibrateScores } from "@/lib/risk-calibration";
-import { deriveSubnetAction } from "@/lib/strategy-engine";
+import { deriveSubnetAction, type StrategicAction } from "@/lib/strategy-engine";
 import {
   evaluateRiskOverride, checkCoherence,
   type SystemStatus,
@@ -41,7 +41,7 @@ export type UnifiedSubnetScore = {
   momentum: number;
   momentumLabel: MomentumLabel;
   momentumScore: number;
-  action: string;
+  action: import("@/lib/strategy-engine").StrategicAction;
   sc: SmartCapitalState;
   confianceScore: number;
   dataUncertain: boolean;
@@ -338,7 +338,7 @@ export function useSubnetScores(): UnifiedScoresResult {
       if (r.dataUncertain) asymmetry -= 15;
 
       const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
-      let action = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, r.conf);
+      let action: StrategicAction = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, r.conf);
       if (override.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
       checkCoherence(override.isOverridden, action);
 

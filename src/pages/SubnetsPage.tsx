@@ -1,34 +1,23 @@
 import React, { useMemo, useState } from "react";
-import { calibrateScores } from "@/lib/risk-calibration";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
+import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import {
   deriveMomentumLabel, momentumColor, computeMomentumScore,
-  opportunityColor, riskColor, clamp, normalizeWithVariance, normalizeOpportunity,
-  computeSmartCapital, type SmartCapitalState,
-  computeSaturationIndex, saturationAlert,
-  computeStabilitySetup, stabilityColor,
+  opportunityColor, riskColor, clamp,
+  type SmartCapitalState,
+  stabilityColor,
 } from "@/lib/gauge-engine";
 import {
   deriveSubnetAction, actionColor, actionBg, actionBorder, actionIcon,
 } from "@/lib/strategy-engine";
+import { confianceColor } from "@/lib/data-fusion";
 import {
-  confianceColor,
-  type SourceMetrics,
-  fuseMetrics,
-} from "@/lib/data-fusion";
-import {
-  evaluateRiskOverride, checkCoherence,
   systemStatusColor, systemStatusLabel,
-  type SystemStatus,
 } from "@/lib/risk-override";
 import {
-  extractHealthData, recalculate, computeAllHealthScores,
-  computeHealthRisk, computeHealthOpportunity,
   healthColor, dilutionLabel, formatUsd,
-  type SubnetHealthResult, type HealthScores, type RecalculatedMetrics,
+  type HealthScores, type RecalculatedMetrics,
 } from "@/lib/subnet-health";
 
 /* ═══════════════════════════════════════ */
@@ -86,8 +75,6 @@ function HealthPanel({ health, onClose }: {
           <h3 className="text-white/90 text-sm font-bold tracking-wider">🔬 HEALTH — SN-{health.netuid} {health.name}</h3>
           <button onClick={onClose} className="text-white/30 hover:text-white/60 text-lg">✕</button>
         </div>
-
-        {/* Recalculated vs displayed */}
         <div className="space-y-1.5">
           <div className="text-white/40 text-[9px] tracking-widest mb-1">RECALCULS</div>
           <Row label="MC recalc" value={formatUsd(recalc.mcRecalc)} sub={capDiv > 2 ? `△ ${capDiv.toFixed(1)}%` : "✓"} warn={capDiv > 5} />
@@ -98,8 +85,6 @@ function HealthPanel({ health, onClose }: {
           <Row label="Liq/MC" value={`${(recalc.liquidityToMc * 100).toFixed(2)}%`} warn={recalc.liquidityToMc < 0.003} />
           {liqDiv > 5 && <Row label="Liq divergence" value={`${liqDiv.toFixed(1)}%`} warn={true} />}
         </div>
-
-        {/* Health scores */}
         <div className="space-y-1.5 pt-2 border-t border-white/5">
           <div className="text-white/40 text-[9px] tracking-widest mb-1">SCORES SANTÉ</div>
           <ScoreBar label="Liquidité" score={scores.liquidityHealth} />
@@ -137,29 +122,7 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
   );
 }
 
-type SignalRow = {
-  netuid: number | null;
-  subnet_name: string | null;
-  state: string | null;
-  mpi: number | null;
-  score: number | null;
-  confidence_pct: number | null;
-  quality_score: number | null;
-  ts: string | null;
-};
-
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
-
-function deriveSubnetSC(psi: number, quality: number, conf: number, state: string | null): SmartCapitalState {
-  const accSignal = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
-  const distSignal = clamp((100 - quality) * 0.4, 0, 40) +
-    (psi >= 80 && quality < 50 ? 30 : 0) +
-    (state === "BREAK" || state === "EXIT_FAST" ? 25 : 0);
-  const score = clamp(accSignal - distSignal * 0.5 + 30, 0, 100);
-  if (score >= 65) return "ACCUMULATION";
-  if (score <= 35) return "DISTRIBUTION";
-  return "STABLE";
-}
 
 function scColor(state: SmartCapitalState): string {
   switch (state) {
@@ -175,290 +138,30 @@ export default function SubnetsPage() {
   const [healthPanel, setHealthPanel] = useState<null | any>(null);
   const { ownedNetuids, addPosition, isOwned } = useLocalPortfolio();
 
-  const { data: signals } = useQuery({
-    queryKey: ["signals-latest-table"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("signals_latest").select("*");
-      if (error) throw error;
-      return (data || []) as SignalRow[];
-    },
-    refetchInterval: 60_000,
-  });
-
-  // Fetch raw_payload for health engine
-  const { data: rawPayloads } = useQuery({
-    queryKey: ["raw-payloads-health"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subnet_metrics_ts")
-        .select("netuid, raw_payload, source, ts")
-        .eq("source", "taostats")
-        .order("ts", { ascending: false })
-        .limit(300);
-      if (error) throw error;
-      const map = new Map<number, any>();
-      for (const r of data || []) {
-        if (!map.has(r.netuid) && r.raw_payload) map.set(r.netuid, r.raw_payload);
-      }
-      return map;
-    },
-    refetchInterval: 120_000,
-  });
-
-  // TAO USD rate
-  const { data: taoUsd } = useQuery({
-    queryKey: ["tao-usd-health"],
-    queryFn: async () => {
-      const { data } = await supabase.from("fx_latest").select("tao_usd").limit(1).maybeSingle();
-      return Number(data?.tao_usd) || 450;
-    },
-    refetchInterval: 300_000,
-  });
-
-  const { data: primaryMetrics } = useQuery({
-    queryKey: ["metrics-primary-table"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subnet_metrics_ts")
-        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
-        .eq("source", "taostats")
-        .order("ts", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      const map = new Map<number, SourceMetrics>();
-      for (const r of data || []) {
-        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
-      }
-      return map;
-    },
-    refetchInterval: 120_000,
-  });
-
-  const { data: secondaryMetrics } = useQuery({
-    queryKey: ["metrics-secondary-table"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subnet_metrics_ts")
-        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
-        .eq("source", "taomarketcap")
-        .order("ts", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      const map = new Map<number, SourceMetrics>();
-      for (const r of data || []) {
-        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taomarketcap" });
-      }
-      return map;
-    },
-    refetchInterval: 120_000,
-  });
-
-  const { data: sparklines } = useQuery({
-    queryKey: ["sparklines-7d"],
-    queryFn: async () => {
-      const since = new Date(Date.now() - 8 * 86400_000).toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("subnet_price_daily")
-        .select("netuid, date, price_close")
-        .gte("date", since)
-        .order("date", { ascending: true });
-      if (error) throw error;
-      const map = new Map<number, number[]>();
-      for (const r of data || []) {
-        if (r.price_close == null) continue;
-        if (!map.has(r.netuid)) map.set(r.netuid, []);
-        map.get(r.netuid)!.push(Number(r.price_close));
-      }
-      return map;
-    },
-    refetchInterval: 300_000,
-  });
-
-  const { data: subnetLatest } = useQuery({
-    queryKey: ["subnet-latest-risk"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subnet_latest")
-        .select("netuid, vol_cap, top_miners_share, liquidity, cap");
-      if (error) throw error;
-      const map = new Map<number, { volCap: number; topMinersShare: number; liqRatio: number; cap: number; liq: number }>();
-      for (const r of data || []) {
-        if (r.netuid == null) continue;
-        const cap = Number(r.cap) || 0;
-        const liq = Number(r.liquidity) || 0;
-        map.set(r.netuid, {
-          volCap: Number(r.vol_cap) || 0,
-          topMinersShare: Number(r.top_miners_share) || 0,
-          liqRatio: cap > 0 ? liq / cap : 0,
-          cap, liq,
-        });
-      }
-      return map;
-    },
-    refetchInterval: 120_000,
-  });
-
-  // Consensus data from fusion
-  const consensusMap = useMemo(() => {
-    if (!primaryMetrics && !secondaryMetrics) return new Map<number, { confianceData: number; dataUncertain: boolean }>();
-    const primaryArr = primaryMetrics ? [...primaryMetrics.values()] : [];
-    const secondaryArr = secondaryMetrics ? [...secondaryMetrics.values()] : [];
-    const fused = fuseMetrics(primaryArr, secondaryArr);
-    const map = new Map<number, { confianceData: number; dataUncertain: boolean }>();
-    for (const f of fused) {
-      map.set(f.netuid, { confianceData: f.confianceData, dataUncertain: f.dataUncertain });
-    }
-    return map;
-  }, [primaryMetrics, secondaryMetrics]);
+  // ── UNIFIED SCORES (single source of truth) ──
+  const { scoresList, sparklines, scoreTimestamp } = useSubnetScores();
 
   const rows = useMemo(() => {
-    if (!signals) return [];
-    const rate = taoUsd || 450;
-
-    const allRows = signals
-      .filter(s => s.netuid != null)
-      .map(s => {
-        const psi = s.mpi ?? s.score ?? 0;
-        const conf = s.confidence_pct ?? 0;
-        const quality = s.quality_score ?? 0;
-        const consensus = consensusMap.get(s.netuid!);
-        const dataUncertain = consensus?.dataUncertain ?? false;
-        const confianceScore = consensus?.confianceData ?? 50;
-        const dataConsistencyRisk = clamp(100 - confianceScore, 0, 100);
-
-        // Health engine: extract from raw_payload
-        const payload = rawPayloads?.get(s.netuid!);
-        const chainData = payload?._chain || {};
-        const healthData = extractHealthData(s.netuid!, payload || {}, chainData, rate);
-        const recalc = recalculate(healthData);
-        const healthScores = computeAllHealthScores(healthData, recalc);
-
-        // Smart Capital
-        const sc = deriveSubnetSC(psi, quality, conf, s.state);
-        const scScore = sc === "ACCUMULATION" ? 70 : sc === "DISTRIBUTION" ? 20 : 45;
-
-        // Momentum
-        const momentumScore = computeMomentumScore(psi);
-        const momentumLabel = deriveMomentumLabel(psi);
-
-        // Pre-hype intensity (simplified)
-        const preHypeIntensity = (psi > 50 && quality > 40 && sc === "ACCUMULATION") ? clamp(psi - 30, 0, 70) : 0;
-
-        // NEW RISK: health-based composite (Section 5)
-        const riskRaw = computeHealthRisk(healthScores, dataConsistencyRisk);
-
-        // NEW OPPORTUNITY: health-based composite (Section 6)
-        const oppRaw = computeHealthOpportunity(momentumScore, healthScores, scScore, preHypeIntensity, recalc);
-
-        return {
-          netuid: s.netuid!, psi, conf, quality, state: s.state,
-          name: s.subnet_name || `SN-${s.netuid}`,
-          dataUncertain, confianceScore,
-          oppRaw, riskRaw,
-          momentumLabel, momentumScore, sc, scScore,
-          healthScores, recalc, healthData,
-          displayedCap: (subnetLatest?.get(s.netuid!)?.cap || 0) * rate,
-          displayedLiq: (subnetLatest?.get(s.netuid!)?.liq || 0) * rate,
-        };
-      });
-
-    // Normalize: percentile mapping for Opp, S-curve for Risk
-    const oppPercentile = normalizeOpportunity(allRows.map(r => r.oppRaw));
-    const riskPercentile = normalizeWithVariance(allRows.map(r => r.riskRaw), 3);
-
-    const finalRows = allRows.map((r, i) => {
-      // Blend: 60% raw (clamped 0-100) + 40% percentile rank
-      let oppBlend = clamp(Math.round(r.oppRaw * 0.6 + oppPercentile[i] * 0.4), 5, 98);
-      let riskBlend = clamp(Math.round(r.riskRaw * 0.6 + riskPercentile[i] * 0.4), 0, 100);
-
-      // DEPEG coherence
-      const isBreak = r.state === "BREAK" || r.state === "EXIT_FAST";
-      if (isBreak || r.state === "DEPEG_WARNING" || r.state === "DEPEG_CRITICAL") {
-        oppBlend = 0;
-      }
-
-      // Risk Override v2: pass hard-condition metrics
-      const slMetrics = subnetLatest?.get(r.netuid);
-      const volMcRatio = (slMetrics?.volCap != null) ? slMetrics.volCap : undefined;
-      const override = evaluateRiskOverride({
-        netuid: r.netuid, state: r.state, psi: r.psi, risk: riskBlend, quality: r.quality,
-        liquidityUsd: r.displayedLiq > 0 ? r.displayedLiq : undefined,
-        volumeMcRatio: volMcRatio,
-        taoInPool: slMetrics?.liq,
-      });
-      if (override.isOverridden) oppBlend = 0;
-
-      // ── CALIBRATION: floor + critical override (top-rank applied post-sort) ──
-      const cal = calibrateScores({
-        risk: riskBlend, opportunity: oppBlend,
-        state: r.state, isTopRank: false, isOverridden: override.isOverridden,
-      });
-      const opp = cal.opportunity;
-      const risk = cal.risk;
-
-      // AS signed with DATA_UNCERTAIN penalty
-      let asymmetry = cal.asymmetry;
-      if (r.dataUncertain) asymmetry -= 15;
-
-      const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
-      let action = override.isOverridden ? "EXIT" as const : deriveSubnetAction(opp, risk, r.conf);
-      if (override.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
-
-      checkCoherence(override.isOverridden, action);
-      const owned = ownedNetuids.has(r.netuid);
-
-      return {
-        netuid: r.netuid, name: r.name, state: r.state,
-        psi: r.psi, conf: r.conf, opp, risk, asymmetry,
-        momentumLabel: r.momentumLabel, action, sc: r.sc, owned,
-        confianceScore: r.confianceScore,
-        dataUncertain: r.dataUncertain,
+    return scoresList
+      .map(r => ({
+        ...r,
+        owned: ownedNetuids.has(r.netuid),
         spark: sparklines?.get(r.netuid) || [],
-        isOverridden: override.isOverridden,
-        isWarning: override.isWarning,
-        systemStatus: override.systemStatus,
-        overrideReasons: override.overrideReasons,
-        healthScores: r.healthScores,
-        recalc: r.recalc,
-        displayedCap: r.displayedCap,
-        displayedLiq: r.displayedLiq,
-      };
-    })
-    .filter(r => {
-      if (mode === "opportunities") return !r.isOverridden && r.opp > r.risk;
-      if (mode === "risks") return r.risk >= r.opp;
-      if (mode === "mine") return r.owned;
-      return true;
-    })
-    .sort((a, b) => {
-      if (mode === "risks") {
-        if (a.isOverridden !== b.isOverridden) return a.isOverridden ? -1 : 1;
-        return b.risk - a.risk;
-      }
-      return b.asymmetry - a.asymmetry;
-    })
-    // ── PASS 2: Apply top-rank floor (Risk ≥ 25 for top 5 after sort) ──
-    .map((r, i) => {
-      if (i < 5 && !r.isOverridden) {
-        const flooredRisk = Math.max(r.risk, 25);
-        if (flooredRisk !== r.risk) {
-          const newAsym = r.opp - flooredRisk - (r.dataUncertain ? 15 : 0);
-          return { ...r, risk: flooredRisk, asymmetry: newAsym };
+      }))
+      .filter(r => {
+        if (mode === "opportunities") return !r.isOverridden && r.opp > r.risk;
+        if (mode === "risks") return r.risk >= r.opp;
+        if (mode === "mine") return r.owned;
+        return true;
+      })
+      .sort((a, b) => {
+        if (mode === "risks") {
+          if (a.isOverridden !== b.isOverridden) return a.isOverridden ? -1 : 1;
+          return b.risk - a.risk;
         }
-      }
-      return r;
-    });
-
-    // Override distribution audit
-    if (finalRows.length >= 5) {
-      const overrideCount = finalRows.filter(r => r.isOverridden).length;
-      const warningCount = finalRows.filter(r => r.isWarning && !r.isOverridden).length;
-      const pct = Math.round((overrideCount / finalRows.length) * 100);
-      console.log(`[OVERRIDE-DIST] n=${finalRows.length} overrides=${overrideCount} (${pct}%) warnings=${warningCount}`);
-    }
-
-    return finalRows;
-  }, [signals, mode, primaryMetrics, secondaryMetrics, ownedNetuids, sparklines, subnetLatest, consensusMap, rawPayloads, taoUsd]);
+        return b.asymmetry - a.asymmetry;
+      });
+  }, [scoresList, mode, ownedNetuids, sparklines]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
@@ -477,7 +180,14 @@ export default function SubnetsPage() {
 
   return (
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14 pl-4 sm:pl-6">
-      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-5 sm:mb-7 ml-28">{t("sub.title")}</h1>
+      <div className="flex items-center gap-3 mb-5 sm:mb-7 ml-28">
+        <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85">{t("sub.title")}</h1>
+        <span className="font-mono text-[8px] px-2 py-0.5 rounded cursor-help"
+          style={{ background: "rgba(255,215,0,0.06)", color: "rgba(255,215,0,0.5)", border: "1px solid rgba(255,215,0,0.1)" }}
+          title={`Score snapshot: ${scoreTimestamp}`}>
+          ⏱ {new Date(scoreTimestamp).toLocaleTimeString()}
+        </span>
+      </div>
 
       {/* Filter row */}
       <div className="flex items-center gap-3 mb-6">
