@@ -70,28 +70,25 @@ Deno.serve(async (req) => {
       { data: taostatsRows },
       { data: tmcRows },
       { data: recentDivEvents },
+      { data: existingOverrides },
     ] = await Promise.all([
       sb.from("subnets").select("netuid"),
-      // Latest metrics per subnet (from view or ordered query)
       sb.from("subnet_metrics_ts").select("netuid, price, cap, vol_24h, liquidity, miners_active, top_miners_share, flow_1m, vol_cap")
         .order("ts", { ascending: false }).limit(500),
-      // ~5m ago snapshots
       sb.from("subnet_metrics_ts").select("netuid, price, liquidity, miners_active, ts")
         .lte("ts", ago5m).order("ts", { ascending: false }).limit(500),
-      // ~1h ago snapshots
       sb.from("subnet_metrics_ts").select("netuid, price, liquidity, miners_active, ts")
         .lte("ts", ago1h).order("ts", { ascending: false }).limit(500),
-      // 7d prices for breakout detection
       sb.from("subnet_metrics_ts").select("netuid, price")
         .gte("ts", ago7d).order("ts", { ascending: true }).limit(1000),
-      // All existing signals
       sb.from("signals").select("*"),
-      // Divergence detection sources
       sb.from("subnet_metrics_ts").select("netuid, price, cap, vol_24h, ts")
         .eq("source", "taostats").order("ts", { ascending: false }).limit(200),
       sb.from("subnet_metrics_ts").select("netuid, price, cap, vol_24h, ts")
         .eq("source", "taomarketcap").order("ts", { ascending: false }).limit(200),
       sb.from("events").select("netuid").eq("type", "DATA_DIVERGENCE").gte("ts", ago30m),
+      // Existing RISK_OVERRIDE events (1 per subnet max)
+      sb.from("events").select("id, netuid").eq("type", "RISK_OVERRIDE"),
     ]);
 
     if (!subnets?.length) {
@@ -348,6 +345,56 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ============= RISK_OVERRIDE: 1 event per overridden subnet =============
+    const overrideMap = new Map<number, number>(); // netuid -> event id
+    for (const o of (existingOverrides || [])) {
+      if (o.netuid != null) overrideMap.set(o.netuid, o.id);
+    }
+
+    const overrideInserts: any[] = [];
+    const overrideUpdates: { id: number; ts: string }[] = [];
+    const clearedOverrideIds: number[] = [];
+
+    for (let i = 0; i < subnetRaws.length; i++) {
+      const s = subnetRaws[i];
+      const mpi = normalizedMpis[i];
+      const normQ = normalizedQs[i];
+      const risk = normalizedConfs[i]; // reuse normalized risk proxy
+      const liqChange1h = s.liq1h > 0 ? ((s.liqNow - s.liq1h) / s.liq1h) * 100 : 0;
+
+      // Override conditions (mirror client-side risk-override.ts)
+      const isOverridden =
+        s.gatingFail ||
+        s.minersNow === 0 ||
+        liqChange1h <= -60 ||
+        mpi > 85 && normQ < 30 ||
+        // State-based: BREAK from low MPI
+        (mpi < 40);
+
+      const existingId = overrideMap.get(s.netuid);
+
+      if (isOverridden) {
+        const evidence = {
+          mpi, quality: normQ, risk,
+          gatingFail: s.gatingFail,
+          minersNow: s.minersNow,
+          liqChange1h: Math.round(liqChange1h * 10) / 10,
+          reasons: s.breakReasons,
+        };
+        if (existingId) {
+          // Update timestamp only
+          overrideUpdates.push({ id: existingId, ts: nowIso });
+        } else {
+          overrideInserts.push({
+            netuid: s.netuid, ts: nowIso, type: "RISK_OVERRIDE", severity: 3, evidence,
+          });
+        }
+      } else if (existingId) {
+        // Subnet no longer overridden → clean up
+        clearedOverrideIds.push(existingId);
+      }
+    }
+
     // ============= BATCH WRITES =============
     const writeResults = await Promise.all([
       signalUpserts.length > 0
@@ -359,13 +406,22 @@ Deno.serve(async (req) => {
       dailyUpserts.length > 0
         ? sb.from("subnet_price_daily").upsert(dailyUpserts, { onConflict: "netuid,date" })
         : Promise.resolve({ error: null }),
+      overrideInserts.length > 0
+        ? sb.from("events").insert(overrideInserts)
+        : Promise.resolve({ error: null }),
+      ...overrideUpdates.map(u =>
+        sb.from("events").update({ ts: u.ts }).eq("id", u.id)
+      ),
+      clearedOverrideIds.length > 0
+        ? sb.from("events").delete().in("id", clearedOverrideIds)
+        : Promise.resolve({ error: null }),
     ]);
 
     for (const r of writeResults) {
       if (r.error) console.error("Batch write error:", r.error.message);
     }
 
-    console.log(`Done: ${subnetRaws.length} subnets processed, ${eventInserts.length} events, ${signalUpserts.length} signals`);
+    console.log(`Done: ${subnetRaws.length} subnets processed, ${eventInserts.length} events, ${signalUpserts.length} signals, ${overrideInserts.length} new overrides, ${overrideUpdates.length} updated, ${clearedOverrideIds.length} cleared`);
 
     return new Response(JSON.stringify({ ok: true, processed: subnetRaws.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
