@@ -9,7 +9,8 @@ import {
   GaugeState, GaugePhase, opportunityColor, riskColor, clamp,
 } from "@/lib/gauge-engine";
 import {
-  deriveSubnetAction, actionColor, actionBg, actionBorder, actionIcon,
+  deriveStrategicAction, actionColor, actionBg, actionBorder, actionIcon,
+  type StrategyMode,
 } from "@/lib/strategy-engine";
 
 type SignalRow = {
@@ -43,11 +44,18 @@ function deriveRisk(psi: number, conf: number, quality: number, state: string | 
   return Math.round(clamp(risk, 0, 100));
 }
 
+const STRATEGY_MODES: { value: StrategyMode; label: string; icon: string }[] = [
+  { value: "hunter", label: "CHASSEUR", icon: "🔥" },
+  { value: "defensive", label: "DÉFENSIF", icon: "🛡" },
+  { value: "bagbuilder", label: "BAG BUILDER", icon: "💎" },
+];
+
 export default function SubnetsPage() {
   const { t } = useI18n();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<ViewMode>("all");
+  const [strategyMode, setStrategyMode] = useState<StrategyMode>("hunter");
 
   const { data: signals } = useQuery({
     queryKey: ["signals-latest-table"],
@@ -74,7 +82,7 @@ export default function SubnetsPage() {
         const opp = deriveOpp(psi, conf, quality, s.state);
         const risk = deriveRisk(psi, conf, quality, s.state);
         const asymmetry = opp - risk;
-        const action = deriveSubnetAction(opp, risk, conf);
+        const action = deriveStrategicAction(opp, risk, "ACCUMULATION", conf, strategyMode);
         return { netuid: s.netuid!, name: s.subnet_name || `SN-${s.netuid}`, psi, conf, state, phase, tMinus, opp, risk, asymmetry, action };
       })
       .filter(r => {
@@ -82,9 +90,8 @@ export default function SubnetsPage() {
         if (mode === "risks") return r.risk >= r.opp;
         return true;
       })
-      // Sort by asymmetry (best first)
       .sort((a, b) => b.asymmetry - a.asymmetry);
-  }, [signals, mode]);
+  }, [signals, mode, strategyMode]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
@@ -96,8 +103,9 @@ export default function SubnetsPage() {
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
       <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-5 sm:mb-7">{t("sub.title")}</h1>
 
-      {/* Mode selector */}
+      {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
+        {/* View mode selector */}
         <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {modeOptions.map(opt => (
             <button key={opt.value}
@@ -109,6 +117,23 @@ export default function SubnetsPage() {
                 fontWeight: mode === opt.value ? 700 : 400,
               }}>
               {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Strategy mode selector */}
+        <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+          {STRATEGY_MODES.map(sm => (
+            <button key={sm.value}
+              onClick={() => setStrategyMode(sm.value)}
+              className="font-mono text-[11px] tracking-wider px-3 py-2 transition-all flex items-center gap-1.5"
+              style={{
+                background: strategyMode === sm.value ? "rgba(255,215,0,0.1)" : "transparent",
+                color: strategyMode === sm.value ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.35)",
+                fontWeight: strategyMode === sm.value ? 700 : 400,
+              }}>
+              <span>{sm.icon}</span>
+              <span className="hidden sm:inline">{sm.label}</span>
             </button>
           ))}
         </div>
