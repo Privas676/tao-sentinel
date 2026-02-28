@@ -123,7 +123,7 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
   );
 }
 
-type SortCol = "asymmetry" | "price" | "var30d" | null;
+type SortCol = "price" | "var30d" | "opp" | "risk" | "asymmetry" | "confiance" | null;
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
 
 function scColor(state: SmartCapitalState): string {
@@ -169,14 +169,16 @@ export default function SubnetsPage() {
         return true;
       })
       .sort((a, b) => {
-        // Custom column sort takes priority
-        if (sortCol === "price") {
-          const diff = (a.alphaPrice || 0) - (b.alphaPrice || 0);
-          return sortDir === "desc" ? -diff : diff;
-        }
-        if (sortCol === "var30d") {
-          const av = a.priceVar30d ?? -9999;
-          const bv = b.priceVar30d ?? -9999;
+        if (sortCol) {
+          let av = 0, bv = 0;
+          switch (sortCol) {
+            case "price": av = a.alphaPrice || 0; bv = b.alphaPrice || 0; break;
+            case "var30d": av = a.priceVar30d ?? -9999; bv = b.priceVar30d ?? -9999; break;
+            case "opp": av = a.opp; bv = b.opp; break;
+            case "risk": av = a.risk; bv = b.risk; break;
+            case "asymmetry": av = a.asymmetry; bv = b.asymmetry; break;
+            case "confiance": av = a.confianceScore; bv = b.confianceScore; break;
+          }
           return sortDir === "desc" ? bv - av : av - bv;
         }
         // Default sort
@@ -247,13 +249,21 @@ export default function SubnetsPage() {
                 Var 30j {sortCol === "var30d" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
               <th className="text-center py-3 px-2">{t("tip.price7d")}</th>
-              <th className="text-right py-3 px-2">{t("sub.opp")}</th>
-              <th className="text-right py-3 px-2">{t("sub.risk")}</th>
-              <th className="text-right py-3 px-2">AS</th>
+              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("opp")}>
+                {t("sub.opp")} {sortCol === "opp" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
+              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("risk")}>
+                {t("sub.risk")} {sortCol === "risk" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
+              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("asymmetry")}>
+                AS {sortCol === "asymmetry" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
               <th className="text-center py-3 px-2">ACTION</th>
               <th className="text-center py-3 px-2">{t("sub.momentum")}</th>
               <th className="text-center py-3 px-2">{t("sc.label")}</th>
-              <th className="text-right py-3 px-2">{t("data.confiance")}</th>
+              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("confiance")}>
+                {t("data.confiance")} {sortCol === "confiance" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
               <th className="text-center py-3 px-2">🔬</th>
               <th className="text-center py-3 px-2">✔</th>
             </tr>
