@@ -114,8 +114,12 @@ export function extractHealthData(
   const sells24h = Number(p.sells_24_hr ?? 0);
 
   // Chain data (from _chain sub-object)
-  const emissionPct = Number(c.emission ?? 0);
-  const emissionPerDay = Number(c.emission_per_day) || (emissionPct > 0 ? emissionPct * 7200 : 0);
+  // emission is in RAO units from TaoStats chain data
+  const RAO_CHAIN = 1e9;
+  const emissionRaw = Number(c.emission ?? 0);
+  const emissionPct = emissionRaw > 1e6 ? emissionRaw / RAO_CHAIN : emissionRaw;
+  const emissionPerDayRaw = Number(c.emission_per_day) || (emissionPct > 0 ? emissionPct * 7200 : 0);
+  const emissionPerDay = emissionPerDayRaw > 1e6 ? emissionPerDayRaw / RAO_CHAIN : emissionPerDayRaw;
   const uidCount = Number(c.active_uids ?? 0);
   const maxUids = Number(c.max_n ?? 256);
   const registrationCount = Number(c.registrations ?? 0);
