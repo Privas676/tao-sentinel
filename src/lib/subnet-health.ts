@@ -182,20 +182,19 @@ export function computeLiquidityHealth(liquidityToMc: number, liquidityUsd: numb
 
 export function computeVolumeHealth(volumeToMc: number): number {
   // 1-10% = healthy, <0.5% = illiquid, >20% = speculative
+  let score: number;
   if (volumeToMc >= 0.01 && volumeToMc <= 0.10) {
-    return 70 + clamp((volumeToMc - 0.01) / 0.09 * 30, 0, 30);
+    score = 70 + clamp((volumeToMc - 0.01) / 0.09 * 30, 0, 30);
+  } else if (volumeToMc > 0.10 && volumeToMc <= 0.20) {
+    score = 70 - (volumeToMc - 0.10) / 0.10 * 20;
+  } else if (volumeToMc > 0.20) {
+    score = clamp(50 - (volumeToMc - 0.20) * 200, 10, 50);
+  } else if (volumeToMc >= 0.005) {
+    score = 40 + (volumeToMc - 0.005) / 0.005 * 30;
+  } else {
+    score = volumeToMc / 0.005 * 40;
   }
-  if (volumeToMc > 0.10 && volumeToMc <= 0.20) {
-    return 70 - (volumeToMc - 0.10) / 0.10 * 20; // declining
-  }
-  if (volumeToMc > 0.20) {
-    return clamp(50 - (volumeToMc - 0.20) * 200, 10, 50); // speculative penalty
-  }
-  if (volumeToMc >= 0.005) {
-    return 40 + (volumeToMc - 0.005) / 0.005 * 30;
-  }
-  // <0.5%
-  return clamp(Math.round(volumeToMc / 0.005 * 40), 5, 40);
+  return clamp(Math.round(score), 5, 100);
 }
 
 export function computeEmissionPressure(emissionToMc: number): number {

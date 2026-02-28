@@ -131,7 +131,7 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
       <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, background: healthColor(score) }} />
       </div>
-      <span className="text-white/60 w-8 text-right">{score}</span>
+      <span className="text-white/60 w-8 text-right">{Math.round(score)}</span>
     </div>
   );
 }
