@@ -316,6 +316,53 @@ export type Database = {
         }
         Relationships: []
       }
+      whale_movements: {
+        Row: {
+          amount_tao: number
+          block_number: number | null
+          coldkey_address: string
+          counterparty: string | null
+          detected_at: string
+          direction: string
+          id: number
+          netuid: number | null
+          raw_payload: Json | null
+          tx_hash: string | null
+        }
+        Insert: {
+          amount_tao: number
+          block_number?: number | null
+          coldkey_address: string
+          counterparty?: string | null
+          detected_at?: string
+          direction: string
+          id?: never
+          netuid?: number | null
+          raw_payload?: Json | null
+          tx_hash?: string | null
+        }
+        Update: {
+          amount_tao?: number
+          block_number?: number | null
+          coldkey_address?: string
+          counterparty?: string | null
+          detected_at?: string
+          direction?: string
+          id?: never
+          netuid?: number | null
+          raw_payload?: Json | null
+          tx_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whale_movements_coldkey_address_fkey"
+            columns: ["coldkey_address"]
+            isOneToOne: false
+            referencedRelation: "whale_coldkeys"
+            referencedColumns: ["address"]
+          },
+        ]
+      }
     }
     Views: {
       fx_latest: {
