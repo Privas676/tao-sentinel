@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS subnet_price_daily_netuid_date_uniq ON public.subnet_price_daily (netuid, date);
