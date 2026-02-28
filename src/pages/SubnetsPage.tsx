@@ -88,14 +88,26 @@ function deriveOpp(psi: number, conf: number, quality: number, state: string | n
 }
 
 function deriveRisk(psi: number, conf: number, quality: number, state: string | null, dataUncertain = false): number {
-  let risk = 0;
-  risk += (100 - quality) * 0.30;
-  risk += (100 - conf) * 0.25;
-  risk += (100 - psi) * 0.15;
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 25;
+  // Base risk floor — even healthy subnets carry inherent risk
+  let risk = 15;
+  // Core deficits (larger coefficients for spread)
+  risk += (100 - quality) * 0.35;
+  risk += (100 - conf) * 0.30;
+  risk += (100 - psi) * 0.20;
+  // Concentration risk: high momentum + mediocre quality = fragile
+  if (psi >= 70 && quality < 60) risk += 8;
+  if (psi >= 80 && quality < 50) risk += 10;
+  // Volatility proxy: extreme momentum in either direction
+  if (psi >= 85) risk += 5; // overheated
+  if (psi < 40) risk += 8;
+  // Confidence gap
+  if (conf < 50) risk += 6;
+  if (conf < 30) risk += 6;
+  // State-based
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 20;
   else if (state === "HOLD") risk += 5;
-  if (psi >= 80 && quality < 50) risk += 12;
-  if (psi < 25) risk += 10;
+  else if (state === "WATCH") risk += 3;
+  // Stagnation zone
   if (psi >= 40 && psi <= 60 && conf < 40) risk += 5;
   if (dataUncertain) risk += 10;
   return Math.round(clamp(risk, 0, 100));
