@@ -214,28 +214,42 @@ function deriveOpportunity(psi: number, conf: number, quality: number, state: st
   return Math.round(clamp(opp, 0, 100));
 }
 
-function deriveRisk(psi: number, conf: number, quality: number, state: string | null): number {
-  // Base risk floor — even healthy subnets carry inherent risk
-  let risk = 15;
-  // Core deficits (larger coefficients for spread)
-  risk += (100 - quality) * 0.35;
-  risk += (100 - conf) * 0.30;
-  risk += (100 - psi) * 0.20;
-  // Concentration risk: high momentum + mediocre quality
-  if (psi >= 70 && quality < 60) risk += 8;
-  if (psi >= 80 && quality < 50) risk += 10;
-  // Volatility proxy
-  if (psi >= 85) risk += 5;
-  if (psi < 40) risk += 8;
-  // Confidence gap
-  if (conf < 50) risk += 6;
-  if (conf < 30) risk += 6;
-  // State-based
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 20;
-  else if (state === "HOLD") risk += 5;
-  else if (state === "WATCH") risk += 3;
-  // Stagnation zone
-  if (psi >= 40 && psi <= 60 && conf < 40) risk += 5;
+export type MarketRiskData = {
+  volCap: number;
+  topMinersShare: number;
+  priceVol7d: number;
+  liqRatio: number;
+};
+
+function deriveRisk(psi: number, conf: number, quality: number, state: string | null, market?: MarketRiskData): number {
+  let risk = 20;
+  risk += (100 - quality) * 0.25;
+  risk += (100 - conf) * 0.20;
+  risk += (100 - psi) * 0.10;
+
+  if (market) {
+    const vc = market.volCap;
+    const vcIdeal = 0.08;
+    const vcDist = Math.abs(Math.log((vc + 0.001) / vcIdeal));
+    risk += clamp(vcDist * 8, 0, 15);
+    risk += clamp(market.topMinersShare * 12, 0, 10);
+    const lrScore = clamp(1 - market.liqRatio * 5, 0, 1);
+    risk += lrScore * 10;
+    risk += clamp(market.priceVol7d * 20, 0, 10);
+  } else {
+    risk += 15;
+  }
+
+  if (psi >= 70 && quality < 60) risk += 5;
+  if (psi >= 80 && quality < 50) risk += 8;
+  if (psi >= 85) risk += 3;
+  if (psi < 40) risk += 5;
+  if (conf < 50) risk += 4;
+  if (conf < 30) risk += 4;
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 15;
+  else if (state === "HOLD") risk += 3;
+  else if (state === "WATCH") risk += 2;
+  if (psi >= 40 && psi <= 60 && conf < 40) risk += 3;
   return Math.round(clamp(risk, 0, 100));
 }
 
