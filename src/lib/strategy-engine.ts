@@ -6,34 +6,48 @@ import type { SmartCapitalState } from "./gauge-engine";
 type SCState = SmartCapitalState | string;
 
 export type StrategicAction = "ENTER" | "WATCH" | "EXIT";
+export type StrategyMode = "hunter" | "defensive" | "bagbuilder";
+
+const THRESHOLDS: Record<StrategyMode, {
+  enterOpp: number; enterRisk: number; enterConf: number;
+  watchOpp: number; watchRisk: number;
+  exitRisk: number; moderateRisk: number;
+}> = {
+  hunter:     { enterOpp: 55, enterRisk: 40, enterConf: 45, watchOpp: 45, watchRisk: 50, exitRisk: 70, moderateRisk: 50 },
+  defensive:  { enterOpp: 75, enterRisk: 25, enterConf: 65, watchOpp: 60, watchRisk: 35, exitRisk: 55, moderateRisk: 35 },
+  bagbuilder: { enterOpp: 60, enterRisk: 35, enterConf: 50, watchOpp: 50, watchRisk: 45, exitRisk: 65, moderateRisk: 45 },
+};
 
 export function deriveStrategicAction(
   opportunity: number,
   risk: number,
   smartCapitalState: SCState,
-  confidence: number
+  confidence: number,
+  mode: StrategyMode = "hunter"
 ): StrategicAction {
+  const t = THRESHOLDS[mode];
+
   // EXIT rules
-  if (risk > 70) return "EXIT";
+  if (risk > t.exitRisk) return "EXIT";
   if (smartCapitalState === "DISTRIBUTION") return "EXIT";
 
   // ENTER rules
   if (
-    opportunity > 60 &&
-    risk < 35 &&
+    opportunity > t.enterOpp &&
+    risk < t.enterRisk &&
     smartCapitalState === "ACCUMULATION" &&
-    confidence > 50
+    confidence > t.enterConf
   ) return "ENTER";
 
   // WATCH rules (middle ground)
   if (
-    opportunity >= 50 &&
-    risk <= 45 &&
+    opportunity >= t.watchOpp &&
+    risk <= t.watchRisk &&
     smartCapitalState !== "DISTRIBUTION"
   ) return "WATCH";
 
   // Default: if risk moderate or opportunity low
-  if (risk > 45) return "EXIT";
+  if (risk > t.moderateRisk) return "EXIT";
   return "WATCH";
 }
 

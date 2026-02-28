@@ -585,9 +585,10 @@ export default function AlienGauge() {
   const dualCore = useMemo(() => computeDualCore(signals, smartCapital), [signals, smartCapital]);
 
   /* ─── Strategic recommendation ─── */
+  const strategyMode = bagBuilder ? "bagbuilder" as const : viewMode;
   const strategicAction = useMemo(() =>
-    deriveStrategicAction(globalOpp, globalRisk, smartCapital.state, globalConf),
-    [globalOpp, globalRisk, smartCapital.state, globalConf]
+    deriveStrategicAction(globalOpp, globalRisk, smartCapital.state, globalConf, strategyMode),
+    [globalOpp, globalRisk, smartCapital.state, globalConf, strategyMode]
   );
 
   /* ─── Sentinel Index ─── */
