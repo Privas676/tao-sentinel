@@ -361,13 +361,14 @@ export default function SubnetsPage() {
         };
       });
 
-    // Normalize with percentile + sigmoid (Section 7)
-    const oppNorm = normalizeWithVariance(allRows.map(r => r.oppRaw), 3);
-    const riskNorm = normalizeWithVariance(allRows.map(r => r.riskRaw), 3);
+    // Normalize: blend raw score (60%) + percentile (40%) to preserve absolute meaning
+    const oppPercentile = normalizeWithVariance(allRows.map(r => r.oppRaw), 3);
+    const riskPercentile = normalizeWithVariance(allRows.map(r => r.riskRaw), 3);
 
     return allRows.map((r, i) => {
-      let opp = oppNorm[i];
-      const risk = riskNorm[i];
+      // Blend: 60% raw (clamped 0-100) + 40% percentile rank
+      let opp = clamp(Math.round(r.oppRaw * 0.6 + oppPercentile[i] * 0.4), 5, 98);
+      const risk = clamp(Math.round(r.riskRaw * 0.6 + riskPercentile[i] * 0.4), 5, 95);
 
       // DEPEG coherence
       const isBreak = r.state === "BREAK" || r.state === "EXIT_FAST";
