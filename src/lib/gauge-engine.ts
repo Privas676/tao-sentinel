@@ -181,7 +181,7 @@ export function derivePhase(psi: number): GaugePhase {
 /*   MOMENTUM (Section 6)                   */
 /* ═══════════════════════════════════════ */
 
-/** Compute momentum score (0-100) from PSI + delta */
+/** Compute momentum score (0-100) from PSI + price variation + volume/MC */
 export function computeMomentumScore(psi: number, prevPsi?: number): number {
   const base = clamp(psi, 0, 100);
   const delta = prevPsi != null ? psi - prevPsi : 0;
@@ -189,7 +189,74 @@ export function computeMomentumScore(psi: number, prevPsi?: number): number {
   return clamp(Math.round(base * 0.7 + 50 * 0.1 + accel + 10), 0, 100);
 }
 
-/** Derive momentum label from momentum score (Section 6) */
+/**
+ * Compute momentum score V2 — multi-factor, designed for percentile ranking.
+ * Uses: PSI (signal strength), price change 7d, volume/MC ratio.
+ * Returns a raw score (not clamped to 0-100) to maximize distribution spread.
+ */
+export function computeMomentumScoreV2(
+  psi: number,
+  priceChange7d: number | null,
+  volMcRatio: number | null,
+): number {
+  // PSI component: 40% weight, S-curve centered at 50
+  const psiNorm = clamp((psi - 30) / 50, 0, 1); // maps 30-80 → 0-1
+  const psiScore = psiNorm * 40;
+
+  // Price change 7d component: 35% weight
+  // Typical range: -30% to +50%, map to 0-35
+  const pc = priceChange7d ?? 0;
+  const pcNorm = clamp((pc + 15) / 50, 0, 1); // maps -15%→0, +35%→1
+  const pcScore = pcNorm * 35;
+
+  // Volume/MC ratio component: 25% weight
+  // Healthy: 1-10%, map to 0-25
+  const vm = volMcRatio ?? 0;
+  const vmNorm = clamp(vm / 0.08, 0, 1); // 0-8% maps to 0-1
+  const vmScore = vmNorm * 25;
+
+  return psiScore + pcScore + vmScore;
+}
+
+/**
+ * Assign momentum labels using PERCENTILE RANKING across the fleet.
+ * Buckets: top 20% = FORT, next 40% = MODÉRÉ, next 30% = STABLE, bottom 10% = DÉTÉRIORATION.
+ * Critical subnets are capped at STABLE.
+ */
+export function assignMomentumLabels(
+  rows: { momentumScoreV2: number; isCritical: boolean }[]
+): MomentumLabel[] {
+  if (rows.length === 0) return [];
+
+  // Sort indices by score descending to get percentile ranks
+  const indexed = rows.map((r, i) => ({ i, score: r.momentumScoreV2 }));
+  indexed.sort((a, b) => b.score - a.score);
+
+  const labels: MomentumLabel[] = new Array(rows.length);
+  const n = rows.length;
+
+  for (let rank = 0; rank < indexed.length; rank++) {
+    const { i } = indexed[rank];
+    const pct = rank / n; // 0 = top, 1 = bottom
+
+    let label: MomentumLabel;
+    if (pct < 0.20) label = "FORT";
+    else if (pct < 0.60) label = "MODÉRÉ";
+    else if (pct < 0.90) label = "STABLE";
+    else label = "DÉTÉRIORATION";
+
+    // Critical subnets cannot be FORT
+    if (rows[i].isCritical && (label === "FORT" || label === "MODÉRÉ")) {
+      label = "STABLE";
+    }
+
+    labels[i] = label;
+  }
+
+  return labels;
+}
+
+/** @deprecated Use computeMomentumScoreV2 + assignMomentumLabels instead */
 export function deriveMomentumLabel(psi: number, prevPsi?: number): MomentumLabel {
   const score = computeMomentumScore(psi, prevPsi);
   if (score >= 70) return "FORT";
