@@ -368,15 +368,15 @@ export function useSubnetScores(): UnifiedScoresResult {
       let riskBlend = clamp(Math.round(r.riskRaw * 0.6 + riskPercentile[i] * 0.4), 0, 100);
 
       const isBreak = r.state === "BREAK" || r.state === "EXIT_FAST";
-      if (isBreak || r.state === "DEPEG_WARNING" || r.state === "DEPEG_CRITICAL") {
+      if (!isRoot && (isBreak || r.state === "DEPEG_WARNING" || r.state === "DEPEG_CRITICAL")) {
         oppBlend = 0;
       }
 
       // ── SN-0 Root: CORE_NETWORK overrides ──
       if (isRoot) {
-        // Disable speculative penalties, fix risk floor & opp cap
         riskBlend = Math.max(riskBlend, 35);
-        oppBlend = Math.min(oppBlend, 60);
+        // Fundamental value: opp floor 30, cap 60
+        oppBlend = clamp(oppBlend, 30, 60);
       }
 
       // Risk Override v2
@@ -403,7 +403,7 @@ export function useSubnetScores(): UnifiedScoresResult {
       // Root: enforce floors/caps after calibration too
       if (isRoot) {
         risk = Math.max(risk, 35);
-        opp = Math.min(opp, 60);
+        opp = clamp(opp, 30, 60);
       }
 
       let asymmetry = cal.asymmetry;
