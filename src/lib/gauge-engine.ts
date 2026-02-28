@@ -48,6 +48,42 @@ export function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+/* ═══════════════════════════════════════ */
+/*   PERCENTILE + SIGMOID NORMALIZATION     */
+/* ═══════════════════════════════════════ */
+
+/** Sigmoid S-curve: amplifies extremes, compresses middle */
+function sigmoid(x: number, steepness = 10, midpoint = 0.5): number {
+  return 1 / (1 + Math.exp(-steepness * (x - midpoint)));
+}
+
+/** Convert raw scores to percentile ranks (0-100) */
+function percentileRank(values: number[]): number[] {
+  if (values.length <= 1) return values.map(() => 50);
+  const sorted = [...values].sort((a, b) => a - b);
+  return values.map(v => {
+    const below = sorted.filter(s => s < v).length;
+    const equal = sorted.filter(s => s === v).length;
+    return ((below + equal * 0.5) / sorted.length) * 100;
+  });
+}
+
+/** Apply S-curve to percentile-normalized scores for high variance */
+function applySCurve(percentile: number, steepness = 8): number {
+  const normalized = percentile / 100; // 0-1
+  const curved = sigmoid(normalized, steepness, 0.5);
+  // Re-scale to 0-100 while ensuring full range usage
+  const min = sigmoid(0, steepness, 0.5);
+  const max = sigmoid(1, steepness, 0.5);
+  return Math.round(((curved - min) / (max - min)) * 100);
+}
+
+/** Normalize an array of scores using percentile + S-curve */
+export function normalizeWithVariance(rawScores: number[], steepness = 8): number[] {
+  const ranks = percentileRank(rawScores);
+  return ranks.map(r => applySCurve(r, steepness));
+}
+
 /* PSI thresholds */
 export const PSI_THRESHOLDS = {
   BUILD_MIN: 35,
@@ -288,46 +324,61 @@ export function processSignals(
   raw: RawSignal[],
   sparklines: Record<number, number[]>
 ): SubnetSignal[] {
-  const signals = raw
-    .filter(s => s.netuid != null)
-    .map(s => {
-      const psi = s.mpi ?? s.score ?? 0;
-      const conf = s.confidence_pct ?? 0;
-      const quality = s.quality_score ?? 0;
-      const isBreak = s.state === "BREAK" || s.state === "EXIT_FAST";
-      const asymScore = conf * 0.6 + quality * 0.4;
-      const asymmetry: Asymmetry = asymScore >= 75 ? "HIGH" : asymScore >= 55 ? "MED" : "LOW";
-      const opportunity = deriveOpportunity(psi, conf, quality, s.state);
-      const risk = deriveRisk(psi, conf, quality, s.state);
-      const dominant = opportunity > risk + 10 ? "opportunity" as const :
-                       risk > opportunity + 10 ? "risk" as const : "neutral" as const;
-      const momentum = clamp(psi - 40, 0, 60) / 60 * 100;
-      const momentumLabel = deriveMomentumLabel(psi);
-      const stabilitySetup = computeStabilitySetup(opportunity, risk, conf, momentum, quality);
-      return {
-        netuid: s.netuid!,
-        name: s.subnet_name || `SN-${s.netuid}`,
-        psi,
-        opportunity,
-        risk,
-        confidence: conf,
-        state: deriveGaugeState(psi, conf, isBreak),
-        phase: derivePhase(psi),
-        asymmetry,
-        sparkline_7d: (sparklines[s.netuid!] ?? []).slice(-7),
-        liquidity: 50,
-        momentum,
-        momentumLabel,
-        reasons: deriveReasons(psi, conf, quality, s.state),
-        dominant,
-        isMicroCap: false,
-        asMicro: 0,
-        preHype: false,
-        preHypeIntensity: 0,
-        stabilitySetup,
-      };
-    })
-    .sort((a, b) => b.psi - a.psi);
+  const filtered = raw.filter(s => s.netuid != null);
+  if (!filtered.length) return [];
+
+  // Step 1: Compute raw opportunity & risk for all subnets
+  const rawData = filtered.map(s => {
+    const psi = s.mpi ?? s.score ?? 0;
+    const conf = s.confidence_pct ?? 0;
+    const quality = s.quality_score ?? 0;
+    return {
+      raw: s, psi, conf, quality,
+      oppRaw: deriveOpportunity(psi, conf, quality, s.state),
+      riskRaw: deriveRisk(psi, conf, quality, s.state),
+    };
+  });
+
+  // Step 2: Percentile + S-curve normalization for high variance
+  const oppNormalized = normalizeWithVariance(rawData.map(d => d.oppRaw), 8);
+  const riskNormalized = normalizeWithVariance(rawData.map(d => d.riskRaw), 8);
+
+  // Step 3: Build SubnetSignals with normalized scores
+  const signals = rawData.map((d, i) => {
+    const s = d.raw;
+    const opportunity = oppNormalized[i];
+    const risk = riskNormalized[i];
+    const isBreak = s.state === "BREAK" || s.state === "EXIT_FAST";
+    const asymScore = d.conf * 0.6 + d.quality * 0.4;
+    const asymmetry: Asymmetry = asymScore >= 75 ? "HIGH" : asymScore >= 55 ? "MED" : "LOW";
+    const dominant = opportunity > risk + 15 ? "opportunity" as const :
+                     risk > opportunity + 15 ? "risk" as const : "neutral" as const;
+    const momentum = clamp(d.psi - 40, 0, 60) / 60 * 100;
+    const momentumLabel = deriveMomentumLabel(d.psi);
+    const stabilitySetup = computeStabilitySetup(opportunity, risk, d.conf, momentum, d.quality);
+    return {
+      netuid: s.netuid!,
+      name: s.subnet_name || `SN-${s.netuid}`,
+      psi: d.psi,
+      opportunity,
+      risk,
+      confidence: d.conf,
+      state: deriveGaugeState(d.psi, d.conf, isBreak),
+      phase: derivePhase(d.psi),
+      asymmetry,
+      sparkline_7d: (sparklines[s.netuid!] ?? []).slice(-7),
+      liquidity: 50,
+      momentum,
+      momentumLabel,
+      reasons: deriveReasons(d.psi, d.conf, d.quality, s.state),
+      dominant,
+      isMicroCap: false,
+      asMicro: 0,
+      preHype: false,
+      preHypeIntensity: 0,
+      stabilitySetup,
+    };
+  }).sort((a, b) => b.psi - a.psi);
 
   // Classify micro-caps
   classifyMicroCaps(signals);
@@ -419,9 +470,15 @@ export function computeGlobalOpportunity(raw: RawSignal[]): number {
     const conf = s.confidence_pct ?? 0;
     const quality = s.quality_score ?? 0;
     return deriveOpportunity(psi, conf, quality, s.state);
-  }).filter(s => s > 0);
+  });
   if (!scores.length) return 0;
-  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const normalized = normalizeWithVariance(scores, 8);
+  // Global = weighted average favoring top quartile
+  const sorted = [...normalized].sort((a, b) => b - a);
+  const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
+  const topAvg = top25.reduce((a, b) => a + b, 0) / top25.length;
+  const allAvg = normalized.reduce((a, b) => a + b, 0) / normalized.length;
+  return Math.round(topAvg * 0.6 + allAvg * 0.4);
 }
 
 export function computeGlobalRisk(raw: RawSignal[]): number {
@@ -431,7 +488,13 @@ export function computeGlobalRisk(raw: RawSignal[]): number {
     const conf = s.confidence_pct ?? 0;
     const quality = s.quality_score ?? 0;
     return deriveRisk(psi, conf, quality, s.state);
-  }).filter(s => s > 0);
+  });
   if (!scores.length) return 0;
-  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const normalized = normalizeWithVariance(scores, 8);
+  // Global risk = weighted average favoring highest risks
+  const sorted = [...normalized].sort((a, b) => b - a);
+  const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
+  const topAvg = top25.reduce((a, b) => a + b, 0) / top25.length;
+  const allAvg = normalized.reduce((a, b) => a + b, 0) / normalized.length;
+  return Math.round(topAvg * 0.5 + allAvg * 0.5);
 }
