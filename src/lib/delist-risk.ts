@@ -161,40 +161,40 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
   // 11. Micro price: alpha token nearly worthless (< 0.005 TAO ≈ $0.90)
   if (sn.alphaPrice > 0 && sn.alphaPrice < 0.005) {
     reasons.push(makeReason("MICRO_PRICE", sn.alphaPrice));
-    totalWeight += 15;
+    totalWeight += 20;
   } else if (sn.alphaPrice > 0 && sn.alphaPrice < 0.008) {
     reasons.push(makeReason("MICRO_PRICE", sn.alphaPrice));
-    totalWeight += 8;
+    totalWeight += 12;
   }
 
-  // 12. Cap concentration: pool IS the market (liq/cap > 0.75)
+  // 12. Cap concentration: pool IS the market (liq/cap > 0.7)
   if (sn.capTao > 0 && sn.liqTao > 0) {
     const liqCapRatio = sn.liqTao / sn.capTao;
     if (liqCapRatio > 0.85) {
       reasons.push(makeReason("CAP_CONCENTRATED", Math.round(liqCapRatio * 100)));
-      totalWeight += 12;
+      totalWeight += 15;
     } else if (liqCapRatio > 0.7) {
       reasons.push(makeReason("CAP_CONCENTRATED", Math.round(liqCapRatio * 100)));
-      totalWeight += 8;
+      totalWeight += 12;
     }
   }
 
   // 13. Small cap (< 20,000 TAO ≈ $3.7M)
   if (sn.capTao > 0 && sn.capTao < 10_000) {
     reasons.push(makeReason("SMALL_CAP", Math.round(sn.capTao)));
-    totalWeight += 10;
+    totalWeight += 12;
   } else if (sn.capTao > 0 && sn.capTao < 20_000) {
     reasons.push(makeReason("SMALL_CAP", Math.round(sn.capTao)));
-    totalWeight += 6;
+    totalWeight += 10;
   }
 
   // Score: clamp to 0–100
   const score = Math.min(100, Math.round(totalWeight));
 
-  // Category — lowered thresholds for better correlation with manual list
+  // Category
   let category: DelistCategory = "NORMAL";
-  if (score >= 50) category = "DEPEG_PRIORITY";
-  else if (score >= 30) category = "HIGH_RISK_NEAR_DELIST";
+  if (score >= 45) category = "DEPEG_PRIORITY";
+  else if (score >= 28) category = "HIGH_RISK_NEAR_DELIST";
 
   return { netuid: sn.netuid, category, score, reasons, source: "" };
 }
