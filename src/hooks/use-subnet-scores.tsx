@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   clamp, normalizeWithVariance, normalizeOpportunity,
-  computeMomentumScore, deriveMomentumLabel,
+  computeMomentumScore, computeMomentumScoreV2, assignMomentumLabels,
   computeStabilitySetup, type SmartCapitalState, type MomentumLabel,
 } from "@/lib/gauge-engine";
 import { calibrateScores } from "@/lib/risk-calibration";
@@ -278,9 +278,15 @@ export function useSubnetScores(): UnifiedScoresResult {
         const sc = deriveSubnetSC(psi, quality, conf, s.state);
         const scScore = sc === "ACCUMULATION" ? 70 : sc === "DISTRIBUTION" ? 20 : 45;
 
-        // Momentum
+        // Momentum V2: multi-factor (PSI + price 7d + vol/MC)
+        const sparkline = sparklines?.get(s.netuid!);
+        const priceChange7d = sparkline && sparkline.length >= 2
+          ? ((sparkline[sparkline.length - 1] - sparkline[0]) / sparkline[0]) * 100
+          : null;
+        const volMcRatio = subnetLatest?.get(s.netuid!)?.volCap ?? null;
         const momentumScore = computeMomentumScore(psi);
-        const momentumLabel = deriveMomentumLabel(psi);
+        const momentumScoreV2 = computeMomentumScoreV2(psi, priceChange7d, volMcRatio);
+        const isCritical = s.state === "BREAK" || s.state === "EXIT_FAST" || s.state === "DEPEG_WARNING" || s.state === "DEPEG_CRITICAL";
 
         // Pre-hype intensity
         const preHypeIntensity = (psi > 50 && quality > 40 && sc === "ACCUMULATION") ? clamp(psi - 30, 0, 70) : 0;
@@ -294,12 +300,17 @@ export function useSubnetScores(): UnifiedScoresResult {
           name: s.subnet_name || `SN-${s.netuid}`,
           dataUncertain, confianceScore,
           oppRaw, riskRaw,
-          momentumLabel, momentumScore, sc, scScore,
+          momentumScore, momentumScoreV2, isCritical, sc, scScore,
           healthScores, recalc,
           displayedCap: (subnetLatest?.get(s.netuid!)?.cap || 0) * rate,
           displayedLiq: (subnetLatest?.get(s.netuid!)?.liq || 0) * rate,
         };
       });
+
+    // Step 1b: Assign momentum labels via percentile ranking
+    const momentumLabels = assignMomentumLabels(
+      allRows.map(r => ({ momentumScoreV2: r.momentumScoreV2, isCritical: r.isCritical }))
+    );
 
     // Step 2: Normalize
     const oppPercentile = normalizeOpportunity(allRows.map(r => r.oppRaw));
@@ -355,7 +366,7 @@ export function useSubnetScores(): UnifiedScoresResult {
         risk,
         asymmetry,
         momentum,
-        momentumLabel: r.momentumLabel,
+        momentumLabel: momentumLabels[i],
         momentumScore: r.momentumScore,
         action,
         sc: r.sc,
