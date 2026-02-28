@@ -55,6 +55,8 @@ export type UnifiedSubnetScore = {
   displayedLiq: number;
   stability: number;
   consensusPrice: number;
+  alphaPrice: number;
+  priceVar30d: number | null;
 };
 
 export type UnifiedScoresResult = {
@@ -205,6 +207,34 @@ export function useSubnetScores(): UnifiedScoresResult {
         if (r.price_close == null) continue;
         if (!map.has(r.netuid)) map.set(r.netuid, []);
         map.get(r.netuid)!.push(Number(r.price_close));
+      }
+      return map;
+    },
+    refetchInterval: 300_000,
+  });
+
+  // 30-day price data for Var 30j column
+  const { data: price30dMap } = useQuery({
+    queryKey: ["unified-price-30d"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 31 * 86400_000).toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from("subnet_price_daily")
+        .select("netuid, date, price_close")
+        .gte("date", since)
+        .order("date", { ascending: true });
+      if (error) throw error;
+      // For each netuid, store oldest and newest price
+      const map = new Map<number, { oldest: number; newest: number }>();
+      for (const r of data || []) {
+        if (r.price_close == null) continue;
+        const p = Number(r.price_close);
+        const existing = map.get(r.netuid);
+        if (!existing) {
+          map.set(r.netuid, { oldest: p, newest: p });
+        } else {
+          existing.newest = p; // data is ordered asc, so last = newest
+        }
       }
       return map;
     },
@@ -382,6 +412,12 @@ export function useSubnetScores(): UnifiedScoresResult {
         displayedLiq: r.displayedLiq,
         stability,
         consensusPrice: consensusPrices.get(r.netuid) ?? 0,
+        alphaPrice: consensusPrices.get(r.netuid) ?? 0,
+        priceVar30d: (() => {
+          const p30 = price30dMap?.get(r.netuid);
+          if (!p30 || p30.oldest <= 0) return null;
+          return ((p30.newest - p30.oldest) / p30.oldest) * 100;
+        })(),
       } satisfies UnifiedSubnetScore;
     });
 
@@ -400,7 +436,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     }
 
     return { scoresList: scored, scoresMap: map, scoreTimestamp: ts };
-  }, [signals, rawPayloads, taoUsd, primaryMetrics, secondaryMetrics, subnetLatest, consensusMap, consensusPrices]);
+  }, [signals, rawPayloads, taoUsd, primaryMetrics, secondaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap]);
 
   return {
     scores: scoresMap,

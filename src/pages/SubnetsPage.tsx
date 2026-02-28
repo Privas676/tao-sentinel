@@ -215,6 +215,8 @@ export default function SubnetsPage() {
               <th className="text-left py-3 px-2">SN</th>
               <th className="text-left py-3 px-2">{t("sub.name")}</th>
               <th className="text-center py-3 px-2">STATUT</th>
+              <th className="text-right py-3 px-2">Prix α</th>
+              <th className="text-right py-3 px-2">Var 30j</th>
               <th className="text-center py-3 px-2">{t("tip.price7d")}</th>
               <th className="text-right py-3 px-2">{t("sub.opp")}</th>
               <th className="text-right py-3 px-2">{t("sub.risk")}</th>
@@ -273,6 +275,17 @@ export default function SubnetsPage() {
                       style={{ color: systemStatusColor(r.systemStatus), background: `${systemStatusColor(r.systemStatus)}15`, border: `1px solid ${systemStatusColor(r.systemStatus)}30` }}>
                       {systemStatusLabel(r.systemStatus)}
                     </span>
+                  </td>
+                  <td className="py-3 px-2 text-right font-mono text-[11px]" style={{ color: "rgba(255,255,255,0.65)" }}>
+                    {r.alphaPrice > 0 ? r.alphaPrice.toFixed(5) : "—"}
+                  </td>
+                  <td className="py-3 px-2 text-right font-mono text-[11px] font-bold" style={{
+                    color: r.priceVar30d == null ? "rgba(255,255,255,0.2)"
+                      : r.priceVar30d > 0 ? "rgba(76,175,80,0.85)"
+                      : r.priceVar30d < 0 ? "rgba(229,57,53,0.85)"
+                      : "rgba(255,255,255,0.4)"
+                  }}>
+                    {r.priceVar30d != null ? `${r.priceVar30d > 0 ? "+" : ""}${r.priceVar30d.toFixed(0)}%` : "—"}
                   </td>
                   <td className="py-3 px-2 text-center"><Sparkline data={r.spark} /></td>
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: oppC }}>{r.opp}</td>
