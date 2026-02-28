@@ -149,8 +149,16 @@ export default function SubnetsPage() {
                   </td>
                   <td className="py-3 px-3 text-center">
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] tracking-wider font-bold"
-                      style={{ color: actionColor(r.action), background: actionBg(r.action), border: `1px solid ${actionBorder(r.action)}` }}>
-                      {actionIcon(r.action)} {t(`strat.${r.action.toLowerCase()}` as any)}
+                      style={{
+                        color: actionColor(r.action),
+                        background: actionBg(r.action),
+                        border: `1px solid ${actionBorder(r.action)}`,
+                        transition: "all 0.5s ease",
+                      }}>
+                      <span style={{ display: "inline-block", transition: "transform 0.4s cubic-bezier(0.34,1.56,0.64,1)" }}>
+                        {actionIcon(r.action)}
+                      </span>
+                      {t(`strat.${r.action.toLowerCase()}` as any)}
                     </span>
                   </td>
                   <td className="py-3 px-3 text-right text-white/55 text-sm">{formatTimeClear(r.tMinus)}</td>
