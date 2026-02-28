@@ -65,6 +65,26 @@ export default function AlertsPage() {
     );
   };
 
+  const renderDivergenceEvent = (ev: EventRow) => {
+    const e = ev.evidence as any;
+    const divs = e?.divergences as { field: string; taostats: number; taomarketcap: number; pct_diff: number }[] || [];
+    return (
+      <div key={ev.id} className="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-2 sm:gap-4 px-3 sm:px-4 py-3 border border-white/[0.04] rounded-lg hover:bg-white/[0.02] transition-colors">
+        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: severityColor(ev.severity) }} />
+        <div className="font-mono text-xs tracking-wider min-w-[120px]" style={{ color: "rgba(255,152,0,0.8)" }}>⚠ DATA_DIVERGENCE</div>
+        <div className="font-mono text-xs text-white/50 min-w-[60px]">SN-{ev.netuid}</div>
+        <div className="font-mono text-[10px] text-white/40 flex-1 flex flex-wrap gap-2">
+          {divs.map((d, i) => (
+            <span key={i} className="px-1.5 py-0.5 rounded" style={{ background: "rgba(255,152,0,0.08)", border: "1px solid rgba(255,152,0,0.15)" }}>
+              {d.field}: {d.pct_diff}% ({d.taostats} vs {d.taomarketcap})
+            </span>
+          ))}
+        </div>
+        <div className="font-mono text-[10px] text-white/20 flex-shrink-0">{ev.ts ? new Date(ev.ts).toLocaleString() : "—"}</div>
+      </div>
+    );
+  };
+
   const renderStandardEvent = (ev: EventRow) => {
     const evidence = ev.evidence as any;
     const reasons = evidence?.reasons as string[] | undefined;
@@ -88,7 +108,11 @@ export default function AlertsPage() {
         <div className="text-center text-white/20 font-mono mt-20">{t("alerts.empty")}</div>
       ) : (
         <div className="space-y-2">
-          {deduped.map(ev => ev.type === "WHALE_MOVE" ? renderWhaleEvent(ev) : renderStandardEvent(ev))}
+          {deduped.map(ev => 
+            ev.type === "WHALE_MOVE" ? renderWhaleEvent(ev) : 
+            ev.type === "DATA_DIVERGENCE" ? renderDivergenceEvent(ev) : 
+            renderStandardEvent(ev)
+          )}
         </div>
       )}
     </div>

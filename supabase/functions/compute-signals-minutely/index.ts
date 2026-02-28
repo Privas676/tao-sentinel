@@ -28,6 +28,68 @@ Deno.serve(async (req) => {
 
     let processed = 0;
 
+    // ============= DATA DIVERGENCE DETECTION =============
+    // Compare latest Taostats vs TMC metrics per subnet
+    const { data: taostatsRows } = await sb.from("subnet_metrics_ts")
+      .select("netuid, price, cap, vol_24h, ts")
+      .eq("source", "taostats")
+      .order("ts", { ascending: false }).limit(200);
+    const { data: tmcRows } = await sb.from("subnet_metrics_ts")
+      .select("netuid, price, cap, vol_24h, ts")
+      .eq("source", "taomarketcap")
+      .order("ts", { ascending: false }).limit(200);
+
+    // Dedupe to latest per netuid
+    const dedupe = (rows: any[]) => {
+      const m = new Map<number, any>();
+      for (const r of rows) { if (!m.has(r.netuid)) m.set(r.netuid, r); }
+      return m;
+    };
+    const tsMap = dedupe(taostatsRows || []);
+    const tmcMap = dedupe(tmcRows || []);
+
+    const pctDiff = (a: number, b: number) => {
+      const avg = (Math.abs(a) + Math.abs(b)) / 2;
+      return avg > 0 ? Math.abs(a - b) / avg * 100 : 0;
+    };
+
+    // Batch dedup check
+    const ago30m = new Date(now.getTime() - 30 * 60000).toISOString();
+    const { data: recentDivEvents } = await sb.from("events")
+      .select("netuid").eq("type", "DATA_DIVERGENCE").gte("ts", ago30m);
+    const recentDivNetuids = new Set((recentDivEvents || []).map((e: any) => e.netuid));
+
+    const divInserts: any[] = [];
+    for (const [netuid, ts] of tsMap) {
+      if (recentDivNetuids.has(netuid)) continue;
+      const tmc = tmcMap.get(netuid);
+      if (!tmc) continue;
+      const fields = [
+        { name: "price", a: Number(ts.price) || 0, b: Number(tmc.price) || 0 },
+        { name: "cap", a: Number(ts.cap) || 0, b: Number(tmc.cap) || 0 },
+        { name: "vol_24h", a: Number(ts.vol_24h) || 0, b: Number(tmc.vol_24h) || 0 },
+      ];
+      const divergent = fields.filter(f => f.a > 0 && f.b > 0 && pctDiff(f.a, f.b) > 8);
+      if (divergent.length > 0) {
+        divInserts.push({
+          netuid, ts: nowIso, type: "DATA_DIVERGENCE", severity: 2,
+          evidence: {
+            divergences: divergent.map(f => ({
+              field: f.name, taostats: Math.round(f.a * 1e6) / 1e6,
+              taomarketcap: Math.round(f.b * 1e6) / 1e6,
+              pct_diff: Math.round(pctDiff(f.a, f.b) * 10) / 10,
+            })),
+            sources: { taostats_ts: ts.ts, tmc_ts: tmc.ts },
+          },
+        });
+      }
+    }
+    if (divInserts.length > 0) {
+      const { error: divErr } = await sb.from("events").insert(divInserts);
+      if (divErr) console.error("DATA_DIVERGENCE insert error:", divErr.message);
+      else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts`);
+    }
+
     for (const { netuid } of subnets) {
       // Latest snapshot
       const { data: latest } = await sb.from("subnet_metrics_ts").select("*")
