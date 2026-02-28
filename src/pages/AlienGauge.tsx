@@ -1,35 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
-import { useAuth } from "@/hooks/use-auth";
-import { usePositions, useOpenPosition, useClosePosition, type DbPosition } from "@/hooks/use-positions";
 import {
-  SubnetSignal, RawSignal, GaugeState, GaugePhase, Asymmetry,
-  clamp, deriveGaugeState, derivePhase,
-  stateColor, stateGlow, rayColor, processSignals,
+  SubnetSignal, RawSignal,
+  clamp, processSignals,
   computeGlobalPsi, computeGlobalConfidence,
   computeGlobalOpportunity, computeGlobalRisk,
   opportunityColor, riskColor,
-  computeSmartCapital, computeDualCore,
-  type SmartCapitalState,
+  computeSmartCapital, type SmartCapitalState,
   computeASMicro, detectPreHype, computeSaturationIndex, saturationAlert,
   stabilityColor, computeStabilitySetup, momentumColor,
-  type MomentumLabel,
 } from "@/lib/gauge-engine";
 import {
   deriveStrategicAction, actionColor, actionBg, actionBorder, actionIcon,
   computeSentinelIndex, sentinelIndexColor, sentinelIndexLabel,
-  deriveSubnetAction, deriveStrategicActionMicro, type StrategyMode,
+  deriveSubnetAction,
 } from "@/lib/strategy-engine";
 import {
   computeGlobalConfianceData, confianceColor, shouldModerateRecommendation,
   type SourceMetrics,
 } from "@/lib/data-fusion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { toast } from "sonner";
 
 /* ═══════════════════════════════════════ */
 /*          VISUAL HELPERS                 */
@@ -83,11 +76,11 @@ function StrategicBadge({ action, label, isMobile }: { action: "ENTER" | "WATCH"
   }, [action, label]);
 
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl"
+    <div className="flex items-center gap-3 px-6 py-3.5 rounded-xl"
       style={{
         background: actionBg(displayAction),
-        border: `1.5px solid ${actionBorder(displayAction)}`,
-        boxShadow: `0 0 25px ${actionBg(displayAction)}, 0 0 50px ${actionBg(displayAction)}`,
+        border: `2px solid ${actionBorder(displayAction)}`,
+        boxShadow: `0 0 35px ${actionBg(displayAction)}, 0 0 60px ${actionBg(displayAction)}`,
         animation: displayAction === "EXIT" ? "priority-pulse 2s ease-in-out infinite" : displayAction === "ENTER" ? "priority-pulse 3s ease-in-out infinite" : "none",
         transition: "background 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease",
         transform: morphing ? "scale(0.88)" : "scale(1)",
@@ -96,10 +89,10 @@ function StrategicBadge({ action, label, isMobile }: { action: "ENTER" | "WATCH"
         transitionProperty: "background, border-color, box-shadow, transform, opacity, filter",
         transitionDuration: "0.5s, 0.5s, 0.5s, 0.3s, 0.3s, 0.3s",
       }}>
-      <span style={{ fontSize: isMobile ? 16 : 22, transition: "transform 0.4s cubic-bezier(0.34,1.56,0.64,1)", transform: morphing ? "rotate(180deg) scale(0)" : "rotate(0deg) scale(1)", display: "inline-block" }}>
+      <span style={{ fontSize: isMobile ? 20 : 28, transition: "transform 0.4s cubic-bezier(0.34,1.56,0.64,1)", transform: morphing ? "rotate(180deg) scale(0)" : "rotate(0deg) scale(1)", display: "inline-block" }}>
         {actionIcon(displayAction)}
       </span>
-      <span className="font-mono font-bold tracking-[0.2em]" style={{ color: actionColor(displayAction), fontSize: isMobile ? 14 : 20 }}>
+      <span className="font-mono font-bold tracking-[0.25em]" style={{ color: actionColor(displayAction), fontSize: isMobile ? 18 : 26 }}>
         {displayLabel}
       </span>
     </div>
@@ -141,10 +134,10 @@ function FlowBadge({ label, direction, isMobile }: { label: string; direction: "
 /* ═══════════════════════════════════════ */
 /*     BEST SUBNET CARD                    */
 /* ═══════════════════════════════════════ */
-function BestSubnetCard({ signal, isMobile, t, onClick, mode, isMicroBest }: {
-  signal: SubnetSignal; isMobile: boolean; t: (k: any) => string; onClick: () => void; mode?: StrategyMode; isMicroBest?: boolean;
+function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest }: {
+  signal: SubnetSignal; isMobile: boolean; t: (k: any) => string; onClick: () => void; isMicroBest?: boolean;
 }) {
-  const action = deriveStrategicAction(signal.opportunity, signal.risk, "ACCUMULATION", signal.confidence, mode ?? "hunter", signal.stabilitySetup);
+  const action = deriveStrategicAction(signal.opportunity, signal.risk, "ACCUMULATION", signal.confidence, "hunter", signal.stabilitySetup);
   const asymScore = signal.opportunity - signal.risk;
   return (
     <div onClick={onClick} className="cursor-pointer rounded-xl transition-all hover:scale-[1.01]" style={{
@@ -228,86 +221,6 @@ function SubnetRow({ signal, rank, type, isMobile, t, onClick }: {
 }
 
 /* ═══════════════════════════════════════ */
-/*     POSITION BAR COMPONENT              */
-/* ═══════════════════════════════════════ */
-type Position = {
-  id?: string;
-  netuid?: number;
-  capital: number;
-  currentValue: number;
-  protectionThreshold: number;
-  exitRecommended: number;
-};
-
-function PositionBar({ position, isMobile, t, onClose, onTakeProfit, exitWarning }: {
-  position: Position; isMobile: boolean; t: (key: any) => string; onClose?: () => void; onTakeProfit?: () => void; exitWarning?: string | null;
-}) {
-  const pnl = position.currentValue - position.capital;
-  const pnlPct = ((pnl / position.capital) * 100);
-  const barColor = pnlPct >= 5 ? "hsl(145, 65%, 48%)" : pnlPct >= 0 ? "hsl(38, 92%, 55%)" : "hsl(0, 72%, 55%)";
-  const barMin = -20, barMax = 30;
-  const barRange = barMax - barMin;
-  const currentPos = clamp((pnlPct - barMin) / barRange * 100, 2, 98);
-  const protectionPos = clamp((position.protectionThreshold - barMin) / barRange * 100, 0, 100);
-  const exitPos = clamp((position.exitRecommended - barMin) / barRange * 100, 0, 100);
-
-  return (
-    <div className="font-mono" style={{
-      width: isMobile ? "min(95vw, 440px)" : 680,
-      background: "rgba(10,8,5,0.85)", border: "1px solid rgba(255,215,0,0.12)",
-      borderRadius: 14, padding: isMobile ? "12px 14px 14px" : "16px 24px 18px",
-      backdropFilter: "blur(16px)", boxShadow: "0 4px 40px rgba(0,0,0,0.6), 0 0 30px rgba(255,215,0,0.03)",
-    }}>
-      <div className="flex items-center justify-between" style={{ fontSize: isMobile ? 11 : 13 }}>
-        <div className="flex flex-col">
-          <span style={{ color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 10 }}>{t("pos.capital")}</span>
-          <span style={{ color: "rgba(255,248,220,0.8)", fontWeight: 700, fontSize: isMobile ? 14 : 17 }}>{position.capital.toLocaleString()} <span style={{ color: "rgba(255,215,0,0.5)", fontSize: isMobile ? 10 : 12 }}>TAO</span></span>
-        </div>
-        <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.06)" }} />
-        <div className="flex flex-col items-center">
-          <span style={{ color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", fontSize: isMobile ? 8 : 10 }}>{t("pos.current")}</span>
-          <span style={{ color: "rgba(255,248,220,0.8)", fontWeight: 700, fontSize: isMobile ? 14 : 17 }}>{position.currentValue.toFixed(2)} <span style={{ color: "rgba(255,215,0,0.5)", fontSize: isMobile ? 10 : 12 }}>TAO</span></span>
-        </div>
-        <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.06)" }} />
-        <div className="flex flex-col items-center">
-          <span style={{ color: barColor, fontWeight: 800, fontSize: isMobile ? 18 : 22 }}>{pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%</span>
-        </div>
-      </div>
-      <div className="relative mt-3" style={{ height: isMobile ? 22 : 26 }}>
-        <div className="absolute inset-x-0 rounded" style={{ top: isMobile ? 8 : 10, height: isMobile ? 5 : 6, background: "linear-gradient(90deg, rgba(229,57,53,0.15), rgba(255,193,7,0.15), rgba(76,175,80,0.25))" }} />
-        <div className="absolute rounded" style={{ top: isMobile ? 8 : 10, height: isMobile ? 5 : 6, left: 0, width: `${currentPos}%`, background: `linear-gradient(90deg, rgba(255,255,255,0.03), ${barColor})`, transition: "width 800ms ease" }} />
-        <div className="absolute" style={{ left: `${protectionPos}%`, top: 2, bottom: 0, width: 2, background: "hsl(38, 92%, 55%)", opacity: 0.7, borderRadius: 1 }}>
-          <div className="absolute font-mono" style={{ bottom: -14, left: "50%", transform: "translateX(-50%)", fontSize: 7, color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap" }}>{t("pos.protection")}</div>
-        </div>
-        <div className="absolute" style={{ left: `${exitPos}%`, top: 2, bottom: 0, width: 2, background: "hsl(0, 72%, 55%)", opacity: 0.6, borderRadius: 1 }}>
-          <div className="absolute font-mono" style={{ bottom: -14, left: "50%", transform: "translateX(-50%)", fontSize: 7, color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap" }}>{t("pos.exit_rec")}</div>
-        </div>
-        <div className="absolute" style={{ left: `${currentPos}%`, top: isMobile ? 4 : 5, width: 3, height: isMobile ? 14 : 16, background: barColor, transform: "translateX(-50%)", boxShadow: `0 0 10px ${barColor}80`, borderRadius: 2, transition: "left 800ms ease" }} />
-      </div>
-      {exitWarning && (
-        <div className="mt-3 px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: "rgba(229,57,53,0.08)", border: "1px solid rgba(229,57,53,0.2)", animation: "priority-pulse 2.5s ease-in-out infinite" }}>
-          <span style={{ color: "rgba(229,57,53,0.9)", fontSize: isMobile ? 10 : 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em" }}>{exitWarning}</span>
-        </div>
-      )}
-      <div className="flex items-center gap-3 mt-3">
-        {onClose && (
-          <button onClick={onClose} className="pointer-events-auto font-mono tracking-wider px-5 py-2.5 rounded-lg transition-all flex items-center gap-2"
-            style={{ background: "rgba(229,57,53,0.08)", color: "rgba(229,57,53,0.7)", border: "1px solid rgba(229,57,53,0.15)", fontSize: isMobile ? 10 : 12, fontWeight: 600 }}>
-            <span>✦</span> {t("pos.close_position")}
-          </button>
-        )}
-        {onTakeProfit && (
-          <button onClick={onTakeProfit} className="pointer-events-auto flex-1 font-mono tracking-wider px-5 py-2.5 rounded-lg transition-all"
-            style={{ background: "linear-gradient(135deg, rgba(255,215,0,0.08), rgba(255,215,0,0.04))", color: "rgba(255,248,220,0.85)", border: "1px solid rgba(255,215,0,0.2)", fontSize: isMobile ? 11 : 13, fontWeight: 700 }}>
-            {t("pos.take_profit_btn")}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════ */
 /*     SUBNET SIDE PANEL                   */
 /* ═══════════════════════════════════════ */
 function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; open: boolean; onClose: () => void }) {
@@ -333,7 +246,7 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
         </SheetHeader>
         <div className="mt-6 space-y-6">
           <div className="text-center">
-            <div className="font-mono text-2xl tracking-wider" style={{ color: stateColor(signal.state) }}>SN-{signal.netuid}</div>
+            <div className="font-mono text-2xl tracking-wider" style={{ color: "rgba(255,248,220,0.9)" }}>SN-{signal.netuid}</div>
             <div className="font-mono text-sm text-white/60 mt-1">{signal.name}</div>
             <div className="flex items-center justify-center gap-2 mt-2">
               {signal.isMicroCap && <span className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: "rgba(0,200,255,0.1)", color: "rgba(0,200,255,0.7)" }}>MICRO-CAP</span>}
@@ -403,126 +316,6 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
 }
 
 /* ═══════════════════════════════════════ */
-/*     OPEN POSITION DIALOG                */
-/* ═══════════════════════════════════════ */
-type Objective = "x2" | "x5" | "x10" | "x20" | "custom";
-type StopMode = "dynamic" | "manual";
-const OBJ_TP: Record<Exclude<Objective, "custom">, number> = { x2: 100, x5: 400, x10: 900, x20: 1900 };
-
-function OpenPositionDialog({ open, onClose, signals, t, preselectedNetuid }: {
-  open: boolean; onClose: () => void; signals: SubnetSignal[]; t: (key: any) => string; preselectedNetuid?: number;
-}) {
-  const { user } = useAuth();
-  const openPosition = useOpenPosition();
-  const [netuid, setNetuid] = useState<string>("");
-  const [capital, setCapital] = useState("");
-  const [stopLoss, setStopLoss] = useState("8");
-  const [objective, setObjective] = useState<Objective>("x5");
-  const [customTP, setCustomTP] = useState("");
-  const [stopMode, setStopMode] = useState<StopMode>("dynamic");
-
-  useEffect(() => {
-    if (preselectedNetuid && open) setNetuid(String(preselectedNetuid));
-  }, [preselectedNetuid, open]);
-
-  const { data: currentPriceUsd } = useQuery({
-    queryKey: ["pos-price", netuid],
-    queryFn: async () => {
-      if (!netuid) return null;
-      const { data } = await supabase.from("subnet_latest_display").select("price_usd").eq("netuid", Number(netuid)).maybeSingle();
-      return data?.price_usd ? Number(data.price_usd) : null;
-    },
-    enabled: !!netuid && open,
-  });
-
-  const tpPct = objective === "custom" ? (parseFloat(customTP) || 100) : OBJ_TP[objective];
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !currentPriceUsd) return;
-    const capitalNum = parseFloat(capital);
-    if (!capitalNum || !netuid) return;
-    try {
-      await openPosition.mutateAsync({
-        netuid: Number(netuid), capital: capitalNum,
-        entry_price: currentPriceUsd,
-        stop_loss_pct: parseFloat(stopLoss) || 8, take_profit_pct: tpPct,
-      });
-      toast.success("Position ouverte ✓");
-      onClose();
-    } catch (err: any) { toast.error(err.message); }
-  };
-
-  const inputStyle = "w-full rounded-lg px-3 py-2.5 font-mono text-sm bg-white/[0.03] border border-white/[0.08] text-white/80 focus:border-[rgba(255,215,0,0.3)] focus:outline-none transition-colors";
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-[#0A0B10] border-white/10 text-white max-w-md">
-        <DialogHeader><DialogTitle className="font-mono tracking-widest text-white/90">{t("pos.open_title")}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div>
-            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.subnet")}</label>
-            <select value={netuid} onChange={e => setNetuid(e.target.value)} required className={`${inputStyle} appearance-none`}>
-              <option value="">—</option>
-              {signals.map(s => (<option key={s.netuid} value={s.netuid} className="bg-[#0a0a0f]">SN-{s.netuid} · {s.name}</option>))}
-            </select>
-          </div>
-          {currentPriceUsd && (
-            <div className="flex items-center gap-4 text-xs font-mono text-white/40">
-              <span>{t("pos.entry_price")}: <span className="text-white/70">${currentPriceUsd.toFixed(4)}</span></span>
-              {capital && (<span>{t("pos.estimated_qty")}: <span className="text-white/70">{(parseFloat(capital) / currentPriceUsd).toFixed(4)}</span></span>)}
-            </div>
-          )}
-          <div>
-            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.amount")}</label>
-            <input type="number" value={capital} onChange={e => setCapital(e.target.value)} min="1" step="any" required className={inputStyle} />
-          </div>
-          <div>
-            <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.objective")}</label>
-            <div className="flex gap-1.5">
-              {(["x2", "x5", "x10", "x20", "custom"] as Objective[]).map(p => (
-                <button key={p} type="button" onClick={() => setObjective(p)}
-                  className="flex-1 py-2 rounded-lg font-mono text-xs tracking-wider transition-all"
-                  style={{ background: objective === p ? "rgba(255,215,0,0.12)" : "rgba(255,255,255,0.03)", color: objective === p ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.35)", border: `1px solid ${objective === p ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.06)"}`, fontWeight: objective === p ? 700 : 400 }}>
-                  {t(`pos.obj_${p}` as any)}
-                </button>
-              ))}
-            </div>
-            {objective === "custom" && (<input type="number" value={customTP} onChange={e => setCustomTP(e.target.value)} min="1" step="any" placeholder="%" className={`${inputStyle} mt-2`} />)}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.stop_mode")}</label>
-              <div className="flex gap-1">
-                {(["dynamic", "manual"] as StopMode[]).map(m => (
-                  <button key={m} type="button" onClick={() => setStopMode(m)}
-                    className="flex-1 py-2 rounded-lg font-mono text-[10px] tracking-wider transition-all"
-                    style={{ background: stopMode === m ? "rgba(229,57,53,0.1)" : "rgba(255,255,255,0.02)", color: stopMode === m ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.3)", border: `1px solid ${stopMode === m ? "rgba(229,57,53,0.2)" : "rgba(255,255,255,0.06)"}` }}>
-                    {t(`pos.stop_${m}` as any)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono tracking-widest uppercase mb-1.5 text-white/40">{t("pos.stop_loss")}</label>
-              <input type="number" value={stopLoss} onChange={e => setStopLoss(e.target.value)} step="any" required className={inputStyle} />
-            </div>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg font-mono text-xs tracking-wider text-white/45 border border-white/10 hover:border-white/20 transition-colors">{t("pos.cancel")}</button>
-            <button type="submit" disabled={openPosition.isPending || !currentPriceUsd}
-              className="flex-1 py-2.5 rounded-lg font-mono text-xs tracking-wider font-bold transition-all disabled:opacity-50"
-              style={{ background: "linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,215,0,0.08))", color: "rgba(255,215,0,0.9)", border: "1px solid rgba(255,215,0,0.3)", boxShadow: "0 0 20px rgba(255,215,0,0.06)" }}>
-              {openPosition.isPending ? "..." : t("pos.confirm")}
-            </button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ═══════════════════════════════════════ */
 /*    ALIEN GAUGE — MAIN PAGE              */
 /* ═══════════════════════════════════════ */
 export default function AlienGauge() {
@@ -558,7 +351,7 @@ export default function AlienGauge() {
     refetchInterval: 300_000,
   });
 
-  /* ─── TMC metrics (secondary source) ─── */
+  /* ─── DataFusion sources ─── */
   const { data: primaryMetricsRaw } = useQuery({
     queryKey: ["metrics-primary"],
     queryFn: async () => {
@@ -569,7 +362,6 @@ export default function AlienGauge() {
         .order("ts", { ascending: false })
         .limit(200);
       if (error) throw error;
-      // Dedupe: keep latest per netuid
       const map = new Map<number, SourceMetrics>();
       for (const r of data || []) {
         const nid = r.netuid;
@@ -600,34 +392,24 @@ export default function AlienGauge() {
     refetchInterval: 120_000,
   });
 
-  /* ─── view mode ─── */
-  const [demoMode, setDemoMode] = useState(false);
-  const [viewMode, setViewMode] = useState<"hunter" | "defensive">("hunter");
-  const [bagBuilder, setBagBuilder] = useState(false);
-
   /* ─── DataFusion Confiance Data ─── */
   const confianceData = useMemo(() => {
-    if (demoMode) return { score: 82, concordance: 88, freshness: 90, completeness: 75, availability: 100, divergentSubnets: [] };
     return computeGlobalConfianceData(primaryMetricsRaw ?? [], secondaryMetricsRaw ?? []);
-  }, [primaryMetricsRaw, secondaryMetricsRaw, demoMode]);
+  }, [primaryMetricsRaw, secondaryMetricsRaw]);
 
   /* ─── signals ─── */
   const allSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
 
-  const realPsi = useMemo(() => computeGlobalPsi(rawSignals ?? []), [rawSignals]);
-  const realConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
   const realOpp = useMemo(() => computeGlobalOpportunity(rawSignals ?? []), [rawSignals]);
   const realRisk = useMemo(() => computeGlobalRisk(rawSignals ?? []), [rawSignals]);
+  const realConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
 
-  const globalOpp = demoMode ? 68 : realOpp;
-  const globalRisk = demoMode ? 32 : realRisk;
-  const globalConf = demoMode ? 71 : realConf;
+  const globalOpp = realOpp;
+  const globalRisk = realRisk;
+  const globalConf = realConf;
 
   /* ─── smart capital ─── */
-  const smartCapital = useMemo(() => {
-    if (demoMode) return { score: 72, state: "ACCUMULATION" as SmartCapitalState };
-    return computeSmartCapital(rawSignals ?? []);
-  }, [rawSignals, demoMode]);
+  const smartCapital = useMemo(() => computeSmartCapital(rawSignals ?? []), [rawSignals]);
 
   /* ─── Flow data ─── */
   const flowData = useMemo(() => {
@@ -653,16 +435,14 @@ export default function AlienGauge() {
     });
   }, [allSignals, smartCapital.state, flowData]);
 
-  /* ─── Strategy mode (modulated by Confiance Data) ─── */
-  const strategyMode = bagBuilder ? "bagbuilder" as const : viewMode;
+  /* ─── Strategy (fixed hunter mode, modulated by Confiance Data) ─── */
   const strategicAction = useMemo(() => {
-    const raw = deriveStrategicAction(globalOpp, globalRisk, smartCapital.state, globalConf, strategyMode);
-    // Moderate: if Confiance Data < 60, downgrade ENTER to WATCH unless very strong signal
+    const raw = deriveStrategicAction(globalOpp, globalRisk, smartCapital.state, globalConf, "hunter");
     if (raw === "ENTER" && shouldModerateRecommendation(confianceData.score, globalOpp, globalRisk)) {
       return "WATCH" as const;
     }
     return raw;
-  }, [globalOpp, globalRisk, smartCapital.state, globalConf, strategyMode, confianceData.score]);
+  }, [globalOpp, globalRisk, smartCapital.state, globalConf, confianceData.score]);
 
   /* ─── Sentinel Index ─── */
   const sentinelIndex = useMemo(() => computeSentinelIndex(globalOpp, globalRisk, smartCapital.score), [globalOpp, globalRisk, smartCapital.score]);
@@ -707,57 +487,7 @@ export default function AlienGauge() {
     [enrichedSignals]
   );
 
-  const { user } = useAuth();
-  const { data: dbPositions } = usePositions();
-  const closePosition = useClosePosition();
-  const [openPosDialog, setOpenPosDialog] = useState(false);
-  const [preselectedNetuid, setPreselectedNetuid] = useState<number | undefined>();
   const [panelSignal, setPanelSignal] = useState<SubnetSignal | null>(null);
-
-  const { data: latestPrices } = useQuery({
-    queryKey: ["position-prices", dbPositions?.map(p => p.netuid)],
-    queryFn: async () => {
-      if (!dbPositions?.length) return {};
-      const netuids = [...new Set(dbPositions.map(p => p.netuid))];
-      const { data } = await supabase.from("subnet_latest_display").select("netuid, price_usd").in("netuid", netuids);
-      const map: Record<number, number> = {};
-      for (const r of data || []) { map[r.netuid!] = Number(r.price_usd) || 0; }
-      return map;
-    },
-    enabled: !!dbPositions?.length,
-    refetchInterval: 60_000,
-  });
-
-  const activePosition: Position | null = useMemo(() => {
-    if (demoMode) return { capital: 5000, currentValue: 5420, protectionThreshold: -8, exitRecommended: 100, netuid: 1 };
-    if (!dbPositions?.length || !latestPrices) return null;
-    const pos = dbPositions[0];
-    const currentPrice = latestPrices[pos.netuid] || Number(pos.entry_price);
-    const currentValue = Number(pos.quantity) * currentPrice;
-    return { id: pos.id, netuid: pos.netuid, capital: Number(pos.capital), currentValue, protectionThreshold: Number(pos.stop_loss_pct), exitRecommended: Number(pos.take_profit_pct) };
-  }, [demoMode, dbPositions, latestPrices]);
-
-  const hasPosition = activePosition !== null;
-
-  const handleClosePosition = useCallback(async () => {
-    if (!activePosition?.id || !latestPrices) return;
-    const price = latestPrices[activePosition.netuid!] || 0;
-    try { await closePosition.mutateAsync({ id: activePosition.id, closed_price: price }); toast.success("Position fermée ✓"); }
-    catch (err: any) { toast.error(err.message); }
-  }, [activePosition, latestPrices, closePosition]);
-
-  /* ─── Notifications ─── */
-  const prevExitWarnRef = useRef(false);
-  useEffect(() => {
-    if (!activePosition || demoMode) return;
-    const shouldWarn = smartCapital.state === "DISTRIBUTION" || globalRisk > 70;
-    if (shouldWarn && !prevExitWarnRef.current) {
-      const msg = smartCapital.state === "DISTRIBUTION" ? t("pos.exit_warn_sc" as any) : t("pos.exit_warn_risk" as any);
-      toast.warning(msg, { duration: 15000 });
-      if (Notification.permission === "granted") new Notification(msg, { icon: "/pwa-192x192.png", tag: "pos-exit-warn" });
-    }
-    prevExitWarnRef.current = shouldWarn;
-  }, [activePosition, smartCapital.state, globalRisk, demoMode, t]);
 
   /* ─── geometry ─── */
   const isMobile = useIsMobile();
@@ -773,7 +503,7 @@ export default function AlienGauge() {
   const riskAngle = (globalRisk / 100) * 270;
 
   return (
-    <div className="fixed inset-0 select-none overflow-y-auto overflow-x-hidden" style={{ background: "#000" }}>
+    <div className="h-full w-full select-none overflow-y-auto overflow-x-hidden" style={{ background: "#000" }}>
       <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.75) 100%)" }} />
 
       <style>{`
@@ -789,33 +519,17 @@ export default function AlienGauge() {
       `}</style>
 
       {/* ═══ HEADER ═══ */}
-      <div className="relative z-30 flex items-start justify-between px-4 sm:px-8 pt-4 sm:pt-6">
-        <div style={{ width: 100 }} />
+      <div className="relative z-30 flex items-center justify-center px-4 sm:px-8 pt-4 sm:pt-6">
         <div className="flex flex-col items-center">
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(255,215,0,0.6)", boxShadow: "0 0 12px rgba(255,215,0,0.3)", marginBottom: 8 }} />
           <span className="font-mono font-bold tracking-[0.4em] sm:tracking-[0.6em]" style={{ fontSize: isMobile ? 14 : 20, color: "rgba(255,248,220,0.85)", textShadow: "0 0 30px rgba(255,215,0,0.15)" }}>
             {t("header.title")}
           </span>
         </div>
-        <div className="flex items-center gap-2" style={{ paddingTop: isMobile ? 2 : 6 }}>
-          <button onClick={() => { setViewMode("hunter"); setBagBuilder(false); }} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
-            style={{ fontSize: isMobile ? 9 : 11, fontWeight: 700, background: viewMode === "hunter" ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.03)", color: viewMode === "hunter" ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)", border: `1px solid ${viewMode === "hunter" ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.06)"}` }}>
-            <span>🔥</span> {t("mode.hunter")}
-          </button>
-          <button onClick={() => { setViewMode("defensive"); setBagBuilder(false); }} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
-            style={{ fontSize: isMobile ? 9 : 11, fontWeight: 700, background: viewMode === "defensive" ? "rgba(229,57,53,0.1)" : "rgba(255,255,255,0.03)", color: viewMode === "defensive" ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.3)", border: `1px solid ${viewMode === "defensive" ? "rgba(229,57,53,0.25)" : "rgba(255,255,255,0.06)"}` }}>
-            <span>🛡</span> {t("mode.defensive")}
-          </button>
-          <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.08)" }} />
-          <button onClick={() => setBagBuilder(b => !b)} className="font-mono tracking-wider px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
-            style={{ fontSize: isMobile ? 9 : 11, fontWeight: 700, background: bagBuilder ? "rgba(0,220,180,0.1)" : "rgba(255,255,255,0.03)", color: bagBuilder ? "rgba(0,220,180,0.9)" : "rgba(255,255,255,0.3)", border: `1px solid ${bagBuilder ? "rgba(0,220,180,0.3)" : "rgba(255,255,255,0.06)"}` }}>
-            <span>💎</span> {t("mode.bag_builder")}
-          </button>
-        </div>
       </div>
 
       {/* ═══ MAIN CONTENT ═══ */}
-      <div className="relative z-10 flex flex-col items-center px-4 sm:px-8 pb-32" style={{ paddingTop: isMobile ? 12 : 24 }}>
+      <div className="relative z-10 flex flex-col items-center px-4 sm:px-8 pb-20" style={{ paddingTop: isMobile ? 12 : 24 }}>
 
         {/* ─── GAUGE ─── */}
         <div className="relative" style={{ width: SIZE, height: SIZE }}>
@@ -934,7 +648,7 @@ export default function AlienGauge() {
             <span className="font-mono tracking-[0.2em] uppercase block mb-3" style={{ fontSize: isMobile ? 8 : 10, color: isMicroBest ? "rgba(0,200,255,0.4)" : "rgba(255,215,0,0.3)" }}>
               {isMicroBest ? t("top.best_micro") : t("top.best")}
             </span>
-            <BestSubnetCard signal={displayBest} isMobile={isMobile} t={t} onClick={() => setPanelSignal(displayBest)} mode={strategyMode} isMicroBest={isMicroBest} />
+            <BestSubnetCard signal={displayBest} isMobile={isMobile} t={t} onClick={() => setPanelSignal(displayBest)} isMicroBest={isMicroBest} />
           </div>
         )}
 
@@ -965,41 +679,17 @@ export default function AlienGauge() {
         </div>
       </div>
 
-      {/* ═══ BOTTOM BAR ═══ */}
-      <div className="fixed left-0 right-0 z-20 flex flex-col items-center" style={{ bottom: isMobile ? 12 : 20 }}>
-        {hasPosition ? (
-          <PositionBar position={activePosition!} isMobile={isMobile} t={t}
-            onClose={activePosition?.id ? handleClosePosition : undefined}
-            onTakeProfit={() => toast.info("Prise de profit partielle — à implémenter")}
-            exitWarning={smartCapital.state === "DISTRIBUTION" ? t("pos.exit_warn_sc") : globalRisk > 70 ? t("pos.exit_warn_risk") : null} />
-        ) : user ? (
-          <button onClick={() => { setPreselectedNetuid(undefined); setOpenPosDialog(true); }}
-            className="font-mono tracking-wider px-7 py-3 rounded-xl transition-all pointer-events-auto flex items-center gap-2"
-            style={{ background: "linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,215,0,0.04))", color: "rgba(255,215,0,0.9)", border: "1px solid rgba(255,215,0,0.25)", fontSize: isMobile ? 12 : 15, fontWeight: 700, boxShadow: "0 0 30px rgba(255,215,0,0.06)", letterSpacing: "0.08em" }}>
-            + {t("pos.open")}
-          </button>
-        ) : (
-          <span className="font-mono text-[10px] tracking-wider px-3 py-2 rounded-md pointer-events-auto"
-            style={{ color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-            {t("pos.login_required")}
+      {/* ═══ NOTIFICATION BUTTON (disabled, "bientôt") ═══ */}
+      <div className="fixed bottom-4 left-4 z-20">
+        <div className="font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md flex items-center gap-2"
+          style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.25)", border: "1px solid rgba(255,255,255,0.08)", cursor: "not-allowed", opacity: 0.7 }}>
+          🔔 {t("gauge.notif")}
+          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold" style={{ background: "rgba(255,193,7,0.12)", color: "rgba(255,193,7,0.7)", border: "1px solid rgba(255,193,7,0.2)" }}>
+            {lang === "fr" ? "BIENTÔT" : "SOON"}
           </span>
-        )}
+        </div>
       </div>
 
-      {typeof Notification !== "undefined" && Notification.permission !== "granted" && (
-        <button onClick={() => Notification.requestPermission()}
-          className="fixed bottom-4 left-4 z-20 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all"
-          style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          🔔 {t("gauge.notif")}
-        </button>
-      )}
-      <button onClick={() => setDemoMode(d => !d)}
-        className="fixed bottom-4 right-4 z-30 font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all pointer-events-auto"
-        style={{ background: demoMode ? "rgba(0,255,200,0.12)" : "rgba(255,255,255,0.03)", color: demoMode ? "rgba(0,255,200,0.8)" : "rgba(255,255,255,0.25)", border: `1px solid ${demoMode ? "rgba(0,255,200,0.3)" : "rgba(255,255,255,0.06)"}` }}>
-        {demoMode ? "⬤ DEMO ON" : "◯ DEMO"}
-      </button>
-
-      <OpenPositionDialog open={openPosDialog} onClose={() => setOpenPosDialog(false)} signals={enrichedSignals} t={t} preselectedNetuid={preselectedNetuid} />
       <SubnetPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} />
     </div>
   );

@@ -2,16 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import { useAuth } from "@/hooks/use-auth";
-import { useNavigate } from "react-router-dom";
 import {
-  deriveGaugeState, derivePhase, deriveMomentumLabel, momentumColor,
+  deriveMomentumLabel, momentumColor,
   opportunityColor, riskColor, clamp,
 } from "@/lib/gauge-engine";
 import {
   deriveStrategicAction, actionColor, actionBg, actionBorder, actionIcon,
-  type StrategyMode,
 } from "@/lib/strategy-engine";
+import {
+  computeGlobalConfianceData, confianceColor,
+  type SourceMetrics,
+} from "@/lib/data-fusion";
 
 type SignalRow = {
   netuid: number | null;
@@ -44,18 +45,9 @@ function deriveRisk(psi: number, conf: number, quality: number, state: string | 
   return Math.round(clamp(risk, 0, 100));
 }
 
-const STRATEGY_MODES: { value: StrategyMode; label: string; icon: string }[] = [
-  { value: "hunter", label: "CHASSEUR", icon: "🔥" },
-  { value: "defensive", label: "DÉFENSIF", icon: "🛡" },
-  { value: "bagbuilder", label: "BAG BUILDER", icon: "💎" },
-];
-
 export default function SubnetsPage() {
   const { t } = useI18n();
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const [mode, setMode] = useState<ViewMode>("all");
-  const [strategyMode, setStrategyMode] = useState<StrategyMode>("hunter");
 
   const { data: signals } = useQuery({
     queryKey: ["signals-latest-table"],
@@ -65,6 +57,45 @@ export default function SubnetsPage() {
       return (data || []) as SignalRow[];
     },
     refetchInterval: 60_000,
+  });
+
+  /* ─── Per-subnet Confiance Data ─── */
+  const { data: primaryMetrics } = useQuery({
+    queryKey: ["metrics-primary-table"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subnet_metrics_ts")
+        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
+        .eq("source", "taostats")
+        .order("ts", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      const map = new Map<number, SourceMetrics>();
+      for (const r of data || []) {
+        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
+      }
+      return map;
+    },
+    refetchInterval: 120_000,
+  });
+
+  const { data: secondaryMetrics } = useQuery({
+    queryKey: ["metrics-secondary-table"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subnet_metrics_ts")
+        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
+        .eq("source", "taomarketcap")
+        .order("ts", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      const map = new Map<number, SourceMetrics>();
+      for (const r of data || []) {
+        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taomarketcap" });
+      }
+      return map;
+    },
+    refetchInterval: 120_000,
   });
 
   const rows = useMemo(() => {
@@ -79,8 +110,31 @@ export default function SubnetsPage() {
         const risk = deriveRisk(psi, conf, quality, s.state);
         const asymmetry = opp - risk;
         const momentumLabel = deriveMomentumLabel(psi);
-        const action = deriveStrategicAction(opp, risk, "ACCUMULATION", conf, strategyMode);
-        return { netuid: s.netuid!, name: s.subnet_name || `SN-${s.netuid}`, psi, conf, opp, risk, asymmetry, momentumLabel, action };
+        const action = deriveStrategicAction(opp, risk, "ACCUMULATION", conf, "hunter");
+
+        // Per-subnet confiance data
+        const pm = primaryMetrics?.get(s.netuid!);
+        const sm = secondaryMetrics?.get(s.netuid!);
+        let confianceScore = 50;
+        if (pm && sm) {
+          // Simple concordance check
+          let conc = 0, n = 0;
+          for (const f of ["price", "cap", "vol24h"] as const) {
+            const pv = pm[f] as number | null;
+            const sv = sm[f] as number | null;
+            if (pv && pv > 0 && sv && sv > 0) {
+              const avg = (Math.abs(pv) + Math.abs(sv)) / 2;
+              const diff = avg > 0 ? Math.abs(pv - sv) / avg * 100 : 0;
+              conc += Math.max(0, 100 - diff * 5);
+              n++;
+            }
+          }
+          confianceScore = n > 0 ? Math.round(conc / n * 0.6 + 40) : 60;
+        } else if (pm || sm) {
+          confianceScore = 45;
+        }
+
+        return { netuid: s.netuid!, name: s.subnet_name || `SN-${s.netuid}`, psi, conf, opp, risk, asymmetry, momentumLabel, action, confianceScore };
       })
       .filter(r => {
         if (mode === "opportunities") return r.opp > r.risk;
@@ -88,7 +142,7 @@ export default function SubnetsPage() {
         return true;
       })
       .sort((a, b) => b.asymmetry - a.asymmetry);
-  }, [signals, mode, strategyMode]);
+  }, [signals, mode, primaryMetrics, secondaryMetrics]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
@@ -100,8 +154,8 @@ export default function SubnetsPage() {
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
       <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-5 sm:mb-7">{t("sub.title")}</h1>
 
-      {/* Controls row */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
+      {/* Filter row */}
+      <div className="flex items-center gap-3 mb-6">
         <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {modeOptions.map(opt => (
             <button key={opt.value}
@@ -113,22 +167,6 @@ export default function SubnetsPage() {
                 fontWeight: mode === opt.value ? 700 : 400,
               }}>
               {opt.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-          {STRATEGY_MODES.map(sm => (
-            <button key={sm.value}
-              onClick={() => setStrategyMode(sm.value)}
-              className="font-mono text-[11px] tracking-wider px-3 py-2 transition-all flex items-center gap-1.5"
-              style={{
-                background: strategyMode === sm.value ? "rgba(255,215,0,0.1)" : "transparent",
-                color: strategyMode === sm.value ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.35)",
-                fontWeight: strategyMode === sm.value ? 700 : 400,
-              }}>
-              <span>{sm.icon}</span>
-              <span className="hidden sm:inline">{sm.label}</span>
             </button>
           ))}
         </div>
@@ -146,8 +184,7 @@ export default function SubnetsPage() {
               <th className="text-right py-3 px-3">ASYM</th>
               <th className="text-center py-3 px-3">ACTION</th>
               <th className="text-center py-3 px-3">{t("sub.momentum")}</th>
-              <th className="text-right py-3 px-3">{t("sub.confidence")}</th>
-              {user && <th className="text-center py-3 px-3"></th>}
+              <th className="text-right py-3 px-3">{t("data.confiance")}</th>
             </tr>
           </thead>
           <tbody>
@@ -187,17 +224,11 @@ export default function SubnetsPage() {
                       {r.momentumLabel}
                     </span>
                   </td>
-                  <td className="py-3 px-3 text-right text-white/55 text-sm">{r.conf}%</td>
-                  {user && (
-                    <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => navigate(`/?open=${r.netuid}`)}
-                        className="font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md transition-all"
-                        style={{ background: "rgba(255,215,0,0.08)", color: "rgba(255,215,0,0.7)", border: "1px solid rgba(255,215,0,0.15)" }}>
-                        {t("sub.open_pos")}
-                      </button>
-                    </td>
-                  )}
+                  <td className="py-3 px-3 text-right">
+                    <span className="font-mono text-xs font-bold" style={{ color: confianceColor(r.confianceScore) }}>
+                      {r.confianceScore}%
+                    </span>
+                  </td>
                 </tr>
               );
             })}

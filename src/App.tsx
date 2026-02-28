@@ -42,9 +42,11 @@ function AppLayout() {
     { path: "/settings", label: t("nav.settings"), icon: "⚙" },
   ];
 
+  const SIDEBAR_W = 200;
+
   return (
     <div className="h-screen w-screen flex bg-black overflow-hidden">
-      {/* Sidebar toggle */}
+      {/* Sidebar toggle — always visible, never overlapped */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className="fixed top-4 left-4 z-50 flex items-center gap-2 px-3.5 py-2.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
@@ -65,15 +67,13 @@ function AppLayout() {
         <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <div className={`fixed md:relative z-40 h-full transition-all duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
-        style={{
-          width: sidebarOpen ? 200 : 0,
-          opacity: sidebarOpen ? 1 : 0,
-          overflow: "hidden",
-        }}>
-        <nav className="h-full w-[200px] border-r border-white/[0.04] pt-16 px-3 flex flex-col gap-1"
-          style={{ background: "rgba(5,5,8,0.98)" }}>
+      {/* Sidebar — fixed, pushes content on desktop */}
+      <div
+        className={`fixed z-40 h-full transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ width: SIDEBAR_W }}
+      >
+        <nav className="h-full border-r border-white/[0.04] pt-16 px-3 flex flex-col gap-1"
+          style={{ background: "rgba(5,5,8,0.98)", width: SIDEBAR_W }}>
           {navItems.map(item => {
             const active = location.pathname === item.path;
             return (
@@ -121,7 +121,7 @@ function AppLayout() {
         </nav>
       </div>
 
-      {/* Main content */}
+      {/* Main content — full width always, sidebar overlays on mobile */}
       <div className="flex-1 h-full overflow-hidden">
         <Routes>
           <Route path="/" element={<AlienGauge />} />
