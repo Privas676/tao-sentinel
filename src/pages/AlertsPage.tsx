@@ -71,7 +71,7 @@ function subnetLinks(netuid: number | null) {
         style={{ background: "rgba(255,215,0,0.06)", color: "rgba(255,215,0,0.6)", border: "1px solid rgba(255,215,0,0.12)" }}>
         TaoStats
       </a>
-      <a href={`https://taomarketcap.com/subnet/${netuid}`} target="_blank" rel="noopener noreferrer"
+      <a href={`https://taomarketcap.com/subnets/${netuid}`} target="_blank" rel="noopener noreferrer"
         onClick={e => e.stopPropagation()}
         className="font-mono text-[9px] px-1.5 py-0.5 rounded transition-all hover:scale-105"
         style={{ background: "rgba(100,181,246,0.06)", color: "rgba(100,181,246,0.6)", border: "1px solid rgba(100,181,246,0.12)" }}>

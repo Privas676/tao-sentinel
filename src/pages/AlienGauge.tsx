@@ -251,7 +251,7 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
               className="flex-1 font-mono text-xs tracking-widest py-3 rounded-lg border border-white/10 hover:border-white/20 text-white/50 hover:text-white/80 transition-all">
               TaoStats ↗
             </button>
-            <button onClick={() => window.open(`https://taomarketcap.com/subnet/${signal.netuid}`, "_blank")}
+            <button onClick={() => window.open(`https://taomarketcap.com/subnets/${signal.netuid}`, "_blank")}
               className="flex-1 font-mono text-xs tracking-widest py-3 rounded-lg border border-white/10 hover:border-white/20 text-white/50 hover:text-white/80 transition-all">
               TaoMarketCap ↗
             </button>
