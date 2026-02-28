@@ -74,7 +74,7 @@ function percentileRank(values: number[]): number[] {
   });
 }
 
-function applySCurve(percentile: number, steepness = 6): number {
+function applySCurve(percentile: number, steepness = 3): number {
   const normalized = percentile / 100;
   const curved = sigmoid(normalized, steepness, 0.5);
   const min = sigmoid(0, steepness, 0.5);
@@ -82,8 +82,8 @@ function applySCurve(percentile: number, steepness = 6): number {
   return Math.round(((curved - min) / (max - min)) * 100);
 }
 
-/** Normalize scores using percentile + S-curve, enforcing anti-100 rule (Section 2.2) */
-export function normalizeWithVariance(rawScores: number[], steepness = 6): number[] {
+/** Normalize scores using percentile + mild S-curve, enforcing anti-100 rule (Section 2.2) */
+export function normalizeWithVariance(rawScores: number[], steepness = 3): number[] {
   const ranks = percentileRank(rawScores);
   const normalized = ranks.map(r => applySCurve(r, steepness));
 
@@ -199,42 +199,33 @@ export function stabilityColor(pct: number): string {
 
 function deriveOpportunity(psi: number, conf: number, quality: number, state: string | null): number {
   let opp = 0;
-  // Momentum_score weight: 30%
-  opp += (psi / 100) * (psi / 100) * 30;
-  // SmartCapital_accumulation proxy (quality): 25%
-  opp += clamp(quality * 0.25, 0, 25);
-  // Dominance_change proxy (confidence): 20%
-  opp += clamp(conf * 0.20, 0, 20);
-  // Emission_change proxy: 15%
-  const emissionProxy = clamp(psi * 0.15, 0, 15);
-  opp += emissionProxy;
-  // PreHype proxy: 10%
-  if (state === "GO") opp += 10;
-  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 7;
+  // LINEAR terms for maximum spread
+  opp += psi * 0.35;           // Momentum: 35%
+  opp += quality * 0.25;       // Quality/Adoption: 25%
+  opp += conf * 0.20;          // Confidence: 20%
+  // State bonuses
+  if (state === "GO") opp += 15;
+  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 8;
   else if (state === "WATCH") opp += 3;
+  else if (state === "HOLD") opp -= 3;
   // Penalties
-  if (state === "BREAK" || state === "EXIT_FAST") opp -= 15;
-  if (psi >= 60 && quality >= 60) opp += 5;
-  if (psi < 30) opp -= 8;
+  if (state === "BREAK" || state === "EXIT_FAST") opp -= 25;
+  if (psi < 30) opp -= 10;
   return Math.round(clamp(opp, 0, 100));
 }
 
 function deriveRisk(psi: number, conf: number, quality: number, state: string | null): number {
   let risk = 0;
-  // Volatilité_courte: 30%
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 35;
+  // LINEAR inverse terms for natural spread
+  risk += (100 - quality) * 0.30;    // Quality deficit: 30%
+  risk += (100 - conf) * 0.25;      // Confidence deficit: 25%
+  risk += (100 - psi) * 0.15;       // Low momentum: 15%
+  // State-based volatility
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 25;
   else if (state === "HOLD") risk += 5;
-  // Liquidity_risk proxy (quality deficit): 25%
-  const qualDeficit = (100 - quality) / 100;
-  risk += qualDeficit * qualDeficit * 25;
-  // Emission_spike_risk: 20%
-  const confDeficit = (100 - conf) / 100;
-  risk += confDeficit * confDeficit * 20;
-  // SmartCapital_distribution proxy: 15%
-  if (psi >= 80 && quality < 50) risk += 15;
-  if (psi >= 90 && quality < 40) risk += 8;
-  // Low PSI stagnation
-  if (psi < 25) risk += 8;
+  // Combo risks
+  if (psi >= 80 && quality < 50) risk += 12;
+  if (psi < 25) risk += 10;
   if (psi >= 40 && psi <= 60 && conf < 40) risk += 5;
   return Math.round(clamp(risk, 0, 100));
 }
@@ -402,8 +393,8 @@ export function processSignals(
   });
 
   // Step 2: Percentile + S-curve with different k values (Section 2.1)
-  const oppNormalized = normalizeWithVariance(rawData.map(d => d.oppRaw), 6);   // k=6
-  const riskNormalized = normalizeWithVariance(rawData.map(d => d.riskRaw), 6);  // k=6
+  const oppNormalized = normalizeWithVariance(rawData.map(d => d.oppRaw), 3);   // k=3 mild curve
+  const riskNormalized = normalizeWithVariance(rawData.map(d => d.riskRaw), 3);  // k=3 mild curve
 
   // Step 3: Build SubnetSignals
   const signals = rawData.map((d, i) => {
@@ -565,7 +556,7 @@ export function computeGlobalOpportunity(raw: RawSignal[]): number {
     return deriveOpportunity(psi, conf, quality, s.state);
   });
   if (!scores.length) return 0;
-  const normalized = normalizeWithVariance(scores, 6);
+  const normalized = normalizeWithVariance(scores, 3);
   const sorted = [...normalized].sort((a, b) => b - a);
   const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
   const topAvg = top25.reduce((a, b) => a + b, 0) / top25.length;
@@ -582,7 +573,7 @@ export function computeGlobalRisk(raw: RawSignal[]): number {
     return deriveRisk(psi, conf, quality, s.state);
   });
   if (!scores.length) return 0;
-  const normalized = normalizeWithVariance(scores, 6);
+  const normalized = normalizeWithVariance(scores, 3);
   const sorted = [...normalized].sort((a, b) => b - a);
   const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
   const topAvg = top25.reduce((a, b) => a + b, 0) / top25.length;
