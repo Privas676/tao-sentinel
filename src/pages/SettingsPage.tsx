@@ -1,7 +1,10 @@
 import { useI18n, Lang } from "@/lib/i18n";
+import { useOverrideMode } from "@/hooks/use-override-mode";
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
+  const { mode, setMode } = useOverrideMode();
+  const fr = lang === "fr";
 
   return (
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
@@ -24,6 +27,37 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Override Mode */}
+        <div>
+          <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
+            {fr ? "MODE ALERTES OVERRIDE" : "OVERRIDE ALERTS MODE"}
+          </label>
+          <div className="flex gap-2">
+            {(["strict", "permissive"] as const).map(m => (
+              <button key={m} onClick={() => setMode(m)}
+                className="font-mono text-sm px-5 py-2.5 rounded-lg transition-all tracking-wider"
+                style={{
+                  background: mode === m ? (m === "strict" ? "rgba(76,175,80,0.12)" : "rgba(255,152,0,0.12)") : "transparent",
+                  color: mode === m ? (m === "strict" ? "rgba(76,175,80,0.9)" : "rgba(255,152,0,0.9)") : "rgba(255,255,255,0.3)",
+                  border: `1px solid ${mode === m ? (m === "strict" ? "rgba(76,175,80,0.3)" : "rgba(255,152,0,0.3)") : "rgba(255,255,255,0.05)"}`,
+                }}>
+                {m === "strict"
+                  ? (fr ? "🛡 Strict" : "🛡 Strict")
+                  : (fr ? "⚡ Permissif" : "⚡ Permissive")}
+              </button>
+            ))}
+          </div>
+          <p className="font-mono text-[10px] text-white/25 mt-2">
+            {mode === "strict"
+              ? (fr
+                ? "Risk ≥ 70 + Confiance ≥ 70% + ≥ 2 signaux critiques requis. Max 10 affichés."
+                : "Risk ≥ 70 + Confidence ≥ 70% + ≥ 2 critical signals required. Max 10 shown.")
+              : (fr
+                ? "Toutes les alertes override sont affichées (règles legacy)."
+                : "All override alerts shown (legacy rules).")}
+          </p>
         </div>
 
         {/* Refresh */}
