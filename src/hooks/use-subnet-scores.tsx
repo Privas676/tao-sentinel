@@ -72,6 +72,21 @@ export type UnifiedScoresResult = {
   subnetList: { netuid: number; name: string }[] | undefined;
 };
 
+/* ─── SPECIAL CASES / WHITELIST ───
+ * Root (SN-0) is the primary TAO staking alpha.
+ * It must NEVER trigger depeg/delist/exit rules.
+ * Risk is hard-capped, status forced to OK, action forced to HOLD.
+ * Extend this map for future system-level subnets.
+ */
+export const SPECIAL_SUBNETS: Record<number, {
+  label: string;
+  forceStatus: SystemStatus;
+  forceAction: StrategicAction;
+  forceRiskMax: number;
+}> = {
+  0: { label: "ROOT (system)", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20 },
+};
+
 /* ─── Helper: derive Smart Capital state per subnet ─── */
 function deriveSubnetSC(psi: number, quality: number, conf: number, state: string | null): SmartCapitalState {
   const accSignal = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
@@ -307,8 +322,8 @@ export function useSubnetScores(): UnifiedScoresResult {
         const recalc = recalculate(healthData);
         let healthScores = computeAllHealthScores(healthData, recalc);
 
-        // SN-0 Root: disable speculative penalties (liquidity, volume/MC, emission)
-        if (s.netuid === 0) {
+        // Whitelisted subnets: disable speculative penalties (liquidity, volume/MC, emission)
+        if (SPECIAL_SUBNETS[s.netuid!]) {
           healthScores = {
             ...healthScores,
             liquidityHealth: 80,    // neutral — not penalized
@@ -361,29 +376,31 @@ export function useSubnetScores(): UnifiedScoresResult {
 
     // Step 3: Build final scores
     const scored = allRows.map((r, i) => {
-      const isRoot = r.netuid === 0;
-      const assetType: AssetType = isRoot ? "CORE_NETWORK" : "SPECULATIVE";
+      const special = SPECIAL_SUBNETS[r.netuid];
+      const isWhitelisted = !!special;
+      const assetType: AssetType = isWhitelisted ? "CORE_NETWORK" : "SPECULATIVE";
 
       let oppBlend = clamp(Math.round(r.oppRaw * 0.6 + oppPercentile[i] * 0.4), 5, 98);
       let riskBlend = clamp(Math.round(r.riskRaw * 0.6 + riskPercentile[i] * 0.4), 0, 100);
 
       const isBreak = r.state === "BREAK" || r.state === "EXIT_FAST";
-      if (!isRoot && (isBreak || r.state === "DEPEG_WARNING" || r.state === "DEPEG_CRITICAL")) {
+      if (!isWhitelisted && (isBreak || r.state === "DEPEG_WARNING" || r.state === "DEPEG_CRITICAL")) {
         oppBlend = 0;
       }
 
-      // ── SN-0 Root: CORE_NETWORK overrides ──
-      if (isRoot) {
-        riskBlend = Math.max(riskBlend, 35);
-        // Fundamental value: opp floor 30, cap 60
+      // ── SPECIAL_SUBNETS whitelist: clamp risk, force status/action ──
+      // Root (SN-0) is the primary TAO staking alpha. It must never
+      // trigger depeg/delist/exit rules. Risk is hard-capped via forceRiskMax.
+      if (isWhitelisted) {
+        riskBlend = Math.min(riskBlend, special.forceRiskMax);
         oppBlend = clamp(oppBlend, 30, 60);
       }
 
-      // Risk Override v2
+      // Risk Override v2 — whitelisted subnets bypass override engine
       const slMetrics = subnetLatest?.get(r.netuid);
       const volMcRatio = (slMetrics?.volCap != null) ? slMetrics.volCap : undefined;
-      const override = isRoot
-        ? { isOverridden: false, isWarning: false, systemStatus: "OK" as SystemStatus, overrideReasons: [] }
+      const override = isWhitelisted
+        ? { isOverridden: false, isWarning: false, systemStatus: special.forceStatus as SystemStatus, overrideReasons: [] }
         : evaluateRiskOverride({
             netuid: r.netuid, state: r.state, psi: r.psi, risk: riskBlend, quality: r.quality,
             liquidityUsd: r.displayedLiq > 0 ? r.displayedLiq : undefined,
@@ -395,27 +412,31 @@ export function useSubnetScores(): UnifiedScoresResult {
       // Calibration
       const cal = calibrateScores({
         risk: riskBlend, opportunity: oppBlend,
-        state: r.state, isTopRank: false, isOverridden: override.isOverridden,
+        state: isWhitelisted ? null : r.state, // whitelist: skip critical state penalties
+        isTopRank: false, isOverridden: override.isOverridden,
       });
       let opp = cal.opportunity;
       let risk = cal.risk;
 
-      // Root: enforce floors/caps after calibration too
-      if (isRoot) {
-        risk = Math.max(risk, 35);
+      // Whitelist: enforce risk cap after calibration too
+      if (isWhitelisted) {
+        risk = Math.min(risk, special.forceRiskMax);
         opp = clamp(opp, 30, 60);
       }
 
       let asymmetry = cal.asymmetry;
+      if (isWhitelisted) asymmetry = opp - risk; // recalc with capped risk
       if (r.dataUncertain) asymmetry -= 15;
 
       const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
       let action: StrategicAction = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, r.conf);
       if (override.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
 
-      // ── Root-specific action: STAKE or NEUTRAL, never EXIT ──
-      if (isRoot) {
-        action = risk < 60 ? "STAKE" : "NEUTRAL";
+      // ── Whitelisted subnets: force action, NEVER EXIT ──
+      if (isWhitelisted) {
+        action = special.forceAction;
+        // Safety invariant: whitelisted subnets can never be EXIT
+        console.assert(action !== "EXIT", `[WHITELIST] SN-${r.netuid} must never have EXIT action`);
       } else {
         checkCoherence(override.isOverridden, action);
       }
@@ -471,6 +492,13 @@ export function useSubnetScores(): UnifiedScoresResult {
       const warningCount = scored.filter(r => r.isWarning && !r.isOverridden).length;
       const pct = Math.round((overrideCount / scored.length) * 100);
       console.log(`[UNIFIED-SCORES] n=${scored.length} overrides=${overrideCount} (${pct}%) warnings=${warningCount} ts=${ts}`);
+
+      // Whitelist invariant check: whitelisted subnets must never be EXIT
+      for (const s of scored) {
+        if (SPECIAL_SUBNETS[s.netuid] && s.action === "EXIT") {
+          console.error(`[WHITELIST-VIOLATION] SN-${s.netuid} (${SPECIAL_SUBNETS[s.netuid].label}) has action EXIT — this should never happen!`);
+        }
+      }
     }
 
     return { scoresList: scored, scoresMap: map, scoreTimestamp: ts };

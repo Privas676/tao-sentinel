@@ -59,7 +59,7 @@ export function macroIcon(rec: MacroRecommendation): string {
   }
 }
 
-export type StrategicAction = "ENTER" | "WATCH" | "EXIT" | "STAKE" | "NEUTRAL";
+export type StrategicAction = "ENTER" | "WATCH" | "EXIT" | "STAKE" | "NEUTRAL" | "HOLD";
 export type StrategyMode = "hunter" | "defensive" | "bagbuilder";
 
 const THRESHOLDS: Record<StrategyMode, {
@@ -137,6 +137,7 @@ export function actionColor(action: StrategicAction): string {
     case "EXIT": return "rgba(229,57,53,0.9)";
     case "STAKE": return "rgba(100,181,246,0.9)";
     case "NEUTRAL": return "rgba(158,158,158,0.9)";
+    case "HOLD": return "rgba(100,181,246,0.9)";
   }
 }
 
@@ -147,6 +148,7 @@ export function actionBg(action: StrategicAction): string {
     case "EXIT": return "rgba(229,57,53,0.08)";
     case "STAKE": return "rgba(100,181,246,0.06)";
     case "NEUTRAL": return "rgba(158,158,158,0.06)";
+    case "HOLD": return "rgba(100,181,246,0.06)";
   }
 }
 
@@ -157,6 +159,7 @@ export function actionBorder(action: StrategicAction): string {
     case "EXIT": return "rgba(229,57,53,0.25)";
     case "STAKE": return "rgba(100,181,246,0.2)";
     case "NEUTRAL": return "rgba(158,158,158,0.2)";
+    case "HOLD": return "rgba(100,181,246,0.2)";
   }
 }
 
@@ -167,6 +170,7 @@ export function actionIcon(action: StrategicAction): string {
     case "EXIT": return "🔴";
     case "STAKE": return "🔵";
     case "NEUTRAL": return "⚪";
+    case "HOLD": return "🔷";
   }
 }
 
