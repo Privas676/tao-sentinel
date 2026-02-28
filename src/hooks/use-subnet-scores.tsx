@@ -25,6 +25,12 @@ import {
   computeHealthRisk, computeHealthOpportunity,
   type HealthScores, type RecalculatedMetrics,
 } from "@/lib/subnet-health";
+import {
+  evaluateAllDelistRisks, computeDelistRiskScore,
+  DEPEG_PRIORITY_MANUAL, HIGH_RISK_NEAR_DELIST_MANUAL,
+  type DelistRiskResult, type SubnetMetricsForDelist, type DelistCategory,
+} from "@/lib/delist-risk";
+import { useDelistMode } from "@/hooks/use-delist-mode";
 
 /* ─── Exported types ─── */
 
@@ -60,6 +66,8 @@ export type UnifiedSubnetScore = {
   consensusPrice: number;
   alphaPrice: number;
   priceVar30d: number | null;
+  delistCategory: DelistCategory;
+  delistScore: number;
 };
 
 export type UnifiedScoresResult = {
@@ -115,6 +123,7 @@ type SignalRow = {
  * All pages consume this same result → identical scores everywhere.
  */
 export function useSubnetScores(): UnifiedScoresResult {
+  const { delistMode } = useDelistMode();
   // ── Data fetching (shared query keys → cached across pages) ──
 
   const { data: signals, isLoading: signalsLoading } = useQuery({
@@ -432,10 +441,60 @@ export function useSubnetScores(): UnifiedScoresResult {
       let action: StrategicAction = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, r.conf);
       if (override.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
 
+      // ── Delist risk: check manual lists for quick lookup ──
+      let delistCategory: DelistCategory = "NORMAL";
+      let delistScore = 0;
+
+      if (!isWhitelisted) {
+        if (delistMode === "manual") {
+          if (DEPEG_PRIORITY_MANUAL.includes(r.netuid)) {
+            delistCategory = "DEPEG_PRIORITY";
+            delistScore = 90;
+          } else if (HIGH_RISK_NEAR_DELIST_MANUAL.includes(r.netuid)) {
+            delistCategory = "HIGH_RISK_NEAR_DELIST";
+            delistScore = 70;
+          }
+        } else {
+          // Auto mode: use scoring from allRows metrics
+          const liqTao = r.displayedLiq > 0 && rate > 0 ? r.displayedLiq / rate : 0;
+          const slm = subnetLatest?.get(r.netuid);
+          const volMcRatioAuto = slm?.volCap ?? 0;
+          const sparkline = sparklines?.get(r.netuid);
+          const priceChange7d = sparkline && sparkline.length >= 2
+            ? ((sparkline[sparkline.length - 1] - sparkline[0]) / sparkline[0]) * 100
+            : null;
+          const autoResult = computeDelistRiskScore({
+            netuid: r.netuid,
+            minersActive: slm ? (r.healthScores.activityHealth > 50 ? 20 : r.healthScores.activityHealth > 20 ? 5 : 0) : 10,
+            liqTao,
+            liqUsd: r.displayedLiq,
+            volMcRatio: volMcRatioAuto,
+            psi: r.psi, quality: r.quality, state: r.state,
+            priceChange7d,
+            confianceData: r.confianceScore,
+            liqHaircut: r.recalc?.liqHaircut ?? 0,
+          });
+          delistCategory = autoResult.category;
+          delistScore = autoResult.score;
+        }
+
+        // ── DEPEG/DELIST COHERENCE ──
+        if (delistCategory === "DEPEG_PRIORITY") {
+          opp = 0;
+          risk = Math.max(risk, 80);
+          asymmetry = -Math.abs(asymmetry) - 20;
+          action = "EXIT";
+        } else if (delistCategory === "HIGH_RISK_NEAR_DELIST") {
+          opp = Math.min(opp, 25);
+          risk = Math.max(risk, 60);
+          asymmetry = Math.min(asymmetry, -5);
+          if (action === "ENTER") action = "WATCH";
+        }
+      }
+
       // ── Whitelisted subnets: force action, NEVER EXIT ──
       if (isWhitelisted) {
         action = special.forceAction;
-        // Safety invariant: whitelisted subnets can never be EXIT
         console.assert(action !== "EXIT", `[WHITELIST] SN-${r.netuid} must never have EXIT action`);
       } else {
         checkCoherence(override.isOverridden, action);
@@ -461,9 +520,9 @@ export function useSubnetScores(): UnifiedScoresResult {
         sc: r.sc,
         confianceScore: r.confianceScore,
         dataUncertain: r.dataUncertain,
-        isOverridden: override.isOverridden,
-        isWarning: override.isWarning,
-        systemStatus: override.systemStatus,
+        isOverridden: override.isOverridden || delistCategory === "DEPEG_PRIORITY",
+        isWarning: override.isWarning || delistCategory === "HIGH_RISK_NEAR_DELIST",
+        systemStatus: delistCategory === "DEPEG_PRIORITY" ? "DEPEG" as SystemStatus : override.systemStatus,
         overrideReasons: override.overrideReasons,
         healthScores: r.healthScores,
         recalc: r.recalc,
@@ -477,6 +536,8 @@ export function useSubnetScores(): UnifiedScoresResult {
           if (!p30 || p30.oldest <= 0) return null;
           return ((p30.newest - p30.oldest) / p30.oldest) * 100;
         })(),
+        delistCategory,
+        delistScore,
       } satisfies UnifiedSubnetScore;
     });
 
@@ -502,7 +563,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     }
 
     return { scoresList: scored, scoresMap: map, scoreTimestamp: ts };
-  }, [signals, rawPayloads, taoUsd, primaryMetrics, secondaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap]);
+  }, [signals, rawPayloads, taoUsd, primaryMetrics, secondaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines]);
 
   return {
     scores: scoresMap,

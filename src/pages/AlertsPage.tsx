@@ -4,6 +4,14 @@ import { useI18n } from "@/lib/i18n";
 import { useMemo, useState } from "react";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
+import { useDelistMode } from "@/hooks/use-delist-mode";
+import {
+  evaluateAllDelistRisks,
+  delistCategoryColor,
+  delistCategoryLabel,
+  type DelistRiskResult,
+  type SubnetMetricsForDelist,
+} from "@/lib/delist-risk";
 
 type EventRow = {
   id: number;
@@ -82,7 +90,6 @@ function typeDisplayLabel(type: string | null, lang: string): { label: string; i
   }
 }
 
-/** Classify event type into filter category */
 function eventCategory(type: string | null): FilterType {
   if (type === "WHALE_MOVE") return "WHALE";
   if (type === "DATA_DIVERGENCE") return "DATA";
@@ -111,20 +118,13 @@ function subnetLinks(netuid: number | null) {
   );
 }
 
-/**
- * Group events by (type, netuid) within 6h sliding windows.
- * Events are already sorted desc by ts from the query.
- */
 function groupEvents(events: EventRow[]): GroupedEvent[] {
   const groups = new Map<string, GroupedEvent[]>();
-
   for (const ev of events) {
     const key = `${ev.type ?? "null"}::${ev.netuid ?? "null"}`;
     const evTs = ev.ts ? new Date(ev.ts).getTime() : 0;
-
     if (!groups.has(key)) groups.set(key, []);
     const buckets = groups.get(key)!;
-
     let placed = false;
     for (const bucket of buckets) {
       const latestTs = new Date(bucket.lastTs).getTime();
@@ -132,34 +132,21 @@ function groupEvents(events: EventRow[]): GroupedEvent[] {
       if (Math.abs(latestTs - evTs) <= SIX_HOURS_MS || Math.abs(firstTs - evTs) <= SIX_HOURS_MS) {
         bucket.occurrences.push(ev);
         bucket.count++;
-        if (evTs > latestTs) {
-          bucket.latest = ev;
-          bucket.lastTs = ev.ts!;
-        }
-        if (evTs < firstTs) {
-          bucket.firstTs = ev.ts!;
-        }
+        if (evTs > latestTs) { bucket.latest = ev; bucket.lastTs = ev.ts!; }
+        if (evTs < firstTs) { bucket.firstTs = ev.ts!; }
         placed = true;
         break;
       }
     }
-
     if (!placed) {
       buckets.push({
-        key: `${key}::${ev.id}`,
-        latest: ev,
-        occurrences: [ev],
-        count: 1,
-        firstTs: ev.ts || new Date().toISOString(),
-        lastTs: ev.ts || new Date().toISOString(),
+        key: `${key}::${ev.id}`, latest: ev, occurrences: [ev], count: 1,
+        firstTs: ev.ts || new Date().toISOString(), lastTs: ev.ts || new Date().toISOString(),
       });
     }
   }
-
   const all: GroupedEvent[] = [];
-  for (const buckets of groups.values()) {
-    all.push(...buckets);
-  }
+  for (const buckets of groups.values()) all.push(...buckets);
   all.sort((a, b) => new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime());
   return all;
 }
@@ -182,52 +169,31 @@ function formatTimeAgo(ts: string, fr: boolean): string {
   return `${days}${fr ? "j" : "d"}`;
 }
 
-/* ─── Strict gating check for OVERRIDE alerts ─── */
-function passesStrictGating(
-  ev: EventRow,
-  scores: Map<number, any> | undefined,
-): boolean {
-  if (ev.type !== "RISK_OVERRIDE") return true; // non-override always passes
+function passesStrictGating(ev: EventRow, scores: Map<number, any> | undefined): boolean {
+  if (ev.type !== "RISK_OVERRIDE") return true;
   if (!scores || ev.netuid == null) return false;
-
   const subnet = scores.get(ev.netuid);
   if (!subnet) return false;
-
   const evidence = ev.evidence as any;
   const risk = subnet.risk ?? 0;
   const confidence = subnet.confianceScore ?? 0;
-
-  // Gate (a): Risk ≥ 70
   if (risk < 70) return false;
-  // Gate (b): Confidence ≥ 70%
   if (confidence < 70) return false;
-  // Gate (c): ≥ 2 critical signals from evidence
   const hardConditions = (evidence?.hardConditions as string[]) || (evidence?.reasons as string[]) || [];
   if (hardConditions.length < 2) return false;
-
   return true;
 }
 
-/* ═══════════════════════════════════════ */
-/*   OVERRIDE REASON CHIPS COMPONENT       */
-/* ═══════════════════════════════════════ */
 function OverrideChips({ evidence, fr }: { evidence: any; fr: boolean }) {
   const hardConditions = (evidence?.hardConditions as string[]) || [];
   const reasons = (evidence?.reasons as string[]) || [];
-
-  // Try to map hardConditions to structured chips first
   const chips: { label: string; color: string }[] = [];
   for (const hc of hardConditions) {
     const chip = OVERRIDE_CHIP_MAP[hc];
-    if (chip) {
-      chips.push({ label: fr ? chip.labelFr : chip.label, color: chip.color });
-    }
+    if (chip) chips.push({ label: fr ? chip.labelFr : chip.label, color: chip.color });
   }
-
-  // If no hardConditions mapped, fall back to reasons as text chips
   if (chips.length === 0) {
     for (const r of reasons.slice(0, 4)) {
-      // Try to detect known patterns
       const lower = r.toLowerCase();
       if (lower.includes("émission") || lower.includes("emission")) {
         chips.push({ label: fr ? "Émission nulle" : "Emission drop", color: "rgba(229,57,53,0.7)" });
@@ -246,9 +212,7 @@ function OverrideChips({ evidence, fr }: { evidence: any; fr: boolean }) {
       }
     }
   }
-
   if (chips.length === 0) return null;
-
   return (
     <div className="flex flex-wrap gap-1">
       {chips.map((c, i) => (
@@ -261,9 +225,6 @@ function OverrideChips({ evidence, fr }: { evidence: any; fr: boolean }) {
   );
 }
 
-/* ═══════════════════════════════════════ */
-/*   EXPANDABLE EVENT ROW                   */
-/* ═══════════════════════════════════════ */
 function ExpandableEventRow({ group, lang }: { group: GroupedEvent; lang: string }) {
   const [expanded, setExpanded] = useState(false);
   const fr = lang === "fr";
@@ -287,50 +248,29 @@ function ExpandableEventRow({ group, lang }: { group: GroupedEvent; lang: string
         onClick={() => isMultiple && setExpanded(!expanded)}
       >
         <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1 sm:mt-0" style={{ background: severityColor(ev.severity) }} />
-        
-        <div className="font-mono text-xs tracking-wider font-bold min-w-[120px]" style={{ color }}>
-          {icon} {label}
-        </div>
-
-        <div className="font-mono text-xs text-white/50 min-w-[60px]">
-          SN-{ev.netuid} {subnetLinks(ev.netuid)}
-        </div>
-
+        <div className="font-mono text-xs tracking-wider font-bold min-w-[120px]" style={{ color }}>{icon} {label}</div>
+        <div className="font-mono text-xs text-white/50 min-w-[60px]">SN-{ev.netuid} {subnetLinks(ev.netuid)}</div>
         {renderMainContent()}
-
         <div className="flex items-center gap-2 ml-auto flex-shrink-0">
           {isMultiple && (
             <span className="font-mono text-[10px] px-2 py-0.5 rounded-full font-bold"
-              style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
-              ×{group.count}
-            </span>
+              style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>×{group.count}</span>
           )}
-          <span className="font-mono text-[10px] text-white/25">
-            {formatTimeAgo(group.lastTs, fr)}
-          </span>
+          <span className="font-mono text-[10px] text-white/25">{formatTimeAgo(group.lastTs, fr)}</span>
           {isMultiple && (
-            <span className="font-mono text-[9px] text-white/20 transition-transform" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>
-              ▼
-            </span>
+            <span className="font-mono text-[9px] text-white/20 transition-transform" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
           )}
         </div>
       </div>
-
       {expanded && isMultiple && (
         <div className="border-t px-4 py-2 space-y-1" style={{ borderColor: `${color}15`, background: `${color}05` }}>
-          <div className="font-mono text-[9px] text-white/30 tracking-widest mb-1.5">
-            {fr ? "OCCURRENCES" : "OCCURRENCES"} ({group.count}) — {fr ? "fenêtre" : "window"} 6h
-          </div>
+          <div className="font-mono text-[9px] text-white/30 tracking-widest mb-1.5">OCCURRENCES ({group.count}) — {fr ? "fenêtre" : "window"} 6h</div>
           {group.occurrences.map((occ, idx) => (
             <div key={occ.id} className="flex items-center gap-3 py-1 font-mono text-[10px]"
               style={{ borderBottom: idx < group.occurrences.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
               <span className="text-white/15 w-5">{idx + 1}</span>
-              <span className="text-white/25 min-w-[130px]">
-                {occ.ts ? new Date(occ.ts).toLocaleString() : "—"}
-              </span>
-              <span className="text-white/40 flex-1 truncate">
-                {renderOccurrenceDetail(occ)}
-              </span>
+              <span className="text-white/25 min-w-[130px]">{occ.ts ? new Date(occ.ts).toLocaleString() : "—"}</span>
+              <span className="text-white/40 flex-1 truncate">{renderOccurrenceDetail(occ)}</span>
               <span className="text-white/15">{occ.severity ? `sev:${occ.severity}` : ""}</span>
             </div>
           ))}
@@ -376,20 +316,14 @@ function renderWhaleContent(ev: EventRow, fr: boolean) {
 
 function renderDivergenceContent(ev: EventRow, fr: boolean) {
   const e = ev.evidence as any;
-
-  // V2 format with chips + gravity
   const chips = e?.chips as { metric: string; diff_pct: number; severity: string }[] | undefined;
   const gravity = e?.gravity as number | undefined;
   const confidenceData = e?.confidence_data as number | undefined;
 
   if (chips && chips.length > 0) {
     const metricColors: Record<string, string> = {
-      price: "rgba(229,57,53,0.8)",
-      mc:    "rgba(255,152,0,0.8)",
-      fdv:   "rgba(255,152,0,0.7)",
-      liq:   "rgba(255,193,7,0.8)",
-      vol:   "rgba(158,158,158,0.7)",
-      supply: "rgba(100,181,246,0.7)",
+      price: "rgba(229,57,53,0.8)", mc: "rgba(255,152,0,0.8)", fdv: "rgba(255,152,0,0.7)",
+      liq: "rgba(255,193,7,0.8)", vol: "rgba(158,158,158,0.7)", supply: "rgba(100,181,246,0.7)",
     };
     return (
       <div className="font-mono text-[10px] flex-1 flex flex-wrap items-center gap-1">
@@ -397,36 +331,22 @@ function renderDivergenceContent(ev: EventRow, fr: boolean) {
           const col = metricColors[c.metric] || "rgba(255,255,255,0.4)";
           return (
             <span key={i} className="px-1.5 py-0.5 rounded font-bold"
-              style={{
-                color: col,
-                background: col.replace(/[\d.]+\)$/, "0.08)"),
-                border: `1px solid ${col.replace(/[\d.]+\)$/, "0.2)")}`,
-              }}>
+              style={{ color: col, background: col.replace(/[\d.]+\)$/, "0.08)"), border: `1px solid ${col.replace(/[\d.]+\)$/, "0.2)")}` }}>
               {c.metric} {c.diff_pct}%
             </span>
           );
         })}
-        {gravity != null && (
-          <span className="text-white/25 ml-1" title={fr ? "Score de gravité" : "Gravity score"}>
-            G:{gravity}
-          </span>
-        )}
-        {confidenceData != null && (
-          <span className="text-white/20 ml-0.5" title={fr ? "Confiance données" : "Data confidence"}>
-            C:{confidenceData}%
-          </span>
-        )}
+        {gravity != null && <span className="text-white/25 ml-1" title={fr ? "Score de gravité" : "Gravity score"}>G:{gravity}</span>}
+        {confidenceData != null && <span className="text-white/20 ml-0.5" title={fr ? "Confiance données" : "Data confidence"}>C:{confidenceData}%</span>}
       </div>
     );
   }
 
-  // Legacy format fallback
   const divs = e?.divergences as { field: string; pct_diff: number }[] || [];
   return (
     <div className="font-mono text-[10px] text-white/40 flex-1 flex flex-wrap gap-1">
       {divs.slice(0, 3).map((d, i) => (
-        <span key={i} className="px-1.5 py-0.5 rounded"
-          style={{ background: "rgba(255,152,0,0.08)", border: "1px solid rgba(255,152,0,0.15)" }}>
+        <span key={i} className="px-1.5 py-0.5 rounded" style={{ background: "rgba(255,152,0,0.08)", border: "1px solid rgba(255,152,0,0.15)" }}>
           {d.field}: {d.pct_diff}%
         </span>
       ))}
@@ -435,7 +355,6 @@ function renderDivergenceContent(ev: EventRow, fr: boolean) {
   );
 }
 
-/** V2: Override content with structured chips */
 function renderOverrideContentV2(ev: EventRow, fr: boolean) {
   const e = ev.evidence as any;
   const mpi = e?.mpi ?? "—";
@@ -443,9 +362,7 @@ function renderOverrideContentV2(ev: EventRow, fr: boolean) {
   return (
     <>
       <div className="font-mono text-[10px] text-white/40">MPI {mpi} · Q {quality}</div>
-      <div className="flex-1">
-        <OverrideChips evidence={e} fr={fr} />
-      </div>
+      <div className="flex-1"><OverrideChips evidence={e} fr={fr} /></div>
     </>
   );
 }
@@ -460,9 +377,7 @@ function renderSmartContent(ev: EventRow, fr: boolean) {
           {fr ? "Intensité" : "Intensity"}: {intensity}%
         </div>
       )}
-      <div className="font-mono text-[10px] text-white/30 flex-1 truncate">
-        {e?.reasons?.join(" · ") || e?.detail || "—"}
-      </div>
+      <div className="font-mono text-[10px] text-white/30 flex-1 truncate">{e?.reasons?.join(" · ") || e?.detail || "—"}</div>
     </>
   );
 }
@@ -476,6 +391,158 @@ function renderStandardContent(ev: EventRow, fr: boolean) {
       {psi != null && <div className="font-mono text-xs text-white/40">PSI {psi}</div>}
       <div className="font-mono text-[10px] text-white/30 flex-1 truncate">{reasons?.join(" · ") || "—"}</div>
     </>
+  );
+}
+
+/* ═══════════════════════════════════════ */
+/*   DELIST WATCHLIST VIEW                   */
+/* ═══════════════════════════════════════ */
+
+function DelistWatchlistView({ fr }: { fr: boolean }) {
+  const { scores, scoresList, sparklines, taoUsd } = useSubnetScores();
+  const { delistMode } = useDelistMode();
+
+  const delistResults = useMemo(() => {
+    if (!scoresList.length) return [];
+
+    const metricsForDelist: SubnetMetricsForDelist[] = scoresList.map(s => ({
+      netuid: s.netuid,
+      minersActive: s.healthScores?.activityHealth != null ? (s.healthScores.activityHealth > 50 ? 20 : s.healthScores.activityHealth > 20 ? 5 : 0) : 10,
+      liqTao: s.displayedLiq > 0 && taoUsd > 0 ? s.displayedLiq / taoUsd : 0,
+      liqUsd: s.displayedLiq,
+      volMcRatio: s.healthScores?.volumeHealth != null ? s.healthScores.volumeHealth / 1000 : 0.01,
+      psi: s.psi,
+      quality: s.quality,
+      state: s.state,
+      priceChange7d: (() => {
+        const sp = sparklines?.get(s.netuid);
+        if (!sp || sp.length < 2) return null;
+        return ((sp[sp.length - 1] - sp[0]) / sp[0]) * 100;
+      })(),
+      confianceData: s.confianceScore,
+      liqHaircut: s.recalc?.liqHaircut ?? 0,
+    }));
+
+    return evaluateAllDelistRisks(delistMode, metricsForDelist);
+  }, [scoresList, delistMode, sparklines, taoUsd]);
+
+  const depegPriority = delistResults.filter(r => r.category === "DEPEG_PRIORITY");
+  const nearDelist = delistResults.filter(r => r.category === "HIGH_RISK_NEAR_DELIST");
+
+  const modeLabel = delistMode === "manual"
+    ? "Manual (Taoflute)"
+    : delistMode === "auto_taostats" ? "Auto (Taostats)" : "Auto (TMC)";
+
+  if (depegPriority.length === 0 && nearDelist.length === 0) {
+    return (
+      <div className="text-center text-white/20 font-mono mt-10">
+        {fr ? "Aucun subnet en risque de delist détecté." : "No delist risk detected."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Source badge */}
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[9px] px-2 py-0.5 rounded"
+          style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          {fr ? "Source" : "Source"}: {modeLabel}
+        </span>
+        <span className="font-mono text-[9px] text-white/20">
+          {depegPriority.length + nearDelist.length} subnets
+        </span>
+      </div>
+
+      {/* DEPEG PRIORITAIRE */}
+      {depegPriority.length > 0 && (
+        <div>
+          <h3 className="font-mono text-xs tracking-widest mb-3 font-bold" style={{ color: "rgba(229,57,53,0.9)" }}>
+            🔴 {fr ? "DEPEG PRIORITAIRE" : "DEPEG PRIORITY"} ({depegPriority.length})
+          </h3>
+          <div className="space-y-1.5">
+            {depegPriority.map(r => (
+              <DelistRow key={r.netuid} result={r} fr={fr} scores={scores} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* PROCHE DELIST */}
+      {nearDelist.length > 0 && (
+        <div>
+          <h3 className="font-mono text-xs tracking-widest mb-3 font-bold" style={{ color: "rgba(255,152,0,0.85)" }}>
+            🟠 {fr ? "PROCHE DELIST" : "NEAR DELIST"} ({nearDelist.length})
+          </h3>
+          <div className="space-y-1.5">
+            {nearDelist.map(r => (
+              <DelistRow key={r.netuid} result={r} fr={fr} scores={scores} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DelistRow({ result, fr, scores }: { result: DelistRiskResult; fr: boolean; scores: Map<number, any> }) {
+  const subnet = scores.get(result.netuid);
+  const name = subnet?.name || `SN-${result.netuid}`;
+  const catColor = delistCategoryColor(result.category);
+
+  return (
+    <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-lg"
+      style={{ border: `1px solid ${catColor}20`, background: `${catColor}05` }}>
+
+      {/* Score indicator */}
+      <div className="font-mono text-lg font-bold min-w-[40px] text-center" style={{ color: catColor }}>
+        {result.score}
+      </div>
+
+      {/* Subnet name */}
+      <div className="font-mono text-xs min-w-[100px]">
+        <span className="text-white/70 font-bold">SN-{result.netuid}</span>
+        <span className="text-white/30 ml-1.5 text-[10px]">{name !== `SN-${result.netuid}` ? name : ""}</span>
+        {subnetLinks(result.netuid)}
+      </div>
+
+      {/* Source badge */}
+      <span className="font-mono text-[8px] px-1.5 py-0.5 rounded shrink-0"
+        style={{
+          background: result.source.includes("Manual") ? "rgba(156,39,176,0.08)" : "rgba(100,181,246,0.08)",
+          color: result.source.includes("Manual") ? "rgba(156,39,176,0.7)" : "rgba(100,181,246,0.7)",
+          border: `1px solid ${result.source.includes("Manual") ? "rgba(156,39,176,0.15)" : "rgba(100,181,246,0.15)"}`,
+        }}>
+        {result.source}
+      </span>
+
+      {/* Reason chips */}
+      <div className="flex flex-wrap gap-1 flex-1">
+        {result.reasons.slice(0, 5).map((reason, i) => (
+          <span key={i} className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
+            style={{
+              color: reason.color,
+              background: reason.color.replace(/[\d.]+\)$/, "0.08)"),
+              border: `1px solid ${reason.color.replace(/[\d.]+\)$/, "0.2)")}`,
+            }}>
+            {fr ? reason.labelFr : reason.label}
+            {reason.value != null && <span className="ml-0.5 opacity-60">({typeof reason.value === "number" ? (reason.value < 1 ? reason.value.toFixed(2) : Math.round(reason.value)) : reason.value})</span>}
+          </span>
+        ))}
+      </div>
+
+      {/* Action */}
+      <div className="font-mono text-[10px] font-bold px-2 py-1 rounded shrink-0"
+        style={{
+          background: result.category === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.1)" : "rgba(255,152,0,0.08)",
+          color: result.category === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.9)" : "rgba(255,152,0,0.8)",
+          border: `1px solid ${result.category === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.25)" : "rgba(255,152,0,0.2)"}`,
+        }}>
+        {result.category === "DEPEG_PRIORITY"
+          ? (fr ? "🔴 SORTIR" : "🔴 EXIT")
+          : (fr ? "🟡 ATTENDRE" : "🟡 WAIT")}
+      </div>
+    </div>
   );
 }
 
@@ -496,37 +563,27 @@ export default function AlertsPage() {
   const { data: events } = useQuery({
     queryKey: ["events-log"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .order("ts", { ascending: false })
-        .limit(500);
+      const { data, error } = await supabase.from("events").select("*").order("ts", { ascending: false }).limit(500);
       if (error) throw error;
       return (data || []) as EventRow[];
     },
     refetchInterval: 60_000,
   });
 
-  // Group events by (type, netuid) within 6h sliding windows
   const grouped = useMemo(() => {
     if (!events) return [];
     return groupEvents(events);
   }, [events]);
 
-  // Separate OVERRIDE alerts into gated vs noise (strict mode only)
-  // Also filter DATA_DIVERGENCE by gravity/confidence unless showMinorDivergences
   const { gatedOverrides, noiseOverrides, otherGrouped } = useMemo(() => {
-    // Filter divergences by gravity/confidence
     const filterDiv = (g: GroupedEvent): boolean => {
       if (g.latest.type !== "DATA_DIVERGENCE") return true;
       if (showMinorDivergences) return true;
       const e = g.latest.evidence as any;
       const gravity = e?.gravity as number | undefined;
       const confidence = e?.confidence_data as number | undefined;
-      // Show if gravity ≥ 60 OR confidence_data ≥ 70
       if (gravity != null && gravity >= 60) return true;
       if (confidence != null && confidence >= 70) return true;
-      // Legacy events without gravity: show them
       if (gravity == null && e?.divergences) return true;
       return false;
     };
@@ -542,64 +599,47 @@ export default function AlertsPage() {
     const overrides: GroupedEvent[] = [];
     const others: GroupedEvent[] = [];
     for (const g of grouped) {
-      if (g.latest.type === "RISK_OVERRIDE") {
-        overrides.push(g);
-      } else {
-        others.push(g);
-      }
+      if (g.latest.type === "RISK_OVERRIDE") overrides.push(g);
+      else others.push(g);
     }
 
     const gated: GroupedEvent[] = [];
     const noise: GroupedEvent[] = [];
     for (const g of overrides) {
-      if (passesStrictGating(g.latest, scores)) {
-        gated.push(g);
-      } else {
-        noise.push(g);
-      }
+      if (passesStrictGating(g.latest, scores)) gated.push(g);
+      else noise.push(g);
     }
 
     return { gatedOverrides: gated, noiseOverrides: noise, otherGrouped: others.filter(filterDiv) };
   }, [grouped, overrideMode, scores, showMinorDivergences]);
 
-  // Apply filters with quota
   const filtered = useMemo(() => {
     if (filter === "ALL") {
       return (events || []).map(ev => ({
-        key: `single-${ev.id}`,
-        latest: ev,
-        occurrences: [ev],
-        count: 1,
-        firstTs: ev.ts || "",
-        lastTs: ev.ts || "",
+        key: `single-${ev.id}`, latest: ev, occurrences: [ev], count: 1,
+        firstTs: ev.ts || "", lastTs: ev.ts || "",
       } as GroupedEvent));
     }
-
     if (filter === "OVERRIDE") {
       const visible = overrideMode === "strict"
         ? gatedOverrides.slice(0, showOverrideNoise ? Infinity : OVERRIDE_QUOTA)
         : gatedOverrides;
-      if (showOverrideNoise && overrideMode === "strict") {
-        return [...visible, ...noiseOverrides];
-      }
+      if (showOverrideNoise && overrideMode === "strict") return [...visible, ...noiseOverrides];
       return visible;
     }
-
     if (filter === "UNIQUE") {
-      // Merge gated overrides (up to quota) + others
-      const visibleOverrides = overrideMode === "strict"
-        ? gatedOverrides.slice(0, OVERRIDE_QUOTA)
-        : gatedOverrides;
+      const visibleOverrides = overrideMode === "strict" ? gatedOverrides.slice(0, OVERRIDE_QUOTA) : gatedOverrides;
       const merged = [...visibleOverrides, ...otherGrouped];
       merged.sort((a, b) => new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime());
       return merged;
     }
-
-    // Other category filters
+    if (filter === "STATE") {
+      // STATE filter: show only state-change events (not delist watchlist which is separate)
+      return grouped.filter(g => eventCategory(g.latest.type) === "STATE");
+    }
     return grouped.filter(g => eventCategory(g.latest.type) === filter);
   }, [grouped, events, filter, gatedOverrides, noiseOverrides, otherGrouped, overrideMode, showOverrideNoise]);
 
-  // Stats
   const stats = useMemo(() => {
     const total = events?.length || 0;
     const uniqueGroups = grouped.length;
@@ -615,7 +655,7 @@ export default function AlertsPage() {
     { value: "OVERRIDE", label: "⛔ Overrides", count: stats.overrides },
     { value: "DATA", label: "⚠ Data" },
     { value: "WHALE", label: "🐋 Whales" },
-    { value: "STATE", label: fr ? "États" : "States" },
+    { value: "STATE", label: fr ? "🔴 États" : "🔴 States" },
     { value: "SMART", label: "🧠 Smart" },
   ];
 
@@ -632,7 +672,7 @@ export default function AlertsPage() {
         {overrideMode === "strict" && stats.noiseCount > 0 && (
           <span className="font-mono text-[9px] px-2 py-0.5 rounded"
             style={{ background: "rgba(255,152,0,0.08)", color: "rgba(255,152,0,0.6)", border: "1px solid rgba(255,152,0,0.15)" }}>
-            🛡 {fr ? "Strict" : "Strict"} · {stats.noiseCount} {fr ? "filtrés" : "filtered"}
+            🛡 Strict · {stats.noiseCount} {fr ? "filtrés" : "filtered"}
           </span>
         )}
       </div>
@@ -650,28 +690,50 @@ export default function AlertsPage() {
                 fontWeight: filter === opt.value ? 700 : 400,
               }}>
               {opt.label}
-              {opt.count != null && (
-                <span className="ml-1 text-[8px]" style={{ opacity: 0.5 }}>({opt.count})</span>
-              )}
+              {opt.count != null && <span className="ml-1 text-[8px]" style={{ opacity: 0.5 }}>({opt.count})</span>}
             </button>
           ))}
         </div>
         <span className="font-mono text-[10px] text-white/20 ml-2">
-          {filtered.length} {fr ? "lignes" : "rows"}
+          {filter === "STATE" ? "" : `${filtered.length} ${fr ? "lignes" : "rows"}`}
         </span>
       </div>
 
-      {(!filtered || filtered.length === 0) ? (
-        <div className="text-center text-white/20 font-mono mt-20">{t("alerts.empty")}</div>
-      ) : (
-        <div className="space-y-1.5">
-          {filtered.map(group => (
-            <ExpandableEventRow key={group.key} group={group} lang={lang} />
-          ))}
+      {/* STATE filter: show DEPEG/DELIST WATCHLIST + state events */}
+      {filter === "STATE" ? (
+        <div className="space-y-8">
+          <DelistWatchlistView fr={fr} />
+
+          {/* Also show state-change events below */}
+          <div>
+            <h3 className="font-mono text-xs tracking-widest text-white/40 mb-3">
+              {fr ? "CHANGEMENTS D'ÉTAT RÉCENTS" : "RECENT STATE CHANGES"}
+            </h3>
+            {filtered.length === 0 ? (
+              <div className="text-center text-white/20 font-mono mt-4">{t("alerts.empty")}</div>
+            ) : (
+              <div className="space-y-1.5">
+                {filtered.map(group => (
+                  <ExpandableEventRow key={group.key} group={group} lang={lang} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+      ) : (
+        <>
+          {(!filtered || filtered.length === 0) ? (
+            <div className="text-center text-white/20 font-mono mt-20">{t("alerts.empty")}</div>
+          ) : (
+            <div className="space-y-1.5">
+              {filtered.map(group => (
+                <ExpandableEventRow key={group.key} group={group} lang={lang} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {/* "See all noise" button for OVERRIDE filter in strict mode */}
       {filter === "OVERRIDE" && overrideMode === "strict" && !showOverrideNoise && noiseOverrides.length > 0 && (
         <div className="mt-4 text-center">
           <button
