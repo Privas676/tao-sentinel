@@ -8,6 +8,34 @@ const corsHeaders = {
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
 function scoreClip(x: number, lo: number, hi: number) { return 100 * clamp((x - lo) / (hi - lo), 0, 1); }
 
+/* ── Percentile + S-curve normalization ── */
+function sigmoid(x: number, steepness = 10, midpoint = 0.5): number {
+  return 1 / (1 + Math.exp(-steepness * (x - midpoint)));
+}
+
+function percentileRank(values: number[]): number[] {
+  if (values.length <= 1) return values.map(() => 50);
+  const sorted = [...values].sort((a, b) => a - b);
+  return values.map(v => {
+    const below = sorted.filter(s => s < v).length;
+    const equal = sorted.filter(s => s === v).length;
+    return ((below + equal * 0.5) / sorted.length) * 100;
+  });
+}
+
+function applySCurve(percentile: number, steepness = 8): number {
+  const n = percentile / 100;
+  const curved = sigmoid(n, steepness, 0.5);
+  const min = sigmoid(0, steepness, 0.5);
+  const max = sigmoid(1, steepness, 0.5);
+  return Math.round(((curved - min) / (max - min)) * 100);
+}
+
+function normalizeWithVariance(rawScores: number[], steepness = 8): number[] {
+  const ranks = percentileRank(rawScores);
+  return ranks.map(r => applySCurve(r, steepness));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -90,21 +118,25 @@ Deno.serve(async (req) => {
       else console.log(`Inserted ${divInserts.length} DATA_DIVERGENCE alerts`);
     }
 
+    // ============= PASS 1: Compute raw scores for all subnets =============
+    type SubnetRaw = {
+      netuid: number; mpiRaw: number; M: number; A: number; L: number; B: number; Q: number;
+      gatingFail: boolean; breakReasons: string[]; breakout: boolean;
+      priceNow: number; price5m: number; price1h: number;
+      liqNow: number; liq1h: number; minersNow: number; minersDelta: number;
+      priceMax7d: number; confidencePct: number;
+    };
+    const subnetRaws: SubnetRaw[] = [];
+
     for (const { netuid } of subnets) {
-      // Latest snapshot
       const { data: latest } = await sb.from("subnet_metrics_ts").select("*")
         .eq("netuid", netuid).order("ts", { ascending: false }).limit(1).maybeSingle();
       if (!latest) continue;
 
-      // 5m ago snapshot
       const { data: snap5m } = await sb.from("subnet_metrics_ts").select("price, liquidity, miners_active")
         .eq("netuid", netuid).lte("ts", ago5m).order("ts", { ascending: false }).limit(1).maybeSingle();
-
-      // 1h ago snapshot
       const { data: snap1h } = await sb.from("subnet_metrics_ts").select("price, liquidity, miners_active")
         .eq("netuid", netuid).lte("ts", ago1h).order("ts", { ascending: false }).limit(1).maybeSingle();
-
-      // 7d price max for breakout
       const { data: prices7d } = await sb.from("subnet_metrics_ts").select("price")
         .eq("netuid", netuid).gte("ts", ago7d).order("ts", { ascending: true });
 
@@ -116,63 +148,64 @@ Deno.serve(async (req) => {
       const liqNow = Number(latest.liquidity) || 0;
       const topMinersShare = Number(latest.top_miners_share) || 0;
 
-      // Approximate unavailable fields with sensible defaults
-      const minerBurnPct = 0; // Not available
-      const deregRank = 999; // Not available, safe default
-      const repoInactive = false;
-      const xInactive = false;
-      const discordInactive = false;
-      const whaleImpactPct = topMinersShare * 100; // approximate
-      const gini = Math.min(topMinersShare * 1.2, 1); // approximate
-
-      // Liquidity haircut: % change from 1h ago
+      const whaleImpactPct = topMinersShare * 100;
+      const gini = Math.min(topMinersShare * 1.2, 1);
       const liq1h = Number(snap1h?.liquidity) || liqNow;
       const liqHaircut = liq1h > 0 ? ((liqNow - liq1h) / liq1h) * 100 : 0;
 
-      // ============= 1. GATING =============
-      const gatingFail =
-        minerBurnPct === 100 ||
-        deregRank <= 5 ||
-        minersNow === 0 ||
-        liqHaircut <= -60;
+      const gatingFail = minersNow === 0 || liqHaircut <= -60;
+      const breakReasons: string[] = [];
+      if (minersNow === 0) breakReasons.push("Zero miners");
+      if (liqHaircut <= -60) breakReasons.push("Liquidity collapse");
 
-      // ============= 2. QUALITY SCORE (Q) =============
       let penalty = 0;
       if (whaleImpactPct >= 30) penalty += 25;
       if (gini >= 0.75) penalty += 20;
-      if (repoInactive) penalty += 15;
-      if (xInactive && discordInactive) penalty += 10;
       const Q = clamp(100 - penalty, 0, 100);
 
-      // ============= 3. MOMENTUM (M) =============
       const r5m = priceNow > 0 && price5m > 0 ? Math.log(priceNow / price5m) : 0;
       const r1h = priceNow > 0 && price1h > 0 ? Math.log(priceNow / price1h) : 0;
       const M = 0.4 * scoreClip(r1h, -0.02, 0.04) + 0.6 * scoreClip(r5m, -0.004, 0.010);
-
-      // ============= 4. ADOPTION (A) =============
       const minersDelta = minersNow - miners1h;
       const A = scoreClip(minersDelta, -5, 25);
-
-      // ============= 5. LIQUIDITY SAFETY (L) =============
       const L = liqHaircut !== 0 ? 100 - scoreClip(Math.abs(liqHaircut), 0, 60) : 50;
-
-      // ============= 6. BREAKOUT (B) =============
       const priceMax7d = (prices7d || []).reduce((max, r) => Math.max(max, Number(r.price) || 0), 0);
       const breakout = priceNow > priceMax7d && priceMax7d > 0;
       const B = breakout ? 100 : 0;
 
-      // ============= 7. MPI =============
-      const mpi = clamp(Math.round(
-        0.30 * M +
-        0.20 * A +
-        0.15 * L +
-        0.15 * B +
-        0.20 * Q
-      ), 0, 100);
+      const mpiRaw = clamp(Math.round(0.30 * M + 0.20 * A + 0.15 * L + 0.15 * B + 0.20 * Q), 0, 100);
+      const confSignal = clamp((mpiRaw - 60) / 40, 0, 1);
+      const confQuality = Q / 100;
+      const confidencePct = Math.round(100 * (0.55 * confSignal + 0.45 * confQuality));
 
-      // ============= 8. DECISION LOGIC =============
+      subnetRaws.push({
+        netuid, mpiRaw, M, A, L, B, Q, gatingFail, breakReasons, breakout,
+        priceNow, price5m, price1h, liqNow, liq1h, minersNow, minersDelta, priceMax7d, confidencePct,
+      });
+    }
+
+    // ============= PASS 2: Percentile + S-curve normalization =============
+    const rawMpis = subnetRaws.map(s => s.mpiRaw);
+    const normalizedMpis = normalizeWithVariance(rawMpis, 8);
+
+    // Scoring stuck detection
+    const mpiStdDev = (() => {
+      if (rawMpis.length < 3) return 999;
+      const mean = rawMpis.reduce((a, b) => a + b, 0) / rawMpis.length;
+      const variance = rawMpis.reduce((a, v) => a + (v - mean) ** 2, 0) / rawMpis.length;
+      return Math.sqrt(variance);
+    })();
+    if (mpiStdDev < 5) {
+      console.warn(`SCORING_STUCK: MPI stddev=${mpiStdDev.toFixed(1)}, raw range too narrow`);
+    }
+
+    // ============= PASS 3: Decision logic + upsert with normalized scores =============
+    for (let i = 0; i < subnetRaws.length; i++) {
+      const s = subnetRaws[i];
+      const mpi = normalizedMpis[i]; // S-curve normalized MPI
+
       const { data: existingSignal } = await sb.from("signals").select("*")
-        .eq("netuid", netuid).maybeSingle();
+        .eq("netuid", s.netuid).maybeSingle();
       const prevState = existingSignal?.state || "NO";
 
       let newState: string;
@@ -180,32 +213,27 @@ Deno.serve(async (req) => {
       let eventType: string | null = null;
       let severity = 0;
 
-      if (gatingFail) {
+      if (s.gatingFail) {
         newState = "BREAK";
-        reasons = [];
-        if (minersNow === 0) reasons.push("Zero miners");
-        if (liqHaircut <= -60) reasons.push("Liquidity collapse");
-        if (minerBurnPct === 100) reasons.push("100% miner burn");
-        if (deregRank <= 5) reasons.push("Near deregistration");
+        reasons = s.breakReasons;
         const canNotify = !existingSignal?.last_notified_at ||
           (now.getTime() - new Date(existingSignal.last_notified_at).getTime() > 15 * 60000);
         if (canNotify && prevState !== "BREAK") { eventType = "BREAK"; severity = 3; }
       }
-      else if (mpi >= 85 && M >= 65 && Q >= 60) {
+      else if (mpi >= 85 && s.M >= 65 && s.Q >= 60) {
         newState = "GO";
-        reasons = ["High MPI", `Momentum ${Math.round(M)}`, `Quality ${Q}`];
-        if (breakout) reasons.push("7d breakout");
+        reasons = ["High MPI", `Momentum ${Math.round(s.M)}`, `Quality ${s.Q}`];
+        if (s.breakout) reasons.push("7d breakout");
         reasons = reasons.slice(0, 3);
         const canGo = !existingSignal?.last_notified_at ||
           (now.getTime() - new Date(existingSignal.last_notified_at).getTime() > 30 * 60000);
         if (canGo) { eventType = "GO"; severity = 2; }
       }
-      else if (mpi >= 72 && M >= 55 && Q >= 55) {
+      else if (mpi >= 72 && s.M >= 55 && s.Q >= 55) {
         newState = "EARLY";
-        reasons = ["Early momentum detected", `MPI ${mpi}`, `Quality ${Q}`];
-        if (breakout) reasons.push("Approaching breakout");
+        reasons = ["Early momentum detected", `MPI ${mpi}`, `Quality ${s.Q}`];
+        if (s.breakout) reasons.push("Approaching breakout");
         reasons = reasons.slice(0, 3);
-        // Anti-spam: 60min cooldown for EARLY unless upgrading to GO
         const lastChange = existingSignal?.last_state_change_at;
         const cooldownOk = !lastChange || prevState !== "EARLY" ||
           (now.getTime() - new Date(lastChange).getTime() > 60 * 60000);
@@ -214,7 +242,6 @@ Deno.serve(async (req) => {
             (now.getTime() - new Date(existingSignal.last_notified_at).getTime() > 60 * 60000);
           if (canNotify) { eventType = "EARLY"; severity = 2; }
         } else {
-          // Still in cooldown, stay at previous state
           newState = prevState === "EARLY" ? "EARLY" : prevState;
         }
       }
@@ -227,30 +254,26 @@ Deno.serve(async (req) => {
         reasons = [`MPI ${mpi}`];
       }
       else {
-        newState = prevState === "BREAK" ? "BREAK" : "BREAK";
+        newState = "BREAK";
         reasons = ["Low MPI"];
       }
 
-      // ============= 9. CONFIDENCE =============
-      const confSignal = clamp((mpi - 60) / 40, 0, 1);
-      const confQuality = Q / 100;
-      const confidencePct = Math.round(100 * (0.55 * confSignal + 0.45 * confQuality));
-
-      // ============= DEPEG Detection =============
-      const priceChange5m = price5m > 0 ? ((priceNow - price5m) / price5m) * 100 : 0;
-      const priceChange1h = price1h > 0 ? ((priceNow - price1h) / price1h) * 100 : 0;
-      const liqChange1h = liq1h > 0 ? ((liqNow - liq1h) / liq1h) * 100 : 0;
+      // DEPEG Detection
+      const priceChange5m = s.price5m > 0 ? ((s.priceNow - s.price5m) / s.price5m) * 100 : 0;
+      const priceChange1h = s.price1h > 0 ? ((s.priceNow - s.price1h) / s.price1h) * 100 : 0;
+      const liqChange1h = s.liq1h > 0 ? ((s.liqNow - s.liq1h) / s.liq1h) * 100 : 0;
 
       if (priceChange5m <= -6 && liqChange1h <= -15) {
-        await sb.from("events").insert({ netuid, ts: nowIso, type: "DEPEG_CRITICAL", severity: 4, evidence: { priceChange5m, priceChange1h, liqChange1h } });
+        await sb.from("events").insert({ netuid: s.netuid, ts: nowIso, type: "DEPEG_CRITICAL", severity: 4, evidence: { priceChange5m, priceChange1h, liqChange1h } });
       } else if (priceChange5m <= -6 || priceChange1h <= -12) {
-        await sb.from("events").insert({ netuid, ts: nowIso, type: "DEPEG_WARNING", severity: 3, evidence: { priceChange5m, priceChange1h } });
+        await sb.from("events").insert({ netuid: s.netuid, ts: nowIso, type: "DEPEG_WARNING", severity: 3, evidence: { priceChange5m, priceChange1h } });
       }
 
-      // ============= Upsert signal =============
+      // Upsert signal with normalized MPI
       const signalData: any = {
-        netuid, ts: nowIso, state: newState, score: mpi, mpi, confidence_pct: confidencePct,
-        quality_score: Q, reasons, miner_filter: minersNow > 0 ? (minersDelta >= 0 ? "PASS" : "WARN") : "FAIL",
+        netuid: s.netuid, ts: nowIso, state: newState, score: mpi, mpi,
+        confidence_pct: s.confidencePct, quality_score: s.Q, reasons,
+        miner_filter: s.minersNow > 0 ? (s.minersDelta >= 0 ? "PASS" : "WARN") : "FAIL",
       };
       if (newState !== prevState) signalData.last_state_change_at = nowIso;
       if (eventType) signalData.last_notified_at = nowIso;
@@ -259,15 +282,15 @@ Deno.serve(async (req) => {
 
       if (eventType) {
         await sb.from("events").insert({
-          netuid, ts: nowIso, type: eventType, severity,
-          evidence: { mpi, confidencePct, M: Math.round(M), A: Math.round(A), L: Math.round(L), B, Q, reasons },
+          netuid: s.netuid, ts: nowIso, type: eventType, severity,
+          evidence: { mpi, mpiRaw: s.mpiRaw, confidencePct: s.confidencePct, M: Math.round(s.M), A: Math.round(s.A), L: Math.round(s.L), B: s.B, Q: s.Q, reasons },
         });
       }
 
-      // ============= Daily price snapshot =============
+      // Daily price snapshot
       const today = now.toISOString().split("T")[0];
       await sb.from("subnet_price_daily").upsert(
-        { netuid, date: today, price_close: priceNow, price_high: Math.max(priceNow, priceMax7d || 0), price_low: priceNow },
+        { netuid: s.netuid, date: today, price_close: s.priceNow, price_high: Math.max(s.priceNow, s.priceMax7d || 0), price_low: s.priceNow },
         { onConflict: "netuid,date" }
       );
 
