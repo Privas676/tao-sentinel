@@ -28,9 +28,12 @@ import {
 
 /* ─── Exported types ─── */
 
+export type AssetType = "SPECULATIVE" | "CORE_NETWORK";
+
 export type UnifiedSubnetScore = {
   netuid: number;
   name: string;
+  assetType: AssetType;
   state: string | null;
   psi: number;
   conf: number;
@@ -302,7 +305,17 @@ export function useSubnetScores(): UnifiedScoresResult {
         const chainData = payload?._chain || {};
         const healthData = extractHealthData(s.netuid!, payload || {}, chainData, rate);
         const recalc = recalculate(healthData);
-        const healthScores = computeAllHealthScores(healthData, recalc);
+        let healthScores = computeAllHealthScores(healthData, recalc);
+
+        // SN-0 Root: disable speculative penalties (liquidity, volume/MC, emission)
+        if (s.netuid === 0) {
+          healthScores = {
+            ...healthScores,
+            liquidityHealth: 80,    // neutral — not penalized
+            volumeHealth: 60,       // neutral
+            emissionPressure: 10,   // minimal pressure
+          };
+        }
 
         // Smart Capital
         const sc = deriveSubnetSC(psi, quality, conf, s.state);
@@ -348,6 +361,9 @@ export function useSubnetScores(): UnifiedScoresResult {
 
     // Step 3: Build final scores
     const scored = allRows.map((r, i) => {
+      const isRoot = r.netuid === 0;
+      const assetType: AssetType = isRoot ? "CORE_NETWORK" : "SPECULATIVE";
+
       let oppBlend = clamp(Math.round(r.oppRaw * 0.6 + oppPercentile[i] * 0.4), 5, 98);
       let riskBlend = clamp(Math.round(r.riskRaw * 0.6 + riskPercentile[i] * 0.4), 0, 100);
 
@@ -356,15 +372,24 @@ export function useSubnetScores(): UnifiedScoresResult {
         oppBlend = 0;
       }
 
+      // ── SN-0 Root: CORE_NETWORK overrides ──
+      if (isRoot) {
+        // Disable speculative penalties, fix risk floor & opp cap
+        riskBlend = Math.max(riskBlend, 35);
+        oppBlend = Math.min(oppBlend, 60);
+      }
+
       // Risk Override v2
       const slMetrics = subnetLatest?.get(r.netuid);
       const volMcRatio = (slMetrics?.volCap != null) ? slMetrics.volCap : undefined;
-      const override = evaluateRiskOverride({
-        netuid: r.netuid, state: r.state, psi: r.psi, risk: riskBlend, quality: r.quality,
-        liquidityUsd: r.displayedLiq > 0 ? r.displayedLiq : undefined,
-        volumeMcRatio: volMcRatio,
-        taoInPool: slMetrics?.liq,
-      });
+      const override = isRoot
+        ? { isOverridden: false, isWarning: false, systemStatus: "OK" as SystemStatus, overrideReasons: [] }
+        : evaluateRiskOverride({
+            netuid: r.netuid, state: r.state, psi: r.psi, risk: riskBlend, quality: r.quality,
+            liquidityUsd: r.displayedLiq > 0 ? r.displayedLiq : undefined,
+            volumeMcRatio: volMcRatio,
+            taoInPool: slMetrics?.liq,
+          });
       if (override.isOverridden) oppBlend = 0;
 
       // Calibration
@@ -372,8 +397,14 @@ export function useSubnetScores(): UnifiedScoresResult {
         risk: riskBlend, opportunity: oppBlend,
         state: r.state, isTopRank: false, isOverridden: override.isOverridden,
       });
-      const opp = cal.opportunity;
-      const risk = cal.risk;
+      let opp = cal.opportunity;
+      let risk = cal.risk;
+
+      // Root: enforce floors/caps after calibration too
+      if (isRoot) {
+        risk = Math.max(risk, 35);
+        opp = Math.min(opp, 60);
+      }
 
       let asymmetry = cal.asymmetry;
       if (r.dataUncertain) asymmetry -= 15;
@@ -381,13 +412,20 @@ export function useSubnetScores(): UnifiedScoresResult {
       const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
       let action: StrategicAction = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, r.conf);
       if (override.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
-      checkCoherence(override.isOverridden, action);
+
+      // ── Root-specific action: STAKE or NEUTRAL, never EXIT ──
+      if (isRoot) {
+        action = risk < 60 ? "STAKE" : "NEUTRAL";
+      } else {
+        checkCoherence(override.isOverridden, action);
+      }
 
       const stability = computeStabilitySetup(opp, risk, r.conf, momentum, r.quality, r.dataUncertain);
 
       return {
         netuid: r.netuid,
         name: r.name,
+        assetType,
         state: r.state,
         psi: r.psi,
         conf: r.conf,

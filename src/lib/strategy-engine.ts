@@ -59,7 +59,7 @@ export function macroIcon(rec: MacroRecommendation): string {
   }
 }
 
-export type StrategicAction = "ENTER" | "WATCH" | "EXIT";
+export type StrategicAction = "ENTER" | "WATCH" | "EXIT" | "STAKE" | "NEUTRAL";
 export type StrategyMode = "hunter" | "defensive" | "bagbuilder";
 
 const THRESHOLDS: Record<StrategyMode, {
@@ -135,6 +135,8 @@ export function actionColor(action: StrategicAction): string {
     case "ENTER": return "rgba(76,175,80,0.9)";
     case "WATCH": return "rgba(255,193,7,0.9)";
     case "EXIT": return "rgba(229,57,53,0.9)";
+    case "STAKE": return "rgba(100,181,246,0.9)";
+    case "NEUTRAL": return "rgba(158,158,158,0.9)";
   }
 }
 
@@ -143,6 +145,8 @@ export function actionBg(action: StrategicAction): string {
     case "ENTER": return "rgba(76,175,80,0.08)";
     case "WATCH": return "rgba(255,193,7,0.06)";
     case "EXIT": return "rgba(229,57,53,0.08)";
+    case "STAKE": return "rgba(100,181,246,0.06)";
+    case "NEUTRAL": return "rgba(158,158,158,0.06)";
   }
 }
 
@@ -151,6 +155,8 @@ export function actionBorder(action: StrategicAction): string {
     case "ENTER": return "rgba(76,175,80,0.25)";
     case "WATCH": return "rgba(255,193,7,0.2)";
     case "EXIT": return "rgba(229,57,53,0.25)";
+    case "STAKE": return "rgba(100,181,246,0.2)";
+    case "NEUTRAL": return "rgba(158,158,158,0.2)";
   }
 }
 
@@ -159,6 +165,8 @@ export function actionIcon(action: StrategicAction): string {
     case "ENTER": return "🟢";
     case "WATCH": return "🟡";
     case "EXIT": return "🔴";
+    case "STAKE": return "🔵";
+    case "NEUTRAL": return "⚪";
   }
 }
 
