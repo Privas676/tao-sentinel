@@ -68,18 +68,18 @@ function percentileRank(values: number[]): number[] {
   });
 }
 
-/** Apply S-curve to percentile-normalized scores for high variance */
-function applySCurve(percentile: number, steepness = 8): number {
-  const normalized = percentile / 100; // 0-1
+/** Apply S-curve to percentile-normalized scores for high variance.
+ *  steepness=6 gives a gentler curve that preserves mid-range differentiation */
+function applySCurve(percentile: number, steepness = 6): number {
+  const normalized = percentile / 100;
   const curved = sigmoid(normalized, steepness, 0.5);
-  // Re-scale to 0-100 while ensuring full range usage
   const min = sigmoid(0, steepness, 0.5);
   const max = sigmoid(1, steepness, 0.5);
   return Math.round(((curved - min) / (max - min)) * 100);
 }
 
 /** Normalize an array of scores using percentile + S-curve */
-export function normalizeWithVariance(rawScores: number[], steepness = 8): number[] {
+export function normalizeWithVariance(rawScores: number[], steepness = 6): number[] {
   const ranks = percentileRank(rawScores);
   return ranks.map(r => applySCurve(r, steepness));
 }
@@ -153,21 +153,44 @@ export function stabilityColor(pct: number): string {
 /* ═══════════════════════════════════════ */
 
 function deriveOpportunity(psi: number, conf: number, quality: number, state: string | null): number {
+  // Use non-linear components to maximize differentiation
   let opp = 0;
-  opp += clamp(psi * 0.45, 0, 45);
-  opp += clamp(conf * 0.25, 0, 25);
+  // PSI contribution with quadratic boost for high values
+  opp += (psi / 100) * (psi / 100) * 35; // 0-35, quadratic
+  // Confidence: linear but wider range
+  opp += clamp(conf * 0.30, 0, 30);
+  // Quality with threshold bonus
   opp += clamp(quality * 0.20, 0, 20);
-  if (state === "GO" || state === "GO_SPECULATIVE") opp += 10;
+  // State bonuses (significant differentiation)
+  if (state === "GO") opp += 15;
+  else if (state === "GO_SPECULATIVE" || state === "EARLY") opp += 10;
+  else if (state === "WATCH") opp += 3;
+  else if (state === "BREAK" || state === "EXIT_FAST") opp -= 10;
+  // Interaction term: high PSI + high quality = extra boost
+  if (psi >= 60 && quality >= 60) opp += 8;
+  // Low PSI penalty
+  if (psi < 30) opp -= 5;
   return Math.round(clamp(opp, 0, 100));
 }
 
 function deriveRisk(psi: number, conf: number, quality: number, state: string | null): number {
   let risk = 0;
-  if (state === "BREAK" || state === "EXIT_FAST") risk += 45;
-  risk += clamp((100 - quality) * 0.25, 0, 25);
-  risk += clamp((100 - conf) * 0.15, 0, 15);
-  if (psi >= 85) risk += clamp((psi - 85) * 1.5, 0, 15);
-  if (psi < 20) risk = Math.max(risk - 10, 5);
+  // State is the strongest risk differentiator
+  if (state === "BREAK" || state === "EXIT_FAST") risk += 40;
+  else if (state === "HOLD") risk += 5;
+  // Quality deficit: quadratic to amplify low quality
+  const qualDeficit = (100 - quality) / 100;
+  risk += qualDeficit * qualDeficit * 30; // 0-30, quadratic
+  // Confidence deficit
+  const confDeficit = (100 - conf) / 100;
+  risk += confDeficit * confDeficit * 20; // 0-20, quadratic
+  // Overheated: very high PSI with low quality = speculative risk
+  if (psi >= 80 && quality < 50) risk += 15;
+  if (psi >= 90 && quality < 40) risk += 10;
+  // Low PSI can mean stagnation risk
+  if (psi < 25) risk += 8;
+  // Moderate PSI with low confidence
+  if (psi >= 40 && psi <= 60 && conf < 40) risk += 5;
   return Math.round(clamp(risk, 0, 100));
 }
 
