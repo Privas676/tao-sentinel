@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useI18n, Lang } from "@/lib/i18n";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 
@@ -5,6 +6,14 @@ export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
   const { mode, setMode } = useOverrideMode();
   const fr = lang === "fr";
+
+  const [showMinorDiv, setShowMinorDiv] = useState(() => {
+    try { return localStorage.getItem("show-minor-divergences") === "true"; } catch { return false; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("show-minor-divergences", showMinorDiv ? "true" : "false");
+  }, [showMinorDiv]);
 
   return (
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
@@ -57,6 +66,30 @@ export default function SettingsPage() {
               : (fr
                 ? "Toutes les alertes override sont affichées (règles legacy)."
                 : "All override alerts shown (legacy rules).")}
+          </p>
+        </div>
+
+        {/* Minor Divergences Toggle */}
+        <div>
+          <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
+            {fr ? "DIVERGENCES DATA" : "DATA DIVERGENCES"}
+          </label>
+          <button
+            onClick={() => setShowMinorDiv(!showMinorDiv)}
+            className="font-mono text-sm px-5 py-2.5 rounded-lg transition-all tracking-wider"
+            style={{
+              background: showMinorDiv ? "rgba(255,152,0,0.12)" : "rgba(255,255,255,0.04)",
+              color: showMinorDiv ? "rgba(255,152,0,0.9)" : "rgba(255,255,255,0.4)",
+              border: `1px solid ${showMinorDiv ? "rgba(255,152,0,0.3)" : "rgba(255,255,255,0.08)"}`,
+            }}>
+            {showMinorDiv
+              ? (fr ? "⚠ Divergences mineures visibles" : "⚠ Minor divergences shown")
+              : (fr ? "Masquer divergences mineures" : "Hide minor divergences")}
+          </button>
+          <p className="font-mono text-[10px] text-white/25 mt-2">
+            {fr
+              ? "Par défaut : Gravité ≥ 60 ou Confiance ≥ 70% uniquement. Activer pour tout voir."
+              : "Default: Gravity ≥ 60 or Confidence ≥ 70% only. Enable to see all."}
           </p>
         </div>
 
