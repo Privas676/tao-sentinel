@@ -20,7 +20,6 @@ function AppLayout() {
   const { user, loading, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Unread events count for badge
   const { data: unreadCount } = useQuery({
     queryKey: ["unread-events"],
     queryFn: async () => {
@@ -46,7 +45,7 @@ function AppLayout() {
 
   return (
     <div className="h-screen w-screen flex bg-black overflow-hidden">
-      {/* Sidebar toggle — always visible, never overlapped */}
+      {/* Sidebar toggle */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className="fixed top-4 left-4 z-50 flex items-center gap-2 px-3.5 py-2.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
@@ -67,9 +66,11 @@ function AppLayout() {
         <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar — fixed, pushes content on desktop */}
+      {/* Sidebar — overlay on mobile, pushes content on desktop */}
       <div
-        className={`fixed z-40 h-full transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed md:relative z-40 h-full transition-all duration-300 ease-in-out flex-shrink-0 ${
+          sidebarOpen ? "translate-x-0 md:translate-x-0" : "-translate-x-full md:translate-x-0 md:-ml-[200px]"
+        }`}
         style={{ width: SIDEBAR_W }}
       >
         <nav className="h-full border-r border-white/[0.04] pt-16 px-3 flex flex-col gap-1"
@@ -96,7 +97,6 @@ function AppLayout() {
             );
           })}
 
-          {/* Auth section at bottom */}
           <div className="mt-auto mb-4 px-3">
             {user ? (
               <div className="space-y-2">
@@ -121,8 +121,8 @@ function AppLayout() {
         </nav>
       </div>
 
-      {/* Main content — full width always, sidebar overlays on mobile */}
-      <div className="flex-1 h-full overflow-hidden">
+      {/* Main content */}
+      <div className="flex-1 h-full overflow-hidden transition-all duration-300">
         <Routes>
           <Route path="/" element={<AlienGauge />} />
           <Route path="/subnets" element={<SubnetsPage />} />
