@@ -41,6 +41,8 @@ function typeDisplayLabel(type: string | null, lang: string): { label: string; i
       return { label: "WHALE", icon: "🐋", color: "rgba(255,215,0,0.8)" };
     case "DATA_DIVERGENCE":
       return { label: fr ? "DIVERGENCE DATA" : "DATA DIVERGENCE", icon: "⚠", color: "rgba(255,152,0,0.8)" };
+    case "RISK_OVERRIDE":
+      return { label: fr ? "⛔ OVERRIDE RISQUE" : "⛔ RISK OVERRIDE", icon: "🛡", color: "rgba(229,57,53,0.9)" };
     case "PRE_HYPE":
       return { label: fr ? "PRÉ-HYPE" : "PRE-HYPE", icon: "🚀", color: "rgba(156,39,176,0.9)" };
     case "SMART_ACCUMULATION":
@@ -55,6 +57,7 @@ function eventCategory(type: string | null): FilterType {
   if (type === "WHALE_MOVE") return "WHALE";
   if (type === "DATA_DIVERGENCE") return "DATA";
   if (type === "PRE_HYPE" || type === "SMART_ACCUMULATION") return "SMART";
+  if (type === "RISK_OVERRIDE") return "STATE";
   return "STATE";
 }
 
@@ -224,10 +227,43 @@ export default function AlertsPage() {
     );
   };
 
+  const renderRiskOverrideEvent = (ev: EventRow, count: number) => {
+    const e = ev.evidence as any;
+    const mpi = e?.mpi ?? "—";
+    const quality = e?.quality ?? "—";
+    const reasons = (e?.reasons as string[]) || [];
+    const gating = e?.gatingFail ? (fr ? "Gating échoué" : "Gating failed") : null;
+    const zeroMiners = e?.minersNow === 0 ? (fr ? "0 mineur" : "0 miners") : null;
+    const tags = [gating, zeroMiners, ...reasons].filter(Boolean);
+    return (
+      <div key={ev.id} className="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-2 sm:gap-4 px-3 sm:px-4 py-3 border rounded-lg hover:bg-white/[0.02] transition-colors"
+        style={{ borderColor: "rgba(229,57,53,0.15)" }}>
+        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1 sm:mt-0" style={{ background: "rgba(229,57,53,0.9)" }} />
+        <div className="font-mono text-xs tracking-wider font-bold" style={{ color: "rgba(229,57,53,0.9)" }}>
+          🛡 {fr ? "OVERRIDE RISQUE" : "RISK OVERRIDE"}
+        </div>
+        <div className="font-mono text-xs text-white/50">SN-{ev.netuid} {subnetLinks(ev.netuid)}</div>
+        <div className="font-mono text-[10px] text-white/40">MPI {mpi} · Q {quality}</div>
+        <div className="font-mono text-[10px] text-white/30 flex-1 flex flex-wrap gap-1">
+          {tags.map((t, i) => (
+            <span key={i} className="px-1.5 py-0.5 rounded" style={{ background: "rgba(229,57,53,0.08)", border: "1px solid rgba(229,57,53,0.15)", color: "rgba(229,57,53,0.7)" }}>
+              {t}
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          {count > 1 && <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.35)" }}>×{count}</span>}
+          <span className="font-mono text-[10px] text-white/20">{ev.ts ? new Date(ev.ts).toLocaleString() : "—"}</span>
+        </div>
+      </div>
+    );
+  };
+
   const renderEvent = ({ event, count }: { event: EventRow; count: number }) => {
     if (event.type === "WHALE_MOVE") return renderWhaleEvent(event, count);
     if (event.type === "DATA_DIVERGENCE") return renderDivergenceEvent(event, count);
     if (event.type === "PRE_HYPE" || event.type === "SMART_ACCUMULATION") return renderSmartEvent(event, count);
+    if (event.type === "RISK_OVERRIDE") return renderRiskOverrideEvent(event, count);
     return renderStandardEvent(event, count);
   };
 
