@@ -295,6 +295,27 @@ export type Database = {
         }
         Relationships: []
       }
+      whale_coldkeys: {
+        Row: {
+          address: string
+          created_at: string
+          id: number
+          label: string | null
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          id?: never
+          label?: string | null
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          id?: never
+          label?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       fx_latest: {
