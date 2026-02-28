@@ -7,9 +7,8 @@ const corsHeaders = {
 
 const RAO = 1e9;
 const MIN_TAO = 100; // alert threshold
-const MAX_RETRIES = 3;
-const BATCH_SIZE = 5; // concurrent requests per batch
-const BATCH_DELAY_MS = 1500; // delay between batches to avoid 429
+const MAX_RETRIES = 4;
+const REQUEST_DELAY_MS = 2000; // 2s between each sequential request
 
 /** Fetch with exponential backoff retry on 429 */
 async function fetchWithRetry(
@@ -64,28 +63,17 @@ Deno.serve(async (req) => {
     let totalInserted = 0;
     let totalEvents = 0;
 
-    // Process coldkeys in batches to avoid rate limiting
-    for (let i = 0; i < coldkeys.length; i += BATCH_SIZE) {
-      const batch = coldkeys.slice(i, i + BATCH_SIZE);
-      if (i > 0) await sleep(BATCH_DELAY_MS);
+    // Process coldkeys sequentially to respect rate limits
+    for (let i = 0; i < coldkeys.length; i++) {
+      const ck = coldkeys[i];
+      if (i > 0) await sleep(REQUEST_DELAY_MS);
 
-      const results = await Promise.allSettled(
-        batch.map(async (ck) => {
-          const url = `https://api.taostats.io/api/transfer/v1?address=${ck.address}&amount_min=${minRao}&timestamp_start=${since}&order=timestamp_desc&limit=50`;
-          const res = await fetchWithRetry(url, { headers });
-          return { ck, res };
-        })
-      );
-
-      for (const result of results) {
-        if (result.status === "rejected") {
-          console.error(`Batch fetch error:`, result.reason);
-          continue;
-        }
-        const { ck, res } = result.value;
+      try {
+        const url = `https://api.taostats.io/api/transfer/v1?address=${ck.address}&amount_min=${minRao}&timestamp_start=${since}&order=timestamp_desc&limit=50`;
+        const res = await fetchWithRetry(url, { headers });
 
         if (!res.ok) {
-          console.error(`Taostats transfer error for ${ck.address}: ${res.status}`);
+          console.error(`Taostats error ${ck.address}: ${res.status} after retries`);
           await res.text();
           continue;
         }
@@ -139,6 +127,8 @@ Deno.serve(async (req) => {
           if (evErr) console.error(`Insert event error:`, evErr);
           else totalEvents++;
         }
+      } catch (e) {
+        console.error(`Error processing ${ck.address}:`, e);
       }
     }
 
