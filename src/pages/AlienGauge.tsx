@@ -18,7 +18,7 @@ import {
 import {
   deriveStrategicAction, actionColor, actionBg, actionBorder, actionIcon,
   computeSentinelIndex, sentinelIndexColor, sentinelIndexLabel,
-  deriveSubnetAction,
+  deriveSubnetAction, type StrategyMode,
 } from "@/lib/strategy-engine";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -111,8 +111,8 @@ function FlowBadge({ label, direction, isMobile }: { label: string; direction: "
 /* ═══════════════════════════════════════ */
 /*     TOP SUBNET CARD (best asymmetry)    */
 /* ═══════════════════════════════════════ */
-function BestSubnetCard({ signal, isMobile, t, onClick }: { signal: SubnetSignal; isMobile: boolean; t: (k: any) => string; onClick: () => void }) {
-  const action = deriveSubnetAction(signal.opportunity, signal.risk, signal.confidence);
+function BestSubnetCard({ signal, isMobile, t, onClick, mode }: { signal: SubnetSignal; isMobile: boolean; t: (k: any) => string; onClick: () => void; mode?: StrategyMode }) {
+  const action = deriveStrategicAction(signal.opportunity, signal.risk, "ACCUMULATION", signal.confidence, mode ?? "hunter");
   const asymScore = signal.opportunity - signal.risk;
   return (
     <div onClick={onClick} className="cursor-pointer rounded-xl transition-all hover:scale-[1.01]" style={{
@@ -891,7 +891,7 @@ export default function AlienGauge() {
             <span className="font-mono tracking-[0.2em] uppercase block mb-3" style={{ fontSize: isMobile ? 8 : 10, color: "rgba(255,215,0,0.3)" }}>
               {t("top.best")}
             </span>
-            <BestSubnetCard signal={bestSubnet} isMobile={isMobile} t={t} onClick={() => setPanelSignal(bestSubnet)} />
+            <BestSubnetCard signal={bestSubnet} isMobile={isMobile} t={t} onClick={() => setPanelSignal(bestSubnet)} mode={strategyMode} />
           </div>
         )}
 
