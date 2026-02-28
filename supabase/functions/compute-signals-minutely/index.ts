@@ -387,30 +387,78 @@ Deno.serve(async (req) => {
       const s = subnetRaws[i];
       const mpi = normalizedMpis[i];
       const normQ = normalizedQs[i];
-      const risk = normalizedConfs[i]; // reuse normalized risk proxy
+      const confidencePct = normalizedConfs[i];
       const liqChange1h = s.liq1h > 0 ? ((s.liqNow - s.liq1h) / s.liq1h) * 100 : 0;
+      const latest = latestMap.get(s.netuid);
+      const volCap = latest ? (Number(latest.vol_cap) || 0) : 0;
 
-      // Override conditions (mirror client-side risk-override.ts)
-      const isOverridden =
-        s.gatingFail ||
-        s.minersNow === 0 ||
-        liqChange1h <= -60 ||
-        mpi > 85 && normQ < 30 ||
-        // State-based: BREAK from low MPI
-        (mpi < 40);
+      // ── Compute hardConditions (mirrors client-side risk-override.ts) ──
+      const hardConditions: string[] = [];
+      const reasons: string[] = [];
+
+      // 1. Zero miners / gating fail
+      if (s.minersNow === 0) {
+        hardConditions.push("EMISSION_ZERO");
+        reasons.push("Zero miners (emission nulle)");
+      }
+
+      // 2. UID/miners very low
+      if (s.minersNow > 0 && s.minersNow <= 3) {
+        hardConditions.push("UID_LOW");
+        reasons.push(`UID actifs très faible (${s.minersNow})`);
+      }
+
+      // 3. Liquidity collapse
+      if (liqChange1h <= -60) {
+        hardConditions.push("LIQUIDITY_USD_CRITICAL");
+        reasons.push(`Effondrement liquidité (${Math.round(liqChange1h)}%)`);
+      }
+
+      // 4. TAO pool critical (liquidity < 5 TAO equivalent)
+      if (s.liqNow > 0 && s.liqNow < 5) {
+        hardConditions.push("TAO_POOL_CRITICAL");
+        reasons.push(`TAO en pool critique (${s.liqNow.toFixed(1)})`);
+      }
+
+      // 5. Volume/MC abnormally low
+      if (volCap < 0.005 && volCap >= 0) {
+        hardConditions.push("VOL_MC_LOW");
+        reasons.push(`Vol/MC trop faible (${(volCap * 100).toFixed(2)}%)`);
+      }
+
+      // 6. PSI overheating + low quality
+      if (mpi > 85 && normQ < 30) {
+        hardConditions.push("SLIPPAGE_HIGH");
+        reasons.push(`PSI surchauffe (${mpi}) qualité insuffisante (${normQ})`);
+      }
+
+      // 7. BREAK state from low MPI
+      if (mpi < 40) {
+        hardConditions.push("BREAK_STATE");
+        reasons.push(`MPI critique (${mpi})`);
+      }
+
+      // 8. Gating fail (general)
+      if (s.gatingFail && !hardConditions.includes("EMISSION_ZERO")) {
+        hardConditions.push("BREAK_STATE");
+        reasons.push("Gating fail");
+      }
+
+      // ── Override decision: ≥ 2 hard conditions required ──
+      const isOverridden = hardConditions.length >= 2;
 
       const existingId = overrideMap.get(s.netuid);
 
       if (isOverridden) {
         const evidence = {
-          mpi, quality: normQ, risk,
+          mpi, quality: normQ, risk: confidencePct,
           gatingFail: s.gatingFail,
           minersNow: s.minersNow,
           liqChange1h: Math.round(liqChange1h * 10) / 10,
-          reasons: s.breakReasons,
+          hardConditions,
+          reasons,
         };
         if (existingId) {
-          // Update timestamp only
           overrideUpdates.push({ id: existingId, ts: nowIso });
         } else {
           overrideInserts.push({
@@ -418,7 +466,6 @@ Deno.serve(async (req) => {
           });
         }
       } else if (existingId) {
-        // Subnet no longer overridden → clean up
         clearedOverrideIds.push(existingId);
       }
     }
