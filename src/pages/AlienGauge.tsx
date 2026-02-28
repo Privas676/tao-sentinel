@@ -1,22 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import {
   SubnetSignal, RawSignal,
-  clamp, processSignals,
-  computeGlobalPsi, computeGlobalConfidence,
+  processSignals,
   computeGlobalOpportunity, computeGlobalRisk,
+  computeGlobalConfidence,
   opportunityColor, riskColor,
-  computeSmartCapital, type SmartCapitalState,
+  computeSmartCapital,
   computeASMicro, detectPreHype, computeSaturationIndex, saturationAlert,
-  stabilityColor, computeStabilitySetup, momentumColor,
+  stabilityColor,
 } from "@/lib/gauge-engine";
 import {
-  deriveStrategicAction, actionColor, actionBg, actionBorder, actionIcon,
+  actionColor, actionBg, actionBorder, actionIcon,
   computeSentinelIndex, sentinelIndexColor, sentinelIndexLabel,
   deriveSubnetAction,
+  deriveMacroRecommendation, macroColor, macroBg, macroBorder, macroIcon,
 } from "@/lib/strategy-engine";
 import {
   computeGlobalConfianceData, confianceColor, shouldModerateRecommendation,
@@ -25,18 +26,8 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 /* ═══════════════════════════════════════ */
-/*          VISUAL HELPERS                 */
+/*          SPARKLINE HELPER               */
 /* ═══════════════════════════════════════ */
-function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
-  const rad = (a: number) => ((a - 90) * Math.PI) / 180;
-  const x1 = cx + r * Math.cos(rad(startAngle));
-  const y1 = cy + r * Math.sin(rad(startAngle));
-  const x2 = cx + r * Math.cos(rad(endAngle));
-  const y2 = cy + r * Math.sin(rad(endAngle));
-  const large = endAngle - startAngle > 180 ? 1 : 0;
-  return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
-}
-
 function TooltipSparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
   if (data.length < 2) return null;
   const min = Math.min(...data), max = Math.max(...data);
@@ -50,83 +41,14 @@ function TooltipSparkline({ data, width, height, color }: { data: number[]; widt
 }
 
 /* ═══════════════════════════════════════ */
-/*     STRATEGIC RECOMMENDATION BADGE      */
+/*     METRIC CARD                         */
 /* ═══════════════════════════════════════ */
-function StrategicBadge({ action, label, isMobile }: { action: "ENTER" | "WATCH" | "EXIT"; label: string; isMobile: boolean }) {
-  const prevActionRef = useRef(action);
-  const [morphing, setMorphing] = useState(false);
-  const [displayAction, setDisplayAction] = useState(action);
-  const [displayLabel, setDisplayLabel] = useState(label);
-
-  useEffect(() => {
-    if (action !== prevActionRef.current) {
-      setMorphing(true);
-      const timer = setTimeout(() => {
-        setDisplayAction(action);
-        setDisplayLabel(label);
-        prevActionRef.current = action;
-        const timer2 = setTimeout(() => setMorphing(false), 80);
-        return () => clearTimeout(timer2);
-      }, 300);
-      return () => clearTimeout(timer);
-    } else {
-      setDisplayAction(action);
-      setDisplayLabel(label);
-    }
-  }, [action, label]);
-
+function MetricCard({ label, value, color, sub }: { label: string; value: string | number; color: string; sub?: string }) {
   return (
-    <div className="flex items-center gap-3 px-6 py-3.5 rounded-xl"
-      style={{
-        background: actionBg(displayAction),
-        border: `2px solid ${actionBorder(displayAction)}`,
-        boxShadow: `0 0 35px ${actionBg(displayAction)}, 0 0 60px ${actionBg(displayAction)}`,
-        animation: displayAction === "EXIT" ? "priority-pulse 2s ease-in-out infinite" : displayAction === "ENTER" ? "priority-pulse 3s ease-in-out infinite" : "none",
-        transition: "background 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease",
-        transform: morphing ? "scale(0.88)" : "scale(1)",
-        opacity: morphing ? 0 : 1,
-        filter: morphing ? "blur(4px) brightness(1.8)" : "blur(0) brightness(1)",
-        transitionProperty: "background, border-color, box-shadow, transform, opacity, filter",
-        transitionDuration: "0.5s, 0.5s, 0.5s, 0.3s, 0.3s, 0.3s",
-      }}>
-      <span style={{ fontSize: isMobile ? 20 : 28, transition: "transform 0.4s cubic-bezier(0.34,1.56,0.64,1)", transform: morphing ? "rotate(180deg) scale(0)" : "rotate(0deg) scale(1)", display: "inline-block" }}>
-        {actionIcon(displayAction)}
-      </span>
-      <span className="font-mono font-bold tracking-[0.25em]" style={{ color: actionColor(displayAction), fontSize: isMobile ? 18 : 26 }}>
-        {displayLabel}
-      </span>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════ */
-/*     SENTINEL INDEX DISPLAY              */
-/* ═══════════════════════════════════════ */
-function SentinelIndexDisplay({ score, label, isMobile }: { score: number; label: string; isMobile: boolean }) {
-  const color = sentinelIndexColor(score);
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <span className="font-mono tracking-[0.2em] uppercase" style={{ color: "rgba(255,255,255,0.3)", fontSize: isMobile ? 7 : 9 }}>
-        TAO SENTINEL INDEX
-      </span>
-      <div className="flex items-center gap-2">
-        <span className="font-mono font-bold" style={{ color, fontSize: isMobile ? 28 : 38 }}>{score}</span>
-        <span className="font-mono font-bold tracking-wider" style={{ color, fontSize: isMobile ? 10 : 13, opacity: 0.7 }}>{label}</span>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════ */
-/*     FLOW BADGES                         */
-/* ═══════════════════════════════════════ */
-function FlowBadge({ label, direction, isMobile }: { label: string; direction: "up" | "down" | "stable"; isMobile: boolean }) {
-  const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "→";
-  const c = direction === "up" ? "rgba(76,175,80,0.8)" : direction === "down" ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.35)";
-  return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
-      <span className="font-mono" style={{ color: "rgba(255,255,255,0.35)", fontSize: isMobile ? 8 : 10, letterSpacing: "0.08em" }}>{label}</span>
-      <span className="font-mono font-bold" style={{ color: c, fontSize: isMobile ? 12 : 14 }}>{arrow}</span>
+    <div className="flex flex-col items-center px-4 py-3 rounded-xl" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
+      <span className="font-mono tracking-[0.15em] uppercase" style={{ fontSize: 8, color: "rgba(255,255,255,0.3)" }}>{label}</span>
+      <span className="font-mono font-bold mt-1" style={{ color, fontSize: 22 }}>{value}</span>
+      {sub && <span className="font-mono mt-0.5" style={{ fontSize: 9, color, opacity: 0.7 }}>{sub}</span>}
     </div>
   );
 }
@@ -134,20 +56,21 @@ function FlowBadge({ label, direction, isMobile }: { label: string; direction: "
 /* ═══════════════════════════════════════ */
 /*     BEST SUBNET CARD                    */
 /* ═══════════════════════════════════════ */
-function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest }: {
-  signal: SubnetSignal; isMobile: boolean; t: (k: any) => string; onClick: () => void; isMicroBest?: boolean;
+function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest, smartCapitalLabel }: {
+  signal: SubnetSignal; isMobile: boolean; t: (k: any) => string; onClick: () => void; isMicroBest?: boolean; smartCapitalLabel: string;
 }) {
-  const action = deriveStrategicAction(signal.opportunity, signal.risk, "ACCUMULATION", signal.confidence, "hunter", signal.stabilitySetup);
+  const action = deriveSubnetAction(signal.opportunity, signal.risk, signal.confidence);
   const asymScore = signal.opportunity - signal.risk;
   return (
     <div onClick={onClick} className="cursor-pointer rounded-xl transition-all hover:scale-[1.01]" style={{
       background: "rgba(255,215,0,0.03)", border: "1px solid rgba(255,215,0,0.12)",
-      padding: isMobile ? "12px 14px" : "16px 20px", boxShadow: "0 0 40px rgba(255,215,0,0.04)",
+      padding: isMobile ? "14px 16px" : "20px 24px", boxShadow: "0 0 40px rgba(255,215,0,0.04)",
     }}>
-      <div className="flex items-center justify-between mb-2">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <span className="font-mono font-bold" style={{ color: "rgba(255,248,220,0.9)", fontSize: isMobile ? 14 : 18 }}>SN-{signal.netuid}</span>
-          <span className="font-mono" style={{ color: "rgba(255,255,255,0.4)", fontSize: isMobile ? 10 : 12 }}>{signal.name}</span>
+          <span className="font-mono font-bold" style={{ color: "rgba(255,248,220,0.9)", fontSize: isMobile ? 16 : 20 }}>SN-{signal.netuid}</span>
+          <span className="font-mono" style={{ color: "rgba(255,255,255,0.4)", fontSize: isMobile ? 11 : 13 }}>{signal.name}</span>
           {signal.isMicroCap && (
             <span className="font-mono text-[8px] px-1.5 py-0.5 rounded" style={{ background: "rgba(0,200,255,0.1)", color: "rgba(0,200,255,0.7)", border: "1px solid rgba(0,200,255,0.2)" }}>MICRO</span>
           )}
@@ -155,37 +78,47 @@ function BestSubnetCard({ signal, isMobile, t, onClick, isMicroBest }: {
             <span className="font-mono text-[8px] px-1.5 py-0.5 rounded" style={{ background: "rgba(255,100,255,0.08)", color: "rgba(255,100,255,0.7)", border: "1px solid rgba(255,100,255,0.15)" }}>PRÉ-HYPE</span>
           )}
         </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md" style={{
-          background: actionBg(action), border: `1px solid ${actionBorder(action)}`, transition: "all 0.5s ease",
+        {/* Subnet action badge */}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{
+          background: actionBg(action), border: `1px solid ${actionBorder(action)}`,
         }}>
-          <span style={{ fontSize: isMobile ? 10 : 12 }}>{actionIcon(action)}</span>
-          <span className="font-mono font-bold tracking-wider" style={{ color: actionColor(action), fontSize: isMobile ? 9 : 11 }}>
+          <span style={{ fontSize: isMobile ? 12 : 14 }}>{actionIcon(action)}</span>
+          <span className="font-mono font-bold tracking-wider" style={{ color: actionColor(action), fontSize: isMobile ? 11 : 13 }}>
             {t(`strat.${action.toLowerCase()}` as any)}
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-4">
+
+      {/* Metrics grid */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
         <div className="flex flex-col">
           <span className="font-mono" style={{ color: "rgba(255,215,0,0.35)", fontSize: 8, letterSpacing: "0.12em" }}>{t("gauge.opportunity")}</span>
-          <span className="font-mono font-bold" style={{ color: opportunityColor(signal.opportunity), fontSize: isMobile ? 20 : 26 }}>{signal.opportunity}</span>
+          <span className="font-mono font-bold" style={{ color: opportunityColor(signal.opportunity), fontSize: isMobile ? 20 : 24 }}>{signal.opportunity}</span>
         </div>
         <div className="flex flex-col">
           <span className="font-mono" style={{ color: "rgba(229,57,53,0.3)", fontSize: 8, letterSpacing: "0.12em" }}>{t("gauge.risk")}</span>
-          <span className="font-mono font-bold" style={{ color: riskColor(signal.risk), fontSize: isMobile ? 20 : 26 }}>{signal.risk}</span>
+          <span className="font-mono font-bold" style={{ color: riskColor(signal.risk), fontSize: isMobile ? 20 : 24 }}>{signal.risk}</span>
         </div>
-        <div style={{ width: 1, height: 30, background: "rgba(255,255,255,0.06)" }} />
         <div className="flex flex-col">
-          <span className="font-mono" style={{ color: "rgba(255,255,255,0.25)", fontSize: 8, letterSpacing: "0.12em" }}>ASYM</span>
-          <span className="font-mono font-bold" style={{ color: asymScore > 30 ? "rgba(76,175,80,0.9)" : "rgba(255,193,7,0.8)", fontSize: isMobile ? 18 : 22 }}>+{asymScore}</span>
+          <span className="font-mono" style={{ color: "rgba(255,255,255,0.25)", fontSize: 8, letterSpacing: "0.12em" }}>
+            {isMicroBest && signal.isMicroCap ? "AS_μ" : "AS"}
+          </span>
+          <span className="font-mono font-bold" style={{ color: asymScore > 30 ? "rgba(76,175,80,0.9)" : asymScore > 0 ? "rgba(255,193,7,0.8)" : "rgba(229,57,53,0.8)", fontSize: isMobile ? 18 : 22 }}>
+            {isMicroBest && signal.isMicroCap ? (signal.asMicro > 0 ? "+" : "") + signal.asMicro : (asymScore > 0 ? "+" : "") + asymScore}
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <span className="font-mono" style={{ color: "rgba(255,255,255,0.25)", fontSize: 8, letterSpacing: "0.12em" }}>{t("sc.label")}</span>
+          <span className="font-mono font-bold" style={{ fontSize: isMobile ? 10 : 12, color: "rgba(255,248,220,0.6)" }}>{smartCapitalLabel}</span>
         </div>
         <div className="flex flex-col">
           <span className="font-mono" style={{ color: "rgba(255,255,255,0.25)", fontSize: 8, letterSpacing: "0.12em" }}>{t("gauge.stability")}</span>
           <span className="font-mono font-bold" style={{ color: stabilityColor(signal.stabilitySetup), fontSize: isMobile ? 14 : 16 }}>{signal.stabilitySetup}%</span>
         </div>
-        {isMicroBest && signal.asMicro > 0 && (
+        {signal.preHype && (
           <div className="flex flex-col">
-            <span className="font-mono" style={{ color: "rgba(0,200,255,0.3)", fontSize: 8, letterSpacing: "0.12em" }}>AS_μ</span>
-            <span className="font-mono font-bold" style={{ color: "rgba(0,200,255,0.8)", fontSize: isMobile ? 14 : 16 }}>+{signal.asMicro}</span>
+            <span className="font-mono" style={{ color: "rgba(255,100,255,0.3)", fontSize: 8, letterSpacing: "0.12em" }}>{t("pre_hype.label")}</span>
+            <span className="font-mono font-bold" style={{ color: "rgba(255,100,255,0.8)", fontSize: isMobile ? 14 : 16 }}>{signal.preHypeIntensity}%</span>
           </div>
         )}
       </div>
@@ -273,10 +206,6 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
               <div className="font-mono text-lg font-bold" style={{ color: stabilityColor(signal.stabilitySetup) }}>{signal.stabilitySetup}%</div>
               <div className="font-mono text-[9px] text-white/30 tracking-widest">{t("gauge.stability")}</div>
             </div>
-            <div className="text-center">
-              <div className="font-mono text-lg font-bold" style={{ color: momentumColor(signal.momentumLabel) }}>{signal.momentumLabel}</div>
-              <div className="font-mono text-[9px] text-white/30 tracking-widest">{t("sub.momentum")}</div>
-            </div>
           </div>
           <div className="bg-white/[0.02] rounded-lg p-4">
             <div className="font-mono text-[10px] text-white/40 tracking-widest mb-3">{t("tip.why")}</div>
@@ -305,10 +234,16 @@ function SubnetPanel({ signal, open, onClose }: { signal: SubnetSignal | null; o
               ))}
             </div>
           )}
-          <button onClick={() => window.open(`https://taostats.io/subnets/${signal.netuid}`, "_blank")}
-            className="w-full font-mono text-xs tracking-widest py-3 rounded-lg border border-white/10 hover:border-white/20 text-white/50 hover:text-white/80 transition-all">
-            {t("panel.open_taostats")} ↗
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => window.open(`https://taostats.io/subnets/${signal.netuid}`, "_blank")}
+              className="flex-1 font-mono text-xs tracking-widest py-3 rounded-lg border border-white/10 hover:border-white/20 text-white/50 hover:text-white/80 transition-all">
+              TaoStats ↗
+            </button>
+            <button onClick={() => window.open(`https://taomarketcap.com/subnet/${signal.netuid}`, "_blank")}
+              className="flex-1 font-mono text-xs tracking-widest py-3 rounded-lg border border-white/10 hover:border-white/20 text-white/50 hover:text-white/80 transition-all">
+              TaoMarketCap ↗
+            </button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -364,8 +299,7 @@ export default function AlienGauge() {
       if (error) throw error;
       const map = new Map<number, SourceMetrics>();
       for (const r of data || []) {
-        const nid = r.netuid;
-        if (!map.has(nid)) map.set(nid, { netuid: nid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
+        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
       }
       return [...map.values()];
     },
@@ -384,34 +318,21 @@ export default function AlienGauge() {
       if (error) throw error;
       const map = new Map<number, SourceMetrics>();
       for (const r of data || []) {
-        const nid = r.netuid;
-        if (!map.has(nid)) map.set(nid, { netuid: nid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taomarketcap" });
+        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taomarketcap" });
       }
       return [...map.values()];
     },
     refetchInterval: 120_000,
   });
 
-  /* ─── DataFusion Confiance Data ─── */
-  const confianceData = useMemo(() => {
-    return computeGlobalConfianceData(primaryMetricsRaw ?? [], secondaryMetricsRaw ?? []);
-  }, [primaryMetricsRaw, secondaryMetricsRaw]);
-
-  /* ─── signals ─── */
+  /* ─── Computed values ─── */
+  const confianceData = useMemo(() => computeGlobalConfianceData(primaryMetricsRaw ?? [], secondaryMetricsRaw ?? []), [primaryMetricsRaw, secondaryMetricsRaw]);
   const allSignals = useMemo(() => processSignals(rawSignals ?? [], sparklines ?? {}), [rawSignals, sparklines]);
-
-  const realOpp = useMemo(() => computeGlobalOpportunity(rawSignals ?? []), [rawSignals]);
-  const realRisk = useMemo(() => computeGlobalRisk(rawSignals ?? []), [rawSignals]);
-  const realConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
-
-  const globalOpp = realOpp;
-  const globalRisk = realRisk;
-  const globalConf = realConf;
-
-  /* ─── smart capital ─── */
+  const globalOpp = useMemo(() => computeGlobalOpportunity(rawSignals ?? []), [rawSignals]);
+  const globalRisk = useMemo(() => computeGlobalRisk(rawSignals ?? []), [rawSignals]);
+  const globalConf = useMemo(() => computeGlobalConfidence(rawSignals ?? []), [rawSignals]);
   const smartCapital = useMemo(() => computeSmartCapital(rawSignals ?? []), [rawSignals]);
 
-  /* ─── Flow data ─── */
   const flowData = useMemo(() => {
     if (!allSignals.length) return { dominance: "stable" as const, emission: "stable" as const, inflow: "stable" as const };
     const oppSignals = allSignals.filter(s => s.dominant === "opportunity").length;
@@ -424,7 +345,6 @@ export default function AlienGauge() {
     };
   }, [allSignals, smartCapital.state]);
 
-  /* ─── Compute AS_micro + Pre-Hype for all signals ─── */
   const enrichedSignals = useMemo(() => {
     return allSignals.map(s => {
       const asMicro = s.isMicroCap
@@ -435,38 +355,23 @@ export default function AlienGauge() {
     });
   }, [allSignals, smartCapital.state, flowData]);
 
-  /* ─── Strategy (fixed hunter mode, modulated by Confiance Data) ─── */
-  const strategicAction = useMemo(() => {
-    const raw = deriveStrategicAction(globalOpp, globalRisk, smartCapital.state, globalConf, "hunter");
-    if (raw === "ENTER" && shouldModerateRecommendation(confianceData.score, globalOpp, globalRisk)) {
-      return "WATCH" as const;
-    }
-    return raw;
-  }, [globalOpp, globalRisk, smartCapital.state, globalConf, confianceData.score]);
-
-  /* ─── Sentinel Index ─── */
   const sentinelIndex = useMemo(() => computeSentinelIndex(globalOpp, globalRisk, smartCapital.score), [globalOpp, globalRisk, smartCapital.score]);
   const sentinelLabel = sentinelIndexLabel(sentinelIndex, lang);
 
-  /* ─── Global Stability Setup ─── */
   const globalStability = useMemo(() => {
     if (!enrichedSignals.length) return 50;
-    const avg = enrichedSignals.reduce((a, s) => a + s.stabilitySetup, 0) / enrichedSignals.length;
-    return Math.round(avg);
+    return Math.round(enrichedSignals.reduce((a, s) => a + s.stabilitySetup, 0) / enrichedSignals.length);
   }, [enrichedSignals]);
 
-  /* ─── Global Asymmetry Score ─── */
-  const globalAsym = globalOpp - globalRisk;
+  const macroRec = useMemo(() => deriveMacroRecommendation(sentinelIndex, smartCapital.state, globalStability, confianceData.score), [sentinelIndex, smartCapital.state, globalStability, confianceData.score]);
 
-  /* ─── Saturation Index ─── */
   const saturationIndex = useMemo(() => computeSaturationIndex(enrichedSignals), [enrichedSignals]);
   const isSaturated = saturationAlert(saturationIndex);
 
-  /* ─── Best micro-cap subnet (center card) ─── */
+  /* ─── Best subnet ─── */
   const bestMicroCap = useMemo(() => {
     const micros = enrichedSignals.filter(s => s.isMicroCap && s.asMicro > 0);
-    if (!micros.length) return null;
-    return micros.sort((a, b) => b.asMicro - a.asMicro)[0];
+    return micros.length ? micros.sort((a, b) => b.asMicro - a.asMicro)[0] : null;
   }, [enrichedSignals]);
 
   const bestSubnet = useMemo(() => {
@@ -477,49 +382,20 @@ export default function AlienGauge() {
   const displayBest = bestMicroCap ?? bestSubnet;
   const isMicroBest = !!bestMicroCap;
 
-  /* ─── Top 3 Opportunities + Top 3 Risks ─── */
-  const topOpportunities = useMemo(() =>
-    [...enrichedSignals].sort((a, b) => b.opportunity - a.opportunity).slice(0, 3),
-    [enrichedSignals]
-  );
-  const topRisks = useMemo(() =>
-    [...enrichedSignals].filter(s => s.risk > 40).sort((a, b) => b.risk - a.risk).slice(0, 3),
-    [enrichedSignals]
-  );
+  /* ─── Top 3 ─── */
+  const topOpportunities = useMemo(() => [...enrichedSignals].sort((a, b) => b.opportunity - a.opportunity).slice(0, 3), [enrichedSignals]);
+  const topRisks = useMemo(() => [...enrichedSignals].filter(s => s.risk > 40).sort((a, b) => b.risk - a.risk).slice(0, 3), [enrichedSignals]);
 
   const [panelSignal, setPanelSignal] = useState<SubnetSignal | null>(null);
-
-  /* ─── geometry ─── */
   const isMobile = useIsMobile();
-  const SIZE = isMobile ? 300 : 520;
-  const SVG_SIZE = SIZE;
-  const CX = SVG_SIZE / 2, CY = SVG_SIZE / 2;
-  const R_OUTER = isMobile ? 120 : 220;
-  const R_INNER = isMobile ? 95 : 180;
 
-  const oppGlobal = opportunityColor(globalOpp);
-  const rskGlobal = riskColor(globalRisk);
-  const oppAngle = (globalOpp / 100) * 270;
-  const riskAngle = (globalRisk / 100) * 270;
+  const scLabel = t(`sc.${smartCapital.state.toLowerCase()}` as any);
+  const macroRecLabel = t(`macro.${macroRec.toLowerCase()}` as any);
 
   return (
     <div className="h-full w-full select-none overflow-y-auto overflow-x-hidden" style={{ background: "#000" }}>
-      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.75) 100%)" }} />
-
-      <style>{`
-        @keyframes priority-pulse {
-          0%, 100% { opacity: 0.6; }
-          50% { opacity: 1; }
-        }
-        @keyframes opp-sweep {
-          0% { opacity: 0.3; }
-          50% { opacity: 0.6; }
-          100% { opacity: 0.3; }
-        }
-      `}</style>
-
       {/* ═══ HEADER ═══ */}
-      <div className="relative z-30 flex items-center justify-center px-4 sm:px-8 pt-4 sm:pt-6">
+      <div className="flex items-center justify-center px-4 pt-6 pb-2">
         <div className="flex flex-col items-center">
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(255,215,0,0.6)", boxShadow: "0 0 12px rgba(255,215,0,0.3)", marginBottom: 8 }} />
           <span className="font-mono font-bold tracking-[0.4em] sm:tracking-[0.6em]" style={{ fontSize: isMobile ? 14 : 20, color: "rgba(255,248,220,0.85)", textShadow: "0 0 30px rgba(255,215,0,0.15)" }}>
@@ -528,134 +404,116 @@ export default function AlienGauge() {
         </div>
       </div>
 
-      {/* ═══ MAIN CONTENT ═══ */}
-      <div className="relative z-10 flex flex-col items-center px-4 sm:px-8 pb-20" style={{ paddingTop: isMobile ? 12 : 24 }}>
+      <div className="px-4 sm:px-8 pb-20 max-w-[900px] mx-auto">
 
-        {/* ─── GAUGE ─── */}
-        <div className="relative" style={{ width: SIZE, height: SIZE }}>
-          <div className="absolute inset-0 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, rgba(255,180,50,0.05) 0%, transparent 60%)`, transform: "scale(1.3)" }} />
-          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}>
-            {Array.from({ length: 54 }, (_, i) => {
-              const angleDeg = (i * 5) - 135;
-              if (angleDeg > 135) return null;
-              const rad = ((angleDeg - 90) * Math.PI) / 180;
-              const isMajor = i % 9 === 0;
-              const r1 = R_OUTER + 4; const r2 = R_OUTER + (isMajor ? 14 : 8);
-              return <line key={`ot-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)} x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)} stroke={isMajor ? "rgba(255,215,0,0.2)" : "rgba(255,215,0,0.06)"} strokeWidth={isMajor ? 1.5 : 0.7} strokeLinecap="round" />;
-            })}
-            {Array.from({ length: 54 }, (_, i) => {
-              const angleDeg = (i * 5) - 135;
-              if (angleDeg > 135) return null;
-              const rad = ((angleDeg - 90) * Math.PI) / 180;
-              const isMajor = i % 9 === 0;
-              const r1 = R_INNER - 4; const r2 = R_INNER - (isMajor ? 12 : 7);
-              return <line key={`it-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)} x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)} stroke={isMajor ? "rgba(229,57,53,0.18)" : "rgba(229,57,53,0.05)"} strokeWidth={isMajor ? 1.2 : 0.5} strokeLinecap="round" />;
-            })}
-            <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="rgba(255,215,0,0.04)" strokeWidth={isMobile ? 6 : 10} />
-            {oppAngle > 0 && <path d={describeArc(CX, CY, R_OUTER, -135, -135 + oppAngle)} fill="none" stroke={oppGlobal} strokeWidth={isMobile ? 6 : 10} strokeLinecap="round" style={{ opacity: 0.55, animation: "opp-sweep 4s ease-in-out infinite" }} />}
-            <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="rgba(229,57,53,0.04)" strokeWidth={isMobile ? 8 : 12} />
-            {riskAngle > 0 && <path d={describeArc(CX, CY, R_INNER, -135, -135 + riskAngle)} fill="none" stroke={rskGlobal} strokeWidth={isMobile ? 8 : 12} strokeLinecap="round" style={{ opacity: 0.55 }} />}
-            <text x={CX + R_OUTER + 18} y={CY - R_OUTER + 30} fill="rgba(255,215,0,0.3)" fontSize={isMobile ? 7 : 10} fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em" textAnchor="start">{t("gauge.opportunity")}</text>
-            <text x={CX + R_INNER + 14} y={CY - R_INNER + 28} fill="rgba(229,57,53,0.25)" fontSize={isMobile ? 7 : 10} fontFamily="'JetBrains Mono', monospace" letterSpacing="0.12em" textAnchor="start">{t("gauge.risk")}</text>
-          </svg>
+        {/* ═══ BLOC 1: VISION MACRO ═══ */}
+        <div className="mt-6 rounded-2xl p-5 sm:p-7" style={{ background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="flex items-center gap-2 mb-5">
+            <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
+              VISION MACRO
+            </span>
+            <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
+          </div>
 
-          {/* CENTER HUD */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="flex flex-col items-center text-center" style={{ maxWidth: isMobile ? 180 : 300 }}>
-              {/* Stabilité Setup */}
-              <span className="font-mono tracking-[0.2em] uppercase" style={{ fontSize: isMobile ? 7 : 10, color: "rgba(255,215,0,0.45)" }}>
-                {t("gauge.stability")}
-              </span>
-              <span className="font-mono font-bold leading-none mt-1" style={{
-                fontSize: isMobile ? 36 : 64, color: stabilityColor(globalStability),
-                textShadow: "0 0 40px rgba(255,215,0,0.2)",
+          {/* Metrics row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <MetricCard
+              label={t("macro.global_index")}
+              value={sentinelIndex}
+              color={sentinelIndexColor(sentinelIndex)}
+              sub={sentinelLabel}
+            />
+            <MetricCard
+              label={t("macro.stability")}
+              value={`${globalStability}%`}
+              color={stabilityColor(globalStability)}
+            />
+            <MetricCard
+              label={t("data.confiance")}
+              value={`${confianceData.score}%`}
+              color={confianceColor(confianceData.score)}
+            />
+            <MetricCard
+              label={t("sc.label")}
+              value={scLabel}
+              color={smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "rgba(255,248,220,0.5)"}
+            />
+          </div>
+
+          {/* OPP / RISK / ASYM row */}
+          <div className="flex items-center justify-center gap-6 sm:gap-10 mb-6">
+            <div className="flex flex-col items-center">
+              <span className="font-mono" style={{ color: "rgba(255,215,0,0.3)", fontSize: 8, letterSpacing: "0.15em" }}>OPP</span>
+              <span className="font-mono font-bold" style={{ color: opportunityColor(globalOpp), fontSize: isMobile ? 20 : 28 }}>{globalOpp}</span>
+            </div>
+            <div style={{ width: 1, height: 30, background: "rgba(255,255,255,0.06)" }} />
+            <div className="flex flex-col items-center">
+              <span className="font-mono" style={{ color: "rgba(229,57,53,0.3)", fontSize: 8, letterSpacing: "0.15em" }}>RISK</span>
+              <span className="font-mono font-bold" style={{ color: riskColor(globalRisk), fontSize: isMobile ? 20 : 28 }}>{globalRisk}</span>
+            </div>
+            <div style={{ width: 1, height: 30, background: "rgba(255,255,255,0.06)" }} />
+            <div className="flex flex-col items-center">
+              <span className="font-mono" style={{ color: "rgba(255,255,255,0.2)", fontSize: 8, letterSpacing: "0.15em" }}>ASYM</span>
+              <span className="font-mono font-bold" style={{
+                color: (globalOpp - globalRisk) > 20 ? "rgba(76,175,80,0.85)" : (globalOpp - globalRisk) > 0 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)",
+                fontSize: isMobile ? 20 : 28,
               }}>
-                {globalStability}%
+                {(globalOpp - globalRisk) > 0 ? "+" : ""}{globalOpp - globalRisk}
               </span>
-
-              {/* Core metrics row */}
-              <div className="flex items-center mt-3" style={{ gap: isMobile ? 8 : 14 }}>
-                <div className="flex flex-col items-center">
-                  <span className="font-mono" style={{ color: "rgba(255,215,0,0.3)", fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em" }}>OPP</span>
-                  <span className="font-mono font-bold" style={{ color: oppGlobal, fontSize: isMobile ? 14 : 20 }}>{globalOpp}</span>
-                </div>
-                <div style={{ width: 1, height: isMobile ? 16 : 24, background: "rgba(255,255,255,0.06)" }} />
-                <div className="flex flex-col items-center">
-                  <span className="font-mono" style={{ color: "rgba(229,57,53,0.3)", fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em" }}>RISK</span>
-                  <span className="font-mono font-bold" style={{ color: rskGlobal, fontSize: isMobile ? 14 : 20 }}>{globalRisk}</span>
-                </div>
-                <div style={{ width: 1, height: isMobile ? 16 : 24, background: "rgba(255,255,255,0.06)" }} />
-                <div className="flex flex-col items-center">
-                  <span className="font-mono" style={{ color: "rgba(255,255,255,0.2)", fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em" }}>ASYM</span>
-                  <span className="font-mono font-bold" style={{ color: globalAsym > 20 ? "rgba(76,175,80,0.85)" : globalAsym > 0 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)", fontSize: isMobile ? 14 : 20 }}>
-                    {globalAsym > 0 ? "+" : ""}{globalAsym}
-                  </span>
-                </div>
-                <div style={{ width: 1, height: isMobile ? 16 : 24, background: "rgba(255,255,255,0.06)" }} />
-                <div className="flex flex-col items-center">
-                  <span className="font-mono" style={{
-                    color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.4)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.4)" : "rgba(255,255,255,0.2)",
-                    fontSize: isMobile ? 6 : 8, letterSpacing: "0.15em",
-                  }}>SC</span>
-                  <span className="font-mono font-bold" style={{
-                    color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "rgba(255,248,220,0.5)",
-                    fontSize: isMobile ? 9 : 12,
-                  }}>
-                    {t(`sc.${smartCapital.state.toLowerCase()}` as any)}
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
-        </div>
 
-        {/* ═══ STRATEGIC RECOMMENDATION ═══ */}
-        <div className="mt-4 sm:mt-6 flex flex-col items-center gap-3">
-          <span className="font-mono tracking-[0.2em] uppercase" style={{ fontSize: isMobile ? 7 : 9, color: "rgba(255,255,255,0.2)" }}>
-            {t("strat.label")}
-          </span>
-          <StrategicBadge action={strategicAction} label={t(`strat.${strategicAction.toLowerCase()}` as any)} isMobile={isMobile} />
-        </div>
-
-        {/* ═══ SENTINEL INDEX + CONFIANCE DATA + FLOW BADGES ═══ */}
-        <div className="mt-5 sm:mt-8 flex flex-col sm:flex-row items-center gap-4 sm:gap-10">
-          <div className="flex flex-col items-center gap-1">
-            <SentinelIndexDisplay score={sentinelIndex} label={sentinelLabel} isMobile={isMobile} />
-            <span className="font-mono" style={{ fontSize: isMobile ? 8 : 10, color: confianceColor(confianceData.score), letterSpacing: "0.08em" }}>
-              {t("data.confiance")}: {confianceData.score}%
+          {/* Macro Recommendation */}
+          <div className="flex flex-col items-center">
+            <span className="font-mono tracking-[0.15em] uppercase mb-2" style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }}>
+              {t("macro.label")}
             </span>
+            <div className="flex items-center gap-3 px-6 py-3 rounded-xl" style={{
+              background: macroBg(macroRec),
+              border: `2px solid ${macroBorder(macroRec)}`,
+              boxShadow: `0 0 30px ${macroBg(macroRec)}`,
+            }}>
+              <span style={{ fontSize: isMobile ? 18 : 24 }}>{macroIcon(macroRec)}</span>
+              <span className="font-mono font-bold tracking-[0.2em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 14 : 20 }}>
+                {macroRecLabel}
+              </span>
+            </div>
           </div>
-          <div style={{ width: 1, height: 40, background: "rgba(255,255,255,0.05)" }} className="hidden sm:block" />
-          <div className="flex items-center gap-2">
-            <FlowBadge label={t("flow.dominance")} direction={flowData.dominance} isMobile={isMobile} />
-            <FlowBadge label={t("flow.emission")} direction={flowData.emission} isMobile={isMobile} />
-            <FlowBadge label={t("flow.inflow")} direction={flowData.inflow} isMobile={isMobile} />
-          </div>
+
+          {/* Saturation alert */}
+          {isSaturated && (
+            <div className="mt-4 px-4 py-2 rounded-lg text-center" style={{ background: "rgba(255,109,0,0.06)", border: "1px solid rgba(255,109,0,0.15)" }}>
+              <span className="font-mono text-[10px] tracking-wider" style={{ color: "rgba(255,109,0,0.8)" }}>
+                {t("gauge.saturation_alert")} ({saturationIndex}%)
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* ═══ SATURATION ALERT ═══ */}
-        {isSaturated && (
-          <div className="mt-3 px-4 py-2 rounded-lg" style={{ background: "rgba(255,109,0,0.06)", border: "1px solid rgba(255,109,0,0.15)" }}>
-            <span className="font-mono text-[10px] tracking-wider" style={{ color: "rgba(255,109,0,0.8)" }}>
-              {t("gauge.saturation_alert")} ({saturationIndex}%)
-            </span>
-          </div>
-        )}
-
-        {/* ═══ BEST SUBNET ═══ */}
+        {/* ═══ BLOC 2: MEILLEUR SUBNET ═══ */}
         {displayBest && (
-          <div className="mt-6 sm:mt-10 w-full" style={{ maxWidth: isMobile ? "100%" : 600 }}>
-            <span className="font-mono tracking-[0.2em] uppercase block mb-3" style={{ fontSize: isMobile ? 8 : 10, color: isMicroBest ? "rgba(0,200,255,0.4)" : "rgba(255,215,0,0.3)" }}>
-              {isMicroBest ? t("top.best_micro") : t("top.best")}
-            </span>
-            <BestSubnetCard signal={displayBest} isMobile={isMobile} t={t} onClick={() => setPanelSignal(displayBest)} isMicroBest={isMicroBest} />
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: isMicroBest ? "rgba(0,200,255,0.5)" : "rgba(255,215,0,0.4)" }}>
+                {isMicroBest ? t("top.best_micro") : t("top.best")}
+              </span>
+              <div className="flex-1 h-px" style={{ background: isMicroBest ? "rgba(0,200,255,0.08)" : "rgba(255,215,0,0.08)" }} />
+            </div>
+            <BestSubnetCard
+              signal={displayBest}
+              isMobile={isMobile}
+              t={t}
+              onClick={() => setPanelSignal(displayBest)}
+              isMicroBest={isMicroBest}
+              smartCapitalLabel={scLabel}
+            />
           </div>
         )}
 
         {/* ═══ TOP 3 OPPORTUNITIES + TOP 3 RISKS ═══ */}
-        <div className="mt-6 sm:mt-8 w-full grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8" style={{ maxWidth: 900 }}>
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div>
-            <span className="font-mono tracking-[0.2em] uppercase block mb-3" style={{ fontSize: isMobile ? 8 : 10, color: "rgba(255,215,0,0.3)" }}>
+            <span className="font-mono tracking-[0.2em] uppercase block mb-3 font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.3)" }}>
               {t("top.opportunities")}
             </span>
             <div className="rounded-xl" style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)" }}>
@@ -665,7 +523,7 @@ export default function AlienGauge() {
             </div>
           </div>
           <div>
-            <span className="font-mono tracking-[0.2em] uppercase block mb-3" style={{ fontSize: isMobile ? 8 : 10, color: "rgba(229,57,53,0.3)" }}>
+            <span className="font-mono tracking-[0.2em] uppercase block mb-3 font-bold" style={{ fontSize: 10, color: "rgba(229,57,53,0.3)" }}>
               {t("top.risks")}
             </span>
             <div className="rounded-xl" style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)" }}>
@@ -676,17 +534,6 @@ export default function AlienGauge() {
               )}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* ═══ NOTIFICATION BUTTON (disabled, "bientôt") ═══ */}
-      <div className="fixed bottom-4 left-4 z-20">
-        <div className="font-mono text-[10px] tracking-wider px-3 py-1.5 rounded-md flex items-center gap-2"
-          style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.25)", border: "1px solid rgba(255,255,255,0.08)", cursor: "not-allowed", opacity: 0.7 }}>
-          🔔 {t("gauge.notif")}
-          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold" style={{ background: "rgba(255,193,7,0.12)", color: "rgba(255,193,7,0.7)", border: "1px solid rgba(255,193,7,0.2)" }}>
-            {lang === "fr" ? "BIENTÔT" : "SOON"}
-          </span>
         </div>
       </div>
 

@@ -165,6 +165,15 @@ const translations = {
   "strat.watch": { fr: "ATTENDRE", en: "WAIT" },
   "strat.exit": { fr: "SORTIR", en: "EXIT" },
 
+  // Macro recommendation
+  "macro.label": { fr: "RECOMMANDATION MACRO", en: "MACRO RECOMMENDATION" },
+  "macro.increase": { fr: "AUGMENTER EXPOSITION", en: "INCREASE EXPOSURE" },
+  "macro.reduce": { fr: "RÉDUIRE EXPOSITION", en: "REDUCE EXPOSURE" },
+  "macro.neutral": { fr: "NEUTRE", en: "NEUTRAL" },
+  "macro.regime": { fr: "RÉGIME MARCHÉ", en: "MARKET REGIME" },
+  "macro.stability": { fr: "STABILITÉ MARCHÉ", en: "MARKET STABILITY" },
+  "macro.global_index": { fr: "INDICE GLOBAL TAO", en: "TAO GLOBAL INDEX" },
+
   // Sentinel Index
   "sentinel.index": { fr: "INDICE TAO SENTINEL", en: "TAO SENTINEL INDEX" },
   "sentinel.offensive": { fr: "OFFENSIF", en: "OFFENSIVE" },

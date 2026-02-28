@@ -5,6 +5,60 @@
 import type { SmartCapitalState } from "./gauge-engine";
 type SCState = SmartCapitalState | string;
 
+export type MacroRecommendation = "INCREASE" | "REDUCE" | "NEUTRAL";
+
+export function deriveMacroRecommendation(
+  sentinelIndex: number,
+  smartCapitalState: SCState,
+  globalStability: number,
+  confianceData: number
+): MacroRecommendation {
+  // Strong reduce signals
+  if (sentinelIndex < 35 || smartCapitalState === "DISTRIBUTION") return "REDUCE";
+  if (globalStability < 30 && sentinelIndex < 50) return "REDUCE";
+  
+  // Strong increase signals
+  if (sentinelIndex >= 65 && smartCapitalState === "ACCUMULATION" && confianceData >= 50) return "INCREASE";
+  if (sentinelIndex >= 55 && globalStability >= 60 && smartCapitalState === "ACCUMULATION") return "INCREASE";
+  
+  // Moderate reduce
+  if (sentinelIndex < 45 && globalStability < 45) return "REDUCE";
+  
+  return "NEUTRAL";
+}
+
+export function macroColor(rec: MacroRecommendation): string {
+  switch (rec) {
+    case "INCREASE": return "rgba(76,175,80,0.9)";
+    case "NEUTRAL": return "rgba(255,193,7,0.9)";
+    case "REDUCE": return "rgba(229,57,53,0.9)";
+  }
+}
+
+export function macroBg(rec: MacroRecommendation): string {
+  switch (rec) {
+    case "INCREASE": return "rgba(76,175,80,0.08)";
+    case "NEUTRAL": return "rgba(255,193,7,0.06)";
+    case "REDUCE": return "rgba(229,57,53,0.08)";
+  }
+}
+
+export function macroBorder(rec: MacroRecommendation): string {
+  switch (rec) {
+    case "INCREASE": return "rgba(76,175,80,0.25)";
+    case "NEUTRAL": return "rgba(255,193,7,0.2)";
+    case "REDUCE": return "rgba(229,57,53,0.25)";
+  }
+}
+
+export function macroIcon(rec: MacroRecommendation): string {
+  switch (rec) {
+    case "INCREASE": return "📈";
+    case "NEUTRAL": return "⚖️";
+    case "REDUCE": return "📉";
+  }
+}
+
 export type StrategicAction = "ENTER" | "WATCH" | "EXIT";
 export type StrategyMode = "hunter" | "defensive" | "bagbuilder";
 
