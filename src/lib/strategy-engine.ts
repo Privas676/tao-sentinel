@@ -23,30 +23,55 @@ export function deriveStrategicAction(
   risk: number,
   smartCapitalState: SCState,
   confidence: number,
-  mode: StrategyMode = "hunter"
+  mode: StrategyMode = "hunter",
+  stabilitySetup?: number
 ): StrategicAction {
   const t = THRESHOLDS[mode];
 
-  // EXIT rules
   if (risk > t.exitRisk) return "EXIT";
   if (smartCapitalState === "DISTRIBUTION") return "EXIT";
 
-  // ENTER rules
+  // ENTER with stability check
+  const stabilityOk = stabilitySetup == null || stabilitySetup > 65;
   if (
     opportunity > t.enterOpp &&
     risk < t.enterRisk &&
     smartCapitalState === "ACCUMULATION" &&
-    confidence > t.enterConf
+    confidence > t.enterConf &&
+    stabilityOk
   ) return "ENTER";
 
-  // WATCH rules (middle ground)
   if (
     opportunity >= t.watchOpp &&
     risk <= t.watchRisk &&
     smartCapitalState !== "DISTRIBUTION"
   ) return "WATCH";
 
-  // Default: if risk moderate or opportunity low
+  if (risk > t.moderateRisk) return "EXIT";
+  return "WATCH";
+}
+
+/** Derive strategic action for micro-cap aware recommendation */
+export function deriveStrategicActionMicro(
+  asMicro: number,
+  risk: number,
+  smartCapitalState: SCState,
+  stabilitySetup: number,
+  mode: StrategyMode = "hunter"
+): StrategicAction {
+  const t = THRESHOLDS[mode];
+
+  if (risk > t.exitRisk) return "EXIT";
+  if (smartCapitalState === "DISTRIBUTION") return "EXIT";
+
+  if (
+    asMicro > 25 &&
+    risk < t.enterRisk &&
+    smartCapitalState === "ACCUMULATION" &&
+    stabilitySetup > 65
+  ) return "ENTER";
+
+  if (asMicro > 10 && risk <= t.watchRisk) return "WATCH";
   if (risk > t.moderateRisk) return "EXIT";
   return "WATCH";
 }
@@ -89,7 +114,6 @@ export function computeSentinelIndex(
   risk: number,
   smartCapitalScore: number
 ): number {
-  // Weighted synthetic score
   const score = opportunity * 0.45 - risk * 0.35 + smartCapitalScore * 0.20;
   return Math.round(Math.max(0, Math.min(100, score + 20)));
 }
