@@ -150,7 +150,8 @@ describe("SubnetsPage", () => {
     expect(screen.getByText(/SN/)).toBeInTheDocument();
     expect(screen.getByText("Opportunité")).toBeInTheDocument();
     expect(screen.getByText("Risque")).toBeInTheDocument();
-    expect(screen.getByText("Momentum")).toBeInTheDocument();
+    const thead = document.querySelector("thead")!;
+    expect(within(thead).getByText("Momentum")).toBeInTheDocument();
   });
 
   it("shows overridden subnet with EXIT action", () => {
