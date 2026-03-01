@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:ui-guard": "vitest run src/test/ui-guard.test.ts src/test/ui-snapshot.test.tsx",
+    "precommit": "vitest run src/test/ui-guard.test.ts src/test/ui-snapshot.test.tsx"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
