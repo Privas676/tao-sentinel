@@ -14,6 +14,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -97,6 +99,31 @@ export default function ProfilePage() {
       toast.error(err.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Session expirée");
+
+      const res = await supabase.functions.invoke("delete-account", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (res.error) throw new Error(res.error.message || "Erreur suppression");
+      if (res.data?.error) throw new Error(res.data.error);
+
+      toast.success("Compte supprimé");
+      await supabase.auth.signOut();
+      navigate("/auth");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
@@ -223,6 +250,65 @@ export default function ProfilePage() {
         >
           {loading ? "..." : "Enregistrer"}
         </button>
+
+        {/* Danger zone */}
+        <div className="pt-8 border-t border-white/[0.06]">
+          <h2
+            className="text-[10px] tracking-widest uppercase mb-3 font-bold"
+            style={{ color: "rgba(229,57,53,0.6)" }}
+          >
+            Zone dangereuse
+          </h2>
+
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="w-full py-2.5 rounded-lg text-sm font-semibold tracking-wider uppercase transition-all hover:brightness-125"
+              style={{
+                background: "rgba(229,57,53,0.08)",
+                color: "rgba(229,57,53,0.6)",
+                border: "1px solid rgba(229,57,53,0.15)",
+              }}
+            >
+              Supprimer mon compte
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <p
+                className="text-xs leading-relaxed"
+                style={{ color: "rgba(229,57,53,0.7)" }}
+              >
+                ⚠️ Cette action est irréversible. Toutes vos données (profil, positions, avatar) seront définitivement supprimées.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-lg text-sm tracking-wider uppercase transition-all"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    color: "rgba(255,255,255,0.5)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-bold tracking-wider uppercase transition-all disabled:opacity-50"
+                  style={{
+                    background: "rgba(229,57,53,0.15)",
+                    color: "rgba(229,57,53,0.9)",
+                    border: "1px solid rgba(229,57,53,0.3)",
+                  }}
+                >
+                  {deleting ? "..." : "Confirmer la suppression"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
