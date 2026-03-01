@@ -828,7 +828,7 @@ export default function AlertsPage() {
     return { gatedOverrides: gated, noiseOverrides: noise, otherGrouped: others.filter(filterOutDivergence) };
   }, [grouped, overrideMode, scores]);
 
-  const STRATEGIC_TYPES = useMemo(() => new Set(["GO", "BREAK", "EXIT_FAST"]), []);
+  const STRATEGIC_TYPES = useMemo(() => new Set(["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST"]), []);
 
   // Apply confidence filter
   const applyConfidenceFilter = useCallback((g: GroupedEvent): boolean => {
