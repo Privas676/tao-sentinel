@@ -284,7 +284,7 @@ export function computeStabilitySetup(
   confidence: number,
   momentum: number,
   quality: number,
-  dataUncertain = false
+  _dataUncertain = false  // kept for API compat, no longer used
 ): number {
   // Stability from asymmetry variance proxy
   const asymStability = clamp(100 - Math.abs(opportunity - risk) * 0.3, 0, 40);
@@ -295,12 +295,9 @@ export function computeStabilitySetup(
   // Quality bonus
   const qualityBonus = clamp(quality * 0.1, 0, 10);
 
-  let result = Math.round(clamp(asymStability + confStability + momentumStability + qualityBonus, 0, 100));
+  const result = Math.round(clamp(asymStability + confStability + momentumStability + qualityBonus, 0, 100));
 
-  // DATA_UNCERTAIN penalty (Section 5)
-  if (dataUncertain) {
-    result = Math.max(0, result - 10);
-  }
+  // DATA_UNCERTAIN penalty removed — TMC decoupled
 
   return result;
 }

@@ -127,11 +127,7 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
     totalWeight += severity;
   }
 
-  // 6. Data divergence (low confidence) — raised threshold
-  if (sn.confianceData < 50) {
-    reasons.push(makeReason("DATA_DIVERGENCE", sn.confianceData));
-    totalWeight += 8;
-  }
+  // 6. Data divergence check REMOVED — TMC decoupled from scoring
 
   // 7. Liquidity haircut severe — softer
   if (sn.liqHaircut <= -20) {

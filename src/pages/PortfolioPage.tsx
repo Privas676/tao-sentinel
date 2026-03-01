@@ -153,7 +153,7 @@ export default function PortfolioPage() {
       const isOverridden = s?.isOverridden ?? false;
       const systemStatus = s?.systemStatus ?? "OK" as const;
       const confianceData = s?.confianceScore ?? 50;
-      const dataUncertain = s?.dataUncertain ?? false;
+      const dataUncertain = false; // TMC decoupled
       const isBreak = s?.state === "BREAK" || s?.state === "EXIT_FAST";
       const price = s?.consensusPrice ?? 0;
 
