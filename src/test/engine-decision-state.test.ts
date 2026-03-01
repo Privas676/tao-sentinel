@@ -99,8 +99,13 @@ describe("evaluateRawState", () => {
     expect(evaluateRawState(d, "ALIGNED", s)).toBe("WATCH");
   });
 
-  it("DATA_STALE takes priority over DEPEG", () => {
+  it("DEPEG_CONFIRMED takes priority over DATA_STALE", () => {
     const d = makeDecision({ delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
+    expect(evaluateRawState(d, "STALE", s)).toBe("DEPEG_CONFIRMED");
+  });
+
+  it("DATA_STALE shows when no critical alert active", () => {
+    const d = makeDecision({ delistScore: 0, risk: 20 });
     expect(evaluateRawState(d, "STALE", s)).toBe("DATA_STALE");
   });
 });
