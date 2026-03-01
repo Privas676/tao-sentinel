@@ -254,7 +254,7 @@ export default function SubnetsPage() {
       </div>
 
       {/* Filter row */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-6 flex-wrap">
         <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {modeOptions.map(opt => (
             <button key={opt.value}
@@ -269,6 +269,39 @@ export default function SubnetsPage() {
             </button>
           ))}
         </div>
+
+        {/* Override ratio indicator — visible in Risques view */}
+        {mode === "risks" && (() => {
+          const total = scoresList.filter(s => s.assetType !== "CORE_NETWORK").length;
+          const overrides = scoresList.filter(s => s.assetType !== "CORE_NETWORK" && s.isOverridden).length;
+          const warnings = scoresList.filter(s => s.assetType !== "CORE_NETWORK" && s.systemStatus === "SURVEILLANCE").length;
+          const criticals = scoresList.filter(s => s.assetType !== "CORE_NETWORK" && (s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEPEG" || s.systemStatus === "DEREGISTRATION")).length;
+          const pct = total > 0 ? Math.round((overrides / total) * 100) : 0;
+          const barColor = pct > 30 ? "rgba(229,57,53,0.8)" : pct > 15 ? "rgba(255,152,0,0.8)" : "rgba(76,175,80,0.8)";
+          return (
+            <div className="flex items-center gap-3 font-mono text-[10px]"
+              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "6px 12px" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-white/40">Overrides</span>
+                <span className="font-bold" style={{ color: barColor }}>{overrides}/{total}</span>
+                <div className="w-16 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
+                </div>
+                <span className="font-bold" style={{ color: barColor }}>{pct}%</span>
+              </div>
+              {criticals > 0 && (
+                <span className="flex items-center gap-1" style={{ color: "rgba(229,57,53,0.9)" }}>
+                  <span>🔴</span> {criticals} critical
+                </span>
+              )}
+              {warnings > 0 && (
+                <span className="flex items-center gap-1" style={{ color: "rgba(255,152,0,0.8)" }}>
+                  <span>🟠</span> {warnings} warn
+                </span>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Table */}
