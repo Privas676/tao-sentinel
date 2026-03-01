@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
+import DistributionBadge from "@/components/DistributionBadge";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
@@ -164,7 +165,7 @@ export default function SubnetsPage() {
   };
 
   // ── UNIFIED SCORES (single source of truth) ──
-  const { scoresList, sparklines, scoreTimestamp, marketContext, dataAlignment, dataAgeDebug, decisionStates } = useSubnetScores();
+  const { scoresList, sparklines, scoreTimestamp, marketContext, dataAlignment, dataAgeDebug, decisionStates, fleetDistribution } = useSubnetScores();
 
   const rows = useMemo(() => {
     return scoresList
@@ -249,6 +250,7 @@ export default function SubnetsPage() {
           ⏱ {new Date(scoreTimestamp).toLocaleTimeString()}
         </span>
         <DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} />
+        <DistributionBadge report={fleetDistribution} />
       </div>
 
       {/* Filter row */}
