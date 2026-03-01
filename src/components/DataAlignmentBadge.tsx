@@ -6,8 +6,8 @@ interface DataAlignmentBadgeProps {
   className?: string;
 }
 
-export default function DataAlignmentBadge({ dataAlignment, dataAgeDebug, className = "" }: DataAlignmentBadgeProps) {
-  if (dataAlignment === "ALIGNED") return null;
+export default function DataAlignmentBadge({ dataAlignment, dataAgeDebug = [], className = "" }: DataAlignmentBadgeProps) {
+  if (!dataAlignment || dataAlignment === "ALIGNED") return null;
 
   const isStale = dataAlignment === "STALE";
 
