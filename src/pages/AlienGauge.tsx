@@ -483,12 +483,30 @@ export default function AlienGauge() {
     return b.risk - a.risk;
   }).slice(0, 3), [enrichedSignals]);
 
-  const depegConfirmedSubnets = useMemo(() =>
-    enrichedSignals.filter(s => s.depegState === "DEPEG_CONFIRMED").sort((a, b) => b.depegProbability - a.depegProbability),
-    [enrichedSignals]);
-  const depegHighRiskSubnets = useMemo(() =>
-    enrichedSignals.filter(s => s.depegState === "DEPEG_HIGH_RISK").sort((a, b) => b.depegProbability - a.depegProbability),
-    [enrichedSignals]);
+  // ── DEPEG DEMO MODE (URL param ?depeg_demo=1) ──
+  const isDepegDemo = useMemo(() => {
+    try { return new URLSearchParams(window.location.search).get("depeg_demo") === "1"; } catch { return false; }
+  }, []);
+
+  const depegConfirmedSubnets = useMemo(() => {
+    if (isDepegDemo && enrichedSignals.length >= 2) {
+      return [
+        { ...enrichedSignals[0], depegState: "DEPEG_CONFIRMED" as const, depegProbability: 92 },
+        { ...enrichedSignals[1], depegState: "DEPEG_CONFIRMED" as const, depegProbability: 78 },
+      ];
+    }
+    return enrichedSignals.filter(s => s.depegState === "DEPEG_CONFIRMED").sort((a, b) => b.depegProbability - a.depegProbability);
+  }, [enrichedSignals, isDepegDemo]);
+
+  const depegHighRiskSubnets = useMemo(() => {
+    if (isDepegDemo && enrichedSignals.length >= 4) {
+      return [
+        { ...enrichedSignals[2], depegState: "DEPEG_HIGH_RISK" as const, depegProbability: 65 },
+        { ...enrichedSignals[3], depegState: "DEPEG_HIGH_RISK" as const, depegProbability: 51 },
+      ];
+    }
+    return enrichedSignals.filter(s => s.depegState === "DEPEG_HIGH_RISK").sort((a, b) => b.depegProbability - a.depegProbability);
+  }, [enrichedSignals, isDepegDemo]);
 
   // ── Audio alert on new DEPEG_CONFIRMED ──
   const prevDepegCountRef = useRef(0);
