@@ -77,6 +77,9 @@ export type UnifiedSubnetScore = {
   priceVar30d: number | null;
   delistCategory: DelistCategory;
   delistScore: number;
+  depegProbability: number;
+  depegState: import("@/lib/depeg-probability").DepegState;
+  depegSignals: string[];
 };
 
 export type UnifiedScoresResult = {
@@ -434,13 +437,14 @@ export function useSubnetScores(): UnifiedScoresResult {
           isOverridden: false, isWarning: false,
           systemStatus: special.forceStatus as SystemStatus,
           overrideReasons: [], delistCategory: "NORMAL", delistScore: 0,
+          depegProbability: 0, depegState: "NORMAL" as const, depegSignals: [],
         });
         continue;
       }
       const liqTao = s.displayedLiq > 0 && rate > 0 ? s.displayedLiq / rate : 0;
       const protInput: ProtectionInput = {
         netuid: s.netuid, state: s.state, psi: s.psi, quality: s.quality,
-        risk: s.healthScores.liquidityHealth < 25 ? 80 : 40, // raw health-based risk indicator
+        risk: s.healthScores.liquidityHealth < 25 ? 80 : 40,
         liquidityUsd: s.displayedLiq > 0 ? s.displayedLiq : undefined,
         volumeMcRatio: s.volMcRatio ?? undefined,
         taoInPool: s.slMetrics?.liq,
@@ -450,6 +454,7 @@ export function useSubnetScores(): UnifiedScoresResult {
         priceChange7d: s.priceChange7d, confianceData: s.confianceScore,
         liqHaircut: s.recalc?.liqHaircut ?? 0,
         delistMode,
+        priceHistory: sparklines?.get(s.netuid) ?? [],
       };
       protectionResults.set(s.netuid, evaluateProtection(protInput));
     }

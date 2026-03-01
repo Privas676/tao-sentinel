@@ -18,6 +18,12 @@ import {
   type DelistCategory,
   type DelistRiskResult,
 } from "./delist-risk";
+import {
+  evaluateDepegState,
+  type DepegInput,
+  type DepegResult,
+  type DepegState,
+} from "./depeg-probability";
 
 /* ── Types ── */
 
@@ -42,6 +48,9 @@ export type ProtectionInput = {
   liqHaircut: number;
   // Delist mode
   delistMode: string;
+  // Depeg probability inputs
+  priceHistory?: number[];
+  volatility7d?: number;
 };
 
 export type ProtectionOutput = {
@@ -52,6 +61,10 @@ export type ProtectionOutput = {
   overrideReasons: string[];
   delistCategory: DelistCategory;
   delistScore: number;
+  // Depeg probability
+  depegProbability: number;
+  depegState: DepegState;
+  depegSignals: string[];
 };
 
 /**
@@ -106,20 +119,39 @@ export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
     }
   }
 
+  // 3. Depeg Probability — tick-based state machine
+  const depegInput: DepegInput = {
+    netuid: input.netuid,
+    alphaPrice: input.alphaPrice,
+    priceHistory: input.priceHistory ?? [],
+    taoInPool: input.taoInPool ?? 0,
+    liquidityUsd: input.liqUsd,
+    capTao: input.capTao,
+    volatility7d: input.volatility7d,
+  };
+  const depeg: DepegResult = evaluateDepegState(depegInput);
+
   // Derive final system status
   let systemStatus = override.systemStatus;
-  if (delistCategory === "DEPEG_PRIORITY") {
+  if (depeg.state === "DEPEG_CONFIRMED") {
     systemStatus = "DEPEG";
+  } else if (delistCategory === "DEPEG_PRIORITY") {
+    systemStatus = "DEPEG";
+  } else if (depeg.state === "DEPEG_HIGH_RISK" && systemStatus === "OK") {
+    systemStatus = "SURVEILLANCE";
   }
 
   return {
     netuid: input.netuid,
-    isOverridden: override.isOverridden || delistCategory === "DEPEG_PRIORITY",
-    isWarning: override.isWarning || delistCategory === "HIGH_RISK_NEAR_DELIST",
+    isOverridden: override.isOverridden || delistCategory === "DEPEG_PRIORITY" || depeg.state === "DEPEG_CONFIRMED",
+    isWarning: override.isWarning || delistCategory === "HIGH_RISK_NEAR_DELIST" || depeg.state === "DEPEG_HIGH_RISK",
     systemStatus,
     overrideReasons: override.overrideReasons,
     delistCategory,
     delistScore,
+    depegProbability: depeg.probability,
+    depegState: depeg.state,
+    depegSignals: depeg.signals.map(s => s.label),
   };
 }
 
