@@ -40,6 +40,10 @@ import {
   type DecisionStateOutput, type DecisionState,
 } from "@/lib/engine-decision-state";
 import { useOverrideMode } from "@/hooks/use-override-mode";
+import {
+  ApiHealthTracker, computeDataConfidence, computeSubnetConfidence,
+  type DataConfidenceScore,
+} from "@/lib/data-confidence";
 
 /* ─── Exported types ─── */
 
@@ -100,6 +104,8 @@ export type UnifiedScoresResult = {
   decisionStates: Map<number, DecisionStateOutput>;
   /** Fleet distribution health report */
   fleetDistribution: FleetDistributionReport | null;
+  /** Data confidence score (0-100) based on real API health metrics */
+  dataConfidence: DataConfidenceScore | null;
 };
 
 /* ─── SPECIAL CASES / WHITELIST ───
@@ -140,6 +146,7 @@ export function useSubnetScores(): UnifiedScoresResult {
   const stateManagerRef = useRef<DecisionStateManager>(
     new DecisionStateManager(DEFAULT_DECISION_SETTINGS)
   );
+  const apiTrackerRef = useRef<ApiHealthTracker>(new ApiHealthTracker());
 
   // Sync settings with override mode
   useMemo(() => {
@@ -151,11 +158,18 @@ export function useSubnetScores(): UnifiedScoresResult {
   const { data: signalsSnapshot, isLoading: signalsLoading } = useQuery({
     queryKey: ["unified-signals"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("signals_latest").select("*");
-      if (error) throw error;
-      const rows = (data || []) as SignalRow[];
-      const ts = rows[0]?.ts ?? null;
-      return createSnapshot(rows, "supabase:signals", null, ts);
+      const t0 = performance.now();
+      try {
+        const { data, error } = await supabase.from("signals_latest").select("*");
+        apiTrackerRef.current.record({ timestamp: Date.now(), success: !error, latencyMs: performance.now() - t0, source: "supabase:signals" });
+        if (error) throw error;
+        const rows = (data || []) as SignalRow[];
+        const ts = rows[0]?.ts ?? null;
+        return createSnapshot(rows, "supabase:signals", null, ts);
+      } catch (e) {
+        apiTrackerRef.current.record({ timestamp: Date.now(), success: false, latencyMs: performance.now() - t0, source: "supabase:signals" });
+        throw e;
+      }
     },
     refetchInterval: 60_000,
   });
@@ -164,20 +178,27 @@ export function useSubnetScores(): UnifiedScoresResult {
   const { data: rawPayloadsSnapshot } = useQuery({
     queryKey: ["unified-raw-payloads"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subnet_metrics_ts")
-        .select("netuid, raw_payload, source, ts")
-        .eq("source", "taostats")
-        .order("ts", { ascending: false })
-        .limit(300);
-      if (error) throw error;
-      const map = new Map<number, any>();
-      let latestTs: string | null = null;
-      for (const r of data || []) {
-        if (!latestTs && r.ts) latestTs = r.ts;
-        if (!map.has(r.netuid) && r.raw_payload) map.set(r.netuid, r.raw_payload);
+      const t0 = performance.now();
+      try {
+        const { data, error } = await supabase
+          .from("subnet_metrics_ts")
+          .select("netuid, raw_payload, source, ts")
+          .eq("source", "taostats")
+          .order("ts", { ascending: false })
+          .limit(300);
+        apiTrackerRef.current.record({ timestamp: Date.now(), success: !error, latencyMs: performance.now() - t0, source: "taostats:raw_payloads" });
+        if (error) throw error;
+        const map = new Map<number, any>();
+        let latestTs: string | null = null;
+        for (const r of data || []) {
+          if (!latestTs && r.ts) latestTs = r.ts;
+          if (!map.has(r.netuid) && r.raw_payload) map.set(r.netuid, r.raw_payload);
+        }
+        return createSnapshot(map, "taostats:raw_payloads", null, latestTs);
+      } catch (e) {
+        apiTrackerRef.current.record({ timestamp: Date.now(), success: false, latencyMs: performance.now() - t0, source: "taostats:raw_payloads" });
+        throw e;
       }
-      return createSnapshot(map, "taostats:raw_payloads", null, latestTs);
     },
     refetchInterval: 120_000,
   });
@@ -196,20 +217,27 @@ export function useSubnetScores(): UnifiedScoresResult {
   const { data: primaryMetricsSnapshot } = useQuery({
     queryKey: ["unified-metrics-primary"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subnet_metrics_ts")
-        .select("netuid, price, cap, vol_24h, liquidity, ts, source")
-        .eq("source", "taostats")
-        .order("ts", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      const map = new Map<number, SourceMetrics>();
-      let latestTs: string | null = null;
-      for (const r of data || []) {
-        if (!latestTs && r.ts) latestTs = r.ts;
-        if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
+      const t0 = performance.now();
+      try {
+        const { data, error } = await supabase
+          .from("subnet_metrics_ts")
+          .select("netuid, price, cap, vol_24h, liquidity, ts, source")
+          .eq("source", "taostats")
+          .order("ts", { ascending: false })
+          .limit(200);
+        apiTrackerRef.current.record({ timestamp: Date.now(), success: !error, latencyMs: performance.now() - t0, source: "taostats:metrics" });
+        if (error) throw error;
+        const map = new Map<number, SourceMetrics>();
+        let latestTs: string | null = null;
+        for (const r of data || []) {
+          if (!latestTs && r.ts) latestTs = r.ts;
+          if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
+        }
+        return createSnapshot(map, "taostats:metrics", null, latestTs);
+      } catch (e) {
+        apiTrackerRef.current.record({ timestamp: Date.now(), success: false, latencyMs: performance.now() - t0, source: "taostats:metrics" });
+        throw e;
       }
-      return createSnapshot(map, "taostats:metrics", null, latestTs);
     },
     refetchInterval: 120_000,
   });
@@ -310,26 +338,61 @@ export function useSubnetScores(): UnifiedScoresResult {
     },
   });
 
-  // ── Confidence data (Taostats-only: freshness + completeness, NO TMC divergence) ──
+  // ── Data Confidence (real-time: API health + staleness + completeness + variance) ──
+  const globalDataConfidence = useMemo<DataConfidenceScore | null>(() => {
+    if (!primaryMetrics) return null;
+    // Compute oldest data age across all subnets
+    let maxAge = 0;
+    let totalFields = 0;
+    let totalPresent = 0;
+    for (const [, m] of primaryMetrics) {
+      const age = m.ts ? (Date.now() - new Date(m.ts).getTime()) / 1000 : 999;
+      if (age > maxAge) maxAge = age;
+      totalFields += 4;
+      if (m.price != null && m.price > 0) totalPresent++;
+      if (m.cap != null && m.cap > 0) totalPresent++;
+      if (m.vol24h != null && m.vol24h > 0) totalPresent++;
+      if (m.liquidity != null && m.liquidity > 0) totalPresent++;
+    }
+    const avgFieldsPresent = primaryMetrics.size > 0 ? totalPresent / primaryMetrics.size : 0;
+    const avgFieldsTotal = 4;
+    // Fleet health flags (will be filled by fleet distribution later, use defaults for now)
+    const fleetHealth = {
+      isFleetUnstable: false,
+      isCompressedPsi: false,
+      isCompressedRisk: false,
+      isExtremeHigh: false,
+      isExtremeLow: false,
+    };
+    return computeDataConfidence({
+      apiRecords: apiTrackerRef.current.getRecords(),
+      dataAgeSeconds: maxAge,
+      fieldsPresent: Math.round(avgFieldsPresent),
+      fieldsTotal: avgFieldsTotal,
+      fleetHealth,
+    });
+  }, [primaryMetrics]);
+
+  // Per-subnet confidence map (blends local freshness + global API health)
   const consensusMap = useMemo(() => {
     if (!primaryMetrics) return new Map<number, { confianceData: number; dataUncertain: boolean }>();
     const map = new Map<number, { confianceData: number; dataUncertain: boolean }>();
+    const globalConf = globalDataConfidence ?? { score: 50, components: { errorRate: 70, latency: 70, freshness: 50, completeness: 50, varianceHealth: 70 }, isUnstable: false, reasons: [] };
     for (const [netuid, m] of primaryMetrics) {
-      // Freshness: how old is the data? Lose 2 points per minute
-      const minutesOld = m.ts ? (Date.now() - new Date(m.ts).getTime()) / 60_000 : 999;
-      const freshness = Math.max(0, 100 - minutesOld * 2);
-      // Completeness: how many fields are non-null and > 0
+      const age = m.ts ? (Date.now() - new Date(m.ts).getTime()) / 1000 : 999;
       let fields = 0;
       if (m.price != null && m.price > 0) fields++;
       if (m.cap != null && m.cap > 0) fields++;
       if (m.vol24h != null && m.vol24h > 0) fields++;
       if (m.liquidity != null && m.liquidity > 0) fields++;
-      const completeness = (fields / 4) * 100;
-      const score = Math.round(freshness * 0.5 + completeness * 0.5);
-      map.set(netuid, { confianceData: Math.max(0, Math.min(100, score)), dataUncertain: false });
+      const score = computeSubnetConfidence(
+        { dataAgeSeconds: age, fieldsPresent: fields, fieldsTotal: 4 },
+        globalConf,
+      );
+      map.set(netuid, { confianceData: score, dataUncertain: globalConf.isUnstable });
     }
     return map;
-  }, [primaryMetrics]);
+  }, [primaryMetrics, globalDataConfidence]);
 
   // ── Prices (Taostats only — single source of truth) ──
   const consensusPrices = useMemo(() => {
@@ -396,7 +459,7 @@ export function useSubnetScores(): UnifiedScoresResult {
         return {
           netuid, name: s.subnet_name || `SN-${netuid}`,
           state: s.state, psi, conf, quality,
-          confianceScore, dataUncertain: false,
+          confianceScore, dataUncertain: consensus?.dataUncertain ?? false,
           healthScores, recalc,
           displayedCap: (slMetrics?.cap || 0) * rate,
           displayedLiq: (slMetrics?.liq || 0) * rate,
@@ -545,6 +608,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     dataAgeDebug: alignmentResult.ages.map(a => ({ source: a.source, ageSeconds: Math.round(a.dataAgeSeconds) })),
     decisionStates,
     fleetDistribution,
+    dataConfidence: globalDataConfidence,
   };
 }
 
