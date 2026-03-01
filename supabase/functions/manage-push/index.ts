@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -88,6 +88,34 @@ Deno.serve(async (req) => {
       await sb.from("push_subscriptions").delete().eq("endpoint", endpoint);
 
       return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── SEND TEST PUSH ──
+    if (action === "send-test") {
+      // Insert a test GO event, then invoke send-push-notifications
+      const { error: evErr } = await sb.from("events").insert({
+        type: "GO",
+        netuid: 33,
+        severity: 3,
+        evidence: { reasons: ["🧪 Test push notification"], test: true },
+      });
+      if (evErr) throw evErr;
+
+      // Call send-push-notifications
+      const fnUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-push-notifications`;
+      const res = await fetch(fnUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: "{}",
+      });
+      const result = await res.json();
+
+      return new Response(JSON.stringify({ ok: true, pushResult: result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

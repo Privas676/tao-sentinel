@@ -38,6 +38,8 @@ export default function PushLogDashboard() {
   const fr = lang === "fr";
   const [logs, setLogs] = useState<PushLogRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
   const [stats, setStats] = useState({ sent: 0, failed: 0, retry: 0, expired: 0, total: 0 });
 
   const loadLogs = useCallback(async () => {
@@ -61,6 +63,29 @@ export default function PushLogDashboard() {
     setStats(s);
     setLoading(false);
   }, []);
+
+  const sendTest = useCallback(async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-push", {
+        body: { action: "send-test" },
+      });
+      if (error) throw new Error(error.message);
+      const r = data?.pushResult;
+      if (r?.sent > 0) {
+        setTestResult(fr ? `✅ ${r.sent} push envoyé(s)` : `✅ ${r.sent} push sent`);
+      } else {
+        setTestResult(fr ? `⚠ ${r?.reason || "no_subscribers"}` : `⚠ ${r?.reason || "no_subscribers"}`);
+      }
+      // Reload logs after test
+      setTimeout(() => loadLogs(), 1500);
+    } catch (err) {
+      setTestResult(`❌ ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setTesting(false);
+    }
+  }, [fr, loadLogs]);
 
   useEffect(() => { loadLogs(); }, [loadLogs]);
 
@@ -99,20 +124,49 @@ export default function PushLogDashboard() {
             </div>
           ))}
         </div>
-        <button
-          onClick={loadLogs}
-          disabled={loading}
-          className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-all"
+        <div className="flex gap-1.5">
+          <button
+            onClick={sendTest}
+            disabled={testing}
+            className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-all"
+            style={{
+              background: "rgba(255,193,7,0.08)",
+              color: "rgba(255,193,7,0.8)",
+              border: "1px solid rgba(255,193,7,0.2)",
+              opacity: testing ? 0.4 : 1,
+            }}
+          >
+            {testing ? "…" : "🧪 Test"}
+          </button>
+          <button
+            onClick={loadLogs}
+            disabled={loading}
+            className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-all"
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              color: "rgba(255,255,255,0.5)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              opacity: loading ? 0.4 : 1,
+            }}
+          >
+            {loading ? "…" : "↻"}
+          </button>
+        </div>
+      </div>
+
+      {/* Test result feedback */}
+      {testResult && (
+        <div
+          className="font-mono text-[10px] px-3 py-2 rounded-lg"
           style={{
-            background: "rgba(255,255,255,0.05)",
-            color: "rgba(255,255,255,0.5)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            opacity: loading ? 0.4 : 1,
+            background: testResult.startsWith("✅") ? "rgba(76,175,80,0.08)" : testResult.startsWith("❌") ? "rgba(229,57,53,0.08)" : "rgba(255,193,7,0.08)",
+            color: testResult.startsWith("✅") ? "rgba(76,175,80,0.8)" : testResult.startsWith("❌") ? "rgba(229,57,53,0.8)" : "rgba(255,193,7,0.8)",
+            border: `1px solid ${testResult.startsWith("✅") ? "rgba(76,175,80,0.15)" : testResult.startsWith("❌") ? "rgba(229,57,53,0.15)" : "rgba(255,193,7,0.15)"}`,
           }}
         >
-          {loading ? "…" : "↻"}
-        </button>
-      </div>
+          {testResult}
+        </div>
+      )}
 
       {/* Log entries */}
       {logs.length === 0 && !loading && (
