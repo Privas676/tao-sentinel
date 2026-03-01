@@ -1,13 +1,14 @@
 /* ═══════════════════════════════════════ */
 /*   UNIFIED SUBNET SCORES HOOK             */
 /*   Single source of truth for all pages   */
-/*   Orchestrates 3 independent engines:    */
+/*   Orchestrates 4 independent engines:    */
 /*   - StrategicEngine (scoring)            */
 /*   - ProtectionEngine (safety)            */
 /*   - RegimeEngine (global regime)         */
+/*   - DecisionStateLayer (stability)       */
 /* ═══════════════════════════════════════ */
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -33,6 +34,11 @@ import { computeStrategicScores, type StrategicInput } from "@/lib/engine-strate
 import { evaluateProtection, type ProtectionInput } from "@/lib/engine-protection";
 import { evaluateRegime, type RegimeInput, type RegimeOutput } from "@/lib/engine-regime";
 import { applyDecision, type DecisionInput, type AssetType } from "@/lib/engine-decision";
+import {
+  DecisionStateManager, DEFAULT_DECISION_SETTINGS, PERMISSIVE_SETTINGS,
+  type DecisionStateOutput, type DecisionState,
+} from "@/lib/engine-decision-state";
+import { useOverrideMode } from "@/hooks/use-override-mode";
 
 /* ─── Exported types ─── */
 
@@ -86,6 +92,8 @@ export type UnifiedScoresResult = {
   dataAlignment: AlignmentStatus;
   /** Per-source age diagnostics (debug) */
   dataAgeDebug: { source: string; ageSeconds: number }[];
+  /** Stable decision states from the Decision State Layer */
+  decisionStates: Map<number, DecisionStateOutput>;
 };
 
 /* ─── SPECIAL CASES / WHITELIST ───
@@ -122,6 +130,16 @@ type SignalRow = {
  */
 export function useSubnetScores(): UnifiedScoresResult {
   const { delistMode } = useDelistMode();
+  const { mode: overrideMode } = useOverrideMode();
+  const stateManagerRef = useRef<DecisionStateManager>(
+    new DecisionStateManager(DEFAULT_DECISION_SETTINGS)
+  );
+
+  // Sync settings with override mode
+  useMemo(() => {
+    const settings = overrideMode === "permissive" ? PERMISSIVE_SETTINGS : DEFAULT_DECISION_SETTINGS;
+    stateManagerRef.current.updateSettings(settings);
+  }, [overrideMode]);
   // ── Data fetching (shared query keys → cached across pages) ──
 
   const { data: signalsSnapshot, isLoading: signalsLoading } = useQuery({
@@ -488,6 +506,16 @@ export function useSubnetScores(): UnifiedScoresResult {
     return { scoresList: scored, scoresMap: map, scoreTimestamp: ts };
   }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines, alignmentResult]);
 
+  // ── Phase 4: DECISION STATE LAYER (stability: hysteresis, confirmation, cooldown) ──
+  const decisionStates = useMemo(() => {
+    const mgr = stateManagerRef.current;
+    const nowMs = Date.now();
+    const outputs = mgr.tickAll(scoresList as any[], alignmentResult.status, nowMs);
+    const map = new Map<number, DecisionStateOutput>();
+    for (const o of outputs) map.set(o.netuid, o);
+    return map;
+  }, [scoresList, alignmentResult.status]);
+
   return {
     scores: scoresMap,
     scoresList,
@@ -499,6 +527,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     marketContext: secondaryMetrics,
     dataAlignment: alignmentResult.status,
     dataAgeDebug: alignmentResult.ages.map(a => ({ source: a.source, ageSeconds: Math.round(a.dataAgeSeconds) })),
+    decisionStates,
   };
 }
 
