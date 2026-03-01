@@ -52,9 +52,9 @@ const REASON_DEFS: Record<string, Omit<DelistReason, "value" | "weight"> & { wei
   DATA_DIVERGENCE:     { code: "DATA_DIVERGENCE",     label: "Extreme divergence",   labelFr: "Divergence extrême",   weight: 7,  color: "rgba(255,152,0,0.7)" },
   SLIPPAGE_HIGH:       { code: "SLIPPAGE_HIGH",       label: "Slippage high",        labelFr: "Slippage élevé",       weight: 8,  color: "rgba(229,57,53,0.7)" },
   SPREAD_HIGH:         { code: "SPREAD_HIGH",         label: "Spread high",          labelFr: "Spread élevé",         weight: 6,  color: "rgba(255,152,0,0.7)" },
-  MICRO_PRICE:         { code: "MICRO_PRICE",         label: "Micro price",          labelFr: "Prix micro",           weight: 15, color: "rgba(229,57,53,0.85)" },
-  CAP_CONCENTRATED:    { code: "CAP_CONCENTRATED",    label: "Cap = Pool",           labelFr: "Cap ≈ Pool",           weight: 10, color: "rgba(255,152,0,0.8)" },
-  SMALL_CAP:           { code: "SMALL_CAP",           label: "Small cap",            labelFr: "Cap faible",           weight: 8,  color: "rgba(255,193,7,0.8)" },
+  MICRO_PRICE:         { code: "MICRO_PRICE",         label: "Micro price",          labelFr: "Prix micro",           weight: 10, color: "rgba(229,57,53,0.85)" },
+  CAP_CONCENTRATED:    { code: "CAP_CONCENTRATED",    label: "Cap = Pool",           labelFr: "Cap ≈ Pool",           weight: 6,  color: "rgba(255,152,0,0.8)" },
+  SMALL_CAP:           { code: "SMALL_CAP",           label: "Small cap",            labelFr: "Cap faible",           weight: 5,  color: "rgba(255,193,7,0.8)" },
   MANUAL_FLAG:         { code: "MANUAL_FLAG",         label: "Manual watchlist",     labelFr: "Liste manuelle",       weight: 10, color: "rgba(229,57,53,0.7)" },
 };
 
@@ -130,8 +130,8 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
     totalWeight += w;
   }
 
-  // 3. Liquidity USD
-  if (sn.liqUsd < 5000) {
+  // 3. Liquidity USD — only critical if very low
+  if (sn.liqUsd < 2000) {
     const w = 15;
     reasons.push(makeReason("LIQ_CRITICAL", sn.liqUsd));
     factors.push(makeFactor("LIQ_CRITICAL", w, sn.liqUsd));
@@ -186,13 +186,13 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
   }
 
   // 11. Micro price
-  if (sn.alphaPrice > 0 && sn.alphaPrice < 0.005) {
-    const w = 20;
+  if (sn.alphaPrice > 0 && sn.alphaPrice < 0.003) {
+    const w = 15;
     reasons.push(makeReason("MICRO_PRICE", sn.alphaPrice));
     factors.push(makeFactor("MICRO_PRICE", w, sn.alphaPrice));
     totalWeight += w;
-  } else if (sn.alphaPrice > 0 && sn.alphaPrice < 0.008) {
-    const w = 12;
+  } else if (sn.alphaPrice > 0 && sn.alphaPrice < 0.005) {
+    const w = 10;
     reasons.push(makeReason("MICRO_PRICE", sn.alphaPrice));
     factors.push(makeFactor("MICRO_PRICE", w, sn.alphaPrice));
     totalWeight += w;
@@ -201,13 +201,13 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
   // 12. Cap concentration
   if (sn.capTao > 0 && sn.liqTao > 0) {
     const liqCapRatio = sn.liqTao / sn.capTao;
-    if (liqCapRatio > 0.85) {
-      const w = 15;
+    if (liqCapRatio > 0.90) {
+      const w = 12;
       reasons.push(makeReason("CAP_CONCENTRATED", Math.round(liqCapRatio * 100)));
       factors.push(makeFactor("CAP_CONCENTRATED", w, liqCapRatio));
       totalWeight += w;
-    } else if (liqCapRatio > 0.7) {
-      const w = 12;
+    } else if (liqCapRatio > 0.80) {
+      const w = 8;
       reasons.push(makeReason("CAP_CONCENTRATED", Math.round(liqCapRatio * 100)));
       factors.push(makeFactor("CAP_CONCENTRATED", w, liqCapRatio));
       totalWeight += w;
@@ -215,13 +215,13 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
   }
 
   // 13. Small cap
-  if (sn.capTao > 0 && sn.capTao < 10_000) {
-    const w = 12;
+  if (sn.capTao > 0 && sn.capTao < 5_000) {
+    const w = 10;
     reasons.push(makeReason("SMALL_CAP", Math.round(sn.capTao)));
     factors.push(makeFactor("SMALL_CAP", w, sn.capTao));
     totalWeight += w;
-  } else if (sn.capTao > 0 && sn.capTao < 20_000) {
-    const w = 10;
+  } else if (sn.capTao > 0 && sn.capTao < 15_000) {
+    const w = 6;
     reasons.push(makeReason("SMALL_CAP", Math.round(sn.capTao)));
     factors.push(makeFactor("SMALL_CAP", w, sn.capTao));
     totalWeight += w;
@@ -232,8 +232,8 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
 
   // Category
   let category: DelistCategory = "NORMAL";
-  if (score >= 45) category = "DEPEG_PRIORITY";
-  else if (score >= 28) category = "HIGH_RISK_NEAR_DELIST";
+  if (score >= 65) category = "DEPEG_PRIORITY";
+  else if (score >= 35) category = "HIGH_RISK_NEAR_DELIST";
 
   return { netuid: sn.netuid, category, score, reasons, factors: topFactors(factors), source: "" };
 }
@@ -265,8 +265,8 @@ function getManualResult(netuid: number, metrics?: SubnetMetricsForDelist): Deli
       label: isDepeg ? "Watchlist depeg" : "Watchlist risque",
       contribution: bonus,
     };
-    const category: DelistCategory = boostedScore >= 45 ? "DEPEG_PRIORITY" :
-      boostedScore >= 28 ? "HIGH_RISK_NEAR_DELIST" : "NORMAL";
+    const category: DelistCategory = boostedScore >= 65 ? "DEPEG_PRIORITY" :
+      boostedScore >= 35 ? "HIGH_RISK_NEAR_DELIST" : "NORMAL";
     return {
       netuid,
       category: isDepeg ? "DEPEG_PRIORITY" : (category === "NORMAL" ? "HIGH_RISK_NEAR_DELIST" : category),

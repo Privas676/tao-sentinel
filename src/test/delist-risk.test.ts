@@ -83,19 +83,20 @@ describe("computeDelistRiskScore", () => {
     expect(r.reasons.some(r => r.code === "PRICE_COLLAPSE")).toBe(true);
   });
 
-  it("multiple factors → DEPEG_PRIORITY (score ≥ 45)", () => {
+  it("multiple severe factors → DEPEG_PRIORITY (score ≥ 65)", () => {
     const r = computeDelistRiskScore(makeSubnet({
-      minersActive: 0, liqTao: 3, alphaPrice: 0.002, capTao: 5000,
+      minersActive: 0, liqTao: 3, liqUsd: 500, alphaPrice: 0.002, capTao: 3000,
     }));
     expect(r.category).toBe("DEPEG_PRIORITY");
-    expect(r.score).toBeGreaterThanOrEqual(45);
+    expect(r.score).toBeGreaterThanOrEqual(65);
   });
 
-  it("moderate factors → HIGH_RISK_NEAR_DELIST (score 28-44)", () => {
+  it("moderate factors → HIGH_RISK_NEAR_DELIST (score 35-64)", () => {
     const r = computeDelistRiskScore(makeSubnet({
-      minersActive: 15, liqTao: 30, volMcRatio: 0.005,
+      minersActive: 3, liqTao: 30, volMcRatio: 0.005, liqUsd: 1500,
     }));
-    expect(r.score).toBeGreaterThanOrEqual(28);
+    expect(r.score).toBeGreaterThanOrEqual(35);
+    expect(r.score).toBeLessThan(65);
     expect(r.category).toBe("HIGH_RISK_NEAR_DELIST");
   });
 });

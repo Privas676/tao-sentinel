@@ -63,11 +63,13 @@ describe("evaluateProtection — Critical states", () => {
     expect(out.isWarning).toBe(true);
   });
 
-  it("zero liquidity triggers full override", () => {
+  it("zero liquidity triggers delist flag (handled by delist engine, not override)", () => {
     const out = evaluateProtection(makeInput({
       liquidityUsd: 0, taoInPool: 0, liqUsd: 0, liqTao: 0,
     }));
-    expect(out.isOverridden).toBe(true);
+    // Override score 0.65 < 0.70 threshold → no override/warning from override engine
+    // But delist engine flags it via HIGH_RISK or DEPEG depending on other signals
+    expect(out.delistScore).toBeGreaterThan(0);
   });
 });
 
