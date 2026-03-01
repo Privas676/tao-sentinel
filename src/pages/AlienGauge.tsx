@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -847,6 +848,13 @@ export default function AlienGauge() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Footer link */}
+        <div className="flex justify-center pt-6 pb-2">
+          <Link to="/methodology" className="font-mono text-[9px] tracking-wider text-white/15 hover:text-white/40 transition-colors">
+            📖 {lang === "fr" ? "Méthodologie & Transparence" : "Methodology & Transparency"}
+          </Link>
         </div>
       </div>
 
