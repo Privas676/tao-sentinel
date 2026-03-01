@@ -20,24 +20,25 @@ vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ user: mockUser, loading: mockAuthLoading }),
 }));
 
-const mockUpdate = vi.fn();
-const mockUpload = vi.fn();
-const mockGetPublicUrl = vi.fn();
-const mockSelect = vi.fn();
+const mockMaybeSingle = vi.fn();
+const mockUpdateEq = vi.fn().mockReturnValue({ error: null });
+const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq });
+const mockUpload = vi.fn().mockResolvedValue({ error: null });
+const mockGetPublicUrl = vi.fn().mockReturnValue({
+  data: { publicUrl: "https://cdn.example.com/avatar.png" },
+});
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: (table: string) => ({
-      select: (cols: string) => ({
-        eq: (_col: string, _val: string) => ({
-          maybeSingle: mockSelect,
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: mockMaybeSingle,
         }),
       }),
       update: (data: any) => {
         mockUpdate(data);
-        return {
-          eq: () => ({ error: null }),
-        };
+        return { eq: mockUpdateEq };
       },
     }),
     storage: {
@@ -49,13 +50,6 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-// --- Helpers ---
-
-function renderProfile() {
-  return render(<ProfilePage />);
-}
-
-// Import after mocks
 import ProfilePage from "@/pages/ProfilePage";
 
 describe("ProfilePage", () => {
@@ -63,30 +57,28 @@ describe("ProfilePage", () => {
     vi.clearAllMocks();
     mockUser = { id: "user-123", email: "test@example.com" };
     mockAuthLoading = false;
-    mockSelect.mockResolvedValue({
+    mockMaybeSingle.mockResolvedValue({
       data: { display_name: "Alice", avatar_url: null },
       error: null,
     });
     mockUpload.mockResolvedValue({ error: null });
-    mockGetPublicUrl.mockReturnValue({
-      data: { publicUrl: "https://cdn.example.com/avatar.png" },
-    });
+    mockUpdateEq.mockReturnValue({ error: null });
   });
 
   it("renders loading state initially", () => {
     mockAuthLoading = true;
-    renderProfile();
+    render(<ProfilePage />);
     expect(screen.getByText("Chargement…")).toBeInTheDocument();
   });
 
   it("redirects to /auth when not authenticated", () => {
     mockUser = null;
-    renderProfile();
+    render(<ProfilePage />);
     expect(mockNavigate).toHaveBeenCalledWith("/auth");
   });
 
   it("renders profile form after loading", async () => {
-    renderProfile();
+    render(<ProfilePage />);
     await waitFor(() => {
       expect(screen.getByText("Profil")).toBeInTheDocument();
     });
@@ -95,18 +87,19 @@ describe("ProfilePage", () => {
   });
 
   it("shows initials when no avatar", async () => {
-    renderProfile();
+    render(<ProfilePage />);
     await waitFor(() => {
       expect(screen.getByText("A")).toBeInTheDocument();
     });
   });
 
   it("updates display name on save", async () => {
-    renderProfile();
+    render(<ProfilePage />);
     await waitFor(() => screen.getByDisplayValue("Alice"));
 
-    const input = screen.getByDisplayValue("Alice");
-    fireEvent.change(input, { target: { value: "Bob" } });
+    fireEvent.change(screen.getByDisplayValue("Alice"), {
+      target: { value: "Bob" },
+    });
     fireEvent.click(screen.getByText("Enregistrer"));
 
     await waitFor(() => {
@@ -118,13 +111,15 @@ describe("ProfilePage", () => {
   });
 
   it("rejects files over 2 MB", async () => {
-    renderProfile();
+    render(<ProfilePage />);
     await waitFor(() => screen.getByText("Profil"));
 
     const file = new File(["x".repeat(3 * 1024 * 1024)], "big.png", {
       type: "image/png",
     });
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
@@ -136,30 +131,34 @@ describe("ProfilePage", () => {
   });
 
   it("uploads avatar and updates profile", async () => {
-    renderProfile();
+    render(<ProfilePage />);
     await waitFor(() => screen.getByText("Profil"));
 
     const file = new File(["img"], "photo.jpg", { type: "image/jpeg" });
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(mockUpload).toHaveBeenCalledWith(
-        "user-123/avatar.jpg",
-        file,
-        { upsert: true }
-      );
+      expect(mockUpload).toHaveBeenCalledWith("user-123/avatar.jpg", file, {
+        upsert: true,
+      });
       expect(mockToastSuccess).toHaveBeenCalledWith("Avatar mis à jour");
     });
   });
 
   it("shows upload error via toast", async () => {
-    mockUpload.mockResolvedValue({ error: { message: "Upload failed" } });
-    renderProfile();
+    mockUpload.mockResolvedValue({
+      error: { message: "Upload failed" },
+    });
+    render(<ProfilePage />);
     await waitFor(() => screen.getByText("Profil"));
 
     const file = new File(["img"], "photo.png", { type: "image/png" });
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
@@ -168,11 +167,14 @@ describe("ProfilePage", () => {
   });
 
   it("shows avatar image when avatarUrl is set", async () => {
-    mockSelect.mockResolvedValue({
-      data: { display_name: "Eve", avatar_url: "https://cdn.example.com/eve.png" },
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        display_name: "Eve",
+        avatar_url: "https://cdn.example.com/eve.png",
+      },
       error: null,
     });
-    renderProfile();
+    render(<ProfilePage />);
     await waitFor(() => {
       const img = screen.getByAltText("Avatar");
       expect(img).toBeInTheDocument();
