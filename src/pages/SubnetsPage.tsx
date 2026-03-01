@@ -259,7 +259,11 @@ export default function SubnetsPage() {
         <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
           {modeOptions.map(opt => (
             <button key={opt.value}
-              onClick={() => setMode(opt.value)}
+              onClick={() => {
+                setMode(opt.value);
+                if (opt.value === "risks") { setSortCol("depeg"); setSortDir("desc"); }
+                else if (opt.value !== mode) { setSortCol(null); setSortDir("desc"); }
+              }}
               className="font-mono text-[11px] tracking-wider px-4 py-2 transition-all"
               style={{
                 background: mode === opt.value ? "rgba(255,215,0,0.1)" : "transparent",
