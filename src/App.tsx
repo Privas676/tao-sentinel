@@ -11,6 +11,7 @@ import AlertsPage from "./pages/AlertsPage";
 import SettingsPage from "./pages/SettingsPage";
 import AuthPage from "./pages/AuthPage";
 import PortfolioPage from "./pages/PortfolioPage";
+import InstallPage from "./pages/InstallPage";
 import { Toaster } from "@/components/ui/sonner";
 
 const queryClient = new QueryClient();
@@ -132,6 +133,7 @@ function AppLayout() {
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/auth" element={user ? <AlienGauge /> : <AuthPage />} />
+          <Route path="/install" element={<InstallPage />} />
         </Routes>
       </div>
     </div>
