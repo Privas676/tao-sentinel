@@ -13,6 +13,7 @@ import AuthPage from "./pages/AuthPage";
 import PortfolioPage from "./pages/PortfolioPage";
 import InstallPage from "./pages/InstallPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import ProfilePage from "./pages/ProfilePage";
 import { Toaster } from "@/components/ui/sonner";
 
 const queryClient = new QueryClient();
@@ -105,7 +106,14 @@ function AppLayout() {
           <div className="mt-auto mb-4 px-3">
             {user ? (
               <div className="space-y-2">
-                <div className="font-mono text-[9px] text-white/25 truncate">{user.email}</div>
+                <Link
+                  to="/profile"
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex items-center gap-2 font-mono text-[9px] text-white/25 hover:text-white/50 transition-colors truncate"
+                >
+                  <span>👤</span>
+                  <span className="truncate">{user.email}</span>
+                </Link>
                 <button
                   onClick={() => { signOut(); setSidebarOpen(false); }}
                   className="font-mono text-[10px] tracking-wider text-white/30 hover:text-white/60 transition-colors"
@@ -136,6 +144,7 @@ function AppLayout() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/auth" element={user ? <AlienGauge /> : <AuthPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/install" element={<InstallPage />} />
         </Routes>
       </div>
