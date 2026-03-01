@@ -3,6 +3,7 @@
 /*   Safety signals: depeg, liquidity,       */
 /*   volatility, override, delist            */
 /*   NO dependency on StrategicEngine        */
+/*   NO hardcoded scores                     */
 /* ═══════════════════════════════════════ */
 
 import {
@@ -56,6 +57,7 @@ export type ProtectionOutput = {
 /**
  * Evaluate protection signals for a single subnet.
  * Pure function: no strategic scoring dependencies.
+ * Delist scores are ALWAYS computed from metrics, never hardcoded.
  */
 export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
   // 1. Risk Override (structural dangers)
@@ -70,36 +72,38 @@ export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
     taoInPool: input.taoInPool,
   });
 
-  // 2. Delist risk
-  let delistCategory: DelistCategory = "NORMAL";
-  let delistScore = 0;
+  // 2. Delist risk — always computed from metrics
+  const autoResult = computeDelistRiskScore({
+    netuid: input.netuid,
+    minersActive: input.minersActive,
+    liqTao: input.liqTao,
+    liqUsd: input.liqUsd,
+    capTao: input.capTao,
+    alphaPrice: input.alphaPrice,
+    volMcRatio: input.volumeMcRatio ?? 0,
+    psi: input.psi,
+    quality: input.quality,
+    state: input.state,
+    priceChange7d: input.priceChange7d,
+    confianceData: input.confianceData,
+    liqHaircut: input.liqHaircut,
+  });
 
+  let delistCategory = autoResult.category;
+  let delistScore = autoResult.score;
+
+  // In manual mode, manual lists can PROMOTE category (never demote)
+  // but the score is always the computed one (with a small manual bonus)
   if (input.delistMode === "manual") {
+    const MANUAL_DEPEG_BONUS = 15;
+    const MANUAL_HIGH_RISK_BONUS = 8;
     if (DEPEG_PRIORITY_MANUAL.includes(input.netuid)) {
-      delistCategory = "DEPEG_PRIORITY";
-      delistScore = 90;
+      delistScore = Math.min(100, delistScore + MANUAL_DEPEG_BONUS);
+      if (delistCategory !== "DEPEG_PRIORITY") delistCategory = "DEPEG_PRIORITY";
     } else if (HIGH_RISK_NEAR_DELIST_MANUAL.includes(input.netuid)) {
-      delistCategory = "HIGH_RISK_NEAR_DELIST";
-      delistScore = 70;
+      delistScore = Math.min(100, delistScore + MANUAL_HIGH_RISK_BONUS);
+      if (delistCategory === "NORMAL") delistCategory = "HIGH_RISK_NEAR_DELIST";
     }
-  } else {
-    const autoResult = computeDelistRiskScore({
-      netuid: input.netuid,
-      minersActive: input.minersActive,
-      liqTao: input.liqTao,
-      liqUsd: input.liqUsd,
-      capTao: input.capTao,
-      alphaPrice: input.alphaPrice,
-      volMcRatio: input.volumeMcRatio ?? 0,
-      psi: input.psi,
-      quality: input.quality,
-      state: input.state,
-      priceChange7d: input.priceChange7d,
-      confianceData: input.confianceData,
-      liqHaircut: input.liqHaircut,
-    });
-    delistCategory = autoResult.category;
-    delistScore = autoResult.score;
   }
 
   // Derive final system status

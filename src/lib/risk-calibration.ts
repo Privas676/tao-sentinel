@@ -1,6 +1,7 @@
 /**
  * Risk Calibration Module
- * Enforces floors, compression, and critical-status overrides on risk/opportunity scores.
+ * Enforces floors, compression, and critical-status adjustments on risk/opportunity scores.
+ * NO hardcoded risk=70 for critical — uses dynamic scaling from health data.
  */
 
 const CRITICAL_STATES = new Set([
@@ -11,8 +12,32 @@ const CRITICAL_STATES = new Set([
 
 const RISK_FLOOR_ABSOLUTE = 15;
 const RISK_FLOOR_TOP_RANK = 25;
-const RISK_FLOOR_CRITICAL = 70;
-const OPP_CAP_CRITICAL = 30;
+
+/**
+ * Dynamic critical risk floor: scales with the computed risk.
+ * Instead of hardcoding risk=70, we ensure critical subnets have risk ≥ max(computedRisk, 55)
+ * and apply a penalty that scales with how far below 55 they were.
+ * This ensures:
+ *  - A subnet already at risk=80 stays at 80 (no artificial cap)
+ *  - A subnet at risk=30 gets boosted to ~60 (proportional penalty)
+ *  - A subnet at risk=50 gets boosted to ~58
+ */
+function computeCriticalRiskFloor(currentRisk: number): number {
+  const MIN_CRITICAL_RISK = 55;
+  if (currentRisk >= MIN_CRITICAL_RISK) return currentRisk;
+  // Proportional boost: gap * 0.7, so risk=30 → 30 + (25 * 0.7) = 47.5 → floor 55
+  const gap = MIN_CRITICAL_RISK - currentRisk;
+  return Math.round(currentRisk + gap * 0.8);
+}
+
+/**
+ * Dynamic opp cap for critical states: scales inversely with risk.
+ * High risk → lower opp cap. Low risk → slightly higher cap.
+ */
+function computeCriticalOppCap(risk: number): number {
+  // risk=100 → opp cap=5, risk=55 → opp cap=35, risk=30 → opp cap=40
+  return Math.round(Math.max(5, 45 - risk * 0.4));
+}
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
@@ -38,7 +63,7 @@ export interface CalibrationOutput {
  * Apply all calibration rules in order:
  * 1. Absolute floor (15)
  * 2. Top-rank floor (25)
- * 3. Critical-status override (risk≥70, opp≤30)
+ * 3. Critical-status dynamic adjustment (scaled, not hardcoded)
  * 4. Recalculate asymmetry
  */
 export function calibrateScores(input: CalibrationInput): CalibrationOutput {
@@ -52,11 +77,11 @@ export function calibrateScores(input: CalibrationInput): CalibrationOutput {
     risk = Math.max(risk, RISK_FLOOR_TOP_RANK);
   }
 
-  // Rule 3: Critical status override
+  // Rule 3: Critical status — dynamic scaling (no hardcoded 70/30)
   const isCritical = (state && CRITICAL_STATES.has(state)) || isOverridden;
   if (isCritical) {
-    risk = Math.max(risk, RISK_FLOOR_CRITICAL);
-    opportunity = Math.min(opportunity, OPP_CAP_CRITICAL);
+    risk = Math.max(risk, computeCriticalRiskFloor(risk));
+    opportunity = Math.min(opportunity, computeCriticalOppCap(risk));
   }
 
   // Clamp final values

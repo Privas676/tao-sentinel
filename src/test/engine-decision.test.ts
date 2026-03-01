@@ -149,17 +149,19 @@ describe("applyDecision — Protection overrides", () => {
 /* ═══════════════════════════════════════ */
 
 describe("applyDecision — Delist/Depeg", () => {
-  it("DEPEG_PRIORITY → opp=0, risk≥80, action=EXIT", () => {
-    const out = applyDecision(makeInput({ prot: { delistCategory: "DEPEG_PRIORITY" } }));
+  it("DEPEG_PRIORITY → opp=0, risk boosted from delistScore, action=EXIT", () => {
+    const out = applyDecision(makeInput({ prot: { delistCategory: "DEPEG_PRIORITY", delistScore: 90 } }));
     expect(out.opp).toBe(0);
-    expect(out.risk).toBeGreaterThanOrEqual(80);
+    // Dynamic: risk floor = 90 * 0.85 = 76
+    expect(out.risk).toBeGreaterThanOrEqual(76);
     expect(out.action).toBe("EXIT");
   });
 
-  it("HIGH_RISK_NEAR_DELIST → opp≤25, risk≥60", () => {
-    const out = applyDecision(makeInput({ prot: { delistCategory: "HIGH_RISK_NEAR_DELIST" } }));
-    expect(out.opp).toBeLessThanOrEqual(25);
-    expect(out.risk).toBeGreaterThanOrEqual(60);
+  it("HIGH_RISK_NEAR_DELIST → opp capped, risk boosted from delistScore", () => {
+    const out = applyDecision(makeInput({ prot: { delistCategory: "HIGH_RISK_NEAR_DELIST", delistScore: 40 } }));
+    // Dynamic: opp cap = max(5, 50 - 40*0.5) = 30, risk floor = 40 * 0.7 = 28
+    expect(out.opp).toBeLessThanOrEqual(30);
+    expect(out.risk).toBeGreaterThanOrEqual(28);
   });
 
   it("HIGH_RISK_NEAR_DELIST downgrades ENTER → WATCH", () => {

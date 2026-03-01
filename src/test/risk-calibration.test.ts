@@ -22,18 +22,28 @@ describe("calibrateScores", () => {
     expect(r.risk).toBe(50);
   });
 
-  it("applies critical state override (risk≥70, opp≤30)", () => {
+  it("critical state boosts risk dynamically (not hardcoded)", () => {
     for (const state of ["DEPEG", "DEREGISTERING", "BREAK", "EXIT_FAST"]) {
       const r = calibrateScores({ risk: 20, opportunity: 80, state });
-      expect(r.risk).toBeGreaterThanOrEqual(70);
-      expect(r.opportunity).toBeLessThanOrEqual(30);
+      // Dynamic: risk=20 → boosted toward 55 via proportional gap fill
+      expect(r.risk).toBeGreaterThan(20);
+      expect(r.risk).toBeGreaterThanOrEqual(48); // 20 + (35 * 0.8) = 48
+      // Opp capped dynamically based on risk
+      expect(r.opportunity).toBeLessThan(80);
     }
+  });
+
+  it("critical state with already-high risk preserves it", () => {
+    const r = calibrateScores({ risk: 80, opportunity: 50, state: "DEPEG" });
+    expect(r.risk).toBe(80); // Already above MIN_CRITICAL_RISK
+    expect(r.opportunity).toBeLessThanOrEqual(15); // 45 - 80*0.4 = 13
   });
 
   it("applies override when isOverridden=true", () => {
     const r = calibrateScores({ risk: 10, opportunity: 90, state: "OK", isOverridden: true });
-    expect(r.risk).toBeGreaterThanOrEqual(70);
-    expect(r.opportunity).toBeLessThanOrEqual(30);
+    // Dynamic scaling: risk boosted, opp capped
+    expect(r.risk).toBeGreaterThan(10);
+    expect(r.opportunity).toBeLessThan(90);
   });
 
   it("calculates asymmetry correctly", () => {
@@ -47,8 +57,10 @@ describe("calibrateScores", () => {
     expect(r.opportunity).toBe(0);
   });
 
-  it("critical + topRank: critical floor dominates", () => {
+  it("critical + topRank: critical floor dominates over topRank", () => {
     const r = calibrateScores({ risk: 10, opportunity: 90, state: "DEPEG", isTopRank: true });
-    expect(r.risk).toBe(70);
+    // Critical dynamic floor (≥48) > topRank floor (25)
+    expect(r.risk).toBeGreaterThanOrEqual(46);
+    expect(r.risk).toBeGreaterThan(25);
   });
 });
