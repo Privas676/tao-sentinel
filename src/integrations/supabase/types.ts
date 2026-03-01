@@ -235,6 +235,68 @@ export type Database = {
         }
         Relationships: []
       }
+      push_log: {
+        Row: {
+          created_at: string
+          endpoint: string
+          error_message: string | null
+          event_id: string
+          event_type: string
+          http_status: number | null
+          id: number
+          last_retry_at: string | null
+          netuid: number | null
+          payload: Json
+          priority: number
+          retry_count: number
+          sent_at: string | null
+          status: string
+          subscription_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          endpoint: string
+          error_message?: string | null
+          event_id: string
+          event_type: string
+          http_status?: number | null
+          id?: never
+          last_retry_at?: string | null
+          netuid?: number | null
+          payload?: Json
+          priority?: number
+          retry_count?: number
+          sent_at?: string | null
+          status?: string
+          subscription_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          endpoint?: string
+          error_message?: string | null
+          event_id?: string
+          event_type?: string
+          http_status?: number | null
+          id?: never
+          last_retry_at?: string | null
+          netuid?: number | null
+          payload?: Json
+          priority?: number
+          retry_count?: number
+          sent_at?: string | null
+          status?: string
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_log_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string
