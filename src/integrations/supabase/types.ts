@@ -110,6 +110,30 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_snapshots: {
+        Row: {
+          engine_version: string
+          id: number
+          snapshot: Json
+          subnet_count: number | null
+          ts: string
+        }
+        Insert: {
+          engine_version?: string
+          id?: never
+          snapshot?: Json
+          subnet_count?: number | null
+          ts?: string
+        }
+        Update: {
+          engine_version?: string
+          id?: never
+          snapshot?: Json
+          subnet_count?: number | null
+          ts?: string
+        }
+        Relationships: []
+      }
       positions: {
         Row: {
           capital: number
