@@ -19,6 +19,10 @@ import {
   systemStatusColor, systemStatusLabel,
 } from "@/lib/risk-override";
 import {
+  stateLabel, stateColor, stateSeverity,
+  type DecisionState,
+} from "@/lib/engine-decision-state";
+import {
   healthColor, dilutionLabel, formatUsd,
   type HealthScores, type RecalculatedMetrics,
 } from "@/lib/subnet-health";
@@ -157,7 +161,7 @@ export default function SubnetsPage() {
   };
 
   // ── UNIFIED SCORES (single source of truth) ──
-  const { scoresList, sparklines, scoreTimestamp, marketContext, dataAlignment, dataAgeDebug } = useSubnetScores();
+  const { scoresList, sparklines, scoreTimestamp, marketContext, dataAlignment, dataAgeDebug, decisionStates } = useSubnetScores();
 
   const rows = useMemo(() => {
     return scoresList
@@ -350,7 +354,21 @@ export default function SubnetsPage() {
                         ⚠ Warning
                       </span>
                     )}
-                    {/* dataUncertain badge removed — TMC decoupled */}
+                    {/* Decision State badge */}
+                    {(() => {
+                      const ds = decisionStates?.get(r.netuid);
+                      const st = ds?.state as DecisionState | undefined;
+                      if (!st || st === "OK") return null;
+                      const sev = stateSeverity(st);
+                      const col = stateColor(st);
+                      return (
+                        <span className={`ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider${sev >= 3 ? " animate-pulse" : ""}`}
+                          style={{ background: `${col}15`, color: col, border: `1px solid ${col}40` }}
+                          title={ds?.pendingState ? `Pending: ${ds.pendingState} (${ds.pendingTicks} ticks)` : undefined}>
+                          {sev >= 3 ? "🚨" : sev >= 2 ? "⚠" : "👁"} {stateLabel(st)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="py-3 px-2 text-center">
                     <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
