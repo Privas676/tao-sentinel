@@ -97,6 +97,8 @@ const ENTRY_TYPES = new Set(["GO", "GO_SPECULATIVE", "EARLY"]);
 const EXIT_TYPES = new Set(["BREAK", "EXIT_FAST"]);
 /** RISK_OVERRIDE is only pushed for Critical-level (evidence.level === "CRITICAL") */
 const OVERRIDE_TYPES = new Set(["RISK_OVERRIDE"]);
+/** DEPEG events: only DEPEG_CONFIRMED triggers push */
+const DEPEG_TYPES = new Set(["DEPEG_CONFIRMED"]);
 
 function isStrategicEvent(type: string | null): boolean {
   if (!type) return false;
@@ -110,6 +112,8 @@ function isPushableEvent(ev: { type: string | null; evidence: any }): boolean {
   if (OVERRIDE_TYPES.has(ev.type)) {
     return ev.evidence?.level === "CRITICAL";
   }
+  // DEPEG_CONFIRMED: always push (high confidence, tick-confirmed)
+  if (DEPEG_TYPES.has(ev.type)) return true;
   return false;
 }
 
@@ -135,6 +139,14 @@ function eventToNotification(ev: { type: string; netuid: number; evidence: any }
     };
   }
 
+  if (DEPEG_TYPES.has(ev.type)) {
+    return {
+      title: `🔴 DEPEG CONFIRMÉ — ${sn}`,
+      body: reasons || `Depeg confirmé sur ${sn} (probabilité: ${e.probability ?? '?'}%)`,
+      tag: `depeg-${ev.netuid}`,
+    };
+  }
+
   const label = ev.type === "EXIT_FAST" ? "⛔ EXIT FAST" : "⛔ ZONE CRITIQUE";
   return {
     title: `${label} — ${sn}`,
@@ -157,7 +169,7 @@ Deno.serve(async (req) => {
     const { data: events } = await sb.from("events")
       .select("type, netuid, evidence, ts")
       .gte("ts", twoMinAgo)
-      .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST", "RISK_OVERRIDE"]);
+      .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST", "RISK_OVERRIDE", "DEPEG_CONFIRMED"]);
 
     const strategic = (events || []).filter(e => isPushableEvent(e));
 

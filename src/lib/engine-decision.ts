@@ -84,6 +84,9 @@ export type DecisionOutput = {
   priceVar30d: number | null;
   delistCategory: DelistCategory;
   delistScore: number;
+  depegProbability: number;
+  depegState: import("./depeg-probability").DepegState;
+  depegSignals: string[];
 };
 
 /* ── Dynamic risk floor from delist score ── */
@@ -215,6 +218,9 @@ export function applyDecision(input: DecisionInput): DecisionOutput {
     priceVar30d: ctx.priceVar30d,
     delistCategory: prot.delistCategory,
     delistScore: prot.delistScore,
+    depegProbability: prot.depegProbability,
+    depegState: prot.depegState,
+    depegSignals: prot.depegSignals,
   };
 }
 
