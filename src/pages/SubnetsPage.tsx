@@ -130,7 +130,7 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
   );
 }
 
-type SortCol = "netuid" | "name" | "status" | "price" | "var30d" | "spark" | "opp" | "risk" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | null;
+type SortCol = "netuid" | "name" | "status" | "dstate" | "price" | "var30d" | "spark" | "opp" | "risk" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | null;
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
 
 function scColor(state: SmartCapitalState): string {
@@ -202,6 +202,13 @@ export default function SubnetsPage() {
             case "momentum": av = momRank(a.momentumLabel); bv = momRank(b.momentumLabel); break;
             case "sc": av = scRank(a.sc); bv = scRank(b.sc); break;
             case "confiance": av = a.confianceScore; bv = b.confianceScore; break;
+            case "dstate": {
+              const dsA = decisionStates?.get(a.netuid);
+              const dsB = decisionStates?.get(b.netuid);
+              av = dsA ? stateSeverity(dsA.state as DecisionState) : 0;
+              bv = dsB ? stateSeverity(dsB.state as DecisionState) : 0;
+              break;
+            }
           }
           return sortDir === "desc" ? bv - av : av - bv;
         }
@@ -212,7 +219,7 @@ export default function SubnetsPage() {
         }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, mode, ownedNetuids, sparklines, sortCol, sortDir]);
+  }, [scoresList, mode, ownedNetuids, sparklines, sortCol, sortDir, decisionStates]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
@@ -269,6 +276,9 @@ export default function SubnetsPage() {
               </th>
               <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("name")}>
                 {t("sub.name")} {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
+              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("dstate")}>
+                ÉTAT {sortCol === "dstate" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
               <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("status")}>
                 STATUT {sortCol === "status" ? (sortDir === "desc" ? "▼" : "▲") : ""}
@@ -354,15 +364,16 @@ export default function SubnetsPage() {
                         ⚠ Warning
                       </span>
                     )}
-                    {/* Decision State badge */}
+                  </td>
+                  <td className="py-3 px-2 text-center">
                     {(() => {
                       const ds = decisionStates?.get(r.netuid);
                       const st = ds?.state as DecisionState | undefined;
-                      if (!st || st === "OK") return null;
+                      if (!st || st === "OK") return <span className="font-mono text-[9px] text-white/15">—</span>;
                       const sev = stateSeverity(st);
                       const col = stateColor(st);
                       return (
-                        <span className={`ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider${sev >= 3 ? " animate-pulse" : ""}`}
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider whitespace-nowrap${sev >= 3 ? " animate-pulse" : ""}`}
                           style={{ background: `${col}15`, color: col, border: `1px solid ${col}40` }}
                           title={ds?.pendingState ? `Pending: ${ds.pendingState} (${ds.pendingTicks} ticks)` : undefined}>
                           {sev >= 3 ? "🚨" : sev >= 2 ? "⚠" : "👁"} {stateLabel(st)}
