@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 // Mock modules
@@ -58,8 +58,7 @@ vi.mock("@tanstack/react-query", async () => {
 });
 
 function renderAlerts(events?: any[]) {
-  const { useQuery } = require("@tanstack/react-query");
-  useQuery.mockReturnValue({ data: events ?? null, isLoading: false });
+  (useQuery as Mock).mockReturnValue({ data: events ?? null, isLoading: false });
   const AlertsPage = require("@/pages/AlertsPage").default;
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
