@@ -476,6 +476,10 @@ export function useSubnetScores(): UnifiedScoresResult {
       const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
       let action: StrategicAction = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, r.conf);
       if (override.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
+      // ── STALE DATA GUARD: block aggressive actions when data is stale ──
+      if (alignmentResult.status === "STALE" && action === "ENTER") {
+        action = "WATCH";
+      }
 
       // ── Delist risk: check manual lists for quick lookup ──
       let delistCategory: DelistCategory = "NORMAL";
@@ -590,7 +594,11 @@ export function useSubnetScores(): UnifiedScoresResult {
       const overrideCount = scored.filter(r => r.isOverridden).length;
       const warningCount = scored.filter(r => r.isWarning && !r.isOverridden).length;
       const pct = Math.round((overrideCount / scored.length) * 100);
-      console.log(`[UNIFIED-SCORES] n=${scored.length} overrides=${overrideCount} (${pct}%) warnings=${warningCount} ts=${ts}`);
+      console.log(`[UNIFIED-SCORES] n=${scored.length} overrides=${overrideCount} (${pct}%) warnings=${warningCount} alignment=${alignmentResult.status} ts=${ts}`);
+      if (alignmentResult.status === "STALE") {
+        const blockedCount = scored.filter(r => !SPECIAL_SUBNETS[r.netuid] && r.action === "WATCH").length;
+        console.warn(`[STALE-GUARD] Data alignment STALE — all ENTER actions downgraded to WATCH (${blockedCount} potential blocks)`);
+      }
 
       // Whitelist invariant check: whitelisted subnets must never be EXIT
       for (const s of scored) {
@@ -601,7 +609,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     }
 
     return { scoresList: scored, scoresMap: map, scoreTimestamp: ts };
-  }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines]);
+  }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines, alignmentResult]);
 
   return {
     scores: scoresMap,
