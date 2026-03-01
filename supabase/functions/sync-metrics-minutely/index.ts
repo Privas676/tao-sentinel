@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     const { error } = await sb.from("subnet_metrics_ts").insert(rows);
     if (error) {
       console.error("Batch insert error:", error.message);
-      return new Response(JSON.stringify({ ok: false, error: error.message }), {
+      return new Response(JSON.stringify({ ok: false, error: "Data ingestion failed" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("sync-metrics error:", e);
-    return new Response(JSON.stringify({ error: String(e) }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
