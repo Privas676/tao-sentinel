@@ -156,7 +156,7 @@ export default function SubnetsPage() {
   };
 
   // ── UNIFIED SCORES (single source of truth) ──
-  const { scoresList, sparklines, scoreTimestamp, marketContext } = useSubnetScores();
+  const { scoresList, sparklines, scoreTimestamp, marketContext, dataAlignment, dataAgeDebug } = useSubnetScores();
 
   const rows = useMemo(() => {
     return scoresList
@@ -233,6 +233,19 @@ export default function SubnetsPage() {
           title={`Score snapshot: ${scoreTimestamp}`}>
           ⏱ {new Date(scoreTimestamp).toLocaleTimeString()}
         </span>
+        {dataAlignment !== "ALIGNED" && (
+          <span
+            className="font-mono text-[8px] px-2 py-0.5 rounded animate-pulse cursor-help"
+            style={{
+              background: dataAlignment === "STALE" ? "rgba(229,57,53,0.10)" : "rgba(255,193,7,0.08)",
+              color: dataAlignment === "STALE" ? "rgba(229,57,53,0.85)" : "rgba(255,193,7,0.75)",
+              border: `1px solid ${dataAlignment === "STALE" ? "rgba(229,57,53,0.25)" : "rgba(255,193,7,0.2)"}`,
+            }}
+            title={`Data ${dataAlignment} — ${dataAgeDebug.map(d => `${d.source}: ${d.ageSeconds}s`).join(", ")}`}
+          >
+            {dataAlignment === "STALE" ? "⚠ STALE" : "⏳ DEGRADED"}
+          </span>
+        )}
       </div>
 
       {/* Filter row */}
