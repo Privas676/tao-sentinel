@@ -14,13 +14,14 @@ import PortfolioPage from "./pages/PortfolioPage";
 import InstallPage from "./pages/InstallPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
+import MethodologyPage from "./pages/MethodologyPage";
 import { Toaster } from "@/components/ui/sonner";
 
 const queryClient = new QueryClient();
 
 function AppLayout() {
   const location = useLocation();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { user, loading, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -45,6 +46,7 @@ function AppLayout() {
     { path: "/alerts", label: t("nav.alerts"), icon: "⚡", badge: unreadCount },
     { path: "/settings", label: t("nav.settings"), icon: "⚙" },
     { path: "/install", label: "Installer", icon: "📲" },
+    { path: "/methodology", label: lang === "fr" ? "Méthodo" : "Method", icon: "📖" },
   ];
 
   const SIDEBAR_W = 200;
@@ -146,6 +148,7 @@ function AppLayout() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/install" element={<InstallPage />} />
+          <Route path="/methodology" element={<MethodologyPage />} />
         </Routes>
       </div>
     </div>
