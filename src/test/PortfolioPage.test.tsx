@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-// @ts-expect-error -- @testing-library/dom types re-exported at runtime
 import { render, screen, fireEvent } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import PortfolioPage from "@/pages/PortfolioPage";
 
 // ── Mock hooks ──
 const mockAddPosition = vi.fn();
@@ -68,7 +68,6 @@ vi.mock("sonner", () => ({
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const PortfolioPage = require("@/pages/PortfolioPage").default;
   return render(
     <QueryClientProvider client={qc}>
       <BrowserRouter>
