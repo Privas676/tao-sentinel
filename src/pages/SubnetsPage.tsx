@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import DataAlignmentBadge from "@/components/DataAlignmentBadge";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
@@ -233,19 +234,7 @@ export default function SubnetsPage() {
           title={`Score snapshot: ${scoreTimestamp}`}>
           ⏱ {new Date(scoreTimestamp).toLocaleTimeString()}
         </span>
-        {dataAlignment !== "ALIGNED" && (
-          <span
-            className="font-mono text-[8px] px-2 py-0.5 rounded animate-pulse cursor-help"
-            style={{
-              background: dataAlignment === "STALE" ? "rgba(229,57,53,0.10)" : "rgba(255,193,7,0.08)",
-              color: dataAlignment === "STALE" ? "rgba(229,57,53,0.85)" : "rgba(255,193,7,0.75)",
-              border: `1px solid ${dataAlignment === "STALE" ? "rgba(229,57,53,0.25)" : "rgba(255,193,7,0.2)"}`,
-            }}
-            title={`Data ${dataAlignment} — ${dataAgeDebug.map(d => `${d.source}: ${d.ageSeconds}s`).join(", ")}`}
-          >
-            {dataAlignment === "STALE" ? "⚠ STALE" : "⏳ DEGRADED"}
-          </span>
-        )}
+        <DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} />
       </div>
 
       {/* Filter row */}

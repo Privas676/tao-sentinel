@@ -23,6 +23,7 @@ import {
   fuseMetrics,
 } from "@/lib/data-fusion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import DataAlignmentBadge from "@/components/DataAlignmentBadge";
 
 /* ═══════════════════════════════════════ */
 /*          SPARKLINE HELPER               */
@@ -469,19 +470,7 @@ export default function AlienGauge() {
               title={`Score snapshot: ${scoreTimestamp}`}>
               ⏱ {new Date(scoreTimestamp).toLocaleTimeString()}
             </span>
-            {dataAlignment !== "ALIGNED" && (
-              <span
-                className="font-mono text-[7px] px-1.5 py-0.5 rounded cursor-help animate-pulse"
-                style={{
-                  background: dataAlignment === "STALE" ? "rgba(229,57,53,0.12)" : "rgba(255,193,7,0.10)",
-                  color: dataAlignment === "STALE" ? "rgba(229,57,53,0.85)" : "rgba(255,193,7,0.8)",
-                  border: `1px solid ${dataAlignment === "STALE" ? "rgba(229,57,53,0.25)" : "rgba(255,193,7,0.2)"}`,
-                }}
-                title={`Data ${dataAlignment} — ${dataAgeDebug.map(d => `${d.source}: ${d.ageSeconds}s`).join(", ")}`}
-              >
-                {dataAlignment === "STALE" ? "⚠ STALE" : "⏳ DEGRADED"}
-              </span>
-            )}
+            <DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" />
           </div>
 
           {/* ─── CIRCULAR GAUGE ─── */}
