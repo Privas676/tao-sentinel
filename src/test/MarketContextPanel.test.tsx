@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from "vitest";
-// @ts-expect-error -- @testing-library/dom types re-exported at runtime
 import { render, screen, fireEvent } from "@testing-library/react";
 import MarketContextPanel from "@/components/MarketContextPanel";
 import { type SourceMetrics } from "@/lib/data-fusion";

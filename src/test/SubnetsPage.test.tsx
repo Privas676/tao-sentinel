@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-// @ts-expect-error -- @testing-library/dom types re-exported at runtime
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import SubnetsPage from "@/pages/SubnetsPage";
 import type { UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 
 // ── Mock hooks ──
@@ -83,8 +83,6 @@ vi.mock("@/hooks/use-delist-mode", () => ({
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  // Dynamic import to get mocked version
-  const SubnetsPage = require("@/pages/SubnetsPage").default;
   return render(
     <QueryClientProvider client={qc}>
       <BrowserRouter>
