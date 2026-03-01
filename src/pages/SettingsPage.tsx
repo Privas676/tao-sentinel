@@ -10,6 +10,7 @@ export default function SettingsPage() {
   const { mode, setMode } = useOverrideMode();
   const { delistMode, setDelistMode } = useDelistMode();
   const { dataConfidence } = useSubnetScores();
+  const [simMode, setSimMode] = useState<"degraded" | "critical" | null>(null);
   const fr = lang === "fr";
 
   // Minor divergences toggle removed — TMC decoupled from alerts
@@ -151,71 +152,122 @@ export default function SettingsPage() {
           <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
             {fr ? "🔬 DEBUG — CONFIANCE DATA" : "🔬 DEBUG — DATA CONFIDENCE"}
           </label>
-          {dataConfidence ? (
-            <div className="border border-white/10 rounded-lg p-4 space-y-3">
-              {/* Global score */}
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs text-white/50">
-                  {fr ? "Score global" : "Global score"}
-                </span>
-                <span
-                  className="font-mono text-lg font-bold"
-                  style={{
-                    color: dataConfidence.score >= 70
-                      ? "rgba(76,175,80,0.9)"
-                      : dataConfidence.score >= 40
-                      ? "rgba(255,193,7,0.9)"
-                      : "rgba(229,57,53,0.9)",
-                  }}
-                >
-                  {dataConfidence.score}%
-                </span>
-              </div>
+          {(() => {
+            // Simulation presets
+            const simPresets: Record<string, typeof dataConfidence> = {
+              degraded: {
+                score: 52,
+                components: { errorRate: 45, latency: 38, freshness: 72, completeness: 100, varianceHealth: 60 },
+                isUnstable: false,
+                reasons: ["Latence API élevée"],
+              },
+              critical: {
+                score: 28,
+                components: { errorRate: 15, latency: 20, freshness: 30, completeness: 55, varianceHealth: 35 },
+                isUnstable: true,
+                reasons: ["Taux d'erreur API élevé (85%)", "Latence API élevée", "Données obsolètes (480s)", "Distribution anormale des scores"],
+              },
+            };
+            const displayed = simMode ? simPresets[simMode]! : dataConfidence;
 
-              {dataConfidence.isUnstable && (
-                <div className="font-mono text-[10px] text-red-400 bg-red-400/10 rounded px-2 py-1">
-                  ⚠ DATA_UNSTABLE — {dataConfidence.reasons.join(" · ")}
+            if (!displayed) {
+              return (
+                <div className="font-mono text-xs text-white/20 border border-white/5 rounded-lg px-4 py-3">
+                  {fr ? "Chargement…" : "Loading…"}
                 </div>
-              )}
+              );
+            }
 
-              {/* Sub-components */}
-              <div className="space-y-1.5">
-                {([
-                  { key: "errorRate", label: fr ? "Taux erreur API" : "API Error Rate", icon: "🔴" },
-                  { key: "latency", label: fr ? "Latence API" : "API Latency", icon: "⏱" },
-                  { key: "freshness", label: fr ? "Fraîcheur données" : "Data Freshness", icon: "🕐" },
-                  { key: "completeness", label: fr ? "Complétude" : "Completeness", icon: "📊" },
-                  { key: "varianceHealth", label: fr ? "Santé variance" : "Variance Health", icon: "📈" },
-                ] as const).map(({ key, label, icon }) => {
-                  const val = dataConfidence.components[key];
-                  const pct = Math.max(0, Math.min(100, val));
-                  const color =
-                    val >= 70 ? "rgba(76,175,80,0.7)" :
-                    val >= 40 ? "rgba(255,193,7,0.7)" :
-                    "rgba(229,57,53,0.7)";
-                  return (
-                    <div key={key} className="flex items-center gap-2">
-                      <span className="text-xs w-4">{icon}</span>
-                      <span className="font-mono text-[10px] text-white/40 flex-1 truncate">{label}</span>
-                      <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${pct}%`, backgroundColor: color }}
-                        />
+            return (
+              <div className="border border-white/10 rounded-lg p-4 space-y-3">
+                {/* Simulation buttons */}
+                <div className="flex gap-1.5 flex-wrap">
+                  {([
+                    { id: null, label: "Live", color: "rgba(76,175,80,0.7)" },
+                    { id: "degraded" as const, label: fr ? "⚠ Dégradé" : "⚠ Degraded", color: "rgba(255,193,7,0.7)" },
+                    { id: "critical" as const, label: fr ? "🔴 Critique" : "🔴 Critical", color: "rgba(229,57,53,0.7)" },
+                  ] as const).map(({ id, label, color }) => (
+                    <button
+                      key={label}
+                      onClick={() => setSimMode(id)}
+                      className="font-mono text-[10px] px-2.5 py-1 rounded transition-all"
+                      style={{
+                        background: simMode === id ? `${color.replace("0.7", "0.15")}` : "transparent",
+                        color: simMode === id ? color : "rgba(255,255,255,0.3)",
+                        border: `1px solid ${simMode === id ? color : "rgba(255,255,255,0.08)"}`,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {simMode && (
+                  <div className="font-mono text-[9px] text-amber-400/60 bg-amber-400/5 rounded px-2 py-1">
+                    {fr ? "⚡ Mode simulation actif — valeurs fictives" : "⚡ Simulation mode — mock values"}
+                  </div>
+                )}
+
+                {/* Global score */}
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-white/50">
+                    {fr ? "Score global" : "Global score"}
+                  </span>
+                  <span
+                    className="font-mono text-lg font-bold"
+                    style={{
+                      color: displayed.score >= 70
+                        ? "rgba(76,175,80,0.9)"
+                        : displayed.score >= 40
+                        ? "rgba(255,193,7,0.9)"
+                        : "rgba(229,57,53,0.9)",
+                    }}
+                  >
+                    {displayed.score}%
+                  </span>
+                </div>
+
+                {displayed.isUnstable && (
+                  <div className="font-mono text-[10px] text-red-400 bg-red-400/10 rounded px-2 py-1">
+                    ⚠ DATA_UNSTABLE — {displayed.reasons.join(" · ")}
+                  </div>
+                )}
+
+                {/* Sub-components */}
+                <div className="space-y-1.5">
+                  {([
+                    { key: "errorRate", label: fr ? "Taux erreur API" : "API Error Rate", icon: "🔴" },
+                    { key: "latency", label: fr ? "Latence API" : "API Latency", icon: "⏱" },
+                    { key: "freshness", label: fr ? "Fraîcheur données" : "Data Freshness", icon: "🕐" },
+                    { key: "completeness", label: fr ? "Complétude" : "Completeness", icon: "📊" },
+                    { key: "varianceHealth", label: fr ? "Santé variance" : "Variance Health", icon: "📈" },
+                  ] as const).map(({ key, label, icon }) => {
+                    const val = displayed.components[key];
+                    const pct = Math.max(0, Math.min(100, val));
+                    const color =
+                      val >= 70 ? "rgba(76,175,80,0.7)" :
+                      val >= 40 ? "rgba(255,193,7,0.7)" :
+                      "rgba(229,57,53,0.7)";
+                    return (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="text-xs w-4">{icon}</span>
+                        <span className="font-mono text-[10px] text-white/40 flex-1 truncate">{label}</span>
+                        <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${pct}%`, backgroundColor: color }}
+                          />
+                        </div>
+                        <span className="font-mono text-[10px] w-8 text-right" style={{ color }}>
+                          {val}
+                        </span>
                       </div>
-                      <span className="font-mono text-[10px] w-8 text-right" style={{ color }}>
-                        {val}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="font-mono text-xs text-white/20 border border-white/5 rounded-lg px-4 py-3">
-              {fr ? "Chargement…" : "Loading…"}
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </div>
