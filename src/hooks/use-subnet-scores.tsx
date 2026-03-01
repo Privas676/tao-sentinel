@@ -29,6 +29,10 @@ import {
   type DelistRiskResult, type SubnetMetricsForDelist, type DelistCategory,
 } from "@/lib/delist-risk";
 import { useDelistMode } from "@/hooks/use-delist-mode";
+import {
+  createSnapshot, checkTimeAlignment, logAlignmentDiag,
+  dataAgeSeconds, type DataSnapshot, type AlignmentStatus,
+} from "@/lib/data-snapshot";
 
 /* ─── Exported types ─── */
 
@@ -78,6 +82,10 @@ export type UnifiedScoresResult = {
   subnetList: { netuid: number; name: string }[] | undefined;
   /** TMC market context data — informational only, NOT used in scoring */
   marketContext: Map<number, SourceMetrics> | undefined;
+  /** Time alignment status across data sources */
+  dataAlignment: AlignmentStatus;
+  /** Per-source age diagnostics (debug) */
+  dataAgeDebug: { source: string; ageSeconds: number }[];
 };
 
 /* ─── SPECIAL CASES / WHITELIST ───
@@ -126,17 +134,20 @@ export function useSubnetScores(): UnifiedScoresResult {
   const { delistMode } = useDelistMode();
   // ── Data fetching (shared query keys → cached across pages) ──
 
-  const { data: signals, isLoading: signalsLoading } = useQuery({
+  const { data: signalsSnapshot, isLoading: signalsLoading } = useQuery({
     queryKey: ["unified-signals"],
     queryFn: async () => {
       const { data, error } = await supabase.from("signals_latest").select("*");
       if (error) throw error;
-      return (data || []) as SignalRow[];
+      const rows = (data || []) as SignalRow[];
+      const ts = rows[0]?.ts ?? null;
+      return createSnapshot(rows, "supabase:signals", null, ts);
     },
     refetchInterval: 60_000,
   });
+  const signals = signalsSnapshot?.payload;
 
-  const { data: rawPayloads } = useQuery({
+  const { data: rawPayloadsSnapshot } = useQuery({
     queryKey: ["unified-raw-payloads"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -147,24 +158,28 @@ export function useSubnetScores(): UnifiedScoresResult {
         .limit(300);
       if (error) throw error;
       const map = new Map<number, any>();
+      let latestTs: string | null = null;
       for (const r of data || []) {
+        if (!latestTs && r.ts) latestTs = r.ts;
         if (!map.has(r.netuid) && r.raw_payload) map.set(r.netuid, r.raw_payload);
       }
-      return map;
+      return createSnapshot(map, "taostats:raw_payloads", null, latestTs);
     },
     refetchInterval: 120_000,
   });
+  const rawPayloads = rawPayloadsSnapshot?.payload;
 
-  const { data: taoUsdRaw } = useQuery({
+  const { data: taoUsdSnapshot } = useQuery({
     queryKey: ["unified-tao-usd"],
     queryFn: async () => {
       const { data } = await supabase.from("fx_latest").select("tao_usd").limit(1).maybeSingle();
-      return Number(data?.tao_usd) || 450;
+      return createSnapshot(Number(data?.tao_usd) || 450, "supabase:fx_rates", null);
     },
     refetchInterval: 300_000,
   });
+  const taoUsdRaw = taoUsdSnapshot?.payload;
 
-  const { data: primaryMetrics } = useQuery({
+  const { data: primaryMetricsSnapshot } = useQuery({
     queryKey: ["unified-metrics-primary"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -175,13 +190,16 @@ export function useSubnetScores(): UnifiedScoresResult {
         .limit(200);
       if (error) throw error;
       const map = new Map<number, SourceMetrics>();
+      let latestTs: string | null = null;
       for (const r of data || []) {
+        if (!latestTs && r.ts) latestTs = r.ts;
         if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
       }
-      return map;
+      return createSnapshot(map, "taostats:metrics", null, latestTs);
     },
     refetchInterval: 120_000,
   });
+  const primaryMetrics = primaryMetricsSnapshot?.payload;
 
   // TMC secondary metrics: kept for Market Context UI only, NOT used in scoring
   const { data: secondaryMetrics } = useQuery({
@@ -310,6 +328,18 @@ export function useSubnetScores(): UnifiedScoresResult {
   }, [primaryMetrics]);
 
   const taoUsd = taoUsdRaw || 450;
+
+  // ── TIME ALIGNMENT GUARD ──
+  const alignmentResult = useMemo(() => {
+    const snapshots: DataSnapshot[] = [];
+    if (signalsSnapshot) snapshots.push(signalsSnapshot);
+    if (rawPayloadsSnapshot) snapshots.push(rawPayloadsSnapshot);
+    if (primaryMetricsSnapshot) snapshots.push(primaryMetricsSnapshot);
+    if (taoUsdSnapshot) snapshots.push(taoUsdSnapshot);
+    const result = checkTimeAlignment(snapshots);
+    logAlignmentDiag("UNIFIED-SCORES", result);
+    return result;
+  }, [signalsSnapshot, rawPayloadsSnapshot, primaryMetricsSnapshot, taoUsdSnapshot]);
 
   // ── MAIN SCORING PIPELINE (single source of truth) ──
   const { scoresList, scoresMap, scoreTimestamp } = useMemo(() => {
@@ -582,6 +612,8 @@ export function useSubnetScores(): UnifiedScoresResult {
     sparklines,
     subnetList,
     marketContext: secondaryMetrics,
+    dataAlignment: alignmentResult.status,
+    dataAgeDebug: alignmentResult.ages.map(a => ({ source: a.source, ageSeconds: Math.round(a.dataAgeSeconds) })),
   };
 }
 
