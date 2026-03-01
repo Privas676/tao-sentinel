@@ -15,6 +15,7 @@ import InstallPage from "./pages/InstallPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
 import MethodologyPage from "./pages/MethodologyPage";
+import QuantDiagnosticsPage from "./pages/QuantDiagnosticsPage";
 import { Toaster } from "@/components/ui/sonner";
 
 const queryClient = new QueryClient();
@@ -149,6 +150,7 @@ function AppLayout() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/install" element={<InstallPage />} />
           <Route path="/methodology" element={<MethodologyPage />} />
+          <Route path="/quant-diagnostics" element={<QuantDiagnosticsPage />} />
         </Routes>
       </div>
     </div>

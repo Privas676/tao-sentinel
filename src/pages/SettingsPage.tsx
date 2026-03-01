@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useI18n, Lang } from "@/lib/i18n";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useDelistMode } from "@/hooks/use-delist-mode";
@@ -435,6 +436,51 @@ export default function SettingsPage() {
                 : "Push notification history: status, priority, retries and deduplication."}
             </p>
             <PushLogDashboard />
+          </div>
+        </div>
+
+        {/* Debug Mode Toggle + Quant Diagnostics */}
+        <div>
+          <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
+            {fr ? "🧪 MODE DEBUG" : "🧪 DEBUG MODE"}
+          </label>
+          <div className="border border-white/10 rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] text-white/30">
+                {fr ? "Activer les outils de diagnostic avancé" : "Enable advanced diagnostic tools"}
+              </span>
+              <button
+                onClick={() => {
+                  const current = localStorage.getItem("DEBUG_MODE") === "true";
+                  localStorage.setItem("DEBUG_MODE", String(!current));
+                  window.dispatchEvent(new Event("storage"));
+                  // Force re-render
+                  setReplayHours(h => h);
+                }}
+                className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-all"
+                style={{
+                  background: localStorage.getItem("DEBUG_MODE") === "true" ? "rgba(76,175,80,0.12)" : "rgba(255,255,255,0.05)",
+                  color: localStorage.getItem("DEBUG_MODE") === "true" ? "rgba(76,175,80,0.8)" : "rgba(255,255,255,0.3)",
+                  border: `1px solid ${localStorage.getItem("DEBUG_MODE") === "true" ? "rgba(76,175,80,0.25)" : "rgba(255,255,255,0.08)"}`,
+                }}
+              >
+                {localStorage.getItem("DEBUG_MODE") === "true" ? "ON" : "OFF"}
+              </button>
+            </div>
+
+            {localStorage.getItem("DEBUG_MODE") === "true" && (
+              <Link
+                to="/quant-diagnostics"
+                className="inline-flex items-center gap-2 font-mono text-[10px] tracking-wider px-3 py-2 rounded-lg transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  color: "rgba(255,255,255,0.5)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                🔬 {fr ? "Ouvrir Quant Diagnostics" : "Open Quant Diagnostics"} →
+              </Link>
+            )}
           </div>
         </div>
 
