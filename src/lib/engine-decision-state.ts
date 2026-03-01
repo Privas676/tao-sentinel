@@ -134,27 +134,29 @@ export function evaluateRawState(
 ): DecisionState {
   const h = settings.hysteresis;
 
-  // Priority 1: Data quality issues
-  if (alignmentStatus === "STALE") return "DATA_STALE";
-  if (decision.confianceScore < h.dataConfidenceMin && decision.dataUncertain) return "DATA_UNSTABLE";
-
-  // Priority 2: Depeg/delist (uses delistScore with hysteresis)
+  // Priority 1: Depeg/delist — highest severity, even if data is stale
   if (decision.delistCategory === "DEPEG_PRIORITY" || decision.delistScore >= h.depegEnter) {
-    return "DEPEG_CONFIRMED"; // Will be downgraded to DEPEG_HIGH_RISK if not confirmed
+    return "DEPEG_CONFIRMED";
   }
   if (decision.delistCategory === "HIGH_RISK_NEAR_DELIST" && decision.delistScore >= h.depegEnter * 0.6) {
     return "DEPEG_HIGH_RISK";
   }
 
-  // Priority 3: Override states
+  // Priority 2: Override states — critical overrides outrank data quality
   if (decision.isOverridden && decision.risk >= h.overrideRiskEnter) {
     return "OVERRIDE_CRITICAL";
   }
+
+  // Priority 3: Data quality issues (below critical alerts)
+  if (alignmentStatus === "STALE") return "DATA_STALE";
+  if (decision.confianceScore < h.dataConfidenceMin && decision.dataUncertain) return "DATA_UNSTABLE";
+
+  // Priority 4: Override warning (below data issues)
   if (decision.isWarning || (decision.risk >= h.overrideRiskEnter && decision.systemStatus !== "OK")) {
     return "OVERRIDE_WARNING";
   }
 
-  // Priority 4: Watch state
+  // Priority 5: Watch state
   if (decision.action === "WATCH" || decision.action === "EXIT") {
     return "WATCH";
   }
