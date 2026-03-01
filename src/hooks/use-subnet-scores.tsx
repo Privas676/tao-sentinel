@@ -14,7 +14,7 @@ import {
   clamp, type SmartCapitalState, type MomentumLabel,
 } from "@/lib/gauge-engine";
 import { computeMomentumScore } from "@/lib/gauge-momentum";
-import { checkCoherence, type SystemStatus } from "@/lib/risk-override";
+import { type SystemStatus } from "@/lib/risk-override";
 import { type SourceMetrics } from "@/lib/data-fusion";
 import {
   extractHealthData, recalculate, computeAllHealthScores,
@@ -32,10 +32,11 @@ import { type StrategicAction } from "@/lib/strategy-subnet";
 import { computeStrategicScores, type StrategicInput } from "@/lib/engine-strategic";
 import { evaluateProtection, type ProtectionInput } from "@/lib/engine-protection";
 import { evaluateRegime, type RegimeInput, type RegimeOutput } from "@/lib/engine-regime";
+import { applyDecision, type DecisionInput, type AssetType } from "@/lib/engine-decision";
 
 /* ─── Exported types ─── */
 
-export type AssetType = "SPECULATIVE" | "CORE_NETWORK";
+export type { AssetType } from "@/lib/engine-decision";
 
 export type UnifiedSubnetScore = {
   netuid: number;
@@ -424,97 +425,39 @@ export function useSubnetScores(): UnifiedScoresResult {
       protectionResults.set(s.netuid, evaluateProtection(protInput));
     }
 
-    // ── Phase 3: DECISION LAYER (merges strategic + protection, no new logic) ──
-    const scored = strategicResults.map((strat, i) => {
+    // ── Phase 3: DECISION LAYER (4th module: engine-decision.ts) ──
+    const scored: UnifiedSubnetScore[] = strategicResults.map((strat, i) => {
       const input = subnetInputs[i];
       const prot = protectionResults.get(strat.netuid)!;
       const special = SPECIAL_SUBNETS[strat.netuid];
-      const isWhitelisted = !!special;
-      const assetType: AssetType = isWhitelisted ? "CORE_NETWORK" : "SPECULATIVE";
 
-      let opp = strat.opp;
-      let risk = strat.risk;
-      let asymmetry = strat.asymmetry;
-      let action = strat.action;
+      const decisionInput: DecisionInput = {
+        strategic: strat,
+        protection: prot,
+        context: {
+          state: input.state,
+          psi: input.psi,
+          conf: input.conf,
+          quality: input.quality,
+          confianceScore: input.confianceScore,
+          dataUncertain: input.dataUncertain,
+          healthScores: input.healthScores,
+          recalc: input.recalc,
+          displayedCap: input.displayedCap,
+          displayedLiq: input.displayedLiq,
+          consensusPrice: consensusPrices.get(strat.netuid) ?? 0,
+          alphaPrice: consensusPrices.get(strat.netuid) ?? 0,
+          priceVar30d: (() => {
+            const p30 = price30dMap?.get(strat.netuid);
+            if (!p30 || p30.oldest <= 0) return null;
+            return ((p30.newest - p30.oldest) / p30.oldest) * 100;
+          })(),
+        },
+        special,
+        alignmentStatus: alignmentResult.status,
+      };
 
-      // Whitelist overrides
-      if (isWhitelisted) {
-        risk = Math.min(risk, special.forceRiskMax);
-        opp = clamp(opp, 30, 60);
-        asymmetry = opp - risk;
-        action = special.forceAction;
-      }
-
-      // Protection overrides: applied AFTER strategic scoring
-      if (prot.isOverridden && !isWhitelisted) {
-        opp = 0;
-        asymmetry = -Math.abs(risk);
-        action = "EXIT";
-      }
-
-      // DEPEG/DELIST coherence
-      if (!isWhitelisted) {
-        if (prot.delistCategory === "DEPEG_PRIORITY") {
-          opp = 0;
-          risk = Math.max(risk, 80);
-          asymmetry = -Math.abs(asymmetry) - 20;
-          action = "EXIT";
-        } else if (prot.delistCategory === "HIGH_RISK_NEAR_DELIST") {
-          opp = Math.min(opp, 25);
-          risk = Math.max(risk, 60);
-          asymmetry = Math.min(asymmetry, -5);
-          if (action === "ENTER") action = "WATCH";
-        }
-
-        // System status downgrade
-        if (prot.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
-      }
-
-      // STALE DATA GUARD
-      if (alignmentResult.status === "STALE" && action === "ENTER") {
-        action = "WATCH";
-      }
-
-      // Coherence check
-      if (!isWhitelisted) {
-        checkCoherence(prot.isOverridden, action);
-      }
-
-      return {
-        netuid: strat.netuid,
-        name: strat.name,
-        assetType,
-        state: input.state,
-        psi: input.psi,
-        conf: input.conf,
-        quality: input.quality,
-        opp, risk, asymmetry,
-        momentum: strat.momentum,
-        momentumLabel: strat.momentumLabel,
-        momentumScore: strat.momentumScore,
-        action,
-        sc: strat.sc,
-        confianceScore: input.confianceScore,
-        dataUncertain: input.dataUncertain,
-        isOverridden: prot.isOverridden,
-        isWarning: prot.isWarning,
-        systemStatus: prot.systemStatus,
-        overrideReasons: prot.overrideReasons,
-        healthScores: input.healthScores,
-        recalc: input.recalc,
-        displayedCap: input.displayedCap,
-        displayedLiq: input.displayedLiq,
-        stability: strat.stability,
-        consensusPrice: consensusPrices.get(strat.netuid) ?? 0,
-        alphaPrice: consensusPrices.get(strat.netuid) ?? 0,
-        priceVar30d: (() => {
-          const p30 = price30dMap?.get(strat.netuid);
-          if (!p30 || p30.oldest <= 0) return null;
-          return ((p30.newest - p30.oldest) / p30.oldest) * 100;
-        })(),
-        delistCategory: prot.delistCategory,
-        delistScore: prot.delistScore,
-      } satisfies UnifiedSubnetScore;
+      return applyDecision(decisionInput) as UnifiedSubnetScore;
     });
 
     // Sort by asymmetry desc (default)
