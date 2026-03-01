@@ -62,6 +62,8 @@ export type BacktestResult = {
   period: { from: string; to: string };
   tickCount: number;
   subnetCount: number;
+  reliabilityScore: number;       // 0-100 composite score
+  reliabilityGrade: string;       // A+ / A / B / C / D / F
   falsePositiveRate: number;     // 0-100%
   falseNegativeRate: number;     // 0-100%
   avgDetectionDelayMs: number;   // milliseconds
@@ -229,10 +231,30 @@ export function runBacktest(
     ? totalStateChanges / totalSubnetHours
     : 0;
 
+  // ── 5. Reliability Score ──
+  // Weights: FP 25%, FN 35%, Detection delay 20%, Flapping 20%
+  const fpScore = Math.max(0, 100 - falsePositiveRate);
+  const fnScore = Math.max(0, 100 - falseNegativeRate);
+  const delayScore = avgDetectionDelayMs === 0 ? 100
+    : Math.max(0, 100 - (avgDetectionDelayMs / 60000) * 3.33); // 0 at 30min
+  const flapScore = Math.max(0, 100 - flappingRate * 50); // 0 at 2/h
+  const reliability = Math.round(
+    fpScore * 0.25 + fnScore * 0.35 + delayScore * 0.20 + flapScore * 0.20
+  );
+  const reliabilityScore = Math.max(0, Math.min(100, reliability));
+  const reliabilityGrade =
+    reliabilityScore >= 95 ? "A+" :
+    reliabilityScore >= 85 ? "A" :
+    reliabilityScore >= 70 ? "B" :
+    reliabilityScore >= 50 ? "C" :
+    reliabilityScore >= 30 ? "D" : "F";
+
   return {
     period: { from, to },
     tickCount: sorted.length,
     subnetCount: allNetuids.size,
+    reliabilityScore,
+    reliabilityGrade,
     falsePositiveRate: Math.round(falsePositiveRate * 10) / 10,
     falseNegativeRate: Math.round(falseNegativeRate * 10) / 10,
     avgDetectionDelayMs,
@@ -259,6 +281,8 @@ function emptyResult(): BacktestResult {
     subnetCount: 0,
     falsePositiveRate: 0,
     falseNegativeRate: 0,
+    reliabilityScore: 0,
+    reliabilityGrade: "F",
     avgDetectionDelayMs: 0,
     avgDetectionDelayMin: 0,
     flappingRate: 0,

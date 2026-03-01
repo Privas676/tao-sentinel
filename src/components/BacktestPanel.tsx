@@ -144,6 +144,14 @@ export default function BacktestPanel() {
     return "rgba(229,57,53,0.8)";
   };
 
+  const gradeColor = (score: number) => {
+    if (score >= 85) return "rgba(76,175,80,0.9)";
+    if (score >= 70) return "rgba(139,195,74,0.9)";
+    if (score >= 50) return "rgba(255,193,7,0.9)";
+    if (score >= 30) return "rgba(255,152,0,0.9)";
+    return "rgba(229,57,53,0.9)";
+  };
+
   return (
     <div className="space-y-4">
       {/* Period selector */}
@@ -196,6 +204,38 @@ export default function BacktestPanel() {
 
       {result && (
         <div className="space-y-3">
+          {/* Reliability Score Hero */}
+          <div
+            className="flex items-center justify-between p-4 rounded-lg"
+            style={{
+              background: `linear-gradient(135deg, ${gradeColor(result.reliabilityScore)}15, transparent)`,
+              border: `1px solid ${gradeColor(result.reliabilityScore)}30`,
+            }}
+          >
+            <div>
+              <div className="text-[9px] tracking-widest uppercase mb-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Score de fiabilité
+              </div>
+              <div className="text-[10px] font-mono" style={{ color: "rgba(255,255,255,0.3)" }}>
+                FP×25% + FN×35% + Délai×20% + Flap×20%
+              </div>
+            </div>
+            <div className="text-right flex items-baseline gap-2">
+              <span
+                className="text-3xl font-black font-mono"
+                style={{ color: gradeColor(result.reliabilityScore) }}
+              >
+                {result.reliabilityGrade}
+              </span>
+              <span
+                className="text-lg font-bold font-mono"
+                style={{ color: gradeColor(result.reliabilityScore), opacity: 0.7 }}
+              >
+                {result.reliabilityScore}%
+              </span>
+            </div>
+          </div>
+
           {/* Summary metrics */}
           <div
             className="grid grid-cols-2 gap-2 p-3 rounded-lg"
