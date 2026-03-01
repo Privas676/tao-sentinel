@@ -17,6 +17,7 @@ import {
 import { computeMomentumScore } from "@/lib/gauge-momentum";
 import { type SystemStatus } from "@/lib/risk-override";
 import { type SourceMetrics } from "@/lib/data-fusion";
+import type { FleetDistributionReport } from "@/lib/distribution-monitor";
 import {
   extractHealthData, recalculate, computeAllHealthScores,
   type HealthScores, type RecalculatedMetrics,
@@ -94,6 +95,8 @@ export type UnifiedScoresResult = {
   dataAgeDebug: { source: string; ageSeconds: number }[];
   /** Stable decision states from the Decision State Layer */
   decisionStates: Map<number, DecisionStateOutput>;
+  /** Fleet distribution health report */
+  fleetDistribution: FleetDistributionReport | null;
 };
 
 /* ─── SPECIAL CASES / WHITELIST ───
@@ -350,8 +353,8 @@ export function useSubnetScores(): UnifiedScoresResult {
   }, [signalsSnapshot, rawPayloadsSnapshot, primaryMetricsSnapshot, taoUsdSnapshot]);
 
   // ── MAIN SCORING PIPELINE (orchestrates 3 independent engines) ──
-  const { scoresList, scoresMap, scoreTimestamp } = useMemo(() => {
-    if (!signals) return { scoresList: [], scoresMap: new Map<number, UnifiedSubnetScore>(), scoreTimestamp: new Date().toISOString() };
+  const { scoresList, scoresMap, scoreTimestamp, fleetDistribution } = useMemo(() => {
+    if (!signals) return { scoresList: [] as UnifiedSubnetScore[], scoresMap: new Map<number, UnifiedSubnetScore>(), scoreTimestamp: new Date().toISOString(), fleetDistribution: null as FleetDistributionReport | null };
 
     const rate = taoUsd;
     const ts = new Date().toISOString();
@@ -412,7 +415,15 @@ export function useSubnetScores(): UnifiedScoresResult {
     }));
     const strategicResults = computeStrategicScores(strategicInputs);
 
-    // ── Phase 2: PROTECTION ENGINE (no strategic deps) ──
+    // Extract fleet distribution report from first strategic result
+    const fleetDist = strategicResults[0]?.fleetDistribution ?? null;
+
+    // If fleet distribution is unstable, flag all subnets as dataUncertain
+    if (fleetDist?.isFleetUnstable) {
+      for (const s of subnetInputs) {
+        s.dataUncertain = true;
+      }
+    }
     const protectionResults = new Map<number, ReturnType<typeof evaluateProtection>>();
     for (const s of subnetInputs) {
       const special = SPECIAL_SUBNETS[s.netuid];
@@ -503,7 +514,7 @@ export function useSubnetScores(): UnifiedScoresResult {
       }
     }
 
-    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts };
+    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist };
   }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines, alignmentResult]);
 
   // ── Phase 4: DECISION STATE LAYER (stability: hysteresis, confirmation, cooldown) ──
@@ -528,6 +539,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     dataAlignment: alignmentResult.status,
     dataAgeDebug: alignmentResult.ages.map(a => ({ source: a.source, ageSeconds: Math.round(a.dataAgeSeconds) })),
     decisionStates,
+    fleetDistribution,
   };
 }
 
