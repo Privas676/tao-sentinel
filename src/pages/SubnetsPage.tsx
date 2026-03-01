@@ -365,19 +365,66 @@ export default function SubnetsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="py-3 px-2 text-center">
+                  <td className="py-3 px-2 text-center relative group/ds">
                     {(() => {
                       const ds = decisionStates?.get(r.netuid);
                       const st = ds?.state as DecisionState | undefined;
                       if (!st || st === "OK") return <span className="font-mono text-[9px] text-white/15">—</span>;
                       const sev = stateSeverity(st);
                       const col = stateColor(st);
+                      const cooldownMin = ds?.isCooledDown ? "En cooldown" : null;
+                      const pendingInfo = ds?.pendingState && ds.pendingTicks > 0
+                        ? `${stateLabel(ds.pendingState as DecisionState)} (${ds.pendingTicks} tick${ds.pendingTicks > 1 ? "s" : ""})`
+                        : null;
+                      const reasons = r.overrideReasons?.length ? r.overrideReasons : [];
                       return (
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider whitespace-nowrap${sev >= 3 ? " animate-pulse" : ""}`}
-                          style={{ background: `${col}15`, color: col, border: `1px solid ${col}40` }}
-                          title={ds?.pendingState ? `Pending: ${ds.pendingState} (${ds.pendingTicks} ticks)` : undefined}>
-                          {sev >= 3 ? "🚨" : sev >= 2 ? "⚠" : "👁"} {stateLabel(st)}
-                        </span>
+                        <div className="inline-block relative">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider whitespace-nowrap cursor-help${sev >= 3 ? " animate-pulse" : ""}`}
+                            style={{ background: `${col}15`, color: col, border: `1px solid ${col}40` }}>
+                            {sev >= 3 ? "🚨" : sev >= 2 ? "⚠" : "👁"} {stateLabel(st)}
+                          </span>
+                          {/* Rich tooltip */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover/ds:opacity-100 transition-opacity duration-150 z-50"
+                            style={{ width: 220 }}>
+                            <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
+                              style={{ background: "rgba(10,10,14,0.97)", border: `1px solid ${col}30`, boxShadow: `0 4px 24px rgba(0,0,0,0.7), 0 0 12px ${col}10` }}>
+                              <div className="font-bold text-[11px] tracking-wider" style={{ color: col }}>
+                                {sev >= 3 ? "🚨" : sev >= 2 ? "⚠" : "👁"} {stateLabel(st)}
+                              </div>
+                              <div className="flex justify-between text-white/40">
+                                <span>Sévérité</span>
+                                <span className="text-white/70 font-bold">{sev}/4</span>
+                              </div>
+                              <div className="flex justify-between text-white/40">
+                                <span>Transition</span>
+                                <span style={{ color: ds?.isTransition ? "rgba(76,175,80,0.9)" : "rgba(255,255,255,0.4)" }}>
+                                  {ds?.isTransition ? "✓ Nouvelle" : "Confirmé"}
+                                </span>
+                              </div>
+                              {cooldownMin && (
+                                <div className="flex justify-between text-white/40">
+                                  <span>Cooldown</span>
+                                  <span style={{ color: "rgba(255,193,7,0.8)" }}>⏳ Actif</span>
+                                </div>
+                              )}
+                              {pendingInfo && (
+                                <div className="pt-1 border-t border-white/5">
+                                  <div className="text-white/30 text-[8px] tracking-widest mb-0.5">TRANSITION PENDING</div>
+                                  <div className="text-white/60">{pendingInfo}</div>
+                                </div>
+                              )}
+                              {reasons.length > 0 && (
+                                <div className="pt-1 border-t border-white/5">
+                                  <div className="text-white/30 text-[8px] tracking-widest mb-0.5">RAISONS</div>
+                                  {reasons.slice(0, 4).map((reason, i) => (
+                                    <div key={i} className="text-white/55 truncate">• {reason}</div>
+                                  ))}
+                                  {reasons.length > 4 && <div className="text-white/30">+{reasons.length - 4} autres</div>}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       );
                     })()}
                   </td>
