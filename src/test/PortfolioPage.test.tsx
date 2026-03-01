@@ -148,3 +148,154 @@ describe("PortfolioPage", () => {
     expect(screen.getByText(/ALERTES PORTEFEUILLE/)).toBeInTheDocument();
   });
 });
+
+/* ══════════════════════════════════════════════ */
+/*      INTERACTION TESTS: Add position flow       */
+/* ══════════════════════════════════════════════ */
+describe("PortfolioPage — Add position interactions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPositions = [];
+  });
+
+  it("add modal shows quantity input", () => {
+    renderPage();
+    fireEvent.click(screen.getByText(/Ajouter un subnet/));
+    const input = screen.getByDisplayValue("10"); // default qty
+    expect(input).toBeInTheDocument();
+  });
+
+  it("changing quantity updates input", () => {
+    renderPage();
+    fireEvent.click(screen.getByText(/Ajouter un subnet/));
+    const input = screen.getByDisplayValue("10") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "50" } });
+    expect(input.value).toBe("50");
+  });
+
+  it("clicking AJOUTER calls addPosition", () => {
+    renderPage();
+    fireEvent.click(screen.getByText(/Ajouter un subnet/));
+    fireEvent.click(screen.getByText("AJOUTER"));
+    expect(mockAddPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it("modal closes after adding", () => {
+    renderPage();
+    fireEvent.click(screen.getByText(/Ajouter un subnet/));
+    fireEvent.click(screen.getByText("AJOUTER"));
+    expect(screen.queryByText("AJOUTER AU PORTEFEUILLE")).not.toBeInTheDocument();
+  });
+
+  it("modal shows consensus price preview", () => {
+    renderPage();
+    fireEvent.click(screen.getByText(/Ajouter un subnet/));
+    expect(screen.getByText(/Prix consensus|Consensus price/)).toBeInTheDocument();
+  });
+
+  it("modal shows estimated value preview", () => {
+    renderPage();
+    fireEvent.click(screen.getByText(/Ajouter un subnet/));
+    const matches = screen.getAllByText(/Valeur estimée|Est. value/);
+    expect(matches.length).toBeGreaterThanOrEqual(2); // summary card + modal
+  });
+
+  it("add button disabled with zero quantity", () => {
+    renderPage();
+    fireEvent.click(screen.getByText(/Ajouter un subnet/));
+    const input = screen.getByDisplayValue("10") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "0" } });
+    const addBtn = screen.getByText("AJOUTER");
+    // Button should be disabled
+    fireEvent.click(addBtn);
+    expect(mockAddPosition).not.toHaveBeenCalled();
+  });
+});
+
+/* ══════════════════════════════════════════════ */
+/*      INTERACTION TESTS: Position management     */
+/* ══════════════════════════════════════════════ */
+describe("PortfolioPage — Position management", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("sell button is visible for each position", () => {
+    mockPositions = [
+      { subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" },
+    ];
+    renderPage();
+    expect(screen.getByText("VENDRE")).toBeInTheDocument();
+  });
+
+  it("clicking VENDRE calls sellPosition", () => {
+    mockPositions = [
+      { subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" },
+    ];
+    renderPage();
+    fireEvent.click(screen.getByText("VENDRE"));
+    expect(mockSellPosition).toHaveBeenCalledWith(1, 0.05); // price from mock scores
+  });
+
+  it("remove button (✕) is visible for each position", () => {
+    mockPositions = [
+      { subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" },
+    ];
+    renderPage();
+    expect(screen.getByText("✕")).toBeInTheDocument();
+  });
+
+  it("shows RENFORCER action for owned subnets (not ENTRER)", () => {
+    mockPositions = [
+      { subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" },
+    ];
+    renderPage();
+    // Alpha has action ENTER → becomes REINFORCE for owned
+    expect(screen.getByText("RENFORCER")).toBeInTheDocument();
+  });
+
+  it("shows SORTIR action for EXIT subnets", () => {
+    mockPositions = [
+      { subnet_id: 6, quantity_tao: 20, entry_price: 0.002, timestamp_added: "2026-01-01" },
+    ];
+    renderPage();
+    expect(screen.getByText("SORTIR")).toBeInTheDocument();
+  });
+
+  it("shows OVERRIDE badge for critical subnets", () => {
+    mockPositions = [
+      { subnet_id: 6, quantity_tao: 20, entry_price: 0.002, timestamp_added: "2026-01-01" },
+    ];
+    renderPage();
+    expect(screen.getByText("OVERRIDE")).toBeInTheDocument();
+  });
+
+  it("multiple positions show multiple sell buttons", () => {
+    mockPositions = [
+      { subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" },
+      { subnet_id: 6, quantity_tao: 20, entry_price: 0.002, timestamp_added: "2026-01-01" },
+    ];
+    renderPage();
+    const sellButtons = screen.getAllByText("VENDRE");
+    expect(sellButtons).toHaveLength(2);
+  });
+
+  it("summary cards update with position data", () => {
+    mockPositions = [
+      { subnet_id: 1, quantity_tao: 100, entry_price: 0.04, timestamp_added: "2026-01-01" },
+    ];
+    renderPage();
+    // Should show 100.00 τ in Total TAO
+    expect(screen.getByText("100.00 τ")).toBeInTheDocument();
+  });
+
+  it("shows already-owned warning in add modal for existing positions", () => {
+    mockPositions = [
+      { subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" },
+    ];
+    renderPage();
+    fireEvent.click(screen.getByText(/Ajouter un subnet/));
+    // Since netuid 1 is owned and is the default selection
+    expect(screen.getByText(/Déjà possédé/)).toBeInTheDocument();
+  });
+});
