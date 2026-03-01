@@ -41,4 +41,4 @@ export const FROZEN_ROUTES = [
 /**
  * Frozen sidebar nav items count.
  */
-export const FROZEN_NAV_COUNT = 6;
+export const FROZEN_NAV_COUNT = 7;
