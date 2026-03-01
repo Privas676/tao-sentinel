@@ -894,14 +894,15 @@ export default function AlertsPage() {
     const noiseCount = noiseOverrides.length;
     const compressionPct = total > 0 ? Math.round((1 - uniqueGroups / total) * 100) : 0;
     const dismissedCount = dismissed.size;
-    return { total, uniqueGroups, overrides, noiseCount, compressionPct, essentialCount: essential.length, noiseEventsCount: noiseEvents.length, dismissedCount };
-  }, [events, grouped, gatedOverrides, noiseOverrides, essential, noiseEvents, dismissed]);
+    const strategicCount = grouped.filter(g => STRATEGIC_TYPES.has(g.latest.type || "")).length;
+    return { total, uniqueGroups, overrides, noiseCount, compressionPct, essentialCount: essential.length, noiseEventsCount: noiseEvents.length, dismissedCount, strategicCount };
+  }, [events, grouped, gatedOverrides, noiseOverrides, essential, noiseEvents, dismissed, STRATEGIC_TYPES]);
 
 
   const filterOptions: { value: FilterType; label: string; count?: number }[] = [
     { value: "UNIQUE", label: fr ? "Groupés" : "Grouped", count: stats.uniqueGroups },
     { value: "ALL", label: fr ? "Tout" : "All", count: stats.total },
-    { value: "STRATEGIC", label: fr ? "🎯 Stratégiques" : "🎯 Strategic" },
+    { value: "STRATEGIC", label: fr ? "🎯 Stratégiques" : "🎯 Strategic", count: stats.strategicCount },
     { value: "OVERRIDE", label: "⛔ Overrides", count: stats.overrides },
     { value: "WHALE", label: "🐋 Whales" },
     { value: "STATE", label: fr ? "🔴 États" : "🔴 States" },
