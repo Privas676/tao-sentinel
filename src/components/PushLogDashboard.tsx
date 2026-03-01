@@ -41,17 +41,18 @@ export default function PushLogDashboard() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [stats, setStats] = useState({ sent: 0, failed: 0, retry: 0, expired: 0, total: 0 });
+  const [subCount, setSubCount] = useState<number | null>(null);
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("push_log")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const [{ data }, { count }] = await Promise.all([
+      supabase.from("push_log").select("*").order("created_at", { ascending: false }).limit(50),
+      supabase.from("push_subscriptions").select("*", { count: "exact", head: true }),
+    ]);
 
     const rows = (data || []) as PushLogRow[];
     setLogs(rows);
+    setSubCount(count ?? 0);
 
     const s = { sent: 0, failed: 0, retry: 0, expired: 0, total: rows.length };
     for (const r of rows) {
@@ -109,6 +110,24 @@ export default function PushLogDashboard() {
 
   return (
     <div className="space-y-3">
+      {/* Subscriber count */}
+      <div className="flex items-center gap-2 pb-1 border-b border-white/[0.06]">
+        <span className="font-mono text-[10px] text-white/40">
+          {fr ? "Abonnés push :" : "Push subscribers:"}
+        </span>
+        <span
+          className="font-mono text-xs font-bold"
+          style={{ color: subCount && subCount > 0 ? "rgba(76,175,80,0.9)" : "rgba(229,57,53,0.7)" }}
+        >
+          {subCount ?? "…"}
+        </span>
+        {subCount === 0 && (
+          <span className="font-mono text-[9px] text-white/25">
+            — {fr ? "Activez les notifications sur /alerts" : "Enable notifications on /alerts"}
+          </span>
+        )}
+      </div>
+
       {/* Header + refresh */}
       <div className="flex items-center justify-between">
         <div className="flex gap-3">
