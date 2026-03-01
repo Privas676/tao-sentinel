@@ -23,7 +23,7 @@ type EventRow = {
   evidence: any;
 };
 
-type FilterType = "ALL" | "UNIQUE" | "OVERRIDE" | "WHALE" | "STATE" | "SMART";
+type FilterType = "ALL" | "UNIQUE" | "OVERRIDE" | "WHALE" | "STATE" | "SMART" | "STRATEGIC";
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
@@ -828,6 +828,8 @@ export default function AlertsPage() {
     return { gatedOverrides: gated, noiseOverrides: noise, otherGrouped: others.filter(filterOutDivergence) };
   }, [grouped, overrideMode, scores]);
 
+  const STRATEGIC_TYPES = useMemo(() => new Set(["GO", "BREAK", "EXIT_FAST"]), []);
+
   // Apply confidence filter
   const applyConfidenceFilter = useCallback((g: GroupedEvent): boolean => {
     if (!confidenceFilter) return true;
@@ -860,6 +862,8 @@ export default function AlertsPage() {
       const merged = [...visibleOverrides, ...otherGrouped];
       merged.sort((a, b) => new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime());
       result = merged;
+    } else if (filter === "STRATEGIC") {
+      result = grouped.filter(g => STRATEGIC_TYPES.has(g.latest.type || ""));
     } else if (filter === "STATE") {
       result = grouped.filter(g => eventCategory(g.latest.type) === "STATE");
     } else {
@@ -893,9 +897,11 @@ export default function AlertsPage() {
     return { total, uniqueGroups, overrides, noiseCount, compressionPct, essentialCount: essential.length, noiseEventsCount: noiseEvents.length, dismissedCount };
   }, [events, grouped, gatedOverrides, noiseOverrides, essential, noiseEvents, dismissed]);
 
+
   const filterOptions: { value: FilterType; label: string; count?: number }[] = [
     { value: "UNIQUE", label: fr ? "Groupés" : "Grouped", count: stats.uniqueGroups },
     { value: "ALL", label: fr ? "Tout" : "All", count: stats.total },
+    { value: "STRATEGIC", label: fr ? "🎯 Stratégiques" : "🎯 Strategic" },
     { value: "OVERRIDE", label: "⛔ Overrides", count: stats.overrides },
     { value: "WHALE", label: "🐋 Whales" },
     { value: "STATE", label: fr ? "🔴 États" : "🔴 States" },

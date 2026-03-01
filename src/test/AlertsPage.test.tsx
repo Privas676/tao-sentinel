@@ -100,6 +100,7 @@ describe("AlertsPage", () => {
     renderAlerts();
     expect(screen.getByText("Groupés")).toBeInTheDocument();
     expect(screen.getByText("Tout")).toBeInTheDocument();
+    expect(screen.getByText("🎯 Stratégiques")).toBeInTheDocument();
     expect(screen.getByText("⛔ Overrides")).toBeInTheDocument();
     expect(screen.getByText("🐋 Whales")).toBeInTheDocument();
     expect(screen.getByText("🔴 États")).toBeInTheDocument();
