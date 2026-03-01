@@ -112,6 +112,54 @@ export type Database = {
           },
         ]
       }
+      push_config: {
+        Row: {
+          created_at: string
+          id: number
+          vapid_private_key: string
+          vapid_public_key: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          vapid_private_key: string
+          vapid_public_key: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          vapid_private_key?: string
+          vapid_public_key?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_id: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_id?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       signals: {
         Row: {
           confidence_pct: number | null

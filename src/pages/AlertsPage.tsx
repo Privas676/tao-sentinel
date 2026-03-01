@@ -5,6 +5,7 @@ import { useMemo, useState, useCallback } from "react";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useDelistMode } from "@/hooks/use-delist-mode";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 import {
   evaluateAllDelistRisks,
   delistCategoryColor,
@@ -771,10 +772,10 @@ export default function AlertsPage() {
   const [showNoise, setShowNoise] = useState(false);
   const [confidenceFilter, setConfidenceFilter] = useState(false);
   const [dismissed, setDismissed] = useState<Map<string, number>>(() => getDismissedAlerts());
-  // Minor divergences toggle removed — TMC decoupled
   const fr = lang === "fr";
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
+  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, error: pushError } = usePushNotifications();
 
   const handleDismiss = useCallback((key: string) => {
     dismissAlert(key);
@@ -918,6 +919,39 @@ export default function AlertsPage() {
             🛡 Strict · {stats.noiseCount} {fr ? "filtrés" : "filtered"}
           </span>
         )}
+
+        {/* Push notification toggle */}
+        <div className="ml-auto">
+          {pushState === "unsupported" ? (
+            <span className="font-mono text-[9px] text-white/20">
+              {fr ? "Push non supporté" : "Push not supported"}
+            </span>
+          ) : pushState === "denied" ? (
+            <span className="font-mono text-[9px] px-2 py-1 rounded"
+              style={{ color: "rgba(229,57,53,0.7)", background: "rgba(229,57,53,0.08)", border: "1px solid rgba(229,57,53,0.15)" }}>
+              🔇 {fr ? "Notifications bloquées" : "Notifications blocked"}
+            </span>
+          ) : pushState === "subscribed" ? (
+            <button onClick={pushUnsubscribe}
+              className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider"
+              style={{ background: "rgba(76,175,80,0.1)", color: "rgba(76,175,80,0.9)", border: "1px solid rgba(76,175,80,0.25)" }}>
+              🔔 {fr ? "Push activé" : "Push enabled"} ✓
+            </button>
+          ) : pushState === "loading" ? (
+            <span className="font-mono text-[9px] text-white/30 animate-pulse">
+              {fr ? "Chargement…" : "Loading…"}
+            </span>
+          ) : (
+            <button onClick={pushSubscribe}
+              className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider hover:bg-white/5"
+              style={{ color: "rgba(255,215,0,0.7)", border: "1px solid rgba(255,215,0,0.15)" }}>
+              🔕 {fr ? "Activer les push" : "Enable push"}
+            </button>
+          )}
+          {pushError && (
+            <span className="font-mono text-[8px] text-red-400/60 ml-2">{pushError}</span>
+          )}
+        </div>
       </div>
 
       {/* Filter bar */}
