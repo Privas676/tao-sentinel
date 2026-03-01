@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useI18n, Lang } from "@/lib/i18n";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useDelistMode } from "@/hooks/use-delist-mode";
+import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import type { DelistMode } from "@/lib/delist-risk";
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
   const { mode, setMode } = useOverrideMode();
   const { delistMode, setDelistMode } = useDelistMode();
+  const { dataConfidence } = useSubnetScores();
   const fr = lang === "fr";
 
   // Minor divergences toggle removed — TMC decoupled from alerts
@@ -142,6 +144,78 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* DataConfidence Debug Panel */}
+        <div>
+          <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
+            {fr ? "🔬 DEBUG — CONFIANCE DATA" : "🔬 DEBUG — DATA CONFIDENCE"}
+          </label>
+          {dataConfidence ? (
+            <div className="border border-white/10 rounded-lg p-4 space-y-3">
+              {/* Global score */}
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-white/50">
+                  {fr ? "Score global" : "Global score"}
+                </span>
+                <span
+                  className="font-mono text-lg font-bold"
+                  style={{
+                    color: dataConfidence.score >= 70
+                      ? "rgba(76,175,80,0.9)"
+                      : dataConfidence.score >= 40
+                      ? "rgba(255,193,7,0.9)"
+                      : "rgba(229,57,53,0.9)",
+                  }}
+                >
+                  {dataConfidence.score}%
+                </span>
+              </div>
+
+              {dataConfidence.isUnstable && (
+                <div className="font-mono text-[10px] text-red-400 bg-red-400/10 rounded px-2 py-1">
+                  ⚠ DATA_UNSTABLE — {dataConfidence.reasons.join(" · ")}
+                </div>
+              )}
+
+              {/* Sub-components */}
+              <div className="space-y-1.5">
+                {([
+                  { key: "errorRate", label: fr ? "Taux erreur API" : "API Error Rate", icon: "🔴" },
+                  { key: "latency", label: fr ? "Latence API" : "API Latency", icon: "⏱" },
+                  { key: "freshness", label: fr ? "Fraîcheur données" : "Data Freshness", icon: "🕐" },
+                  { key: "completeness", label: fr ? "Complétude" : "Completeness", icon: "📊" },
+                  { key: "varianceHealth", label: fr ? "Santé variance" : "Variance Health", icon: "📈" },
+                ] as const).map(({ key, label, icon }) => {
+                  const val = dataConfidence.components[key];
+                  const pct = Math.max(0, Math.min(100, val));
+                  const color =
+                    val >= 70 ? "rgba(76,175,80,0.7)" :
+                    val >= 40 ? "rgba(255,193,7,0.7)" :
+                    "rgba(229,57,53,0.7)";
+                  return (
+                    <div key={key} className="flex items-center gap-2">
+                      <span className="text-xs w-4">{icon}</span>
+                      <span className="font-mono text-[10px] text-white/40 flex-1 truncate">{label}</span>
+                      <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${pct}%`, backgroundColor: color }}
+                        />
+                      </div>
+                      <span className="font-mono text-[10px] w-8 text-right" style={{ color }}>
+                        {val}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="font-mono text-xs text-white/20 border border-white/5 rounded-lg px-4 py-3">
+              {fr ? "Chargement…" : "Loading…"}
+            </div>
+          )}
         </div>
       </div>
     </div>
