@@ -25,6 +25,7 @@ import {
 } from "@/lib/data-fusion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
+import { evaluateKillSwitch, type KillSwitchResult } from "@/lib/push-kill-switch";
 
 /* ═══════════════════════════════════════ */
 /*          SPARKLINE HELPER               */
@@ -346,7 +347,7 @@ export default function AlienGauge() {
   const { t, lang } = useI18n();
 
   // ── UNIFIED SCORES (single source of truth) ──
-  const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug } = useSubnetScores();
+  const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence } = useSubnetScores();
 
   // Raw signals still needed for global Smart Capital computation
   const { data: rawSignals } = useQuery({
@@ -517,6 +518,26 @@ export default function AlienGauge() {
     prevDepegCountRef.current = depegConfirmedSubnets.length;
   }, [depegConfirmedSubnets.length, playDepegAlert]);
 
+  // ── Push Kill Switch (SAFE MODE) ──
+  const criticalSurgeRef = useRef<number | null>(null);
+  const killSwitch = useMemo<KillSwitchResult>(() => {
+    const criticalCount = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    const totalSubnets = enrichedSignals.length;
+    // Track when critical surge started
+    if (criticalCount / (totalSubnets || 1) >= 0.30) {
+      if (criticalSurgeRef.current === null) criticalSurgeRef.current = Date.now();
+    } else {
+      criticalSurgeRef.current = null;
+    }
+    return evaluateKillSwitch({
+      dataConfidence,
+      fleetDistribution,
+      criticalCount,
+      totalSubnets,
+      criticalSurgeStartedAt: criticalSurgeRef.current,
+    });
+  }, [enrichedSignals, dataConfidence, fleetDistribution]);
+
   const [panelSignal, setPanelSignal] = useState<DashSignal | null>(null);
   const isMobile = useIsMobile();
 
@@ -685,6 +706,22 @@ export default function AlienGauge() {
               <span className="font-mono text-[10px] tracking-wider" style={{ color: "rgba(255,109,0,0.8)" }}>
                 {t("gauge.saturation_alert")} ({saturationIndex}%)
               </span>
+            </div>
+          )}
+
+          {/* SAFE MODE indicator */}
+          {killSwitch.active && (
+            <div className="mt-3 px-4 py-2.5 rounded-lg text-center animate-pulse" style={{
+              background: "rgba(229,57,53,0.06)",
+              border: "1px solid rgba(229,57,53,0.2)",
+              boxShadow: "0 0 20px rgba(229,57,53,0.05)",
+            }}>
+              <div className="font-mono text-[11px] font-bold tracking-[0.2em]" style={{ color: "rgba(229,57,53,0.9)" }}>
+                🛡 SAFE MODE
+              </div>
+              <div className="font-mono text-[9px] mt-1" style={{ color: "rgba(229,57,53,0.5)" }}>
+                {lang === "fr" ? "Push non-critiques suspendues" : "Non-critical push suspended"} · {killSwitch.triggers.length} trigger{killSwitch.triggers.length > 1 ? "s" : ""}
+              </div>
             </div>
           )}
 

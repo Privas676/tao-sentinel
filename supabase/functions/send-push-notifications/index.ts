@@ -166,26 +166,87 @@ Deno.serve(async (req) => {
 
     // Get recent strategic events (last 2 minutes — this runs every minute)
     const twoMinAgo = new Date(Date.now() - 2 * 60000).toISOString();
-    const { data: events } = await sb.from("events")
-      .select("type, netuid, evidence, ts")
-      .gte("ts", twoMinAgo)
-      .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST", "RISK_OVERRIDE", "DEPEG_CONFIRMED"]);
+    const tenMinAgo = new Date(Date.now() - 10 * 60000).toISOString();
+
+    const [{ data: events }, { data: allSignals }, { data: recentCriticals }] = await Promise.all([
+      sb.from("events")
+        .select("type, netuid, evidence, ts")
+        .gte("ts", twoMinAgo)
+        .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST", "RISK_OVERRIDE", "DEPEG_CONFIRMED"]),
+      sb.from("signals")
+        .select("netuid, confidence_pct, quality_score, state"),
+      sb.from("events")
+        .select("type, ts")
+        .gte("ts", tenMinAgo)
+        .in("type", ["BREAK", "EXIT_FAST"]),
+    ]);
 
     const strategic = (events || []).filter(e => isPushableEvent(e));
+    const signals = allSignals || [];
+    const criticals = recentCriticals || [];
 
-    // ── KILL SWITCH: Distribution instability guard ──
-    // If too many strategic events fire simultaneously, it likely indicates
-    // a compressed/extreme distribution anomaly — suppress notifications.
-    const KILL_SWITCH_THRESHOLD = 10; // >10 strategic events in 2min = anomaly
-    if (strategic.length > KILL_SWITCH_THRESHOLD) {
-      console.error(`[PUSH-KILL-SWITCH] ${strategic.length} strategic events in 2min — distribution likely unstable, suppressing notifications`);
-      return new Response(JSON.stringify({
-        ok: true, sent: 0,
-        reason: "kill_switch_distribution_unstable",
-        eventCount: strategic.length,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // ══════════════════════════════════════
+    //   KILL SWITCH — Multi-trigger evaluation
+    // ══════════════════════════════════════
+
+    const killSwitchReasons: string[] = [];
+    let safeModeActive = false;
+
+    // Trigger 1: >10 strategic events in 2min (distribution anomaly)
+    const VOLUME_THRESHOLD = 10;
+    if (strategic.length > VOLUME_THRESHOLD) {
+      killSwitchReasons.push(`${strategic.length} events in 2min (volume anomaly)`);
+      safeModeActive = true;
+    }
+
+    // Trigger 2: >30% subnets in BREAK/EXIT in 10min window
+    const totalSubnets = signals.length || 1;
+    const uniqueCriticalNetuids = new Set(criticals.map((e: any) => e.netuid ?? 0));
+    const criticalPct = uniqueCriticalNetuids.size / totalSubnets;
+    if (criticalPct >= 0.30) {
+      killSwitchReasons.push(`${Math.round(criticalPct * 100)}% subnets critical in 10min`);
+      safeModeActive = true;
+    }
+
+    // Trigger 3: Average confidence too low across fleet
+    const confidences = signals.map((s: any) => s.confidence_pct ?? 50);
+    const avgConfidence = confidences.length > 0
+      ? confidences.reduce((a: number, b: number) => a + b, 0) / confidences.length
+      : 50;
+    if (avgConfidence < 40) {
+      killSwitchReasons.push(`Avg fleet confidence ${Math.round(avgConfidence)}% < 40%`);
+      safeModeActive = true;
+    }
+
+    // Trigger 4: Average quality score very low
+    const qualities = signals.map((s: any) => s.quality_score ?? 50);
+    const avgQuality = qualities.length > 0
+      ? qualities.reduce((a: number, b: number) => a + b, 0) / qualities.length
+      : 50;
+    if (avgQuality < 30) {
+      killSwitchReasons.push(`Avg fleet quality ${Math.round(avgQuality)}% < 30%`);
+      safeModeActive = true;
+    }
+
+    // ── Apply Kill Switch ──
+    if (safeModeActive) {
+      // Filter: only allow DEPEG_CONFIRMED through
+      const criticalOnly = strategic.filter(e => DEPEG_TYPES.has(e.type!));
+      console.error(`[PUSH-KILL-SWITCH] SAFE MODE — ${killSwitchReasons.join("; ")} | Blocking ${strategic.length - criticalOnly.length} events, allowing ${criticalOnly.length} critical`);
+
+      if (criticalOnly.length === 0) {
+        return new Response(JSON.stringify({
+          ok: true, sent: 0,
+          reason: "kill_switch_safe_mode",
+          triggers: killSwitchReasons,
+          blocked: strategic.length,
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Replace strategic with only critical events
+      strategic.length = 0;
+      strategic.push(...criticalOnly);
     }
 
     if (strategic.length === 0) {
