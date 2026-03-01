@@ -39,9 +39,9 @@ vi.mock("@/hooks/use-delist-mode", () => ({
 }));
 
 import { render, screen, fireEvent } from "@testing-library/react";
+import SettingsPage from "@/pages/SettingsPage";
 
 function renderSettings() {
-  const SettingsPage = require("@/pages/SettingsPage").default;
   return render(<SettingsPage />);
 }
 
