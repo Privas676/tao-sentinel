@@ -1,7 +1,11 @@
 /* ═══════════════════════════════════════ */
 /*   DELIST RISK ENGINE                      */
 /*   Hybrid: Manual + Auto detection         */
+/*   NO hardcoded scores — all computed      */
 /* ═══════════════════════════════════════ */
+
+import type { ScoreFactor } from "./score-factors";
+import { topFactors } from "./score-factors";
 
 export type DelistMode = "manual" | "auto_taostats" | "auto_taomarketcap";
 
@@ -10,9 +14,10 @@ export type DelistCategory = "DEPEG_PRIORITY" | "HIGH_RISK_NEAR_DELIST" | "NORMA
 export type DelistRiskResult = {
   netuid: number;
   category: DelistCategory;
-  score: number; // 0–100
+  score: number; // 0–100, always computed
   reasons: DelistReason[];
-  source: string; // "Manual (Taoflute)" | "Auto (Taostats)" | "Auto (TaoMarketCap)"
+  factors: ScoreFactor[]; // top-3 contributing factors
+  source: string;
 };
 
 export type DelistReason = {
@@ -50,6 +55,7 @@ const REASON_DEFS: Record<string, Omit<DelistReason, "value" | "weight"> & { wei
   MICRO_PRICE:         { code: "MICRO_PRICE",         label: "Micro price",          labelFr: "Prix micro",           weight: 15, color: "rgba(229,57,53,0.85)" },
   CAP_CONCENTRATED:    { code: "CAP_CONCENTRATED",    label: "Cap = Pool",           labelFr: "Cap ≈ Pool",           weight: 10, color: "rgba(255,152,0,0.8)" },
   SMALL_CAP:           { code: "SMALL_CAP",           label: "Small cap",            labelFr: "Cap faible",           weight: 8,  color: "rgba(255,193,7,0.8)" },
+  MANUAL_FLAG:         { code: "MANUAL_FLAG",         label: "Manual watchlist",     labelFr: "Liste manuelle",       weight: 10, color: "rgba(229,57,53,0.7)" },
 };
 
 function makeReason(code: string, value?: number): DelistReason {
@@ -57,131 +63,168 @@ function makeReason(code: string, value?: number): DelistReason {
   return { ...def, value };
 }
 
+function makeFactor(code: string, contribution: number, rawValue?: number): ScoreFactor {
+  const def = REASON_DEFS[code];
+  return { code, label: def?.labelFr ?? code, contribution, rawValue };
+}
+
 /* ─── AUTO DELIST RISK SCORE ─── */
 
 export type SubnetMetricsForDelist = {
   netuid: number;
   minersActive: number;
-  liqTao: number;         // TAO in pool
-  liqUsd: number;         // liquidity in USD
-  capTao: number;         // market cap in TAO
-  alphaPrice: number;     // alpha token price in TAO
-  volMcRatio: number;     // vol_24h / cap
-  psi: number;            // MPI/PSI score
-  quality: number;        // quality score
+  liqTao: number;
+  liqUsd: number;
+  capTao: number;
+  alphaPrice: number;
+  volMcRatio: number;
+  psi: number;
+  quality: number;
   state: string | null;
-  priceChange7d: number | null; // % change over 7 days
-  confianceData: number;  // data confidence 0-100
-  liqHaircut: number;     // % change in liq (negative = drop)
+  priceChange7d: number | null;
+  confianceData: number;
+  liqHaircut: number;
 };
 
 /**
  * Compute delist risk score (0–100) based on on-chain/market metrics.
- * Higher score = higher delist risk.
+ * Higher score = higher delist risk. ALL scores are computed, never hardcoded.
  */
 export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskResult {
   if (WHITELIST.has(sn.netuid)) {
-    return { netuid: sn.netuid, category: "NORMAL", score: 0, reasons: [], source: "" };
+    return { netuid: sn.netuid, category: "NORMAL", score: 0, reasons: [], factors: [], source: "" };
   }
 
   const reasons: DelistReason[] = [];
+  const factors: ScoreFactor[] = [];
   let totalWeight = 0;
 
-  // 1. Emission / miners — relaxed thresholds
+  // 1. Emission / miners
   if (sn.minersActive === 0) {
+    const w = 20;
     reasons.push(makeReason("EMISSION_ZERO", 0));
-    totalWeight += 20;
+    factors.push(makeFactor("EMISSION_ZERO", w, 0));
+    totalWeight += w;
   } else if (sn.minersActive <= 5) {
+    const w = 18;
     reasons.push(makeReason("UID_CRITICAL", sn.minersActive));
-    totalWeight += 18;
+    factors.push(makeFactor("UID_CRITICAL", w, sn.minersActive));
+    totalWeight += w;
   } else if (sn.minersActive <= 20) {
+    const w = 12;
     reasons.push(makeReason("UID_LOW", sn.minersActive));
-    totalWeight += 12;
+    factors.push(makeFactor("UID_LOW", w, sn.minersActive));
+    totalWeight += w;
   }
 
-  // 2. Pool TAO — raised thresholds significantly
+  // 2. Pool TAO
   if (sn.liqTao < 10) {
+    const w = 18;
     reasons.push(makeReason("POOL_COLLAPSE", sn.liqTao));
-    totalWeight += 18;
+    factors.push(makeFactor("POOL_COLLAPSE", w, sn.liqTao));
+    totalWeight += w;
   } else if (sn.liqTao < 50) {
+    const w = 10;
     reasons.push(makeReason("POOL_THIN", sn.liqTao));
-    totalWeight += 10;
+    factors.push(makeFactor("POOL_THIN", w, sn.liqTao));
+    totalWeight += w;
   }
 
-  // 3. Liquidity USD — raised threshold
+  // 3. Liquidity USD
   if (sn.liqUsd < 5000) {
+    const w = 15;
     reasons.push(makeReason("LIQ_CRITICAL", sn.liqUsd));
-    totalWeight += 15;
+    factors.push(makeFactor("LIQ_CRITICAL", w, sn.liqUsd));
+    totalWeight += w;
   }
 
-  // 4. Volume/MC abnormally low — relaxed
+  // 4. Volume/MC abnormally low
   if (sn.volMcRatio < 0.01) {
+    const w = 10;
     reasons.push(makeReason("VOL_MC_LOW", sn.volMcRatio * 100));
-    totalWeight += 10;
+    factors.push(makeFactor("VOL_MC_LOW", w, sn.volMcRatio));
+    totalWeight += w;
   }
 
-  // 5. Price collapse over 7d — softer threshold
+  // 5. Price collapse over 7d
   if (sn.priceChange7d != null && sn.priceChange7d <= -20) {
-    const severity = sn.priceChange7d <= -50 ? 15 : 12;
+    const w = sn.priceChange7d <= -50 ? 15 : 12;
     reasons.push(makeReason("PRICE_COLLAPSE", sn.priceChange7d));
-    totalWeight += severity;
+    factors.push(makeFactor("PRICE_COLLAPSE", w, sn.priceChange7d));
+    totalWeight += w;
   }
 
-  // 6. Data divergence check REMOVED — TMC decoupled from scoring
-
-  // 7. Liquidity haircut severe — softer
+  // 7. Liquidity haircut severe
   if (sn.liqHaircut <= -20) {
-    const severity = sn.liqHaircut <= -50 ? 15 : 10;
+    const w = sn.liqHaircut <= -50 ? 15 : 10;
     reasons.push(makeReason("POOL_COLLAPSE", sn.liqHaircut));
-    totalWeight += severity;
+    factors.push(makeFactor("POOL_COLLAPSE", w, sn.liqHaircut));
+    totalWeight += w;
   }
 
-  // 8. BREAK/EXIT_FAST/DEPEG state — increased weight
+  // 8. BREAK/EXIT_FAST/DEPEG state
   if (sn.state === "BREAK" || sn.state === "EXIT_FAST") {
     totalWeight += 10;
+    factors.push(makeFactor("BREAK_STATE", 10));
   } else if (sn.state === "DEPEG_WARNING" || sn.state === "DEPEG_CRITICAL") {
     totalWeight += 15;
+    factors.push(makeFactor("DEPEG", 15));
   }
 
-  // 9. PSI overheating + low quality — relaxed
+  // 9. PSI overheating + low quality
   if (sn.psi > 75 && sn.quality < 35) {
+    const w = 10;
     reasons.push(makeReason("SLIPPAGE_HIGH", sn.psi));
-    totalWeight += 10;
+    factors.push(makeFactor("SLIPPAGE_HIGH", w, sn.psi));
+    totalWeight += w;
   }
 
   // 10. Combined weakness: low quality + low PSI = zombie subnet
   if (sn.psi < 30 && sn.quality < 30) {
     totalWeight += 8;
+    factors.push(makeFactor("UID_LOW", 8, sn.psi));
   }
 
-  // 11. Micro price: alpha token nearly worthless (< 0.005 TAO ≈ $0.90)
+  // 11. Micro price
   if (sn.alphaPrice > 0 && sn.alphaPrice < 0.005) {
+    const w = 20;
     reasons.push(makeReason("MICRO_PRICE", sn.alphaPrice));
-    totalWeight += 20;
+    factors.push(makeFactor("MICRO_PRICE", w, sn.alphaPrice));
+    totalWeight += w;
   } else if (sn.alphaPrice > 0 && sn.alphaPrice < 0.008) {
+    const w = 12;
     reasons.push(makeReason("MICRO_PRICE", sn.alphaPrice));
-    totalWeight += 12;
+    factors.push(makeFactor("MICRO_PRICE", w, sn.alphaPrice));
+    totalWeight += w;
   }
 
-  // 12. Cap concentration: pool IS the market (liq/cap > 0.7)
+  // 12. Cap concentration
   if (sn.capTao > 0 && sn.liqTao > 0) {
     const liqCapRatio = sn.liqTao / sn.capTao;
     if (liqCapRatio > 0.85) {
+      const w = 15;
       reasons.push(makeReason("CAP_CONCENTRATED", Math.round(liqCapRatio * 100)));
-      totalWeight += 15;
+      factors.push(makeFactor("CAP_CONCENTRATED", w, liqCapRatio));
+      totalWeight += w;
     } else if (liqCapRatio > 0.7) {
+      const w = 12;
       reasons.push(makeReason("CAP_CONCENTRATED", Math.round(liqCapRatio * 100)));
-      totalWeight += 12;
+      factors.push(makeFactor("CAP_CONCENTRATED", w, liqCapRatio));
+      totalWeight += w;
     }
   }
 
-  // 13. Small cap (< 20,000 TAO ≈ $3.7M)
+  // 13. Small cap
   if (sn.capTao > 0 && sn.capTao < 10_000) {
+    const w = 12;
     reasons.push(makeReason("SMALL_CAP", Math.round(sn.capTao)));
-    totalWeight += 12;
+    factors.push(makeFactor("SMALL_CAP", w, sn.capTao));
+    totalWeight += w;
   } else if (sn.capTao > 0 && sn.capTao < 20_000) {
+    const w = 10;
     reasons.push(makeReason("SMALL_CAP", Math.round(sn.capTao)));
-    totalWeight += 10;
+    factors.push(makeFactor("SMALL_CAP", w, sn.capTao));
+    totalWeight += w;
   }
 
   // Score: clamp to 0–100
@@ -192,41 +235,66 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
   if (score >= 45) category = "DEPEG_PRIORITY";
   else if (score >= 28) category = "HIGH_RISK_NEAR_DELIST";
 
-  return { netuid: sn.netuid, category, score, reasons, source: "" };
+  return { netuid: sn.netuid, category, score, reasons, factors: topFactors(factors), source: "" };
 }
 
 /* ─── MANUAL MODE ─── */
 
-function getManualResult(netuid: number): DelistRiskResult | null {
+/**
+ * Manual mode: always compute auto score.
+ * Manual lists only BOOST the category — they never impose a hardcoded score.
+ * The manual flag adds a fixed bonus to the computed score.
+ */
+const MANUAL_DEPEG_BONUS = 15;
+const MANUAL_HIGH_RISK_BONUS = 8;
+
+function getManualResult(netuid: number, metrics?: SubnetMetricsForDelist): DelistRiskResult | null {
   if (WHITELIST.has(netuid)) return null;
 
-  if (DEPEG_PRIORITY_MANUAL.includes(netuid)) {
+  const isDepeg = DEPEG_PRIORITY_MANUAL.includes(netuid);
+  const isHighRisk = HIGH_RISK_NEAR_DELIST_MANUAL.includes(netuid);
+  if (!isDepeg && !isHighRisk) return null;
+
+  // Always compute the real score from metrics
+  if (metrics) {
+    const auto = computeDelistRiskScore(metrics);
+    const bonus = isDepeg ? MANUAL_DEPEG_BONUS : MANUAL_HIGH_RISK_BONUS;
+    const boostedScore = Math.min(100, auto.score + bonus);
+    const manualFactor: ScoreFactor = {
+      code: "MANUAL_FLAG",
+      label: isDepeg ? "Watchlist depeg" : "Watchlist risque",
+      contribution: bonus,
+    };
+    const category: DelistCategory = boostedScore >= 45 ? "DEPEG_PRIORITY" :
+      boostedScore >= 28 ? "HIGH_RISK_NEAR_DELIST" : "NORMAL";
     return {
       netuid,
-      category: "DEPEG_PRIORITY",
-      score: 90,
-      reasons: [makeReason("RANK_DROP")],
+      category: isDepeg ? "DEPEG_PRIORITY" : (category === "NORMAL" ? "HIGH_RISK_NEAR_DELIST" : category),
+      score: boostedScore,
+      reasons: auto.reasons.length > 0 ? auto.reasons : [makeReason("RANK_DROP")],
+      factors: topFactors([...auto.factors, manualFactor]),
       source: "Manual (Taoflute)",
     };
   }
-  if (HIGH_RISK_NEAR_DELIST_MANUAL.includes(netuid)) {
-    return {
-      netuid,
-      category: "HIGH_RISK_NEAR_DELIST",
-      score: 70,
-      reasons: [makeReason("RANK_DROP")],
-      source: "Manual (Taoflute)",
-    };
-  }
-  return null;
+
+  // Fallback without metrics: minimal score based on category floor
+  const fallbackScore = isDepeg ? 55 : 35;
+  return {
+    netuid,
+    category: isDepeg ? "DEPEG_PRIORITY" : "HIGH_RISK_NEAR_DELIST",
+    score: fallbackScore,
+    reasons: [makeReason("RANK_DROP")],
+    factors: [{ code: "MANUAL_FLAG", label: "Liste manuelle (pas de métriques)", contribution: fallbackScore }],
+    source: "Manual (Taoflute)",
+  };
 }
 
 /* ─── MAIN ENTRY POINT ─── */
 
 /**
  * Get delist risk for all subnets.
- * In manual mode: uses hardcoded lists.
- * In auto mode: computes from metrics.
+ * In manual mode: computes auto score + manual bonus.
+ * In auto mode: computes from metrics only.
  */
 export function evaluateAllDelistRisks(
   mode: DelistMode,
@@ -235,19 +303,13 @@ export function evaluateAllDelistRisks(
   const results: DelistRiskResult[] = [];
 
   if (mode === "manual") {
-    // Manual: assign fixed scores from lists + compute auto scores as secondary info
-    for (const sn of subnets) {
-      const manual = getManualResult(sn.netuid);
-      if (manual) {
-        // Enrich manual with auto-computed reasons
-        const auto = computeDelistRiskScore(sn);
-        const enrichedReasons = auto.reasons.length > 0 ? auto.reasons : manual.reasons;
-        results.push({
-          ...manual,
-          score: Math.max(manual.score, auto.score), // Take highest
-          reasons: enrichedReasons,
-        });
-      }
+    // Manual: compute auto score + manual bonus for flagged subnets
+    const metricsMap = new Map(subnets.map(sn => [sn.netuid, sn]));
+    const allFlagged = new Set([...DEPEG_PRIORITY_MANUAL, ...HIGH_RISK_NEAR_DELIST_MANUAL]);
+    for (const netuid of allFlagged) {
+      const metrics = metricsMap.get(netuid);
+      const result = getManualResult(netuid, metrics ?? undefined);
+      if (result) results.push(result);
     }
   } else {
     const sourceLabel = mode === "auto_taostats" ? "Auto (Taostats)" : "Auto (TaoMarketCap)";

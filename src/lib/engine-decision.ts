@@ -3,6 +3,7 @@
 /*   Merges Strategic + Protection outputs   */
 /*   into final unified scores.              */
 /*   NO scoring logic — only arbitration.    */
+/*   NO hardcoded risk floors.               */
 /* ═══════════════════════════════════════ */
 
 import { clamp } from "./gauge-types";
@@ -85,16 +86,48 @@ export type DecisionOutput = {
   delistScore: number;
 };
 
+/* ── Dynamic risk floor from delist score ── */
+
+/**
+ * Derive a risk floor from the computed delist score.
+ * Instead of hardcoded risk=80/60, we use: floor = delistScore * 0.85
+ * This ensures risk scales proportionally with computed delist severity.
+ */
+function delistRiskFloor(delistScore: number, category: DelistCategory): number {
+  if (category === "DEPEG_PRIORITY") {
+    // Floor scales with delist score: score=90 → floor=76, score=60 → floor=51
+    return Math.round(delistScore * 0.85);
+  }
+  if (category === "HIGH_RISK_NEAR_DELIST") {
+    // Softer scaling: score=70 → floor=49, score=40 → floor=28
+    return Math.round(delistScore * 0.7);
+  }
+  return 0;
+}
+
+/**
+ * Derive opp cap from delist score (inversely proportional).
+ */
+function delistOppCap(delistScore: number, category: DelistCategory): number {
+  if (category === "DEPEG_PRIORITY") return 0;
+  if (category === "HIGH_RISK_NEAR_DELIST") {
+    // score=70 → cap=15, score=30 → cap=35
+    return Math.round(Math.max(5, 50 - delistScore * 0.5));
+  }
+  return 100;
+}
+
 /* ── Single-subnet decision ── */
 
 /**
  * Merge strategic scores + protection signals into a final unified score.
  * This is PURE arbitration — no new scoring logic.
+ * All floors and caps are DERIVED from computed scores, never hardcoded.
  *
  * Rules applied (in order):
  * 1. Whitelist overrides (force risk cap, opp range, action)
  * 2. Protection overrides (override → opp=0, action=EXIT)
- * 3. Delist/depeg coherence (DEPEG_PRIORITY → EXIT, HIGH_RISK → cap opp)
+ * 3. Delist/depeg coherence (dynamic floors from delistScore)
  * 4. System status downgrade (non-OK status blocks ENTER)
  * 5. Stale data guard (STALE alignment blocks ENTER)
  * 6. Coherence check (log inconsistencies)
@@ -124,16 +157,16 @@ export function applyDecision(input: DecisionInput): DecisionOutput {
     action = "EXIT";
   }
 
-  // 3. DEPEG/DELIST coherence
+  // 3. DEPEG/DELIST coherence — dynamic floors from computed delistScore
   if (!isWhitelisted) {
     if (prot.delistCategory === "DEPEG_PRIORITY") {
       opp = 0;
-      risk = Math.max(risk, 80);
+      risk = Math.max(risk, delistRiskFloor(prot.delistScore, prot.delistCategory));
       asymmetry = -Math.abs(asymmetry) - 20;
       action = "EXIT";
     } else if (prot.delistCategory === "HIGH_RISK_NEAR_DELIST") {
-      opp = Math.min(opp, 25);
-      risk = Math.max(risk, 60);
+      opp = Math.min(opp, delistOppCap(prot.delistScore, prot.delistCategory));
+      risk = Math.max(risk, delistRiskFloor(prot.delistScore, prot.delistCategory));
       asymmetry = Math.min(asymmetry, -5);
       if (action === "ENTER") action = "WATCH";
     }

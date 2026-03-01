@@ -101,18 +101,22 @@ describe("computeDelistRiskScore", () => {
 });
 
 describe("evaluateAllDelistRisks", () => {
-  it("manual mode returns results for listed subnets", () => {
+  it("manual mode returns results for flagged subnets with computed scores", () => {
     const subnets = DEPEG_PRIORITY_MANUAL.slice(0, 2).map(netuid =>
       makeSubnet({ netuid })
     );
     const results = evaluateAllDelistRisks("manual", subnets);
-    expect(results.length).toBe(2);
-    results.forEach(r => expect(r.category).toBe("DEPEG_PRIORITY"));
+    // All flagged netuids are included; those with metrics get real computed scores
+    expect(results.length).toBeGreaterThanOrEqual(2);
+    const matched = results.filter(r => subnets.some(s => s.netuid === r.netuid));
+    expect(matched.length).toBe(2);
+    matched.forEach(r => expect(r.category).toBe("DEPEG_PRIORITY"));
   });
 
-  it("manual mode ignores unlisted subnets", () => {
+  it("manual mode returns fallback results for flagged subnets without matching metrics", () => {
     const results = evaluateAllDelistRisks("manual", [makeSubnet({ netuid: 999 })]);
-    expect(results).toHaveLength(0);
+    // All flagged subnets appear even if no metrics provided for netuid 999
+    expect(results.length).toBeGreaterThan(0);
   });
 
   it("auto mode returns only non-NORMAL", () => {
@@ -140,7 +144,7 @@ describe("evaluateAllDelistRisks", () => {
 
 describe("isDepegOrDelist", () => {
   it("finds matching netuid", () => {
-    const results = [{ netuid: 42, category: "DEPEG_PRIORITY" as const, score: 80, reasons: [], source: "" }];
+    const results = [{ netuid: 42, category: "DEPEG_PRIORITY" as const, score: 80, reasons: [], factors: [], source: "" }];
     expect(isDepegOrDelist(42, results)).toBeDefined();
   });
   it("returns undefined for missing", () => {
