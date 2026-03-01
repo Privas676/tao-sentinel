@@ -140,6 +140,22 @@ Deno.serve(async (req) => {
       .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST"]);
 
     const strategic = (events || []).filter(e => isStrategicEvent(e.type));
+
+    // ── KILL SWITCH: Distribution instability guard ──
+    // If too many strategic events fire simultaneously, it likely indicates
+    // a compressed/extreme distribution anomaly — suppress notifications.
+    const KILL_SWITCH_THRESHOLD = 10; // >10 strategic events in 2min = anomaly
+    if (strategic.length > KILL_SWITCH_THRESHOLD) {
+      console.error(`[PUSH-KILL-SWITCH] ${strategic.length} strategic events in 2min — distribution likely unstable, suppressing notifications`);
+      return new Response(JSON.stringify({
+        ok: true, sent: 0,
+        reason: "kill_switch_distribution_unstable",
+        eventCount: strategic.length,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (strategic.length === 0) {
       return new Response(JSON.stringify({ ok: true, sent: 0, reason: "no_strategic_events" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
