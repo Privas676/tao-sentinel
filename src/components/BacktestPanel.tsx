@@ -1,12 +1,77 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { runBacktest, type BacktestResult, type PipelineSnapshot, type HistoricalEvent, type TickMetric } from "@/lib/backtest-engine";
+import { runBacktest, type BacktestResult, type PipelineSnapshot, type HistoricalEvent, type TickMetric, type SnapshotSubnet } from "@/lib/backtest-engine";
 import { toast } from "sonner";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Period = "7d" | "14d" | "30d" | "60d";
 
 const PERIOD_DAYS: Record<Period, number> = { "7d": 7, "14d": 14, "30d": 30, "60d": 60 };
+
+const IS_DEV = import.meta.env.DEV;
+
+/* ── Simulation: generates fake snapshots + events for sparkline testing ── */
+function generateSimulatedData(days: number) {
+  const TICK_INTERVAL_MS = 60 * 60 * 1000; // 1h
+  const tickCount = days * 24;
+  const now = Date.now();
+  const start = now - days * 24 * 3600 * 1000;
+  const STATES = ["WATCH", "HOLD", "BREAK", "GO", "GO_SPECULATIVE", "EARLY"];
+  const NETUIDS = [1, 2, 6, 8, 13, 18, 33, 42, 50, 73];
+
+  const snapshots: PipelineSnapshot[] = [];
+  const events: HistoricalEvent[] = [];
+  const prevState = new Map<number, string>();
+
+  for (let i = 0; i < tickCount; i++) {
+    const ts = new Date(start + i * TICK_INTERVAL_MS).toISOString();
+    const subs: SnapshotSubnet[] = NETUIDS.map((netuid) => {
+      const cycle = Math.sin((i + netuid) / 12) * 0.5 + 0.5; // 0..1 wave
+      const noise = (Math.random() - 0.5) * 0.2;
+      const mpi = Math.round(Math.max(0, Math.min(100, cycle * 80 + noise * 40 + 10)));
+      const conf = Math.round(Math.max(0, Math.min(100, cycle * 70 + noise * 30 + 20)));
+      const stateIdx = mpi > 80 ? (Math.random() > 0.5 ? 3 : 4) // GO or GO_SPECULATIVE
+        : mpi > 55 ? 0  // WATCH
+        : mpi > 35 ? 1  // HOLD
+        : 2;             // BREAK
+      const state = STATES[stateIdx];
+      prevState.set(netuid, state);
+
+      return {
+        netuid, price: 0.5 + cycle * 2, price_5m: 0.5, price_1h: 0.5,
+        liq: 5000 + cycle * 20000, liq_1h: 5000, miners: 64, miners_delta: 0,
+        price_max_7d: 3, mpi_raw: mpi, M: mpi, A: conf, L: 70, B: 50, Q: 60,
+        mpi, quality: Math.round(mpi * 0.9), confidence: conf,
+        state, gating_fail: false, breakout: mpi > 85,
+      };
+    });
+
+    snapshots.push({ ts, snapshot: subs, subnet_count: NETUIDS.length, engine_version: "v4-sim" });
+
+    // Sprinkle some critical events
+    if (i > 0 && Math.random() < 0.08) {
+      const netuid = NETUIDS[Math.floor(Math.random() * NETUIDS.length)];
+      events.push({
+        ts: new Date(start + i * TICK_INTERVAL_MS + 5 * 60000).toISOString(),
+        netuid,
+        type: ["DEPEG_WARNING", "BREAK", "EXIT_FAST"][Math.floor(Math.random() * 3)],
+        severity: Math.floor(Math.random() * 5) + 5,
+      });
+    }
+    // Sprinkle confirming events
+    if (i > 0 && Math.random() < 0.06) {
+      const netuid = NETUIDS[Math.floor(Math.random() * NETUIDS.length)];
+      events.push({
+        ts: new Date(start + i * TICK_INTERVAL_MS + 10 * 60000).toISOString(),
+        netuid,
+        type: ["GO", "SMART_ACCUMULATION"][Math.floor(Math.random() * 2)],
+        severity: 3,
+      });
+    }
+  }
+
+  return { snapshots, events };
+}
 
 export default function BacktestPanel() {
   const [period, setPeriod] = useState<Period>("7d");
@@ -56,6 +121,22 @@ export default function BacktestPanel() {
     }
   };
 
+  const runSimulation = () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const days = PERIOD_DAYS[period];
+      const { snapshots, events } = generateSimulatedData(days);
+      const r = runBacktest(snapshots, events);
+      setResult(r);
+      toast.success(`Simulation terminée : ${r.tickCount} ticks simulés`);
+    } catch (err: any) {
+      toast.error(err.message || "Erreur simulation");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const ratingColor = (value: number, invert = false) => {
     const v = invert ? 100 - value : value;
     if (v >= 80) return "rgba(76,175,80,0.8)";
@@ -97,7 +178,22 @@ export default function BacktestPanel() {
         {loading ? "Analyse en cours…" : `Lancer le backtest (${period})`}
       </button>
 
-      {/* Results */}
+      {/* Simulate button — DEV only */}
+      {IS_DEV && (
+        <button
+          onClick={runSimulation}
+          disabled={loading}
+          className="w-full py-2 rounded-lg text-[11px] font-mono tracking-wider uppercase transition-all disabled:opacity-50"
+          style={{
+            background: "rgba(171,71,188,0.08)",
+            color: "rgba(171,71,188,0.7)",
+            border: "1px dashed rgba(171,71,188,0.25)",
+          }}
+        >
+          {loading ? "…" : `🧪 Simuler (${period} — données fictives)`}
+        </button>
+      )}
+
       {result && (
         <div className="space-y-3">
           {/* Summary metrics */}
