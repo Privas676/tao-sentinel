@@ -235,7 +235,7 @@ export default function PortfolioPage() {
 
   return (
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
-      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-1">
+      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-1 ml-28 sm:ml-0">
         {fr ? "Portefeuille" : "Portfolio"}
       </h1>
       {/* Score timestamp badge */}
