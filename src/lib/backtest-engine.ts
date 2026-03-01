@@ -48,6 +48,16 @@ export type HistoricalEvent = {
   severity: number | null;
 };
 
+export type TickMetric = {
+  ts: string;
+  alertCount: number;
+  eventCount: number;
+  stateChanges: number;
+  activeSubnets: number;
+  avgMpi: number;
+  avgConfidence: number;
+};
+
 export type BacktestResult = {
   period: { from: string; to: string };
   tickCount: number;
@@ -57,6 +67,7 @@ export type BacktestResult = {
   avgDetectionDelayMs: number;   // milliseconds
   avgDetectionDelayMin: number;  // minutes
   flappingRate: number;          // state changes per subnet per hour
+  tickMetrics: TickMetric[];
   details: {
     totalAlerts: number;
     confirmedAlerts: number;
@@ -113,21 +124,47 @@ export function runBacktest(
 
   // ── 4. Track state changes for flapping ──
   let totalStateChanges = 0;
+  const tickMetrics: TickMetric[] = [];
 
   for (const snap of sorted) {
     const snapTs = new Date(snap.ts).getTime();
+    let tickAlerts = 0;
+    let tickStateChanges = 0;
+    let mpiSum = 0;
+    let confSum = 0;
+
     for (const sub of snap.snapshot) {
       const prev = prevStates.get(sub.netuid);
       if (prev && prev !== sub.state) {
         totalStateChanges++;
+        tickStateChanges++;
       }
       prevStates.set(sub.netuid, sub.state);
+      mpiSum += sub.mpi ?? 0;
+      confSum += sub.confidence ?? 0;
 
       // Record alert if entering an alert state
       if (ALERT_STATES.has(sub.state) && (!prev || !ALERT_STATES.has(prev))) {
         alerts.push({ netuid: sub.netuid, ts: snapTs, state: sub.state, confirmed: false });
+        tickAlerts++;
       }
     }
+
+    const n = snap.snapshot.length || 1;
+    // Count events in ±5min window of this tick
+    const tickEvents = sortedEvents.filter(
+      (e) => Math.abs(new Date(e.ts).getTime() - snapTs) <= 5 * 60 * 1000
+    ).length;
+
+    tickMetrics.push({
+      ts: snap.ts,
+      alertCount: tickAlerts,
+      eventCount: tickEvents,
+      stateChanges: tickStateChanges,
+      activeSubnets: snap.snapshot.length,
+      avgMpi: Math.round(mpiSum / n),
+      avgConfidence: Math.round(confSum / n),
+    });
   }
 
   // ── 2. Match alerts to confirming events (within 60 min window) ──
@@ -201,6 +238,7 @@ export function runBacktest(
     avgDetectionDelayMs,
     avgDetectionDelayMin: Math.round(avgDetectionDelayMs / 60000 * 10) / 10,
     flappingRate: Math.round(flappingRate * 100) / 100,
+    tickMetrics,
     details: {
       totalAlerts,
       confirmedAlerts,
@@ -224,6 +262,7 @@ function emptyResult(): BacktestResult {
     avgDetectionDelayMs: 0,
     avgDetectionDelayMin: 0,
     flappingRate: 0,
+    tickMetrics: [],
     details: {
       totalAlerts: 0, confirmedAlerts: 0, unconfirmedAlerts: 0,
       totalEvents: 0, eventsWithPriorAlert: 0, eventsMissed: 0,
