@@ -136,7 +136,7 @@ export default function PortfolioPage() {
   const [addQty, setAddQty] = useState<number>(10);
 
   // ── UNIFIED SCORES (single source of truth) ──
-  const { scores, scoreTimestamp, sparklines, subnetList } = useSubnetScores();
+  const { scores, scoreTimestamp, sparklines, subnetList, dataAlignment, dataAgeDebug } = useSubnetScores();
 
   // Build enriched rows for portfolio positions using UNIFIED scores
   const rows = useMemo(() => {
@@ -239,8 +239,21 @@ export default function PortfolioPage() {
         {fr ? "Portefeuille" : "Portfolio"}
       </h1>
       {/* Score timestamp badge */}
-      <div className="mb-5 font-mono text-[8px] text-white/20" title={`Score snapshot: ${scoreTimestamp}`}>
+      <div className="mb-5 font-mono text-[8px] text-white/20 flex items-center gap-2" title={`Score snapshot: ${scoreTimestamp}`}>
         📊 Scores unifiés — {new Date(scoreTimestamp).toLocaleTimeString()}
+        {dataAlignment !== "ALIGNED" && (
+          <span
+            className="font-mono text-[8px] px-2 py-0.5 rounded animate-pulse cursor-help"
+            style={{
+              background: dataAlignment === "STALE" ? "rgba(229,57,53,0.10)" : "rgba(255,193,7,0.08)",
+              color: dataAlignment === "STALE" ? "rgba(229,57,53,0.85)" : "rgba(255,193,7,0.75)",
+              border: `1px solid ${dataAlignment === "STALE" ? "rgba(229,57,53,0.25)" : "rgba(255,193,7,0.2)"}`,
+            }}
+            title={`Data ${dataAlignment} — ${dataAgeDebug.map(d => `${d.source}: ${d.ageSeconds}s`).join(", ")}`}
+          >
+            {dataAlignment === "STALE" ? "⚠ STALE" : "⏳ DEGRADED"}
+          </span>
+        )}
       </div>
 
       {/* ── SUMMARY CARDS ── */}
