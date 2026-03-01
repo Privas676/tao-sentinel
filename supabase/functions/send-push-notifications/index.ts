@@ -95,10 +95,22 @@ function derIntegerToRaw(der: Uint8Array, offset: number): Uint8Array {
 /** Strategic transition types that trigger push notifications */
 const ENTRY_TYPES = new Set(["GO", "GO_SPECULATIVE", "EARLY"]);
 const EXIT_TYPES = new Set(["BREAK", "EXIT_FAST"]);
+/** RISK_OVERRIDE is only pushed for Critical-level (evidence.level === "CRITICAL") */
+const OVERRIDE_TYPES = new Set(["RISK_OVERRIDE"]);
 
 function isStrategicEvent(type: string | null): boolean {
   if (!type) return false;
   return ENTRY_TYPES.has(type) || EXIT_TYPES.has(type);
+}
+
+function isPushableEvent(ev: { type: string | null; evidence: any }): boolean {
+  if (!ev.type) return false;
+  if (isStrategicEvent(ev.type)) return true;
+  // RISK_OVERRIDE: only push if Critical level
+  if (OVERRIDE_TYPES.has(ev.type)) {
+    return ev.evidence?.level === "CRITICAL";
+  }
+  return false;
 }
 
 function eventToNotification(ev: { type: string; netuid: number; evidence: any }) {
@@ -112,6 +124,14 @@ function eventToNotification(ev: { type: string; netuid: number; evidence: any }
       title: `${label} — ${sn}`,
       body: reasons || `Signal d'entrée détecté sur ${sn}`,
       tag: `state-${ev.netuid}`,
+    };
+  }
+
+  if (OVERRIDE_TYPES.has(ev.type)) {
+    return {
+      title: `🚨 OVERRIDE CRITIQUE — ${sn}`,
+      body: reasons || `Override de risque critique sur ${sn} (score: ${e.overrideScore ?? '?'})`,
+      tag: `override-${ev.netuid}`,
     };
   }
 
@@ -137,9 +157,9 @@ Deno.serve(async (req) => {
     const { data: events } = await sb.from("events")
       .select("type, netuid, evidence, ts")
       .gte("ts", twoMinAgo)
-      .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST"]);
+      .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST", "RISK_OVERRIDE"]);
 
-    const strategic = (events || []).filter(e => isStrategicEvent(e.type));
+    const strategic = (events || []).filter(e => isPushableEvent(e));
 
     // ── KILL SWITCH: Distribution instability guard ──
     // If too many strategic events fire simultaneously, it likely indicates

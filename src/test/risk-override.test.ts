@@ -12,67 +12,120 @@ beforeEach(() => clearOverrideCooldowns());
 
 const base = { netuid: 1, state: null as string | null, psi: 50, risk: 50, quality: 50 };
 
-describe("evaluateRiskOverride", () => {
-  it("returns OK with no hard conditions", () => {
+describe("evaluateRiskOverride v3", () => {
+  it("returns OK with no flags", () => {
     const r = evaluateRiskOverride(base);
     expect(r.isOverridden).toBe(false);
     expect(r.isWarning).toBe(false);
     expect(r.systemStatus).toBe("OK");
+    expect(r.overrideScore).toBe(0);
+    expect(r.flags).toHaveLength(0);
   });
 
-  it("1 hard condition → warning only", () => {
-    const r = evaluateRiskOverride({ ...base, state: "BREAK" });
+  it("1 strong flag → warning (surveillance)", () => {
+    const r = evaluateRiskOverride({ ...base, state: "DEPEG" });
     expect(r.isOverridden).toBe(false);
     expect(r.isWarning).toBe(true);
-    expect(r.hardConditions).toContain("BREAK_STATE");
-    expect(r.systemStatus).toBe("SURVEILLANCE");
-  });
-
-  it("2+ hard conditions → override", () => {
-    const r = evaluateRiskOverride({ ...base, state: "BREAK", emissionTao: 0 });
-    expect(r.isOverridden).toBe(true);
-    expect(r.hardConditions).toHaveLength(2);
-    expect(r.systemStatus).toBe("ZONE_CRITIQUE");
-  });
-
-  it("DEPEG state triggers hard condition + status", () => {
-    const r = evaluateRiskOverride({ ...base, state: "DEPEG", emissionTao: 0 });
-    expect(r.isOverridden).toBe(true);
+    expect(r.flags).toContain("DEPEG");
     expect(r.systemStatus).toBe("DEPEG");
-    expect(r.hardConditions).toContain("DEPEG");
+    expect(r.overrideScore).toBe(0.5);
   });
 
-  it("DEREGISTRATION state", () => {
+  it("1 weak flag alone → no warning (score < 0.30)", () => {
+    const r = evaluateRiskOverride({ ...base, minersActive: 2 });
+    expect(r.isOverridden).toBe(false);
+    expect(r.isWarning).toBe(false);
+    expect(r.flags).toContain("UID_FAIBLE");
+  });
+
+  it("2 flags but score < 0.70 → no override, no warning", () => {
+    // UID_FAIBLE (0.12) + VOL_MC_ANOMALIE (0.18) = 0.30 < 0.70
+    const r = evaluateRiskOverride({ ...base, minersActive: 2, volumeMcRatio: 0.001 });
+    expect(r.isOverridden).toBe(false);
+    expect(r.isWarning).toBe(false);
+    expect(r.flags).toHaveLength(2);
+  });
+
+  it("2 strong flags → score >= 0.70 → warning (not critical)", () => {
+    // ZONE_CRITIQUE_STATE (0.30) + POOL_FAIBLE (0.35) = 0.65... add VOL_MC
+    // Actually: POOL_FAIBLE (0.35) + LIQUIDITY_STRESS (0.30) = 0.65
+    // Need to hit 0.70: POOL_FAIBLE (0.35) + ZONE_CRITIQUE_STATE (0.30) + UID_FAIBLE (0.12) = 0.77
+    const r = evaluateRiskOverride({ ...base, state: "BREAK", taoInPool: 2, minersActive: 1 });
+    expect(r.flags.length).toBeGreaterThanOrEqual(2);
+    expect(r.overrideScore).toBeGreaterThanOrEqual(0.70);
+    // Score is 0.30 + 0.35 + 0.12 = 0.77 → warning (< 0.85)
+    expect(r.isWarning).toBe(true);
+    expect(r.isOverridden).toBe(false);
+  });
+
+  it("multiple strong flags → score >= 0.85 → critical override", () => {
+    // DEPEG (0.50) + POOL_FAIBLE (0.35) = 0.85
+    const r = evaluateRiskOverride({ ...base, state: "DEPEG", taoInPool: 2 });
+    expect(r.isOverridden).toBe(true);
+    expect(r.overrideScore).toBeGreaterThanOrEqual(0.85);
+    expect(r.systemStatus).toBe("DEPEG");
+  });
+
+  it("DEREGISTRATION + pool → critical", () => {
     const r = evaluateRiskOverride({ ...base, state: "DEREGISTRATION", taoInPool: 2 });
     expect(r.isOverridden).toBe(true);
     expect(r.systemStatus).toBe("DEREGISTRATION");
+    expect(r.flags).toContain("DEREGISTRATION");
+    expect(r.flags).toContain("POOL_FAIBLE");
   });
 
-  it("TAO pool critical triggers hard condition", () => {
+  it("TAO pool critical triggers flag", () => {
     const r = evaluateRiskOverride({ ...base, taoInPool: 3 });
-    expect(r.hardConditions).toContain("TAO_POOL_CRITICAL");
+    expect(r.flags).toContain("POOL_FAIBLE");
   });
 
   it("liquidity USD critical", () => {
     const r = evaluateRiskOverride({ ...base, liquidityUsd: 200 });
-    expect(r.hardConditions).toContain("LIQUIDITY_USD_CRITICAL");
+    expect(r.flags).toContain("LIQUIDITY_STRESS");
   });
 
   it("vol/MC low", () => {
     const r = evaluateRiskOverride({ ...base, volumeMcRatio: 0.001 });
-    expect(r.hardConditions).toContain("VOL_MC_LOW");
+    expect(r.flags).toContain("VOL_MC_ANOMALIE");
   });
 
   it("slippage high", () => {
     const r = evaluateRiskOverride({ ...base, slippagePct: 0.08 });
-    expect(r.hardConditions).toContain("SLIPPAGE_HIGH");
+    expect(r.flags).toContain("SLIPPAGE_HIGH");
   });
 
-  it("cooldown downgrades second override to warning", () => {
-    evaluateRiskOverride({ ...base, state: "BREAK", emissionTao: 0 }); // first → override
-    const r2 = evaluateRiskOverride({ ...base, state: "BREAK", emissionTao: 0 }); // second → cooldown
+  it("emission zero", () => {
+    const r = evaluateRiskOverride({ ...base, emissionTao: 0 });
+    expect(r.flags).toContain("EMISSION_ZERO");
+  });
+
+  it("cooldown suppresses repeated critical override to warning", () => {
+    // First call: critical override
+    evaluateRiskOverride({ ...base, state: "DEPEG", taoInPool: 2 });
+    // Second call within cooldown → warning
+    const r2 = evaluateRiskOverride({ ...base, state: "DEPEG", taoInPool: 2 });
     expect(r2.isOverridden).toBe(false);
     expect(r2.isWarning).toBe(true);
+  });
+
+  it("overrideScore is capped at 1.0", () => {
+    // Stack many flags
+    const r = evaluateRiskOverride({
+      ...base,
+      state: "DEPEG",
+      taoInPool: 1,
+      liquidityUsd: 100,
+      volumeMcRatio: 0.001,
+      emissionTao: 0,
+      slippagePct: 0.10,
+      minersActive: 1,
+    });
+    expect(r.overrideScore).toBeLessThanOrEqual(1.0);
+  });
+
+  it("backward compat: hardConditions equals flags", () => {
+    const r = evaluateRiskOverride({ ...base, state: "BREAK" });
+    expect(r.hardConditions).toEqual(r.flags);
   });
 });
 
