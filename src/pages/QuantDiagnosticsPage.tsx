@@ -1,8 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { analyzeDistribution } from "@/lib/distribution-monitor";
+import { analyzeScoreVolatility, type FleetVolatilityReport } from "@/lib/score-volatility";
+import { supabase } from "@/integrations/supabase/client";
 
 /* ── Histogram renderer ── */
 function Histogram({ values, label, bins = 10 }: { values: number[]; label: string; bins?: number }) {
@@ -75,6 +78,167 @@ function Flag({ active, label }: { active: boolean; label: string }) {
       }}
     >
       ⚠ {label}
+    </div>
+  );
+}
+
+/* ── Volatility Panel ── */
+function VolatilityPanel({ fr }: { fr: boolean }) {
+  const [window, setWindow] = useState<"24h" | "7d">("24h");
+
+  const hoursBack = window === "24h" ? 24 : 168;
+  const since = useMemo(
+    () => new Date(Date.now() - hoursBack * 3600_000).toISOString(),
+    [hoursBack],
+  );
+
+  const { data: volatility, isLoading } = useQuery({
+    queryKey: ["quant-volatility", window],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_snapshots")
+        .select("ts, snapshot")
+        .gte("ts", since)
+        .order("ts", { ascending: true })
+        .limit(1000);
+      if (error) throw error;
+      return analyzeScoreVolatility(
+        (data || []).map(d => ({ ts: d.ts, snapshot: d.snapshot as any[] })),
+        window,
+      );
+    },
+    refetchInterval: 300_000,
+  });
+
+  return (
+    <div className="border border-white/[0.06] rounded-lg p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-xs tracking-widest text-white/50">
+          {fr ? "VOLATILITÉ DES SCORES" : "SCORE VOLATILITY"}
+        </span>
+        <div className="flex gap-1">
+          {(["24h", "7d"] as const).map(w => (
+            <button
+              key={w}
+              onClick={() => setWindow(w)}
+              className="font-mono text-[9px] px-2 py-1 rounded transition-all"
+              style={{
+                background: window === w ? "rgba(255,255,255,0.08)" : "transparent",
+                color: window === w ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.25)",
+                border: `1px solid ${window === w ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)"}`,
+              }}
+            >
+              {w}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="font-mono text-[10px] text-white/20 py-4 text-center">
+          {fr ? "Analyse des snapshots…" : "Analyzing snapshots…"}
+        </div>
+      ) : volatility ? (
+        <VolatilityContent report={volatility} fr={fr} />
+      ) : null}
+    </div>
+  );
+}
+
+function VolatilityContent({ report, fr }: { report: FleetVolatilityReport; fr: boolean }) {
+  const [showTop, setShowTop] = useState(false);
+
+  return (
+    <div className="space-y-3">
+      {/* Flags */}
+      <div className="space-y-1.5">
+        <Flag
+          active={report.scoreInstability}
+          label={
+            fr
+              ? `Score Instability — ${report.scoreInstabilityPsi ? `ΔPSI>20: ${report.pctPsiAbove20}%` : ""} ${report.scoreInstabilityRisk ? `ΔRisk>25: ${report.pctRiskAbove25}%` : ""} des subnets instables`
+              : `Score Instability — ${report.scoreInstabilityPsi ? `ΔPSI>20: ${report.pctPsiAbove20}%` : ""} ${report.scoreInstabilityRisk ? `ΔRisk>25: ${report.pctRiskAbove25}%` : ""} of subnets unstable`
+          }
+        />
+        {!report.scoreInstability && report.subnetCount > 0 && (
+          <div
+            className="font-mono text-[9px] px-2 py-1 rounded"
+            style={{
+              background: "rgba(76,175,80,0.08)",
+              color: "rgba(76,175,80,0.7)",
+              border: "1px solid rgba(76,175,80,0.15)",
+            }}
+          >
+            ✓ {fr ? "Scores stables — aucune instabilité détectée" : "Scores stable — no instability detected"}
+          </div>
+        )}
+      </div>
+
+      {/* Meta */}
+      <div className="font-mono text-[9px] text-white/20">
+        {report.snapshotCount} snapshots · {report.subnetCount} subnets · {report.window}
+      </div>
+
+      {/* Stats */}
+      <div className="space-y-1">
+        <Stat label={fr ? "ΔPSI moyen (1h)" : "Avg ΔPSI (1h)"} value={report.avgDeltaPsi} />
+        <Stat label={fr ? "ΔRisk moyen (1h)" : "Avg ΔRisk (1h)"} value={report.avgDeltaRisk} />
+        <Stat
+          label={fr ? "% subnets ΔPSI > 20 (1h)" : "% subnets ΔPSI > 20 (1h)"}
+          value={`${report.pctPsiAbove20}%`}
+          warn={report.pctPsiAbove20 > 20}
+        />
+        <Stat
+          label={fr ? "% subnets ΔRisk > 25 (1h)" : "% subnets ΔRisk > 25 (1h)"}
+          value={`${report.pctRiskAbove25}%`}
+          warn={report.pctRiskAbove25 > 20}
+        />
+      </div>
+
+      {/* Top movers toggle */}
+      {report.subnets.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowTop(v => !v)}
+            className="font-mono text-[9px] text-white/30 hover:text-white/50 transition-colors"
+          >
+            {showTop
+              ? (fr ? "▼ Masquer le détail" : "▼ Hide detail")
+              : (fr ? "▶ Top 10 subnets les plus volatils" : "▶ Top 10 most volatile subnets")}
+          </button>
+
+          {showTop && (
+            <div className="mt-2 space-y-0.5">
+              <div className="grid grid-cols-5 gap-1 font-mono text-[8px] text-white/25 pb-1 border-b border-white/[0.04]">
+                <span>SN</span>
+                <span>ΔPSI avg</span>
+                <span>ΔPSI max</span>
+                <span>ΔRisk avg</span>
+                <span>ΔRisk max</span>
+              </div>
+              {report.subnets.slice(0, 10).map(s => {
+                const psiWarn = s.deltaPsiMax1h > 20;
+                const riskWarn = s.deltaRiskMax1h > 25;
+                return (
+                  <div
+                    key={s.netuid}
+                    className="grid grid-cols-5 gap-1 font-mono text-[9px] py-0.5"
+                    style={{
+                      color: psiWarn || riskWarn ? "rgba(229,57,53,0.7)" : "rgba(255,255,255,0.4)",
+                    }}
+                  >
+                    <span className="text-white/50">SN-{s.netuid}</span>
+                    <span>{s.deltaPsiMean1h}</span>
+                    <span style={{ fontWeight: psiWarn ? 700 : 400 }}>{s.deltaPsiMax1h}</span>
+                    <span>{s.deltaRiskMean1h}</span>
+                    <span style={{ fontWeight: riskWarn ? 700 : 400 }}>{s.deltaRiskMax1h}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -206,6 +370,11 @@ export default function QuantDiagnosticsPage() {
           </div>
         </div>
 
+        {/* ── Score Volatility Section ── */}
+        <div className="mb-4">
+          <VolatilityPanel fr={fr} />
+        </div>
+
         <p className="font-mono text-[8px] text-white/15 text-center mt-8">
           {fr ? "Module purement analytique — aucune modification du scoring" : "Purely analytical module — no scoring modification"}
         </p>
@@ -214,7 +383,7 @@ export default function QuantDiagnosticsPage() {
   );
 }
 
-/* Local percentile helper (avoid importing internal from distribution-monitor) */
+/* Local percentile helper */
 function percentile(sorted: number[], p: number): number {
   if (!sorted.length) return 0;
   const idx = (p / 100) * (sorted.length - 1);
