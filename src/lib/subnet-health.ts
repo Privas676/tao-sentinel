@@ -265,17 +265,18 @@ export function computeAllHealthScores(data: SubnetHealthData, recalc: Recalcula
 
 /* ─── Composite Risk (Section 5) ─── */
 
-export function computeHealthRisk(scores: HealthScores, dataConsistencyRisk: number, recalc?: RecalculatedMetrics): number {
+export function computeHealthRisk(scores: HealthScores, _dataConsistencyRisk: number, recalc?: RecalculatedMetrics): number {
   // Invert health scores to risk: high health = low risk
   const liquidityRisk = 100 - scores.liquidityHealth;
   const activityRisk = 100 - scores.activityHealth;
 
+  // Note: dataConsistencyRisk weight removed (was 15% from TMC divergence)
+  // Redistributed to other factors
   let risk =
-    liquidityRisk * 0.25 +
-    scores.emissionPressure * 0.20 +
-    scores.dilutionRisk * 0.20 +
-    activityRisk * 0.20 +
-    dataConsistencyRisk * 0.15;
+    liquidityRisk * 0.30 +
+    scores.emissionPressure * 0.25 +
+    scores.dilutionRisk * 0.25 +
+    activityRisk * 0.20;
 
   // Liq Haircut penalty: large pool/spot divergence signals structural risk
   if (recalc) {

@@ -17,9 +17,7 @@ import {
   evaluateRiskOverride, checkCoherence,
   type SystemStatus,
 } from "@/lib/risk-override";
-import {
-  fuseMetrics, type SourceMetrics,
-} from "@/lib/data-fusion";
+import { type SourceMetrics } from "@/lib/data-fusion";
 import {
   extractHealthData, recalculate, computeAllHealthScores,
   computeHealthRisk, computeHealthOpportunity,
@@ -78,6 +76,8 @@ export type UnifiedScoresResult = {
   isLoading: boolean;
   sparklines: Map<number, number[]> | undefined;
   subnetList: { netuid: number; name: string }[] | undefined;
+  /** TMC market context data — informational only, NOT used in scoring */
+  marketContext: Map<number, SourceMetrics> | undefined;
 };
 
 /* ─── SPECIAL CASES / WHITELIST ───
@@ -183,6 +183,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     refetchInterval: 120_000,
   });
 
+  // TMC secondary metrics: kept for Market Context UI only, NOT used in scoring
   const { data: secondaryMetrics } = useQuery({
     queryKey: ["unified-metrics-secondary"],
     queryFn: async () => {
@@ -277,31 +278,36 @@ export function useSubnetScores(): UnifiedScoresResult {
     },
   });
 
-  // ── Consensus data ──
+  // ── Confidence data (Taostats-only: freshness + completeness, NO TMC divergence) ──
   const consensusMap = useMemo(() => {
-    if (!primaryMetrics && !secondaryMetrics) return new Map<number, { confianceData: number; dataUncertain: boolean }>();
-    const pa = primaryMetrics ? [...primaryMetrics.values()] : [];
-    const sa = secondaryMetrics ? [...secondaryMetrics.values()] : [];
-    const fused = fuseMetrics(pa, sa);
+    if (!primaryMetrics) return new Map<number, { confianceData: number; dataUncertain: boolean }>();
     const map = new Map<number, { confianceData: number; dataUncertain: boolean }>();
-    for (const f of fused) {
-      map.set(f.netuid, { confianceData: f.confianceData, dataUncertain: f.dataUncertain });
+    for (const [netuid, m] of primaryMetrics) {
+      // Freshness: how old is the data? Lose 2 points per minute
+      const minutesOld = m.ts ? (Date.now() - new Date(m.ts).getTime()) / 60_000 : 999;
+      const freshness = Math.max(0, 100 - minutesOld * 2);
+      // Completeness: how many fields are non-null and > 0
+      let fields = 0;
+      if (m.price != null && m.price > 0) fields++;
+      if (m.cap != null && m.cap > 0) fields++;
+      if (m.vol24h != null && m.vol24h > 0) fields++;
+      if (m.liquidity != null && m.liquidity > 0) fields++;
+      const completeness = (fields / 4) * 100;
+      const score = Math.round(freshness * 0.5 + completeness * 0.5);
+      map.set(netuid, { confianceData: Math.max(0, Math.min(100, score)), dataUncertain: false });
     }
     return map;
-  }, [primaryMetrics, secondaryMetrics]);
+  }, [primaryMetrics]);
 
-  // ── Consensus prices ──
+  // ── Prices (Taostats only — single source of truth) ──
   const consensusPrices = useMemo(() => {
     if (!primaryMetrics) return new Map<number, number>();
-    const pa = [...primaryMetrics.values()];
-    const sa = secondaryMetrics ? [...secondaryMetrics.values()] : [];
-    const fused = fuseMetrics(pa, sa);
     const map = new Map<number, number>();
-    for (const f of fused) {
-      if (f.price) map.set(f.netuid, f.price);
+    for (const [netuid, m] of primaryMetrics) {
+      if (m.price) map.set(netuid, m.price);
     }
     return map;
-  }, [primaryMetrics, secondaryMetrics]);
+  }, [primaryMetrics]);
 
   const taoUsd = taoUsdRaw || 450;
 
@@ -320,9 +326,9 @@ export function useSubnetScores(): UnifiedScoresResult {
         const conf = s.confidence_pct ?? 0;
         const quality = s.quality_score ?? 0;
         const consensus = consensusMap.get(s.netuid!);
-        const dataUncertain = consensus?.dataUncertain ?? false;
+        const dataUncertain = false; // No longer derived from TMC divergence
         const confianceScore = consensus?.confianceData ?? 50;
-        const dataConsistencyRisk = clamp(100 - confianceScore, 0, 100);
+        const dataConsistencyRisk = 0; // TMC decoupled: no inter-source risk
 
         // Health engine
         const payload = rawPayloads?.get(s.netuid!);
@@ -435,7 +441,7 @@ export function useSubnetScores(): UnifiedScoresResult {
 
       let asymmetry = cal.asymmetry;
       if (isWhitelisted) asymmetry = opp - risk; // recalc with capped risk
-      if (r.dataUncertain) asymmetry -= 15;
+      // dataUncertain penalty removed — TMC decoupled
 
       const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
       let action: StrategicAction = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, r.conf);
@@ -565,7 +571,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     }
 
     return { scoresList: scored, scoresMap: map, scoreTimestamp: ts };
-  }, [signals, rawPayloads, taoUsd, primaryMetrics, secondaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines]);
+  }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines]);
 
   return {
     scores: scoresMap,
@@ -575,6 +581,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     isLoading: signalsLoading,
     sparklines,
     subnetList,
+    marketContext: secondaryMetrics,
   };
 }
 

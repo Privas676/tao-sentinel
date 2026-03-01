@@ -22,7 +22,7 @@ type EventRow = {
   evidence: any;
 };
 
-type FilterType = "ALL" | "UNIQUE" | "OVERRIDE" | "DATA" | "WHALE" | "STATE" | "SMART";
+type FilterType = "ALL" | "UNIQUE" | "OVERRIDE" | "WHALE" | "STATE" | "SMART";
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
@@ -69,12 +69,8 @@ function isEssentialEvent(g: GroupedEvent, scores: Map<number, any> | undefined)
   if (ev.type === "DEPEG_WARNING") return true;
   // Overrides: only if passes strict gating
   if (ev.type === "RISK_OVERRIDE") return passesStrictGating(ev, scores);
-  // Data divergence: only if gravity ≥ 60
-  if (ev.type === "DATA_DIVERGENCE") {
-    const e = ev.evidence as any;
-    const gravity = e?.gravity as number | undefined;
-    return gravity != null && gravity >= 60;
-  }
+  // DATA_DIVERGENCE: no longer essential — TMC decoupled
+  if (ev.type === "DATA_DIVERGENCE") return false;
   // Whale moves with large amounts
   if (ev.type === "WHALE_MOVE") {
     const e = ev.evidence as any;
@@ -152,7 +148,7 @@ function typeDisplayLabel(type: string | null, lang: string): { label: string; i
 
 function eventCategory(type: string | null): FilterType {
   if (type === "WHALE_MOVE") return "WHALE";
-  if (type === "DATA_DIVERGENCE") return "DATA";
+  if (type === "DATA_DIVERGENCE") return "ALL"; // No longer a dedicated filter category
   if (type === "PRE_HYPE" || type === "SMART_ACCUMULATION") return "SMART";
   if (type === "RISK_OVERRIDE") return "OVERRIDE";
   return "STATE";
@@ -775,9 +771,7 @@ export default function AlertsPage() {
   const [showNoise, setShowNoise] = useState(false);
   const [confidenceFilter, setConfidenceFilter] = useState(false);
   const [dismissed, setDismissed] = useState<Map<string, number>>(() => getDismissedAlerts());
-  const [showMinorDivergences] = useState(() => {
-    try { return localStorage.getItem("show-minor-divergences") === "true"; } catch { return false; }
-  });
+  // Minor divergences toggle removed — TMC decoupled
   const fr = lang === "fr";
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
@@ -803,23 +797,16 @@ export default function AlertsPage() {
   }, [events]);
 
   const { gatedOverrides, noiseOverrides, otherGrouped } = useMemo(() => {
-    const filterDiv = (g: GroupedEvent): boolean => {
-      if (g.latest.type !== "DATA_DIVERGENCE") return true;
-      if (showMinorDivergences) return true;
-      const e = g.latest.evidence as any;
-      const gravity = e?.gravity as number | undefined;
-      const confidence = e?.confidence_data as number | undefined;
-      if (gravity != null && gravity >= 60) return true;
-      if (confidence != null && confidence >= 70) return true;
-      if (gravity == null && e?.divergences) return true;
-      return false;
+    // DATA_DIVERGENCE events are no longer filtered/displayed as alerts
+    const filterOutDivergence = (g: GroupedEvent): boolean => {
+      return g.latest.type !== "DATA_DIVERGENCE";
     };
 
     if (overrideMode === "permissive") {
       return {
         gatedOverrides: grouped.filter(g => g.latest.type === "RISK_OVERRIDE"),
         noiseOverrides: [] as GroupedEvent[],
-        otherGrouped: grouped.filter(g => g.latest.type !== "RISK_OVERRIDE").filter(filterDiv),
+        otherGrouped: grouped.filter(g => g.latest.type !== "RISK_OVERRIDE").filter(filterOutDivergence),
       };
     }
 
@@ -837,8 +824,8 @@ export default function AlertsPage() {
       else noise.push(g);
     }
 
-    return { gatedOverrides: gated, noiseOverrides: noise, otherGrouped: others.filter(filterDiv) };
-  }, [grouped, overrideMode, scores, showMinorDivergences]);
+    return { gatedOverrides: gated, noiseOverrides: noise, otherGrouped: others.filter(filterOutDivergence) };
+  }, [grouped, overrideMode, scores]);
 
   // Apply confidence filter
   const applyConfidenceFilter = useCallback((g: GroupedEvent): boolean => {
@@ -909,7 +896,6 @@ export default function AlertsPage() {
     { value: "UNIQUE", label: fr ? "Groupés" : "Grouped", count: stats.uniqueGroups },
     { value: "ALL", label: fr ? "Tout" : "All", count: stats.total },
     { value: "OVERRIDE", label: "⛔ Overrides", count: stats.overrides },
-    { value: "DATA", label: "⚠ Data" },
     { value: "WHALE", label: "🐋 Whales" },
     { value: "STATE", label: fr ? "🔴 États" : "🔴 States" },
     { value: "SMART", label: "🧠 Smart" },

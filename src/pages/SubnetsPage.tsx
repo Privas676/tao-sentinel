@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
+import MarketContextPanel from "@/components/MarketContextPanel";
 import {
   deriveMomentumLabel, momentumColor, computeMomentumScore,
   opportunityColor, riskColor, clamp,
@@ -12,6 +13,7 @@ import {
   deriveSubnetAction, actionColor, actionBg, actionBorder, actionIcon,
 } from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
+import { type SourceMetrics } from "@/lib/data-fusion";
 import {
   systemStatusColor, systemStatusLabel,
 } from "@/lib/risk-override";
@@ -138,6 +140,7 @@ export default function SubnetsPage() {
   const { t, lang } = useI18n();
   const [mode, setMode] = useState<ViewMode>("all");
   const [healthPanel, setHealthPanel] = useState<null | any>(null);
+  const [tmcPanel, setTmcPanel] = useState<null | { netuid: number; name: string }>(null);
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const { ownedNetuids, addPosition, isOwned } = useLocalPortfolio();
@@ -153,7 +156,7 @@ export default function SubnetsPage() {
   };
 
   // ── UNIFIED SCORES (single source of truth) ──
-  const { scoresList, sparklines, scoreTimestamp } = useSubnetScores();
+  const { scoresList, sparklines, scoreTimestamp, marketContext } = useSubnetScores();
 
   const rows = useMemo(() => {
     return scoresList
@@ -295,6 +298,7 @@ export default function SubnetsPage() {
                 {t("data.confiance")} {sortCol === "confiance" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
               <th className="text-center py-3 px-2">🔬</th>
+              <th className="text-center py-3 px-2" title="Market Context (TMC)">📊</th>
               <th className="text-center py-3 px-2">✔</th>
             </tr>
           </thead>
@@ -344,12 +348,7 @@ export default function SubnetsPage() {
                         ⚠ Warning
                       </span>
                     )}
-                    {r.dataUncertain && !r.isOverridden && (
-                      <span className="ml-1 inline-flex items-center px-1 py-0.5 rounded text-[7px] tracking-wider"
-                        style={{ background: "rgba(255,152,0,0.08)", color: "rgba(255,152,0,0.7)", border: "1px solid rgba(255,152,0,0.15)" }}>
-                        ⚠ DATA
-                      </span>
-                    )}
+                    {/* dataUncertain badge removed — TMC decoupled */}
                   </td>
                   <td className="py-3 px-2 text-center">
                     <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
@@ -409,6 +408,14 @@ export default function SubnetsPage() {
                     </button>
                   </td>
                   <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setTmcPanel({ netuid: r.netuid, name: r.name }); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded transition-colors hover:bg-white/5"
+                      style={{ color: marketContext?.has(r.netuid) ? "rgba(100,181,246,0.5)" : "rgba(255,255,255,0.15)", border: "1px solid rgba(100,181,246,0.1)" }}>
+                      📊
+                    </button>
+                  </td>
+                  <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
                     {r.owned ? (
                       <span style={{ color: "rgba(76,175,80,0.8)", fontSize: 14 }}>✔</span>
                     ) : (
@@ -428,6 +435,16 @@ export default function SubnetsPage() {
 
       {/* Health Panel Modal */}
       {healthPanel && <HealthPanel health={healthPanel} onClose={() => setHealthPanel(null)} />}
+
+      {/* Market Context Panel (TMC — informational only) */}
+      {tmcPanel && (
+        <MarketContextPanel
+          netuid={tmcPanel.netuid}
+          name={tmcPanel.name}
+          tmc={marketContext?.get(tmcPanel.netuid)}
+          onClose={() => setTmcPanel(null)}
+        />
+      )}
     </div>
   );
 }
