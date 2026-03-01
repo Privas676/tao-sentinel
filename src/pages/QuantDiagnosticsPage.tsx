@@ -7,6 +7,7 @@ import { analyzeDistribution } from "@/lib/distribution-monitor";
 import { analyzeScoreVolatility, type FleetVolatilityReport } from "@/lib/score-volatility";
 import { supabase } from "@/integrations/supabase/client";
 import CorrelationPanel from "@/components/CorrelationPanel";
+import PredictivePowerPanel from "@/components/PredictivePowerPanel";
 
 /* ── Histogram renderer ── */
 function Histogram({ values, label, bins = 10 }: { values: number[]; label: string; bins?: number }) {
@@ -374,6 +375,11 @@ export default function QuantDiagnosticsPage() {
         {/* ── Correlation Section ── */}
         <div className="mb-4">
           <CorrelationPanel psiValues={psiValues} riskValues={riskValues} fr={fr} />
+        </div>
+
+        {/* ── Predictive Power Section ── */}
+        <div className="mb-4">
+          <PredictivePowerPanel fr={fr} />
         </div>
 
         {/* ── Score Volatility Section ── */}
