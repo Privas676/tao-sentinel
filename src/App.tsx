@@ -42,6 +42,7 @@ function AppLayout() {
     { path: "/portfolio", label: t("nav.portfolio"), icon: "💼" },
     { path: "/alerts", label: t("nav.alerts"), icon: "⚡", badge: unreadCount },
     { path: "/settings", label: t("nav.settings"), icon: "⚙" },
+    { path: "/install", label: "Installer", icon: "📲" },
   ];
 
   const SIDEBAR_W = 200;
