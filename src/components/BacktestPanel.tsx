@@ -73,10 +73,14 @@ function generateSimulatedData(days: number) {
   return { snapshots, events };
 }
 
+type CompareEntry = { period: Period; result: BacktestResult };
+
 export default function BacktestPanel() {
   const [period, setPeriod] = useState<Period>("7d");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [comparison, setComparison] = useState<CompareEntry[] | null>(null);
 
   const runTest = async () => {
     setLoading(true);
@@ -124,6 +128,7 @@ export default function BacktestPanel() {
   const runSimulation = () => {
     setLoading(true);
     setResult(null);
+    setComparison(null);
     try {
       const days = PERIOD_DAYS[period];
       const { snapshots, events } = generateSimulatedData(days);
@@ -134,6 +139,58 @@ export default function BacktestPanel() {
       toast.error(err.message || "Erreur simulation");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runCompare = async (simulate = false) => {
+    setComparing(true);
+    setComparison(null);
+    setResult(null);
+    try {
+      const periods: Period[] = ["7d", "14d", "30d", "60d"];
+      const entries: CompareEntry[] = [];
+
+      for (const p of periods) {
+        const days = PERIOD_DAYS[p];
+        let snapshots: PipelineSnapshot[];
+        let events: HistoricalEvent[];
+
+        if (simulate) {
+          const sim = generateSimulatedData(days);
+          snapshots = sim.snapshots;
+          events = sim.events;
+        } else {
+          const since = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+          const [snapRes, evtRes] = await Promise.all([
+            supabase.from("pipeline_snapshots")
+              .select("ts, snapshot, subnet_count, engine_version")
+              .gte("ts", since).order("ts", { ascending: true }).limit(1000),
+            supabase.from("events")
+              .select("ts, netuid, type, severity")
+              .gte("ts", since).order("ts", { ascending: true }).limit(1000),
+          ]);
+          if (snapRes.error) throw snapRes.error;
+          if (evtRes.error) throw evtRes.error;
+          snapshots = (snapRes.data || []) as unknown as PipelineSnapshot[];
+          events = (evtRes.data || []) as unknown as HistoricalEvent[];
+        }
+
+        if (snapshots.length > 0) {
+          entries.push({ period: p, result: runBacktest(snapshots, events) });
+        }
+      }
+
+      if (entries.length === 0) {
+        toast.error("Aucun snapshot disponible");
+        return;
+      }
+
+      setComparison(entries);
+      toast.success(`Comparaison terminée : ${entries.length} périodes`);
+    } catch (err: any) {
+      toast.error(err.message || "Erreur comparaison");
+    } finally {
+      setComparing(false);
     }
   };
 
@@ -201,6 +258,39 @@ export default function BacktestPanel() {
           {loading ? "…" : `🧪 Simuler (${period} — données fictives)`}
         </button>
       )}
+
+      {/* Compare buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => runCompare(false)}
+          disabled={loading || comparing}
+          className="flex-1 py-2 rounded-lg text-[11px] font-mono tracking-wider uppercase transition-all disabled:opacity-50"
+          style={{
+            background: "rgba(66,165,245,0.08)",
+            color: "rgba(66,165,245,0.7)",
+            border: "1px solid rgba(66,165,245,0.2)",
+          }}
+        >
+          {comparing ? "…" : "📊 Comparer toutes les périodes"}
+        </button>
+        {IS_DEV && (
+          <button
+            onClick={() => runCompare(true)}
+            disabled={loading || comparing}
+            className="py-2 px-3 rounded-lg text-[11px] font-mono tracking-wider uppercase transition-all disabled:opacity-50"
+            style={{
+              background: "rgba(171,71,188,0.08)",
+              color: "rgba(171,71,188,0.6)",
+              border: "1px dashed rgba(171,71,188,0.2)",
+            }}
+          >
+            {comparing ? "…" : "🧪 Sim"}
+          </button>
+        )}
+      </div>
+
+      {/* Comparison table */}
+      {comparison && <ComparisonTable entries={comparison} gradeColor={gradeColor} />}
 
       {result && (
         <div className="space-y-3">
@@ -415,6 +505,98 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between text-[11px] font-mono">
       <span style={{ color: "rgba(255,255,255,0.35)" }}>{label}</span>
       <span style={{ color: "rgba(255,255,255,0.6)" }}>{value}</span>
+    </div>
+  );
+}
+
+/* ── Comparison Table ── */
+
+function ComparisonTable({ entries, gradeColor }: {
+  entries: CompareEntry[];
+  gradeColor: (score: number) => string;
+}) {
+  // Find trend direction between shortest and longest period
+  const trend = entries.length >= 2
+    ? entries[entries.length - 1].result.reliabilityScore - entries[0].result.reliabilityScore
+    : 0;
+  const trendIcon = trend > 5 ? "📈" : trend < -5 ? "📉" : "➡️";
+  const trendLabel = trend > 5 ? "En amélioration" : trend < -5 ? "En dégradation" : "Stable";
+
+  return (
+    <div
+      className="p-3 rounded-lg space-y-3"
+      style={{ background: "rgba(66,165,245,0.03)", border: "1px solid rgba(66,165,245,0.12)" }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] tracking-widest uppercase font-bold" style={{ color: "rgba(255,255,255,0.3)" }}>
+          Comparaison inter-périodes
+        </div>
+        <div className="text-[10px] font-mono" style={{ color: trend > 5 ? "rgba(76,175,80,0.8)" : trend < -5 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.4)" }}>
+          {trendIcon} {trendLabel}
+        </div>
+      </div>
+
+      {/* Score bar chart */}
+      <div className="flex items-end gap-2 h-20">
+        {entries.map((e) => {
+          const h = Math.max(8, (e.result.reliabilityScore / 100) * 100);
+          return (
+            <div key={e.period} className="flex-1 flex flex-col items-center gap-1">
+              <span className="font-mono text-[9px] font-bold" style={{ color: gradeColor(e.result.reliabilityScore) }}>
+                {e.result.reliabilityGrade}
+              </span>
+              <div
+                className="w-full rounded-t transition-all"
+                style={{
+                  height: `${h}%`,
+                  background: `linear-gradient(to top, ${gradeColor(e.result.reliabilityScore)}40, ${gradeColor(e.result.reliabilityScore)}15)`,
+                  border: `1px solid ${gradeColor(e.result.reliabilityScore)}30`,
+                  borderBottom: "none",
+                }}
+              />
+              <span className="font-mono text-[9px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                {e.period}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Detail table */}
+      <div className="space-y-0.5">
+        <div className="grid font-mono text-[8px] tracking-wider uppercase" style={{
+          gridTemplateColumns: `80px repeat(${entries.length}, 1fr)`,
+          color: "rgba(255,255,255,0.25)",
+        }}>
+          <span />
+          {entries.map(e => <span key={e.period} className="text-center">{e.period}</span>)}
+        </div>
+        {([
+          { key: "reliabilityScore", label: "Score", fmt: (v: number) => `${v}%` },
+          { key: "falsePositiveRate", label: "Faux Pos.", fmt: (v: number) => `${v}%` },
+          { key: "falseNegativeRate", label: "Faux Neg.", fmt: (v: number) => `${v}%` },
+          { key: "avgDetectionDelayMin", label: "Délai", fmt: (v: number) => `${v}m` },
+          { key: "flappingRate", label: "Flapping", fmt: (v: number) => `${v}/h` },
+          { key: "tickCount", label: "Ticks", fmt: (v: number) => String(v) },
+        ] as const).map(({ key, label, fmt }) => (
+          <div key={key} className="grid font-mono text-[10px]" style={{
+            gridTemplateColumns: `80px repeat(${entries.length}, 1fr)`,
+            borderBottom: "1px solid rgba(255,255,255,0.04)",
+            padding: "3px 0",
+          }}>
+            <span style={{ color: "rgba(255,255,255,0.35)" }}>{label}</span>
+            {entries.map(e => (
+              <span key={e.period} className="text-center" style={{
+                color: key === "reliabilityScore"
+                  ? gradeColor(e.result[key] as number)
+                  : "rgba(255,255,255,0.55)",
+              }}>
+                {fmt(e.result[key] as number)}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
