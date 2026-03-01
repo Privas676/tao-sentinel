@@ -1,43 +1,81 @@
 /* ═══════════════════════════════════════ */
-/*   RISK OVERRIDE ENGINE v2                 */
-/*   Hiérarchisé: ≥2 hard conditions         */
-/*   Cooldown 6h, raréfaction, explicable    */
+/*   RISK OVERRIDE ENGINE v3                 */
+/*   Weighted overrideScore approach         */
+/*   Warning ≥ 0.70, Critical ≥ 0.85        */
+/*   Cooldown 30min, re-alert if +0.15      */
 /* ═══════════════════════════════════════ */
 
 export type SystemStatus = "OK" | "SURVEILLANCE" | "ZONE_CRITIQUE" | "DEPEG" | "DEREGISTRATION";
 
-export type HardCondition =
-  | "EMISSION_ZERO"
-  | "TAO_POOL_CRITICAL"
-  | "LIQUIDITY_USD_CRITICAL"
-  | "VOL_MC_LOW"
-  | "SLIPPAGE_HIGH"
+export type OverrideFlag =
+  | "POOL_FAIBLE"
+  | "ZONE_CRITIQUE_STATE"
+  | "LIQUIDITY_STRESS"
+  | "UID_FAIBLE"
+  | "VOL_MC_ANOMALIE"
   | "DEPEG"
   | "DEREGISTRATION"
-  | "BREAK_STATE";
+  | "EMISSION_ZERO"
+  | "SLIPPAGE_HIGH";
 
 export type RiskOverrideResult = {
-  isOverridden: boolean;
-  isWarning: boolean;           // 1 hard condition → warning badge only
+  isOverridden: boolean;       // Critical override (score >= 0.85)
+  isWarning: boolean;          // Warning (score >= 0.70)
   systemStatus: SystemStatus;
   overrideReasons: string[];
-  hardConditions: HardCondition[];
+  overrideScore: number;       // 0..1 weighted score
+  flags: OverrideFlag[];
+  /** @deprecated use flags instead */
+  hardConditions: OverrideFlag[];
 };
 
-// ── Cooldown cache (in-memory, per session) ──
-const overrideCooldowns = new Map<number, number>(); // netuid → timestamp
-const COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+/* ── Flag weights ── */
 
-/** Check cooldown: returns true if the override should be suppressed */
-function isCoolingDown(netuid: number): boolean {
-  const lastTs = overrideCooldowns.get(netuid);
-  if (!lastTs) return false;
-  return Date.now() - lastTs < COOLDOWN_MS;
+const FLAG_WEIGHTS: Record<OverrideFlag, number> = {
+  POOL_FAIBLE:         0.35,   // fort
+  ZONE_CRITIQUE_STATE: 0.30,   // fort
+  LIQUIDITY_STRESS:    0.30,   // fort
+  DEPEG:               0.50,   // très fort
+  DEREGISTRATION:      0.50,   // très fort
+  EMISSION_ZERO:       0.25,   // moyen-fort
+  UID_FAIBLE:          0.12,   // faible-moyen
+  VOL_MC_ANOMALIE:     0.18,   // moyen
+  SLIPPAGE_HIGH:       0.20,   // moyen
+};
+
+/* ── Thresholds ── */
+
+const OVERRIDE_WARNING_THRESHOLD = 0.70;
+const OVERRIDE_CRITICAL_THRESHOLD = 0.85;
+const MIN_FLAGS_FOR_OVERRIDE = 2;
+
+const THRESHOLDS = {
+  TAO_POOL_CRITICAL: 5,        // TAO in pool < 5
+  LIQUIDITY_USD_CRITICAL: 500,  // < $500
+  VOL_MC_MIN: 0.005,           // < 0.5%
+  SLIPPAGE_5K: 0.05,           // > 5%
+  MINERS_MIN: 3,               // < 3 active miners
+};
+
+/* ── Cooldown cache ── */
+
+type CooldownEntry = { ts: number; score: number };
+const overrideCooldowns = new Map<number, CooldownEntry>();
+const COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+const RE_ALERT_DELTA = 0.15;        // re-alert if score jumps +0.15
+
+function shouldSuppress(netuid: number, currentScore: number): boolean {
+  const entry = overrideCooldowns.get(netuid);
+  if (!entry) return false;
+  const elapsed = Date.now() - entry.ts;
+  if (elapsed >= COOLDOWN_MS) return false;
+  // Re-alert if score increased significantly
+  if (currentScore - entry.score >= RE_ALERT_DELTA) return false;
+  return true;
 }
 
-/** Record an override emission */
-function recordOverride(netuid: number): void {
-  overrideCooldowns.set(netuid, Date.now());
+function recordOverride(netuid: number, score: number): void {
+  overrideCooldowns.set(netuid, { ts: Date.now(), score });
 }
 
 /** Clear cooldown (for testing) */
@@ -45,19 +83,8 @@ export function clearOverrideCooldowns(): void {
   overrideCooldowns.clear();
 }
 
-// ── Thresholds ──
-const THRESHOLDS = {
-  TAO_POOL_CRITICAL: 5,       // TAO in pool < 5 TAO
-  LIQUIDITY_USD_CRITICAL: 500, // liquidity < $500
-  VOL_MC_MIN: 0.005,          // volume/MC < 0.5%
-  SLIPPAGE_5K: 0.05,          // simulated slippage > 5% on $5k
-};
+/* ── Main evaluation ── */
 
-/**
- * Evaluate hard conditions for a subnet.
- * Override triggers ONLY if ≥2 hard conditions are met.
- * Single condition → warning only (badge, no action override).
- */
 export function evaluateRiskOverride(params: {
   netuid: number;
   state: string | null;
@@ -65,126 +92,127 @@ export function evaluateRiskOverride(params: {
   risk: number;
   quality: number;
   liquidityCollapse?: boolean;
-  // New v2 params (optional, from metrics)
   emissionTao?: number;
   taoInPool?: number;
   liquidityUsd?: number;
   volumeMcRatio?: number;
   slippagePct?: number;
+  minersActive?: number;
 }): RiskOverrideResult {
   const {
     netuid, state, psi, risk, quality, liquidityCollapse,
-    emissionTao, taoInPool, liquidityUsd, volumeMcRatio, slippagePct,
+    emissionTao, taoInPool, liquidityUsd, volumeMcRatio, slippagePct, minersActive,
   } = params;
 
-  const hardConditions: HardCondition[] = [];
+  const flags: OverrideFlag[] = [];
   const reasons: string[] = [];
   let systemStatus: SystemStatus = "OK";
 
-  // ── Hard condition checks ──
+  // ── Flag detection ──
 
-  // 1. DEPEG
+  // 1. DEPEG (très fort)
   if (state === "DEPEG" || state === "DEPEG_WARNING" || state === "DEPEG_CRITICAL") {
-    hardConditions.push("DEPEG");
+    flags.push("DEPEG");
     reasons.push("Depeg détecté");
     systemStatus = "DEPEG";
   }
 
-  // 2. Deregistration
+  // 2. Deregistration (très fort)
   if (state === "DEREGISTRATION") {
-    hardConditions.push("DEREGISTRATION");
+    flags.push("DEREGISTRATION");
     reasons.push("Désenregistrement");
     systemStatus = "DEREGISTRATION";
   }
 
-  // 3. BREAK/EXIT_FAST (zone critique)
+  // 3. Zone critique (fort)
   if (state === "BREAK" || state === "EXIT_FAST") {
-    hardConditions.push("BREAK_STATE");
+    flags.push("ZONE_CRITIQUE_STATE");
     reasons.push("Zone critique active");
   }
 
-  // 4. Emission zero or near-zero
-  if (emissionTao !== undefined && emissionTao <= 0.001) {
-    hardConditions.push("EMISSION_ZERO");
-    reasons.push("Émission nulle/critique");
-  }
-
-  // 5. TAO in pool critical
+  // 4. Pool faible (fort)
   if (taoInPool !== undefined && taoInPool < THRESHOLDS.TAO_POOL_CRITICAL) {
-    hardConditions.push("TAO_POOL_CRITICAL");
+    flags.push("POOL_FAIBLE");
     reasons.push(`TAO en pool critique (${taoInPool.toFixed(1)})`);
   }
 
-  // 6. Liquidity USD critical
+  // 5. Liquidity stress (fort)
   if (liquidityUsd !== undefined && liquidityUsd < THRESHOLDS.LIQUIDITY_USD_CRITICAL) {
-    hardConditions.push("LIQUIDITY_USD_CRITICAL");
+    flags.push("LIQUIDITY_STRESS");
     reasons.push(`Liquidité critique ($${Math.round(liquidityUsd)})`);
   }
-
-  // 7. Volume/MC ratio too low
-  if (volumeMcRatio !== undefined && volumeMcRatio < THRESHOLDS.VOL_MC_MIN) {
-    hardConditions.push("VOL_MC_LOW");
-    reasons.push(`Vol/MC trop faible (${(volumeMcRatio * 100).toFixed(2)}%)`);
-  }
-
-  // 8. Slippage high (simulated)
-  if (slippagePct !== undefined && slippagePct > THRESHOLDS.SLIPPAGE_5K) {
-    hardConditions.push("SLIPPAGE_HIGH");
-    reasons.push(`Slippage élevé (${(slippagePct * 100).toFixed(1)}%)`);
-  }
-
-  // 9. Liquidity collapse (legacy compat)
-  if (liquidityCollapse && !hardConditions.includes("LIQUIDITY_USD_CRITICAL")) {
-    hardConditions.push("LIQUIDITY_USD_CRITICAL");
+  if (liquidityCollapse && !flags.includes("LIQUIDITY_STRESS")) {
+    flags.push("LIQUIDITY_STRESS");
     reasons.push("Effondrement liquidité");
   }
 
-  // 10. PSI overheating + low quality → counts as hard condition
-  if (psi > 85 && quality < 30) {
-    // Not a hard condition by itself, but contributes to warning
-    reasons.push(`PSI surchauffe (${psi}) qualité insuffisante (${quality})`);
+  // 6. Emission zero (moyen-fort)
+  if (emissionTao !== undefined && emissionTao <= 0.001) {
+    flags.push("EMISSION_ZERO");
+    reasons.push("Émission nulle/critique");
   }
 
-  // 11. High risk → contributes to warning only
-  if (risk > 85) {
-    reasons.push(`Risque critique (${risk})`);
+  // 7. Vol/MC anomalie (moyen)
+  if (volumeMcRatio !== undefined && volumeMcRatio < THRESHOLDS.VOL_MC_MIN) {
+    flags.push("VOL_MC_ANOMALIE");
+    reasons.push(`Vol/MC trop faible (${(volumeMcRatio * 100).toFixed(2)}%)`);
   }
 
-  // ── Decision: Override vs Warning vs OK ──
-  const hardCount = hardConditions.length;
-  const isOverrideCandidate = hardCount >= 2;
-  const isWarningCandidate = hardCount === 1;
+  // 8. Slippage high (moyen)
+  if (slippagePct !== undefined && slippagePct > THRESHOLDS.SLIPPAGE_5K) {
+    flags.push("SLIPPAGE_HIGH");
+    reasons.push(`Slippage élevé (${(slippagePct * 100).toFixed(1)}%)`);
+  }
 
-  // Apply cooldown: suppress repeated overrides for same subnet within 6h
+  // 9. UID faible (faible-moyen)
+  if (minersActive !== undefined && minersActive < THRESHOLDS.MINERS_MIN) {
+    flags.push("UID_FAIBLE");
+    reasons.push(`UIDs actifs faibles (${minersActive})`);
+  }
+
+  // ── Compute weighted overrideScore ──
+  let overrideScore = 0;
+  for (const f of flags) {
+    overrideScore += FLAG_WEIGHTS[f] || 0;
+  }
+  overrideScore = Math.min(overrideScore, 1.0);
+
+  // ── Decision: requires nb_flags >= 2 AND score threshold ──
+  const flagCount = flags.length;
   let isOverridden = false;
   let isWarning = false;
 
-  if (isOverrideCandidate) {
-    if (isCoolingDown(netuid)) {
-      // Cooldown active: downgrade to warning
+  if (flagCount >= MIN_FLAGS_FOR_OVERRIDE) {
+    if (overrideScore >= OVERRIDE_CRITICAL_THRESHOLD) {
+      // Critical override
+      if (shouldSuppress(netuid, overrideScore)) {
+        isWarning = true; // cooldown → downgrade to warning
+      } else {
+        isOverridden = true;
+        recordOverride(netuid, overrideScore);
+      }
+    } else if (overrideScore >= OVERRIDE_WARNING_THRESHOLD) {
       isWarning = true;
-    } else {
-      isOverridden = true;
-      recordOverride(netuid);
     }
-  } else if (isWarningCandidate) {
+  } else if (flagCount === 1 && overrideScore >= 0.30) {
+    // Single strong flag → surveillance only
     isWarning = true;
   }
 
   // Determine system status
   if (isOverridden) {
     if (systemStatus === "OK") {
-      systemStatus = hardConditions.some(c => c === "DEPEG" || c === "DEREGISTRATION")
-        ? systemStatus // already set above
+      systemStatus = flags.includes("DEPEG") || flags.includes("DEREGISTRATION")
+        ? systemStatus
         : "ZONE_CRITIQUE";
     }
   } else if (isWarning) {
     if (systemStatus === "OK") systemStatus = "SURVEILLANCE";
   }
 
-  // Audit log
+  // Audit log (only for non-OK)
   if (isOverridden || isWarning) {
-    console.log(`[OVERRIDE] SN-${netuid}: ${isOverridden ? 'OVERRIDE' : 'WARNING'} | hard=${hardCount} | ${hardConditions.join(',')} | reasons=${reasons.join('; ')}`);
+    console.log(`[OVERRIDE-v3] SN-${netuid}: ${isOverridden ? 'CRITICAL' : 'WARNING'} | score=${overrideScore.toFixed(2)} | flags=${flagCount} [${flags.join(',')}] | ${reasons.join('; ')}`);
   }
 
   return {
@@ -192,7 +220,9 @@ export function evaluateRiskOverride(params: {
     isWarning,
     systemStatus,
     overrideReasons: reasons,
-    hardConditions,
+    overrideScore: Math.round(overrideScore * 100) / 100,
+    flags,
+    hardConditions: flags, // backward compat
   };
 }
 
