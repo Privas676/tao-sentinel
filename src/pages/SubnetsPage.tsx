@@ -131,6 +131,8 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
   );
 }
 
+
+
 type SortCol = "netuid" | "name" | "status" | "dstate" | "price" | "var30d" | "spark" | "opp" | "risk" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | null;
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
 
@@ -385,7 +387,7 @@ export default function SubnetsPage() {
                             {sev >= 3 ? "🚨" : sev >= 2 ? "⚠" : "👁"} {stateLabel(st)}
                           </span>
                           {/* Rich tooltip */}
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover/ds:opacity-100 transition-opacity duration-150 z-50"
+                          <div className={`absolute left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover/ds:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                             style={{ width: 220 }}>
                             <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
                               style={{ background: "rgba(10,10,14,0.97)", border: `1px solid ${col}30`, boxShadow: `0 4px 24px rgba(0,0,0,0.7), 0 0 12px ${col}10` }}>
@@ -450,7 +452,7 @@ export default function SubnetsPage() {
                   <td className="py-3 px-2 text-right font-bold text-sm relative group/opp" style={{ color: oppC }}>
                     {r.opp}
                     {/* Opportunity ScoreFactors tooltip */}
-                    <div className="absolute bottom-full right-0 mb-2 pointer-events-none opacity-0 group-hover/opp:opacity-100 transition-opacity duration-150 z-50"
+                    <div className={`absolute right-0 pointer-events-none opacity-0 group-hover/opp:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                       style={{ width: 230 }}>
                       <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
                         style={{ background: "rgba(10,10,14,0.97)", border: "1px solid rgba(255,215,0,0.2)", boxShadow: "0 4px 24px rgba(0,0,0,0.7)" }}>
@@ -490,7 +492,7 @@ export default function SubnetsPage() {
                   <td className="py-3 px-2 text-right font-bold text-sm relative group/rsk" style={{ color: rskC }}>
                     {r.risk}
                     {/* Risk ScoreFactors tooltip */}
-                    <div className="absolute bottom-full right-0 mb-2 pointer-events-none opacity-0 group-hover/rsk:opacity-100 transition-opacity duration-150 z-50"
+                    <div className={`absolute right-0 pointer-events-none opacity-0 group-hover/rsk:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                       style={{ width: 230 }}>
                       <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
                         style={{ background: "rgba(10,10,14,0.97)", border: "1px solid rgba(229,57,53,0.2)", boxShadow: "0 4px 24px rgba(0,0,0,0.7)" }}>
