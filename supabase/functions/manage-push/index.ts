@@ -5,6 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const ALLOWED_ACTIONS = ["get-vapid-key", "subscribe", "unsubscribe", "send-test"];
+
 /**
  * Generate VAPID key pair using Web Crypto API (P-256 / ECDSA)
  */
@@ -36,6 +38,13 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action as string;
 
+    // Validate action parameter
+    if (!action || !ALLOWED_ACTIONS.includes(action)) {
+      return new Response(JSON.stringify({ error: "Invalid action" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── GET or CREATE VAPID keys ──
     if (action === "get-vapid-key") {
       let { data: config } = await sb.from("push_config").select("vapid_public_key").eq("id", 1).maybeSingle();
@@ -59,8 +68,27 @@ Deno.serve(async (req) => {
     // ── SUBSCRIBE ──
     if (action === "subscribe") {
       const { endpoint, p256dh, auth } = body;
-      if (!endpoint || !p256dh || !auth) {
-        return new Response(JSON.stringify({ error: "Missing subscription fields" }), {
+
+      // Validate endpoint is a valid HTTPS URL
+      if (!endpoint || typeof endpoint !== "string" || !endpoint.startsWith("https://")) {
+        return new Response(JSON.stringify({ error: "Invalid endpoint: must be an HTTPS URL" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (endpoint.length > 2048) {
+        return new Response(JSON.stringify({ error: "Endpoint URL too long" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Validate subscription keys
+      if (!p256dh || typeof p256dh !== "string" || p256dh.length < 20 || p256dh.length > 512) {
+        return new Response(JSON.stringify({ error: "Invalid p256dh key" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!auth || typeof auth !== "string" || auth.length < 10 || auth.length > 512) {
+        return new Response(JSON.stringify({ error: "Invalid auth key" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -79,8 +107,8 @@ Deno.serve(async (req) => {
     // ── UNSUBSCRIBE ──
     if (action === "unsubscribe") {
       const { endpoint } = body;
-      if (!endpoint) {
-        return new Response(JSON.stringify({ error: "Missing endpoint" }), {
+      if (!endpoint || typeof endpoint !== "string" || !endpoint.startsWith("https://")) {
+        return new Response(JSON.stringify({ error: "Invalid endpoint" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -92,8 +120,28 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── SEND TEST PUSH ──
+    // ── SEND TEST PUSH (requires authentication) ──
     if (action === "send-test") {
+      // Verify caller is authenticated
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const userClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: { user }, error: userErr } = await userClient.auth.getUser();
+      if (userErr || !user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Insert a test GO event, then invoke send-push-notifications
       const { error: evErr } = await sb.from("events").insert({
         type: "GO",
@@ -125,7 +173,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("manage-push error:", e);
-    return new Response(JSON.stringify({ error: String(e) }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
