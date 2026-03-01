@@ -26,6 +26,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
 import { evaluateKillSwitch, type KillSwitchResult } from "@/lib/push-kill-switch";
+import { useAuditLogger } from "@/hooks/use-audit-log";
 
 /* ═══════════════════════════════════════ */
 /*          SPARKLINE HELPER               */
@@ -537,6 +538,16 @@ export default function AlienGauge() {
       criticalSurgeStartedAt: criticalSurgeRef.current,
     });
   }, [enrichedSignals, dataConfidence, fleetDistribution]);
+
+  // ── Audit Logger ──
+  useAuditLogger(
+    enrichedSignals,
+    scoreTimestamp,
+    dataAlignment ?? "UNKNOWN",
+    dataConfidence,
+    killSwitch,
+    fleetDistribution,
+  );
 
   const [panelSignal, setPanelSignal] = useState<DashSignal | null>(null);
   const isMobile = useIsMobile();

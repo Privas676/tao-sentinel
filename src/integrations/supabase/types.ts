@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          alignment_status: string | null
+          data_confidence: number | null
+          decision_reason: string | null
+          engine_version: string
+          event_type: string
+          id: number
+          inputs: Json
+          kill_switch_active: boolean | null
+          kill_switch_triggers: Json | null
+          netuid: number | null
+          outputs: Json
+          snapshot_ids: Json
+          subnet_count: number | null
+          top_factors: Json
+          ts: string
+        }
+        Insert: {
+          alignment_status?: string | null
+          data_confidence?: number | null
+          decision_reason?: string | null
+          engine_version?: string
+          event_type: string
+          id?: never
+          inputs?: Json
+          kill_switch_active?: boolean | null
+          kill_switch_triggers?: Json | null
+          netuid?: number | null
+          outputs?: Json
+          snapshot_ids?: Json
+          subnet_count?: number | null
+          top_factors?: Json
+          ts?: string
+        }
+        Update: {
+          alignment_status?: string | null
+          data_confidence?: number | null
+          decision_reason?: string | null
+          engine_version?: string
+          event_type?: string
+          id?: never
+          inputs?: Json
+          kill_switch_active?: boolean | null
+          kill_switch_triggers?: Json | null
+          netuid?: number | null
+          outputs?: Json
+          snapshot_ids?: Json
+          subnet_count?: number | null
+          top_factors?: Json
+          ts?: string
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           evidence: Json | null

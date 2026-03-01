@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useI18n, Lang } from "@/lib/i18n";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useDelistMode } from "@/hooks/use-delist-mode";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import type { DelistMode } from "@/lib/delist-risk";
+import { useAuditExport, useAuditReplay, type ReplayEntry } from "@/hooks/use-audit-log";
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
@@ -10,6 +12,10 @@ export default function SettingsPage() {
   const { delistMode, setDelistMode } = useDelistMode();
   const { dataConfidence } = useSubnetScores();
   const fr = lang === "fr";
+  const { exportAudit, isExporting } = useAuditExport();
+  const replay = useAuditReplay();
+  const [replayHours, setReplayHours] = useState(24);
+  const [replayNetuid, setReplayNetuid] = useState("");
 
   // Minor divergences toggle removed — TMC decoupled from alerts
 
@@ -215,6 +221,204 @@ export default function SettingsPage() {
               {fr ? "Chargement…" : "Loading…"}
             </div>
           )}
+        </div>
+
+        {/* Audit Log Export */}
+        <div>
+          <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
+            {fr ? "📋 AUDIT LOG — EXPORT" : "📋 AUDIT LOG — EXPORT"}
+          </label>
+          <div className="border border-white/10 rounded-lg p-4 space-y-3">
+            <p className="font-mono text-[10px] text-white/30">
+              {fr
+                ? "Exporter l'historique des décisions du moteur (scoring, alertes, kill switch)."
+                : "Export engine decision history (scoring, alerts, kill switch)."}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => exportAudit("csv", 24)}
+                disabled={isExporting}
+                className="font-mono text-[11px] px-4 py-2 rounded-lg transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(255,255,255,0.6)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  opacity: isExporting ? 0.4 : 1,
+                }}
+              >
+                {isExporting ? "…" : "CSV (24h)"}
+              </button>
+              <button
+                onClick={() => exportAudit("json", 24)}
+                disabled={isExporting}
+                className="font-mono text-[11px] px-4 py-2 rounded-lg transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(255,255,255,0.6)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  opacity: isExporting ? 0.4 : 1,
+                }}
+              >
+                {isExporting ? "…" : "JSON (24h)"}
+              </button>
+              <button
+                onClick={() => exportAudit("csv", 168)}
+                disabled={isExporting}
+                className="font-mono text-[11px] px-4 py-2 rounded-lg transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(255,255,255,0.6)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  opacity: isExporting ? 0.4 : 1,
+                }}
+              >
+                {isExporting ? "…" : "CSV (7d)"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Replay Mode */}
+        <div>
+          <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
+            {fr ? "🔄 REPLAY — BACKTEST DÉCISIONS" : "🔄 REPLAY — BACKTEST DECISIONS"}
+          </label>
+          <div className="border border-white/10 rounded-lg p-4 space-y-3">
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <span className="font-mono text-[10px] text-white/30 block mb-1">
+                  {fr ? "Fenêtre (heures)" : "Window (hours)"}
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={168}
+                  value={replayHours}
+                  onChange={e => setReplayHours(Number(e.target.value) || 24)}
+                  className="font-mono text-xs w-full px-3 py-2 rounded-lg"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    color: "rgba(255,255,255,0.7)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                  }}
+                />
+              </div>
+              <div className="flex-1">
+                <span className="font-mono text-[10px] text-white/30 block mb-1">
+                  {fr ? "Subnet (optionnel)" : "Subnet (optional)"}
+                </span>
+                <input
+                  type="number"
+                  placeholder="ex: 18"
+                  value={replayNetuid}
+                  onChange={e => setReplayNetuid(e.target.value)}
+                  className="font-mono text-xs w-full px-3 py-2 rounded-lg"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    color: "rgba(255,255,255,0.7)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                  }}
+                />
+              </div>
+              <button
+                onClick={() => {
+                  const to = new Date();
+                  const from = new Date(to.getTime() - replayHours * 3600000);
+                  const nid = replayNetuid ? Number(replayNetuid) : undefined;
+                  replay.loadReplay(from, to, nid);
+                }}
+                disabled={replay.isLoading}
+                className="font-mono text-[11px] px-4 py-2 rounded-lg transition-all whitespace-nowrap"
+                style={{
+                  background: "rgba(76,175,80,0.1)",
+                  color: "rgba(76,175,80,0.8)",
+                  border: "1px solid rgba(76,175,80,0.2)",
+                  opacity: replay.isLoading ? 0.4 : 1,
+                }}
+              >
+                {replay.isLoading ? "…" : (fr ? "Charger" : "Load")}
+              </button>
+            </div>
+
+            {/* Replay viewer */}
+            {replay.total > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] text-white/40">
+                    {replay.cursor + 1} / {replay.total}
+                  </span>
+                  <div className="flex gap-1">
+                    <button onClick={() => replay.step(-10)} className="font-mono text-[10px] px-2 py-1 rounded" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }}>⏪</button>
+                    <button onClick={() => replay.step(-1)} className="font-mono text-[10px] px-2 py-1 rounded" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }}>◀</button>
+                    <button onClick={() => replay.step(1)} className="font-mono text-[10px] px-2 py-1 rounded" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }}>▶</button>
+                    <button onClick={() => replay.step(10)} className="font-mono text-[10px] px-2 py-1 rounded" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }}>⏩</button>
+                  </div>
+                </div>
+
+                {/* Scrubber */}
+                <input
+                  type="range"
+                  min={0}
+                  max={replay.total - 1}
+                  value={replay.cursor}
+                  onChange={e => replay.setCursor(Number(e.target.value))}
+                  className="w-full h-1 accent-green-500/60"
+                  style={{ background: "rgba(255,255,255,0.05)" }}
+                />
+
+                {/* Current entry detail */}
+                {replay.current && (
+                  <div className="border border-white/[0.06] rounded-lg p-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] text-white/60">
+                        {new Date(replay.current.ts).toLocaleString()}
+                      </span>
+                      <span className="font-mono text-[10px] px-2 py-0.5 rounded-full" style={{
+                        background: replay.current.event_type === "KILL_SWITCH"
+                          ? "rgba(229,57,53,0.15)"
+                          : replay.current.event_type === "STATE_CHANGE"
+                          ? "rgba(255,193,7,0.15)"
+                          : "rgba(76,175,80,0.15)",
+                        color: replay.current.event_type === "KILL_SWITCH"
+                          ? "rgba(229,57,53,0.8)"
+                          : replay.current.event_type === "STATE_CHANGE"
+                          ? "rgba(255,193,7,0.8)"
+                          : "rgba(76,175,80,0.8)",
+                      }}>
+                        {replay.current.event_type}
+                      </span>
+                    </div>
+                    {replay.current.netuid != null && (
+                      <div className="font-mono text-[10px] text-white/40">SN-{replay.current.netuid}</div>
+                    )}
+                    {replay.current.decision_reason && (
+                      <div className="font-mono text-[10px] text-white/50 italic">{replay.current.decision_reason}</div>
+                    )}
+                    {replay.current.data_confidence != null && (
+                      <div className="font-mono text-[10px] text-white/30">
+                        Confidence: {replay.current.data_confidence}%
+                        {replay.current.kill_switch_active && " · 🛡 SAFE MODE"}
+                      </div>
+                    )}
+                    <details className="mt-1">
+                      <summary className="font-mono text-[9px] text-white/20 cursor-pointer">
+                        {fr ? "Détail JSON" : "JSON detail"}
+                      </summary>
+                      <pre className="font-mono text-[8px] text-white/20 mt-1 max-h-32 overflow-auto whitespace-pre-wrap">
+                        {JSON.stringify({ inputs: replay.current.inputs, outputs: replay.current.outputs }, null, 2)}
+                      </pre>
+                    </details>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {replay.total === 0 && !replay.isLoading && (
+              <p className="font-mono text-[10px] text-white/20 text-center py-2">
+                {fr ? "Aucune entrée. Lancez d'abord le chargement." : "No entries. Load data first."}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
