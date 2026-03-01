@@ -134,7 +134,7 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
 
 
 
-type SortCol = "netuid" | "name" | "status" | "dstate" | "price" | "var30d" | "spark" | "opp" | "risk" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | null;
+type SortCol = "netuid" | "name" | "status" | "dstate" | "price" | "var30d" | "spark" | "opp" | "risk" | "depeg" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | null;
 type ViewMode = "all" | "opportunities" | "risks" | "mine";
 
 function scColor(state: SmartCapitalState): string {
@@ -206,6 +206,7 @@ export default function SubnetsPage() {
             case "momentum": av = momRank(a.momentumLabel); bv = momRank(b.momentumLabel); break;
             case "sc": av = scRank(a.sc); bv = scRank(b.sc); break;
             case "confiance": av = a.confianceScore; bv = b.confianceScore; break;
+            case "depeg": av = a.depegProbability; bv = b.depegProbability; break;
             case "dstate": {
               const dsA = decisionStates?.get(a.netuid);
               const dsB = decisionStates?.get(b.netuid);
@@ -336,6 +337,11 @@ export default function SubnetsPage() {
               <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("risk")}>
                 {t("sub.risk")} {sortCol === "risk" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
+              {mode === "risks" && (
+                <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("depeg")}>
+                  Depeg % {sortCol === "depeg" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+                </th>
+              )}
               <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("asymmetry")}>
                 AS {sortCol === "asymmetry" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
@@ -573,6 +579,35 @@ export default function SubnetsPage() {
                       </div>
                     </div>
                   </td>
+                  {mode === "risks" && (() => {
+                    const dp = r.depegProbability;
+                    const dpColor = dp >= 85 ? "rgba(229,57,53,0.95)" : dp >= 70 ? "rgba(255,152,0,0.9)" : dp >= 30 ? "rgba(255,193,7,0.7)" : "rgba(76,175,80,0.7)";
+                    const dpLabel = r.depegState === "DEPEG_CONFIRMED" ? "🔴" : r.depegState === "DEPEG_HIGH_RISK" ? "🟠" : "";
+                    return (
+                      <td className="py-3 px-2 relative group/depeg">
+                        <div className="flex items-center gap-1.5 justify-center">
+                          <div className="w-14 h-2 rounded-full bg-white/5 overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${dp}%`, background: dpColor }} />
+                          </div>
+                          <span className="font-mono text-[10px] font-bold" style={{ color: dpColor }}>
+                            {dpLabel}{dp}%
+                          </span>
+                        </div>
+                        {dp > 0 && r.depegSignals.length > 0 && (
+                          <div className={`absolute left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover/depeg:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
+                            style={{ width: 200 }}>
+                            <div className="rounded-lg px-3 py-2 font-mono text-[10px] space-y-1"
+                              style={{ background: "rgba(10,10,14,0.97)", border: `1px solid ${dpColor}30`, boxShadow: "0 4px 20px rgba(0,0,0,0.7)" }}>
+                              <div className="font-bold text-[11px]" style={{ color: dpColor }}>Depeg {dp}%</div>
+                              {r.depegSignals.map((s, i) => (
+                                <div key={i} className="text-white/55 text-[9px]">• {s}</div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })()}
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: r.asymmetry > 20 ? "rgba(76,175,80,0.8)" : r.asymmetry > 0 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)" }}>
                     {r.asymmetry > 0 ? "+" : ""}{r.asymmetry}
                   </td>
