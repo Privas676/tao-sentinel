@@ -446,8 +446,70 @@ export default function SubnetsPage() {
                     {r.priceVar30d != null ? `${r.priceVar30d > 0 ? "+" : ""}${r.priceVar30d.toFixed(0)}%` : "—"}
                   </td>
                   <td className="py-3 px-2 text-center"><Sparkline data={r.spark} /></td>
-                  <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: oppC }}>{r.opp}</td>
-                  <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: rskC }}>{r.risk}</td>
+                  <td className="py-3 px-2 text-right font-bold text-sm relative group/opp" style={{ color: oppC }}>
+                    {r.opp}
+                    {/* Opportunity factors tooltip */}
+                    <div className="absolute bottom-full right-0 mb-2 pointer-events-none opacity-0 group-hover/opp:opacity-100 transition-opacity duration-150 z-50"
+                      style={{ width: 200 }}>
+                      <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1"
+                        style={{ background: "rgba(10,10,14,0.97)", border: "1px solid rgba(255,215,0,0.2)", boxShadow: "0 4px 24px rgba(0,0,0,0.7)" }}>
+                        <div className="font-bold text-[11px] tracking-wider" style={{ color: oppC }}>
+                          OPP {r.opp}
+                        </div>
+                        {(() => {
+                          const h = r.healthScores;
+                          const factors = [
+                            { label: "Momentum", value: Math.round(clamp(r.psi - 40, 0, 60) / 60 * 100), weight: 30 },
+                            { label: "Volume", value: Math.round(h.volumeHealth), weight: 20 },
+                            { label: "Activité", value: Math.round(h.activityHealth), weight: 20 },
+                            { label: "Smart Capital", value: r.sc === "ACCUMULATION" ? 70 : r.sc === "DISTRIBUTION" ? 20 : 45, weight: 15 },
+                            { label: "Liquidité", value: Math.round(h.liquidityHealth), weight: 0 },
+                          ].sort((a, b) => (b.value * b.weight) - (a.value * a.weight)).slice(0, 3);
+                          return factors.map((f, i) => (
+                            <div key={i} className="flex justify-between text-white/50">
+                              <span>{f.label}</span>
+                              <span className="text-white/75 font-bold">{f.value}</span>
+                            </div>
+                          ));
+                        })()}
+                        {r.isOverridden && <div className="text-red-400/80 text-[9px] pt-1 border-t border-white/5">⛔ Override actif → OPP = 0</div>}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-2 text-right font-bold text-sm relative group/rsk" style={{ color: rskC }}>
+                    {r.risk}
+                    {/* Risk factors tooltip */}
+                    <div className="absolute bottom-full right-0 mb-2 pointer-events-none opacity-0 group-hover/rsk:opacity-100 transition-opacity duration-150 z-50"
+                      style={{ width: 200 }}>
+                      <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1"
+                        style={{ background: "rgba(10,10,14,0.97)", border: "1px solid rgba(229,57,53,0.2)", boxShadow: "0 4px 24px rgba(0,0,0,0.7)" }}>
+                        <div className="font-bold text-[11px] tracking-wider" style={{ color: rskC }}>
+                          RISK {r.risk}
+                        </div>
+                        {(() => {
+                          const h = r.healthScores;
+                          const factors = [
+                            { label: "Liquidité ↓", value: Math.round(100 - h.liquidityHealth), weight: 30 },
+                            { label: "Émission", value: Math.round(h.emissionPressure), weight: 25 },
+                            { label: "Dilution", value: Math.round(h.dilutionRisk), weight: 25 },
+                            { label: "Activité ↓", value: Math.round(100 - h.activityHealth), weight: 20 },
+                            { label: "Haircut", value: Math.round(Math.abs(r.recalc.liqHaircut)), weight: 0 },
+                          ].sort((a, b) => (b.value * b.weight) - (a.value * a.weight)).slice(0, 3);
+                          return factors.map((f, i) => (
+                            <div key={i} className="flex justify-between text-white/50">
+                              <span>{f.label}</span>
+                              <span className="text-white/75 font-bold">{f.value}</span>
+                            </div>
+                          ));
+                        })()}
+                        {r.delistCategory !== "NORMAL" && (
+                          <div className="text-red-400/80 text-[9px] pt-1 border-t border-white/5">
+                            {r.delistCategory === "DEPEG_PRIORITY" ? "🔴 DEPEG" : "🟠 Near Delist"} · Score {r.delistScore}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: r.asymmetry > 20 ? "rgba(76,175,80,0.8)" : r.asymmetry > 0 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)" }}>
                     {r.asymmetry > 0 ? "+" : ""}{r.asymmetry}
                   </td>
