@@ -6,6 +6,7 @@ import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import type { DelistMode } from "@/lib/delist-risk";
 import { useAuditExport, useAuditReplay, type ReplayEntry } from "@/hooks/use-audit-log";
 import BacktestPanel from "@/components/BacktestPanel";
+import PushLogDashboard from "@/components/PushLogDashboard";
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
@@ -419,6 +420,21 @@ export default function SettingsPage() {
                 {fr ? "Aucune entrée. Lancez d'abord le chargement." : "No entries. Load data first."}
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Push Log Dashboard */}
+        <div>
+          <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
+            {fr ? "📡 PUSH LOG — NOTIFICATIONS" : "📡 PUSH LOG — NOTIFICATIONS"}
+          </label>
+          <div className="border border-white/10 rounded-lg p-4">
+            <p className="font-mono text-[10px] text-white/30 mb-3">
+              {fr
+                ? "Historique des notifications push : statut, priorité, retries et déduplication."
+                : "Push notification history: status, priority, retries and deduplication."}
+            </p>
+            <PushLogDashboard />
           </div>
         </div>
 
