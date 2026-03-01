@@ -491,6 +491,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============= PIPELINE SNAPSHOT (for backtest) =============
+    const snapshotData = subnetRaws.map((s, i) => ({
+      netuid: s.netuid,
+      // Raw metrics
+      price: s.priceNow, price_5m: s.price5m, price_1h: s.price1h,
+      liq: s.liqNow, liq_1h: s.liq1h,
+      miners: s.minersNow, miners_delta: s.minersDelta,
+      price_max_7d: s.priceMax7d,
+      mpi_raw: s.mpiRaw, M: Math.round(s.M), A: Math.round(s.A),
+      L: Math.round(s.L), B: s.B, Q: s.Q,
+      // Normalized outputs
+      mpi: normalizedMpis[i], quality: normalizedQs[i], confidence: normalizedConfs[i],
+      state: signalUpserts[i]?.state || "NO",
+      gating_fail: s.gatingFail,
+      breakout: s.breakout,
+    }));
+
     // ============= BATCH WRITES =============
     const writeResults = await Promise.all([
       signalUpserts.length > 0
@@ -511,6 +528,13 @@ Deno.serve(async (req) => {
       clearedOverrideIds.length > 0
         ? sb.from("events").delete().in("id", clearedOverrideIds)
         : Promise.resolve({ error: null }),
+      // Write pipeline snapshot
+      sb.from("pipeline_snapshots").insert({
+        ts: nowIso,
+        snapshot: snapshotData,
+        subnet_count: subnetRaws.length,
+        engine_version: "v4",
+      }),
     ]);
 
     for (const r of writeResults) {

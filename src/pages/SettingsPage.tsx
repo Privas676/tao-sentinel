@@ -5,6 +5,7 @@ import { useDelistMode } from "@/hooks/use-delist-mode";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import type { DelistMode } from "@/lib/delist-risk";
 import { useAuditExport, useAuditReplay, type ReplayEntry } from "@/hooks/use-audit-log";
+import BacktestPanel from "@/components/BacktestPanel";
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
@@ -418,6 +419,21 @@ export default function SettingsPage() {
                 {fr ? "Aucune entrée. Lancez d'abord le chargement." : "No entries. Load data first."}
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Backtest Report */}
+        <div>
+          <label className="font-mono text-xs tracking-widest text-white/40 mb-3 block">
+            {fr ? "📊 BACKTEST — FIABILITÉ MOTEUR" : "📊 BACKTEST — ENGINE RELIABILITY"}
+          </label>
+          <div className="border border-white/10 rounded-lg p-4">
+            <p className="font-mono text-[10px] text-white/30 mb-3">
+              {fr
+                ? "Rejoue la DecisionLayer sur les snapshots historiques et mesure : faux positifs, faux négatifs, délai de détection et stabilité (flapping)."
+                : "Replays the DecisionLayer on historical snapshots and measures: false positives, false negatives, detection delay and stability (flapping)."}
+            </p>
+            <BacktestPanel />
           </div>
         </div>
       </div>
