@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const replay = useAuditReplay();
   const [replayHours, setReplayHours] = useState(24);
   const [replayNetuid, setReplayNetuid] = useState("");
+  const [debugMode, setDebugMode] = useState(() => localStorage.getItem("DEBUG_MODE") === "true");
 
   // Minor divergences toggle removed — TMC decoupled from alerts
 
@@ -451,24 +452,22 @@ export default function SettingsPage() {
               </span>
               <button
                 onClick={() => {
-                  const current = localStorage.getItem("DEBUG_MODE") === "true";
-                  localStorage.setItem("DEBUG_MODE", String(!current));
-                  window.dispatchEvent(new Event("storage"));
-                  // Force re-render
-                  setReplayHours(h => h);
+                  const next = !debugMode;
+                  localStorage.setItem("DEBUG_MODE", String(next));
+                  setDebugMode(next);
                 }}
                 className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-all"
                 style={{
-                  background: localStorage.getItem("DEBUG_MODE") === "true" ? "rgba(76,175,80,0.12)" : "rgba(255,255,255,0.05)",
-                  color: localStorage.getItem("DEBUG_MODE") === "true" ? "rgba(76,175,80,0.8)" : "rgba(255,255,255,0.3)",
-                  border: `1px solid ${localStorage.getItem("DEBUG_MODE") === "true" ? "rgba(76,175,80,0.25)" : "rgba(255,255,255,0.08)"}`,
+                  background: debugMode ? "rgba(76,175,80,0.12)" : "rgba(255,255,255,0.05)",
+                  color: debugMode ? "rgba(76,175,80,0.8)" : "rgba(255,255,255,0.3)",
+                  border: `1px solid ${debugMode ? "rgba(76,175,80,0.25)" : "rgba(255,255,255,0.08)"}`,
                 }}
               >
-                {localStorage.getItem("DEBUG_MODE") === "true" ? "ON" : "OFF"}
+                {debugMode ? "ON" : "OFF"}
               </button>
             </div>
 
-            {localStorage.getItem("DEBUG_MODE") === "true" && (
+            {debugMode && (
               <Link
                 to="/quant-diagnostics"
                 className="inline-flex items-center gap-2 font-mono text-[10px] tracking-wider px-3 py-2 rounded-lg transition-all"
