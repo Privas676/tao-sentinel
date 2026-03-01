@@ -12,6 +12,7 @@ import {
   stabilityColor,
   type SmartCapitalState, type RawSignal,
 } from "@/lib/gauge-engine";
+import { type ScoreFactor, topFactors } from "@/lib/score-factors";
 import {
   actionColor, actionBg, actionBorder, actionIcon,
   computeSentinelIndex, sentinelIndexColor, sentinelIndexLabel,
@@ -213,6 +214,78 @@ function SubnetPanel({ signal, open, onClose }: { signal: DashSignal | null; ope
               <div className="font-mono text-[10px] text-white/40 tracking-widest mt-1">{t("gauge.risk")}</div>
             </div>
           </div>
+
+          {/* ── ScoreFactors: Opportunity ── */}
+          <div className="bg-white/[0.02] rounded-lg p-4">
+            <div className="font-mono text-[9px] text-white/30 tracking-widest mb-2.5" style={{ color: oppC }}>
+              TOP CONTRIBUTEURS — OPP {signal.opp}
+            </div>
+            {(() => {
+              const h = signal.healthScores ?? { volumeHealth: 50, activityHealth: 50, liquidityHealth: 50, emissionPressure: 20, dilutionRisk: 20 };
+              const factors: ScoreFactor[] = [
+                { code: "MOMENTUM", label: "Momentum (PSI)", contribution: Math.round(clamp(signal.psi - 40, 0, 60) / 60 * 30), rawValue: signal.psi },
+                { code: "VOLUME", label: "Volume santé", contribution: Math.round(h.volumeHealth / 100 * 20), rawValue: Math.round(h.volumeHealth) },
+                { code: "ACTIVITY", label: "Activité mineurs", contribution: Math.round(h.activityHealth / 100 * 20), rawValue: Math.round(h.activityHealth) },
+                { code: "SMART_CAPITAL", label: "Smart Capital", contribution: signal.sc === "ACCUMULATION" ? 15 : signal.sc === "DISTRIBUTION" ? 3 : 8, rawValue: signal.sc === "ACCUMULATION" ? 70 : signal.sc === "DISTRIBUTION" ? 20 : 45 },
+                { code: "LIQUIDITY", label: "Liquidité", contribution: Math.round(h.liquidityHealth / 100 * 15), rawValue: Math.round(h.liquidityHealth) },
+              ];
+              return topFactors(factors, 3).map((f, i) => (
+                <div key={i} className="mb-2">
+                  <div className="flex justify-between items-center font-mono text-[11px]">
+                    <span className="text-white/50">{f.label}</span>
+                    <span className="text-white/75 font-bold">+{f.contribution}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${clamp((f.rawValue ?? 0), 0, 100)}%`, background: oppC }} />
+                    </div>
+                    <span className="font-mono text-[9px] text-white/30 w-7 text-right">{f.rawValue ?? 0}</span>
+                  </div>
+                </div>
+              ));
+            })()}
+            {signal.isOverridden && <div className="font-mono text-[10px] pt-2 border-t border-white/5" style={{ color: "rgba(229,57,53,0.8)" }}>⛔ Override actif → OPP = 0</div>}
+          </div>
+
+          {/* ── ScoreFactors: Risk ── */}
+          <div className="bg-white/[0.02] rounded-lg p-4">
+            <div className="font-mono text-[9px] text-white/30 tracking-widest mb-2.5" style={{ color: rskC }}>
+              TOP CONTRIBUTEURS — RISK {signal.risk}
+            </div>
+            {(() => {
+              const h = signal.healthScores ?? { volumeHealth: 50, activityHealth: 50, liquidityHealth: 50, emissionPressure: 20, dilutionRisk: 20 };
+              const factors: ScoreFactor[] = [
+                { code: "LIQ_LOW", label: "Liquidité ↓", contribution: Math.round((100 - h.liquidityHealth) / 100 * 30), rawValue: Math.round(100 - h.liquidityHealth) },
+                { code: "EMISSION", label: "Pression émission", contribution: Math.round(h.emissionPressure / 100 * 25), rawValue: Math.round(h.emissionPressure) },
+                { code: "DILUTION", label: "Risque dilution", contribution: Math.round(h.dilutionRisk / 100 * 25), rawValue: Math.round(h.dilutionRisk) },
+                { code: "ACTIVITY_LOW", label: "Activité ↓", contribution: Math.round((100 - h.activityHealth) / 100 * 20), rawValue: Math.round(100 - h.activityHealth) },
+                { code: "HAIRCUT", label: "Haircut prix", contribution: Math.round(Math.min(Math.abs(signal.recalc?.liqHaircut ?? 0), 50) / 50 * 15), rawValue: Math.round(Math.abs(signal.recalc?.liqHaircut ?? 0)) },
+              ];
+              return topFactors(factors, 3).map((f, i) => (
+                <div key={i} className="mb-2">
+                  <div className="flex justify-between items-center font-mono text-[11px]">
+                    <span className="text-white/50">{f.label}</span>
+                    <span className="text-white/75 font-bold">+{f.contribution}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${clamp((f.rawValue ?? 0), 0, 100)}%`, background: rskC }} />
+                    </div>
+                    <span className="font-mono text-[9px] text-white/30 w-7 text-right">{f.rawValue ?? 0}</span>
+                  </div>
+                </div>
+              ));
+            })()}
+            {signal.delistCategory !== "NORMAL" && (
+              <div className="font-mono text-[10px] pt-2 border-t border-white/5 flex justify-between">
+                <span style={{ color: signal.delistCategory === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.9)" : "rgba(255,152,0,0.9)" }}>
+                  {signal.delistCategory === "DEPEG_PRIORITY" ? "🔴 DEPEG" : "🟠 Near Delist"}
+                </span>
+                <span className="text-white/60 font-bold">Score {signal.delistScore}</span>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-center gap-6">
             <div className="text-center">
               <div className="font-mono text-lg font-bold" style={{ color: stabilityColor(signal.stability) }}>{signal.stability}%</div>
