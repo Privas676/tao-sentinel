@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { runBacktest, type BacktestResult, type PipelineSnapshot, type HistoricalEvent } from "@/lib/backtest-engine";
+import { runBacktest, type BacktestResult, type PipelineSnapshot, type HistoricalEvent, type TickMetric } from "@/lib/backtest-engine";
 import { toast } from "sonner";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Period = "7d" | "14d" | "30d" | "60d";
 
@@ -130,6 +131,50 @@ export default function BacktestPanel() {
             />
           </div>
 
+          {/* Sparklines */}
+          {result.tickMetrics.length > 1 && (
+            <div
+              className="p-3 rounded-lg space-y-3"
+              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <div className="text-[10px] tracking-widest uppercase font-bold" style={{ color: "rgba(255,255,255,0.3)" }}>
+                Évolution temporelle
+              </div>
+              <Sparkline
+                data={result.tickMetrics}
+                dataKey="avgMpi"
+                label="MPI moyen"
+                color="#4CAF50"
+                domain={[0, 100]}
+              />
+              <Sparkline
+                data={result.tickMetrics}
+                dataKey="avgConfidence"
+                label="Confiance moyenne"
+                color="#42A5F5"
+                domain={[0, 100]}
+              />
+              <Sparkline
+                data={result.tickMetrics}
+                dataKey="alertCount"
+                label="Alertes / tick"
+                color="#FFC107"
+              />
+              <Sparkline
+                data={result.tickMetrics}
+                dataKey="stateChanges"
+                label="Changements d'état"
+                color="#E53935"
+              />
+              <Sparkline
+                data={result.tickMetrics}
+                dataKey="activeSubnets"
+                label="Subnets actifs"
+                color="#AB47BC"
+              />
+            </div>
+          )}
+
           {/* Details */}
           <div
             className="p-3 rounded-lg space-y-1.5"
@@ -147,6 +192,66 @@ export default function BacktestPanel() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Sparkline component ── */
+
+function Sparkline({ data, dataKey, label, color, domain }: {
+  data: TickMetric[];
+  dataKey: keyof TickMetric;
+  label: string;
+  color: string;
+  domain?: [number, number];
+}) {
+  const formatTime = (ts: string) => {
+    const d = new Date(ts);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-mono text-[9px] tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>
+          {label}
+        </span>
+        <span className="font-mono text-[9px]" style={{ color }}>
+          {data.length > 0 ? String(data[data.length - 1][dataKey]) : "—"}
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height={40}>
+        <AreaChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id={`grad-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          {domain && <YAxis domain={domain} hide />}
+          <XAxis dataKey="ts" hide />
+          <Tooltip
+            contentStyle={{
+              background: "rgba(0,0,0,0.85)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 6,
+              fontSize: 10,
+              fontFamily: "monospace",
+              color: "rgba(255,255,255,0.7)",
+            }}
+            labelFormatter={formatTime}
+            formatter={(value: number) => [value, label]}
+          />
+          <Area
+            type="monotone"
+            dataKey={dataKey}
+            stroke={color}
+            strokeWidth={1.5}
+            fill={`url(#grad-${dataKey})`}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 }
