@@ -6,6 +6,7 @@ import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { analyzeDistribution } from "@/lib/distribution-monitor";
 import { analyzeScoreVolatility, type FleetVolatilityReport } from "@/lib/score-volatility";
 import { supabase } from "@/integrations/supabase/client";
+import CorrelationPanel from "@/components/CorrelationPanel";
 
 /* ── Histogram renderer ── */
 function Histogram({ values, label, bins = 10 }: { values: number[]; label: string; bins?: number }) {
@@ -368,6 +369,11 @@ export default function QuantDiagnosticsPage() {
             <Stat label="% Risk > 80" value={`${pctRiskAbove80}%`} warn={pctRiskAbove80 > 30} />
             <Stat label="% Risk > 85" value={`${riskReport.pctAbove85}%`} warn={riskReport.pctAbove85 > 50} />
           </div>
+        </div>
+
+        {/* ── Correlation Section ── */}
+        <div className="mb-4">
+          <CorrelationPanel psiValues={psiValues} riskValues={riskValues} fr={fr} />
         </div>
 
         {/* ── Score Volatility Section ── */}
