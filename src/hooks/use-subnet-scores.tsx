@@ -1,38 +1,37 @@
 /* ═══════════════════════════════════════ */
 /*   UNIFIED SUBNET SCORES HOOK             */
 /*   Single source of truth for all pages   */
+/*   Orchestrates 3 independent engines:    */
+/*   - StrategicEngine (scoring)            */
+/*   - ProtectionEngine (safety)            */
+/*   - RegimeEngine (global regime)         */
 /* ═══════════════════════════════════════ */
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  clamp, normalizeWithVariance, normalizeOpportunity,
-  computeMomentumScore, computeMomentumScoreV2, assignMomentumLabels,
-  computeStabilitySetup, type SmartCapitalState, type MomentumLabel,
+  clamp, type SmartCapitalState, type MomentumLabel,
 } from "@/lib/gauge-engine";
-import { calibrateScores } from "@/lib/risk-calibration";
-import { deriveSubnetAction, type StrategicAction } from "@/lib/strategy-engine";
-import {
-  evaluateRiskOverride, checkCoherence,
-  type SystemStatus,
-} from "@/lib/risk-override";
+import { computeMomentumScore } from "@/lib/gauge-momentum";
+import { checkCoherence, type SystemStatus } from "@/lib/risk-override";
 import { type SourceMetrics } from "@/lib/data-fusion";
 import {
   extractHealthData, recalculate, computeAllHealthScores,
-  computeHealthRisk, computeHealthOpportunity,
   type HealthScores, type RecalculatedMetrics,
 } from "@/lib/subnet-health";
-import {
-  evaluateAllDelistRisks, computeDelistRiskScore,
-  DEPEG_PRIORITY_MANUAL, HIGH_RISK_NEAR_DELIST_MANUAL,
-  type DelistRiskResult, type SubnetMetricsForDelist, type DelistCategory,
-} from "@/lib/delist-risk";
+import { type DelistCategory } from "@/lib/delist-risk";
 import { useDelistMode } from "@/hooks/use-delist-mode";
 import {
   createSnapshot, checkTimeAlignment, logAlignmentDiag,
-  dataAgeSeconds, type DataSnapshot, type AlignmentStatus,
+  type DataSnapshot, type AlignmentStatus,
 } from "@/lib/data-snapshot";
+import { type StrategicAction } from "@/lib/strategy-subnet";
+
+// ── 3 Independent Engines ──
+import { computeStrategicScores, type StrategicInput } from "@/lib/engine-strategic";
+import { evaluateProtection, type ProtectionInput } from "@/lib/engine-protection";
+import { evaluateRegime, type RegimeInput, type RegimeOutput } from "@/lib/engine-regime";
 
 /* ─── Exported types ─── */
 
@@ -103,17 +102,7 @@ export const SPECIAL_SUBNETS: Record<number, {
   0: { label: "ROOT (system)", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20 },
 };
 
-/* ─── Helper: derive Smart Capital state per subnet ─── */
-function deriveSubnetSC(psi: number, quality: number, conf: number, state: string | null): SmartCapitalState {
-  const accSignal = quality * 0.5 + conf * 0.3 + clamp(psi * 0.2, 0, 20);
-  const distSignal = clamp((100 - quality) * 0.4, 0, 40) +
-    (psi >= 80 && quality < 50 ? 30 : 0) +
-    (state === "BREAK" || state === "EXIT_FAST" ? 25 : 0);
-  const score = clamp(accSignal - distSignal * 0.5 + 30, 0, 100);
-  if (score >= 65) return "ACCUMULATION";
-  if (score <= 35) return "DISTRIBUTION";
-  return "STABLE";
-}
+/* deriveSubnetSC moved to engine-strategic.ts */
 
 type SignalRow = {
   netuid: number | null;
@@ -341,245 +330,190 @@ export function useSubnetScores(): UnifiedScoresResult {
     return result;
   }, [signalsSnapshot, rawPayloadsSnapshot, primaryMetricsSnapshot, taoUsdSnapshot]);
 
-  // ── MAIN SCORING PIPELINE (single source of truth) ──
+  // ── MAIN SCORING PIPELINE (orchestrates 3 independent engines) ──
   const { scoresList, scoresMap, scoreTimestamp } = useMemo(() => {
     if (!signals) return { scoresList: [], scoresMap: new Map<number, UnifiedSubnetScore>(), scoreTimestamp: new Date().toISOString() };
 
     const rate = taoUsd;
     const ts = new Date().toISOString();
 
-    // Step 1: Compute raw scores for all subnets
-    const allRows = signals
+    // ── Phase 0: Extract health data + prepare inputs ──
+    const subnetInputs = signals
       .filter(s => s.netuid != null)
       .map(s => {
+        const netuid = s.netuid!;
         const psi = s.mpi ?? s.score ?? 0;
         const conf = s.confidence_pct ?? 0;
         const quality = s.quality_score ?? 0;
-        const consensus = consensusMap.get(s.netuid!);
-        const dataUncertain = false; // No longer derived from TMC divergence
+        const consensus = consensusMap.get(netuid);
         const confianceScore = consensus?.confianceData ?? 50;
-        const dataConsistencyRisk = 0; // TMC decoupled: no inter-source risk
 
-        // Health engine
-        const payload = rawPayloads?.get(s.netuid!);
+        // Health engine (shared data, both strategic and protection use it)
+        const payload = rawPayloads?.get(netuid);
         const chainData = payload?._chain || {};
-        const healthData = extractHealthData(s.netuid!, payload || {}, chainData, rate);
+        const healthData = extractHealthData(netuid, payload || {}, chainData, rate);
         const recalc = recalculate(healthData);
+        const special = SPECIAL_SUBNETS[netuid];
         let healthScores = computeAllHealthScores(healthData, recalc);
 
-        // Whitelisted subnets: disable speculative penalties (liquidity, volume/MC, emission)
-        if (SPECIAL_SUBNETS[s.netuid!]) {
-          healthScores = {
-            ...healthScores,
-            liquidityHealth: 80,    // neutral — not penalized
-            volumeHealth: 60,       // neutral
-            emissionPressure: 10,   // minimal pressure
-          };
+        if (special) {
+          healthScores = { ...healthScores, liquidityHealth: 80, volumeHealth: 60, emissionPressure: 10 };
         }
 
-        // Smart Capital
-        const sc = deriveSubnetSC(psi, quality, conf, s.state);
-        const scScore = sc === "ACCUMULATION" ? 70 : sc === "DISTRIBUTION" ? 20 : 45;
-
-        // Momentum V2: multi-factor (PSI + price 7d + vol/MC)
-        const sparkline = sparklines?.get(s.netuid!);
+        // Price data
+        const sparkline = sparklines?.get(netuid);
         const priceChange7d = sparkline && sparkline.length >= 2
           ? ((sparkline[sparkline.length - 1] - sparkline[0]) / sparkline[0]) * 100
           : null;
-        const volMcRatio = subnetLatest?.get(s.netuid!)?.volCap ?? null;
-        const momentumScore = computeMomentumScore(psi);
-        const momentumScoreV2 = computeMomentumScoreV2(psi, priceChange7d, volMcRatio);
-        const isCritical = s.state === "BREAK" || s.state === "EXIT_FAST" || s.state === "DEPEG_WARNING" || s.state === "DEPEG_CRITICAL";
-
-        // Pre-hype intensity
-        const preHypeIntensity = (psi > 50 && quality > 40 && sc === "ACCUMULATION") ? clamp(psi - 30, 0, 70) : 0;
-
-        // Health-based risk & opportunity
-        const riskRaw = computeHealthRisk(healthScores, dataConsistencyRisk, recalc);
-        const oppRaw = computeHealthOpportunity(momentumScore, healthScores, scScore, preHypeIntensity, recalc);
+        const slMetrics = subnetLatest?.get(netuid);
+        const volMcRatio = slMetrics?.volCap ?? null;
 
         return {
-          netuid: s.netuid!, psi, conf, quality, state: s.state,
-          name: s.subnet_name || `SN-${s.netuid}`,
-          dataUncertain, confianceScore,
-          oppRaw, riskRaw,
-          momentumScore, momentumScoreV2, isCritical, sc, scScore,
+          netuid, name: s.subnet_name || `SN-${netuid}`,
+          state: s.state, psi, conf, quality,
+          confianceScore, dataUncertain: false,
           healthScores, recalc,
-          displayedCap: (subnetLatest?.get(s.netuid!)?.cap || 0) * rate,
-          displayedLiq: (subnetLatest?.get(s.netuid!)?.liq || 0) * rate,
+          displayedCap: (slMetrics?.cap || 0) * rate,
+          displayedLiq: (slMetrics?.liq || 0) * rate,
+          priceChange7d, volMcRatio,
+          sparklineLen: sparkline?.length ?? 0,
+          slMetrics,
         };
       });
 
-    // Step 1b: Assign momentum labels via percentile ranking
-    const momentumLabels = assignMomentumLabels(
-      allRows.map(r => ({ momentumScoreV2: r.momentumScoreV2, isCritical: r.isCritical }))
-    );
+    // ── Phase 1: STRATEGIC ENGINE (pure scoring, no protection deps) ──
+    const strategicInputs: StrategicInput[] = subnetInputs.map(s => ({
+      netuid: s.netuid, name: s.name, state: s.state,
+      psi: s.psi, conf: s.conf, quality: s.quality,
+      healthScores: s.healthScores, recalc: s.recalc,
+      displayedCap: s.displayedCap, displayedLiq: s.displayedLiq,
+      confianceScore: s.confianceScore, dataUncertain: s.dataUncertain,
+      priceChange7d: s.priceChange7d, volMcRatio: s.volMcRatio,
+      sparklineLen: s.sparklineLen,
+    }));
+    const strategicResults = computeStrategicScores(strategicInputs);
 
-    // Step 2: Normalize
-    const oppPercentile = normalizeOpportunity(allRows.map(r => r.oppRaw));
-    const riskPercentile = normalizeWithVariance(allRows.map(r => r.riskRaw), 3);
+    // ── Phase 2: PROTECTION ENGINE (no strategic deps) ──
+    const protectionResults = new Map<number, ReturnType<typeof evaluateProtection>>();
+    for (const s of subnetInputs) {
+      const special = SPECIAL_SUBNETS[s.netuid];
+      if (special) {
+        // Whitelisted: bypass protection engine
+        protectionResults.set(s.netuid, {
+          netuid: s.netuid,
+          isOverridden: false, isWarning: false,
+          systemStatus: special.forceStatus as SystemStatus,
+          overrideReasons: [], delistCategory: "NORMAL", delistScore: 0,
+        });
+        continue;
+      }
+      const liqTao = s.displayedLiq > 0 && rate > 0 ? s.displayedLiq / rate : 0;
+      const protInput: ProtectionInput = {
+        netuid: s.netuid, state: s.state, psi: s.psi, quality: s.quality,
+        risk: s.healthScores.liquidityHealth < 25 ? 80 : 40, // raw health-based risk indicator
+        liquidityUsd: s.displayedLiq > 0 ? s.displayedLiq : undefined,
+        volumeMcRatio: s.volMcRatio ?? undefined,
+        taoInPool: s.slMetrics?.liq,
+        minersActive: s.slMetrics?.minersActive ?? 10,
+        liqTao, liqUsd: s.displayedLiq,
+        capTao: s.slMetrics?.cap ?? 0, alphaPrice: s.slMetrics?.price ?? 0,
+        priceChange7d: s.priceChange7d, confianceData: s.confianceScore,
+        liqHaircut: s.recalc?.liqHaircut ?? 0,
+        delistMode,
+      };
+      protectionResults.set(s.netuid, evaluateProtection(protInput));
+    }
 
-    // Step 3: Build final scores
-    const scored = allRows.map((r, i) => {
-      const special = SPECIAL_SUBNETS[r.netuid];
+    // ── Phase 3: DECISION LAYER (merges strategic + protection, no new logic) ──
+    const scored = strategicResults.map((strat, i) => {
+      const input = subnetInputs[i];
+      const prot = protectionResults.get(strat.netuid)!;
+      const special = SPECIAL_SUBNETS[strat.netuid];
       const isWhitelisted = !!special;
       const assetType: AssetType = isWhitelisted ? "CORE_NETWORK" : "SPECULATIVE";
 
-      let oppBlend = clamp(Math.round(r.oppRaw * 0.6 + oppPercentile[i] * 0.4), 5, 98);
-      let riskBlend = clamp(Math.round(r.riskRaw * 0.6 + riskPercentile[i] * 0.4), 0, 100);
+      let opp = strat.opp;
+      let risk = strat.risk;
+      let asymmetry = strat.asymmetry;
+      let action = strat.action;
 
-      const isBreak = r.state === "BREAK" || r.state === "EXIT_FAST";
-      if (!isWhitelisted && (isBreak || r.state === "DEPEG_WARNING" || r.state === "DEPEG_CRITICAL")) {
-        oppBlend = 0;
-      }
-
-      // ── SPECIAL_SUBNETS whitelist: clamp risk, force status/action ──
-      // Root (SN-0) is the primary TAO staking alpha. It must never
-      // trigger depeg/delist/exit rules. Risk is hard-capped via forceRiskMax.
-      if (isWhitelisted) {
-        riskBlend = Math.min(riskBlend, special.forceRiskMax);
-        oppBlend = clamp(oppBlend, 30, 60);
-      }
-
-      // Risk Override v2 — whitelisted subnets bypass override engine
-      const slMetrics = subnetLatest?.get(r.netuid);
-      const volMcRatio = (slMetrics?.volCap != null) ? slMetrics.volCap : undefined;
-      const override = isWhitelisted
-        ? { isOverridden: false, isWarning: false, systemStatus: special.forceStatus as SystemStatus, overrideReasons: [] }
-        : evaluateRiskOverride({
-            netuid: r.netuid, state: r.state, psi: r.psi, risk: riskBlend, quality: r.quality,
-            liquidityUsd: r.displayedLiq > 0 ? r.displayedLiq : undefined,
-            volumeMcRatio: volMcRatio,
-            taoInPool: slMetrics?.liq,
-          });
-      if (override.isOverridden) oppBlend = 0;
-
-      // Calibration
-      const cal = calibrateScores({
-        risk: riskBlend, opportunity: oppBlend,
-        state: isWhitelisted ? null : r.state, // whitelist: skip critical state penalties
-        isTopRank: false, isOverridden: override.isOverridden,
-      });
-      let opp = cal.opportunity;
-      let risk = cal.risk;
-
-      // Whitelist: enforce risk cap after calibration too
+      // Whitelist overrides
       if (isWhitelisted) {
         risk = Math.min(risk, special.forceRiskMax);
         opp = clamp(opp, 30, 60);
+        asymmetry = opp - risk;
+        action = special.forceAction;
       }
 
-      let asymmetry = cal.asymmetry;
-      if (isWhitelisted) asymmetry = opp - risk; // recalc with capped risk
-      // dataUncertain penalty removed — TMC decoupled
-
-      const momentum = clamp(r.psi - 40, 0, 60) / 60 * 100;
-      let action: StrategicAction = override.isOverridden ? "EXIT" : deriveSubnetAction(opp, risk, r.conf);
-      if (override.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
-      // ── STALE DATA GUARD: block aggressive actions when data is stale ──
-      if (alignmentResult.status === "STALE" && action === "ENTER") {
-        action = "WATCH";
+      // Protection overrides: applied AFTER strategic scoring
+      if (prot.isOverridden && !isWhitelisted) {
+        opp = 0;
+        asymmetry = -Math.abs(risk);
+        action = "EXIT";
       }
 
-      // ── Delist risk: check manual lists for quick lookup ──
-      let delistCategory: DelistCategory = "NORMAL";
-      let delistScore = 0;
-
+      // DEPEG/DELIST coherence
       if (!isWhitelisted) {
-        if (delistMode === "manual") {
-          if (DEPEG_PRIORITY_MANUAL.includes(r.netuid)) {
-            delistCategory = "DEPEG_PRIORITY";
-            delistScore = 90;
-          } else if (HIGH_RISK_NEAR_DELIST_MANUAL.includes(r.netuid)) {
-            delistCategory = "HIGH_RISK_NEAR_DELIST";
-            delistScore = 70;
-          }
-        } else {
-          // Auto mode: use scoring from allRows metrics
-          const liqTao = r.displayedLiq > 0 && rate > 0 ? r.displayedLiq / rate : 0;
-          const slm = subnetLatest?.get(r.netuid);
-          const volMcRatioAuto = slm?.volCap ?? 0;
-          const sparkline = sparklines?.get(r.netuid);
-          const priceChange7d = sparkline && sparkline.length >= 2
-            ? ((sparkline[sparkline.length - 1] - sparkline[0]) / sparkline[0]) * 100
-            : null;
-          const autoResult = computeDelistRiskScore({
-            netuid: r.netuid,
-            minersActive: slm?.minersActive ?? 10,
-            liqTao,
-            liqUsd: r.displayedLiq,
-            capTao: slm?.cap ?? 0,
-            alphaPrice: slm?.price ?? 0,
-            volMcRatio: volMcRatioAuto,
-            psi: r.psi, quality: r.quality, state: r.state,
-            priceChange7d,
-            confianceData: r.confianceScore,
-            liqHaircut: r.recalc?.liqHaircut ?? 0,
-          });
-          delistCategory = autoResult.category;
-          delistScore = autoResult.score;
-        }
-
-        // ── DEPEG/DELIST COHERENCE ──
-        if (delistCategory === "DEPEG_PRIORITY") {
+        if (prot.delistCategory === "DEPEG_PRIORITY") {
           opp = 0;
           risk = Math.max(risk, 80);
           asymmetry = -Math.abs(asymmetry) - 20;
           action = "EXIT";
-        } else if (delistCategory === "HIGH_RISK_NEAR_DELIST") {
+        } else if (prot.delistCategory === "HIGH_RISK_NEAR_DELIST") {
           opp = Math.min(opp, 25);
           risk = Math.max(risk, 60);
           asymmetry = Math.min(asymmetry, -5);
           if (action === "ENTER") action = "WATCH";
         }
+
+        // System status downgrade
+        if (prot.systemStatus !== "OK" && action === "ENTER") action = "WATCH";
       }
 
-      // ── Whitelisted subnets: force action, NEVER EXIT ──
-      if (isWhitelisted) {
-        action = special.forceAction;
-        console.assert(action !== "EXIT", `[WHITELIST] SN-${r.netuid} must never have EXIT action`);
-      } else {
-        checkCoherence(override.isOverridden, action);
+      // STALE DATA GUARD
+      if (alignmentResult.status === "STALE" && action === "ENTER") {
+        action = "WATCH";
       }
 
-      const stability = computeStabilitySetup(opp, risk, r.conf, momentum, r.quality, r.dataUncertain);
+      // Coherence check
+      if (!isWhitelisted) {
+        checkCoherence(prot.isOverridden, action);
+      }
 
       return {
-        netuid: r.netuid,
-        name: r.name,
+        netuid: strat.netuid,
+        name: strat.name,
         assetType,
-        state: r.state,
-        psi: r.psi,
-        conf: r.conf,
-        quality: r.quality,
-        opp,
-        risk,
-        asymmetry,
-        momentum,
-        momentumLabel: momentumLabels[i],
-        momentumScore: r.momentumScore,
+        state: input.state,
+        psi: input.psi,
+        conf: input.conf,
+        quality: input.quality,
+        opp, risk, asymmetry,
+        momentum: strat.momentum,
+        momentumLabel: strat.momentumLabel,
+        momentumScore: strat.momentumScore,
         action,
-        sc: r.sc,
-        confianceScore: r.confianceScore,
-        dataUncertain: r.dataUncertain,
-        isOverridden: override.isOverridden || delistCategory === "DEPEG_PRIORITY",
-        isWarning: override.isWarning || delistCategory === "HIGH_RISK_NEAR_DELIST",
-        systemStatus: delistCategory === "DEPEG_PRIORITY" ? "DEPEG" as SystemStatus : override.systemStatus,
-        overrideReasons: override.overrideReasons,
-        healthScores: r.healthScores,
-        recalc: r.recalc,
-        displayedCap: r.displayedCap,
-        displayedLiq: r.displayedLiq,
-        stability,
-        consensusPrice: consensusPrices.get(r.netuid) ?? 0,
-        alphaPrice: consensusPrices.get(r.netuid) ?? 0,
+        sc: strat.sc,
+        confianceScore: input.confianceScore,
+        dataUncertain: input.dataUncertain,
+        isOverridden: prot.isOverridden,
+        isWarning: prot.isWarning,
+        systemStatus: prot.systemStatus,
+        overrideReasons: prot.overrideReasons,
+        healthScores: input.healthScores,
+        recalc: input.recalc,
+        displayedCap: input.displayedCap,
+        displayedLiq: input.displayedLiq,
+        stability: strat.stability,
+        consensusPrice: consensusPrices.get(strat.netuid) ?? 0,
+        alphaPrice: consensusPrices.get(strat.netuid) ?? 0,
         priceVar30d: (() => {
-          const p30 = price30dMap?.get(r.netuid);
+          const p30 = price30dMap?.get(strat.netuid);
           if (!p30 || p30.oldest <= 0) return null;
           return ((p30.newest - p30.oldest) / p30.oldest) * 100;
         })(),
-        delistCategory,
-        delistScore,
+        delistCategory: prot.delistCategory,
+        delistScore: prot.delistScore,
       } satisfies UnifiedSubnetScore;
     });
 
@@ -600,10 +534,10 @@ export function useSubnetScores(): UnifiedScoresResult {
         console.warn(`[STALE-GUARD] Data alignment STALE — all ENTER actions downgraded to WATCH (${blockedCount} potential blocks)`);
       }
 
-      // Whitelist invariant check: whitelisted subnets must never be EXIT
+      // Whitelist invariant check
       for (const s of scored) {
         if (SPECIAL_SUBNETS[s.netuid] && s.action === "EXIT") {
-          console.error(`[WHITELIST-VIOLATION] SN-${s.netuid} (${SPECIAL_SUBNETS[s.netuid].label}) has action EXIT — this should never happen!`);
+          console.error(`[WHITELIST-VIOLATION] SN-${s.netuid} (${SPECIAL_SUBNETS[s.netuid].label}) has action EXIT!`);
         }
       }
     }
