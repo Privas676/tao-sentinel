@@ -505,6 +505,11 @@ export function useSubnetScores(): UnifiedScoresResult {
         continue;
       }
       const liqTao = s.displayedLiq > 0 && rate > 0 ? s.displayedLiq / rate : 0;
+      const sparkline = sparklines?.get(s.netuid);
+      const sparkLen = sparkline?.length ?? 0;
+      // Derive price24hAgo (last entry) and price7dAgo (7th from end) from daily sparklines
+      const price24hAgo = sparkLen >= 2 ? sparkline![sparkLen - 2] : null;
+      const price7dAgo = sparkLen >= 7 ? sparkline![sparkLen - 7] : null;
       const protInput: ProtectionInput = {
         netuid: s.netuid, state: s.state, psi: s.psi, quality: s.quality,
         risk: s.healthScores.liquidityHealth < 25 ? 80 : 40,
@@ -517,7 +522,9 @@ export function useSubnetScores(): UnifiedScoresResult {
         priceChange7d: s.priceChange7d, confianceData: s.confianceScore,
         liqHaircut: s.recalc?.liqHaircut ?? 0,
         delistMode,
-        priceHistory: sparklines?.get(s.netuid) ?? [],
+        price24hAgo,
+        price7dAgo,
+        historyDays: sparkLen,
       };
       protectionResults.set(s.netuid, evaluateProtection(protInput));
     }

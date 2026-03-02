@@ -48,9 +48,10 @@ export type ProtectionInput = {
   liqHaircut: number;
   // Delist mode
   delistMode: string;
-  // Depeg probability inputs
-  priceHistory?: number[];
-  volatility7d?: number;
+  // Depeg probability inputs (v2: price-drop based)
+  price24hAgo?: number | null;
+  price7dAgo?: number | null;
+  historyDays?: number;
 };
 
 export type ProtectionOutput = {
@@ -119,15 +120,14 @@ export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
     }
   }
 
-  // 3. Depeg Probability — tick-based state machine
+  // 3. Depeg Probability — tick-based state machine (v2: price-drop based)
   const depegInput: DepegInput = {
     netuid: input.netuid,
     alphaPrice: input.alphaPrice,
-    priceHistory: input.priceHistory ?? [],
-    taoInPool: input.taoInPool ?? 0,
-    liquidityUsd: input.liqUsd,
-    capTao: input.capTao,
-    volatility7d: input.volatility7d,
+    price24hAgo: input.price24hAgo ?? null,
+    price7dAgo: input.price7dAgo ?? null,
+    dataConfidence: input.confianceData,
+    historyDays: input.historyDays,
   };
   const depeg: DepegResult = evaluateDepegState(depegInput);
 
@@ -149,7 +149,7 @@ export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
     overrideReasons: override.overrideReasons,
     delistCategory,
     delistScore,
-    depegProbability: depeg.probability,
+    depegProbability: depeg.drop24 != null || depeg.drop7 != null ? (depeg.state === "DEPEG_CONFIRMED" ? 90 : depeg.state === "DEPEG_HIGH_RISK" ? 60 : 0) : 0,
     depegState: depeg.state,
     depegSignals: depeg.signals.map(s => s.label),
   };
