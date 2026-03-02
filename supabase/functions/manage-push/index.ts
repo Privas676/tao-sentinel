@@ -130,14 +130,35 @@ Deno.serve(async (req) => {
         });
       }
 
-      const token = authHeader.replace("Bearer ", "");
+      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+      if (!token) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const userClient = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_ANON_KEY")!,
         { global: { headers: { Authorization: authHeader } } }
       );
-      const { data: { user }, error: userErr } = await userClient.auth.getUser(token);
-      if (userErr || !user) {
+
+      // Lovable Cloud compatibility: try JWT claims first, then fallback to getUser.
+      let userId: string | null = null;
+
+      const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
+      if (!claimsErr && claimsData?.claims?.sub) {
+        userId = String(claimsData.claims.sub);
+      }
+
+      if (!userId) {
+        const { data: { user }, error: userErr } = await userClient.auth.getUser(token);
+        if (!userErr && user) {
+          userId = user.id;
+        }
+      }
+
+      if (!userId) {
         return new Response(JSON.stringify({ error: "Unauthorized - please sign in first" }), {
           status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
