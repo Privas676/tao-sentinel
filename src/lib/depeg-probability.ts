@@ -76,7 +76,7 @@ function deriveDeregistrationRank(netuid: number): number | null {
 
 /* ── Public: compute depeg state (v3 — deregistration based) ── */
 
-const DEBUG_DEPEG = false;
+const DEBUG_DEPEG = typeof window !== "undefined" && localStorage.getItem("DEBUG_DEPEG") === "1";
 
 /**
  * Compute depeg state based on Taoflute deregistration logic.
