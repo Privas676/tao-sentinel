@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════ */
-/*   DEPEG PROBABILITY ENGINE               */
-/*   Probabilistic depeg detection with     */
-/*   tick confirmation + hysteresis         */
+/*   DEPEG PROBABILITY ENGINE v2            */
+/*   Pure price-drop based detection        */
+/*   with tick confirmation + hysteresis    */
 /* ═══════════════════════════════════════ */
 
 export type DepegState = "NORMAL" | "DEPEG_HIGH_RISK" | "DEPEG_CONFIRMED";
@@ -10,62 +10,60 @@ export type DepegInput = {
   netuid: number;
   /** Current alpha price in TAO */
   alphaPrice: number;
-  /** Previous prices: [oldest..newest], at least 2 ticks */
-  priceHistory: number[];
-  /** Pool TAO amount */
-  taoInPool: number;
-  /** Liquidity in USD */
-  liquidityUsd: number;
-  /** Market cap in TAO */
-  capTao: number;
-  /** Volatility baseline (e.g. 7d stdev / mean, 0..1) */
-  volatility7d?: number;
+  /** Price ~24h ago (null if unavailable) */
+  price24hAgo: number | null;
+  /** Price ~7d ago (null if unavailable) */
+  price7dAgo: number | null;
+  /** Data confidence 0–100 */
+  dataConfidence?: number;
+  /** Number of days of historical data available */
+  historyDays?: number;
 };
 
 export type DepegResult = {
   netuid: number;
-  probability: number;       // 0–100
   state: DepegState;
-  confirmedTicks: number;    // consecutive ticks above threshold
-  stateEnteredAt: number;    // timestamp ms
+  confirmedTicks: number;
+  stateEnteredAt: number;
+  drop24: number | null;   // percent drop (negative = down)
+  drop7: number | null;    // percent drop (negative = down)
   signals: DepegSignal[];
 };
 
 export type DepegSignal = {
   code: string;
   label: string;
-  contribution: number;      // 0–100
   value?: number;
 };
 
-/* ── Weights ── */
-
-const WEIGHTS = {
-  PRICE_PEG_RATIO:      30,   // price vs baseline deviation
-  FALL_VELOCITY:        25,   // rate of price decline (delta 1-5 ticks)
-  SHORT_TERM_VOL:       15,   // short-term volatility spike
-  LIQUIDITY_STRESS:     20,   // pool/liq stress
-  POOL_DRAIN:           10,   // pool TAO critically low
-} as const;
-
 /* ── Thresholds ── */
 
-const DEPEG_HIGH_RISK_PROB = 70;
-const DEPEG_CONFIRMED_PROB = 85;
-const DEPEG_EXIT_PROB = 60;
+/** RISQUE_DEPEG entry thresholds */
+const HIGH_RISK_DROP24 = -0.20;  // -20% over 24h
+const HIGH_RISK_DROP7  = -0.35;  // -35% over 7d
+
+/** DEPEG_CONFIRMED entry thresholds */
+const CONFIRMED_DROP24 = -0.30;  // -30% over 24h
+const CONFIRMED_DROP7  = -0.50;  // -50% over 7d
+
+/** Ticks required to confirm states */
 const HIGH_RISK_CONFIRM_TICKS = 2;
 const CONFIRMED_CONFIRM_TICKS = 3;
-const CONFIRMED_MIN_DURATION_MS = 5 * 60 * 1000; // 5 min
-const EXIT_SUSTAIN_MS = 5 * 60 * 1000;           // 5 min below threshold to exit
+
+/** Hysteresis exit thresholds (must be sustained for EXIT_TICKS) */
+const EXIT_DROP24 = -0.10;  // better than -10% 24h
+const EXIT_DROP7  = -0.20;  // better than -20% 7d
+const EXIT_TICKS  = 6;
 
 /* ── State cache (per subnet) ── */
 
 type DepegStateEntry = {
   state: DepegState;
-  confirmedTicks: number;
+  confirmedTicks: number;       // ticks meeting current threshold
   stateEnteredAt: number;
-  exitStartedAt: number | null;      // when prob dropped below exit threshold
-  lastProb: number;
+  exitTicks: number;            // consecutive ticks meeting exit criteria
+  lastDrop24: number | null;
+  lastDrop7: number | null;
 };
 
 const stateCache = new Map<number, DepegStateEntry>();
@@ -80,147 +78,112 @@ export function getDepegCachedState(netuid: number): DepegStateEntry | undefined
   return stateCache.get(netuid);
 }
 
-/* ── Signal computation ── */
+/* ── Drop computation ── */
+
+function computeDrops(input: DepegInput): { drop24: number | null; drop7: number | null } {
+  const { alphaPrice, price24hAgo, price7dAgo } = input;
+
+  let drop24: number | null = null;
+  if (price24hAgo != null && price24hAgo > 0 && alphaPrice >= 0) {
+    drop24 = (alphaPrice - price24hAgo) / price24hAgo; // negative = price fell
+  }
+
+  let drop7: number | null = null;
+  if (price7dAgo != null && price7dAgo > 0 && alphaPrice >= 0) {
+    drop7 = (alphaPrice - price7dAgo) / price7dAgo;
+  }
+
+  return { drop24, drop7 };
+}
+
+/* ── Signal generation ── */
+
+function buildSignals(drop24: number | null, drop7: number | null): DepegSignal[] {
+  const signals: DepegSignal[] = [];
+
+  if (drop24 != null) {
+    signals.push({
+      code: "DROP_24H",
+      label: `Chute 24h: ${(drop24 * 100).toFixed(1)}%`,
+      value: Math.round(drop24 * 100),
+    });
+  }
+  if (drop7 != null) {
+    signals.push({
+      code: "DROP_7D",
+      label: `Chute 7j: ${(drop7 * 100).toFixed(1)}%`,
+      value: Math.round(drop7 * 100),
+    });
+  }
+
+  return signals;
+}
+
+/* ── Threshold checks ── */
+
+function meetsHighRiskThreshold(drop24: number | null, drop7: number | null): boolean {
+  return (drop24 != null && drop24 <= HIGH_RISK_DROP24) ||
+         (drop7 != null && drop7 <= HIGH_RISK_DROP7);
+}
+
+function meetsConfirmedThreshold(drop24: number | null, drop7: number | null): boolean {
+  return (drop24 != null && drop24 <= CONFIRMED_DROP24) ||
+         (drop7 != null && drop7 <= CONFIRMED_DROP7);
+}
+
+function meetsExitCriteria(drop24: number | null, drop7: number | null): boolean {
+  // Both must be above exit threshold (recovered enough)
+  const d24ok = drop24 == null || drop24 > EXIT_DROP24;
+  const d7ok  = drop7 == null || drop7 > EXIT_DROP7;
+  return d24ok && d7ok;
+}
+
+/* ── Guard rails ── */
+
+function canConfirmDepeg(input: DepegInput): boolean {
+  // Cannot confirm if < 7 days of history
+  if (input.historyDays != null && input.historyDays < 7) return false;
+  // Cannot confirm if data confidence < 70%
+  if (input.dataConfidence != null && input.dataConfidence < 70) return false;
+  return true;
+}
+
+/* ── Public: compute probability (backward compat) ── */
 
 /**
- * Compute depeg probability from market signals.
- * Returns a probability 0–100 and signal breakdown.
+ * Compute depeg signals from price drops.
+ * Returns drop values and signal breakdown.
  */
-export function computeDepegProbability(input: DepegInput): { probability: number; signals: DepegSignal[] } {
-  const signals: DepegSignal[] = [];
-  let totalProb = 0;
+export function computeDepegProbability(input: DepegInput): { probability: number; signals: DepegSignal[]; drop24: number | null; drop7: number | null } {
+  const { drop24, drop7 } = computeDrops(input);
+  const signals = buildSignals(drop24, drop7);
 
-  const { alphaPrice, priceHistory, taoInPool, liquidityUsd, capTao, volatility7d } = input;
-
-  // ─── 1. Price/Peg Ratio (deviation from baseline) ───
-  // Use the median of history as "peg baseline"
-  if (priceHistory.length >= 2 && alphaPrice > 0) {
-    const sorted = [...priceHistory].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    if (median > 0) {
-      const deviation = (median - alphaPrice) / median; // positive = price fell
-      // Scale: 0% dev → 0 contribution, 30%+ dev → full contribution
-      const score = Math.min(1, Math.max(0, deviation / 0.30));
-      const contribution = Math.round(score * WEIGHTS.PRICE_PEG_RATIO);
-      if (contribution > 0) {
-        signals.push({
-          code: "PRICE_PEG_RATIO",
-          label: "Déviation prix/peg",
-          contribution,
-          value: Math.round(deviation * 100),
-        });
-        totalProb += contribution;
-      }
+  // Simple probability mapping for display
+  let probability = 0;
+  if (meetsConfirmedThreshold(drop24, drop7)) {
+    probability = 90;
+  } else if (meetsHighRiskThreshold(drop24, drop7)) {
+    probability = 60;
+  } else {
+    // Mild concern if any drop > 10%
+    const worst = Math.min(drop24 ?? 0, drop7 ?? 0);
+    if (worst < -0.10) {
+      probability = Math.round(Math.min(40, Math.abs(worst) * 200));
     }
   }
 
-  // ─── 2. Fall Velocity (delta over recent ticks) ───
-  if (priceHistory.length >= 2) {
-    // Compare last price vs 1-tick-ago and vs oldest available
-    const recent = priceHistory[priceHistory.length - 1] || alphaPrice;
-    const prev = priceHistory[priceHistory.length - 2];
-    const oldest = priceHistory[0];
-    
-    if (prev > 0 && oldest > 0) {
-      const shortDelta = (prev - alphaPrice) / prev;  // 1-tick fall
-      const longDelta = (oldest - alphaPrice) / oldest; // full-window fall
-      const maxDelta = Math.max(shortDelta, longDelta * 0.6); // weight recent more
-      
-      // Scale: 5%+ drop → starts contributing, 20%+ → full
-      const score = Math.min(1, Math.max(0, (maxDelta - 0.05) / 0.15));
-      const contribution = Math.round(score * WEIGHTS.FALL_VELOCITY);
-      if (contribution > 0) {
-        signals.push({
-          code: "FALL_VELOCITY",
-          label: "Vitesse de chute",
-          contribution,
-          value: Math.round(maxDelta * 100),
-        });
-        totalProb += contribution;
-      }
-    }
-  }
-
-  // ─── 3. Short-term Volatility ───
-  if (priceHistory.length >= 3) {
-    const returns: number[] = [];
-    for (let i = 1; i < priceHistory.length; i++) {
-      if (priceHistory[i - 1] > 0) {
-        returns.push((priceHistory[i] - priceHistory[i - 1]) / priceHistory[i - 1]);
-      }
-    }
-    if (returns.length >= 2) {
-      const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
-      const variance = returns.reduce((s, r) => s + (r - mean) ** 2, 0) / returns.length;
-      const stdev = Math.sqrt(variance);
-      
-      // Compare to baseline volatility
-      const baseline = volatility7d ?? 0.02; // default 2%
-      const volRatio = baseline > 0 ? stdev / baseline : stdev / 0.02;
-      
-      // Scale: 2x normal vol → starts, 5x+ → full
-      const score = Math.min(1, Math.max(0, (volRatio - 2) / 3));
-      const contribution = Math.round(score * WEIGHTS.SHORT_TERM_VOL);
-      if (contribution > 0) {
-        signals.push({
-          code: "SHORT_TERM_VOL",
-          label: "Volatilité court terme",
-          contribution,
-          value: Math.round(volRatio * 100),
-        });
-        totalProb += contribution;
-      }
-    }
-  }
-
-  // ─── 4. Liquidity Stress ───
-  if (liquidityUsd >= 0 && capTao > 0) {
-    // Stress = very low liquidity relative to cap
-    const liqCapRatio = capTao > 0 ? liquidityUsd / (capTao * 0.01) : 100; // normalized
-    // Also absolute: < $500 is critical
-    const absStress = liquidityUsd < 500 ? 1.0 :
-                      liquidityUsd < 2000 ? 0.6 :
-                      liquidityUsd < 5000 ? 0.2 : 0;
-    const relStress = liqCapRatio < 1 ? 0.8 :
-                      liqCapRatio < 5 ? 0.3 : 0;
-    const stress = Math.max(absStress, relStress);
-    const contribution = Math.round(stress * WEIGHTS.LIQUIDITY_STRESS);
-    if (contribution > 0) {
-      signals.push({
-        code: "LIQUIDITY_STRESS",
-        label: "Stress liquidité",
-        contribution,
-        value: Math.round(liquidityUsd),
-      });
-      totalProb += contribution;
-    }
-  }
-
-  // ─── 5. Pool Drain ───
-  if (taoInPool < 10) {
-    const score = taoInPool < 1 ? 1.0 : taoInPool < 5 ? 0.7 : 0.4;
-    const contribution = Math.round(score * WEIGHTS.POOL_DRAIN);
-    signals.push({
-      code: "POOL_DRAIN",
-      label: "Pool TAO critique",
-      contribution,
-      value: Math.round(taoInPool * 10) / 10,
-    });
-    totalProb += contribution;
-  }
-
-  const probability = Math.min(100, Math.max(0, totalProb));
-  return { probability, signals };
+  return { probability, signals, drop24, drop7 };
 }
 
 /* ── State Machine with hysteresis ── */
 
 /**
- * Evaluate depeg state for a subnet. Uses tick-based confirmation
- * and hysteresis for stable state transitions.
+ * Evaluate depeg state for a subnet using pure price-drop logic.
+ * Uses tick-based confirmation and hysteresis.
  */
 export function evaluateDepegState(input: DepegInput, now: number = Date.now()): DepegResult {
-  const { probability, signals } = computeDepegProbability(input);
+  const { drop24, drop7 } = computeDrops(input);
+  const signals = buildSignals(drop24, drop7);
   const netuid = input.netuid;
 
   // Get or create state entry
@@ -230,8 +193,9 @@ export function evaluateDepegState(input: DepegInput, now: number = Date.now()):
       state: "NORMAL",
       confirmedTicks: 0,
       stateEnteredAt: now,
-      exitStartedAt: null,
-      lastProb: 0,
+      exitTicks: 0,
+      lastDrop24: null,
+      lastDrop7: null,
     };
     stateCache.set(netuid, entry);
   }
@@ -241,12 +205,13 @@ export function evaluateDepegState(input: DepegInput, now: number = Date.now()):
   // ─── State transitions ───
 
   if (prevState === "NORMAL") {
-    if (probability >= DEPEG_HIGH_RISK_PROB) {
+    if (meetsHighRiskThreshold(drop24, drop7)) {
       entry.confirmedTicks++;
       if (entry.confirmedTicks >= HIGH_RISK_CONFIRM_TICKS) {
         entry.state = "DEPEG_HIGH_RISK";
         entry.stateEnteredAt = now;
-        entry.exitStartedAt = null;
+        entry.confirmedTicks = 0;
+        entry.exitTicks = 0;
       }
     } else {
       entry.confirmedTicks = 0;
@@ -254,16 +219,15 @@ export function evaluateDepegState(input: DepegInput, now: number = Date.now()):
   }
 
   else if (prevState === "DEPEG_HIGH_RISK") {
-    if (probability >= DEPEG_CONFIRMED_PROB) {
+    if (meetsConfirmedThreshold(drop24, drop7) && canConfirmDepeg(input)) {
       entry.confirmedTicks++;
-      const duration = now - entry.stateEnteredAt;
-      if (entry.confirmedTicks >= CONFIRMED_CONFIRM_TICKS || duration >= CONFIRMED_MIN_DURATION_MS) {
+      if (entry.confirmedTicks >= CONFIRMED_CONFIRM_TICKS) {
         entry.state = "DEPEG_CONFIRMED";
         entry.stateEnteredAt = now;
         entry.confirmedTicks = 0;
-        entry.exitStartedAt = null;
+        entry.exitTicks = 0;
       }
-    } else if (probability >= DEPEG_HIGH_RISK_PROB) {
+    } else if (meetsHighRiskThreshold(drop24, drop7)) {
       // Stay in HIGH_RISK, reset confirmed tick count for upgrade
       entry.confirmedTicks = 0;
     } else {
@@ -271,42 +235,41 @@ export function evaluateDepegState(input: DepegInput, now: number = Date.now()):
       entry.state = "NORMAL";
       entry.confirmedTicks = 0;
       entry.stateEnteredAt = now;
-      entry.exitStartedAt = null;
+      entry.exitTicks = 0;
     }
   }
 
   else if (prevState === "DEPEG_CONFIRMED") {
-    // Hysteresis: only exit if prob < EXIT threshold for >= 5 min
-    if (probability < DEPEG_EXIT_PROB) {
-      if (!entry.exitStartedAt) {
-        entry.exitStartedAt = now;
-      }
-      const exitDuration = now - entry.exitStartedAt;
-      if (exitDuration >= EXIT_SUSTAIN_MS) {
+    // Hysteresis: only exit if drops recover for EXIT_TICKS consecutive scans
+    if (meetsExitCriteria(drop24, drop7)) {
+      entry.exitTicks++;
+      if (entry.exitTicks >= EXIT_TICKS) {
         entry.state = "NORMAL";
         entry.confirmedTicks = 0;
         entry.stateEnteredAt = now;
-        entry.exitStartedAt = null;
+        entry.exitTicks = 0;
       }
     } else {
-      // Still above exit threshold → reset exit timer
-      entry.exitStartedAt = null;
+      // Still bad → reset exit counter
+      entry.exitTicks = 0;
     }
   }
 
-  entry.lastProb = probability;
+  entry.lastDrop24 = drop24;
+  entry.lastDrop7 = drop7;
 
   // Log state transitions
   if (entry.state !== prevState) {
-    console.log(`[DEPEG] SN-${netuid}: ${prevState} → ${entry.state} | prob=${probability} | ticks=${entry.confirmedTicks} | signals=${signals.map(s => s.code).join(',')}`);
+    console.log(`[DEPEG] SN-${netuid}: ${prevState} → ${entry.state} | drop24=${drop24 != null ? (drop24 * 100).toFixed(1) + '%' : 'N/A'} | drop7=${drop7 != null ? (drop7 * 100).toFixed(1) + '%' : 'N/A'}`);
   }
 
   return {
     netuid,
-    probability,
     state: entry.state,
     confirmedTicks: entry.confirmedTicks,
     stateEnteredAt: entry.stateEnteredAt,
+    drop24,
+    drop7,
     signals,
   };
 }
@@ -324,7 +287,7 @@ export function depegStateColor(state: DepegState): string {
 export function depegStateLabel(state: DepegState, fr: boolean = true): string {
   switch (state) {
     case "NORMAL": return "Normal";
-    case "DEPEG_HIGH_RISK": return fr ? "Depeg Probable" : "Depeg Likely";
+    case "DEPEG_HIGH_RISK": return fr ? "Risque Depeg" : "Depeg Risk";
     case "DEPEG_CONFIRMED": return fr ? "Depeg Confirmé" : "Depeg Confirmed";
   }
 }
