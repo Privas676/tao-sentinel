@@ -69,6 +69,11 @@ export default function PushLogDashboard() {
     setTesting(true);
     setTestResult(null);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setTestResult(fr ? "❌ Connectez-vous d'abord" : "❌ Please sign in first");
+        return;
+      }
       const { data, error } = await supabase.functions.invoke("manage-push", {
         body: { action: "send-test" },
       });
@@ -79,7 +84,6 @@ export default function PushLogDashboard() {
       } else {
         setTestResult(fr ? `⚠ ${r?.reason || "no_subscribers"}` : `⚠ ${r?.reason || "no_subscribers"}`);
       }
-      // Reload logs after test
       setTimeout(() => loadLogs(), 1500);
     } catch (err) {
       setTestResult(`❌ ${err instanceof Error ? err.message : String(err)}`);
