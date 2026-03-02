@@ -586,7 +586,7 @@ export default function SubnetsPage() {
                   {mode === "risks" && (() => {
                     const dp = r.depegProbability;
                     const dpColor = dp >= 85 ? "rgba(229,57,53,0.95)" : dp >= 70 ? "rgba(255,152,0,0.9)" : dp >= 30 ? "rgba(255,193,7,0.7)" : "rgba(76,175,80,0.7)";
-                    const dpLabel = r.depegState === "DEPEG_CONFIRMED" ? "🔴" : r.depegState === "DEPEG_HIGH_RISK" ? "🟠" : "";
+                    const dpLabel = r.depegState === "CONFIRMED" ? "🔴" : r.depegState === "WATCH" || r.depegState === "WAITLIST" ? "🟠" : "";
                     return (
                       <td className="py-3 px-2 relative group/depeg">
                         <div className="flex items-center gap-1.5 justify-center">

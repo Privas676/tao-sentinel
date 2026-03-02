@@ -500,7 +500,7 @@ export function useSubnetScores(): UnifiedScoresResult {
           isOverridden: false, isWarning: false,
           systemStatus: special.forceStatus as SystemStatus,
           overrideReasons: [], delistCategory: "NORMAL", delistScore: 0,
-          depegProbability: 0, depegState: "NORMAL" as const, depegSignals: [],
+          depegProbability: 0, depegState: "NONE" as const, depegSignals: [],
         });
         continue;
       }
