@@ -31,8 +31,8 @@ export type DelistReason = {
 
 /* ─── MANUAL LISTS (Taoflute baseline) ─── */
 
-export const DEPEG_PRIORITY_MANUAL: number[] = [83, 96, 30, 57, 97, 40, 84, 79, 128, 118];
-export const HIGH_RISK_NEAR_DELIST_MANUAL: number[] = [99, 109, 31, 86, 47, 67, 76, 90, 105, 15, 108, 38, 49, 114, 107, 113, 92, 126, 87, 80, 91, 94];
+export const DEPEG_PRIORITY_MANUAL: number[] = [96, 57, 79, 84, 83, 97, 40, 128, 69, 118];
+export const HIGH_RISK_NEAR_DELIST_MANUAL: number[] = [99, 109, 31, 86, 47, 67, 76, 90, 105, 15, 108, 38, 114, 107, 113, 92, 126, 87, 80, 91, 94];
 
 /* ─── WHITELISTED (never delist) ─── */
 const WHITELIST = new Set([0]); // Root subnet
