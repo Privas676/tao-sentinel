@@ -69,15 +69,28 @@ export default function PushLogDashboard() {
     setTesting(true);
     setTestResult(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      let { data: { session } } = await supabase.auth.getSession();
+
+      // Recovery path: session may be stale in memory, try refresh once.
       if (!session) {
-        setTestResult(fr ? "❌ Connectez-vous d'abord" : "❌ Please sign in first");
+        const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+        if (refreshErr) throw new Error(refreshErr.message);
+        session = refreshed.session;
+      }
+
+      if (!session?.access_token) {
+        setTestResult(fr ? "❌ Session invalide — reconnectez-vous" : "❌ Invalid session — please sign in again");
         return;
       }
+
       const { data, error } = await supabase.functions.invoke("manage-push", {
         body: { action: "send-test" },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
       if (error) throw new Error(error.message);
+
       const r = data?.pushResult;
       if (r?.sent > 0) {
         setTestResult(fr ? `✅ ${r.sent} push envoyé(s)` : `✅ ${r.sent} push sent`);
