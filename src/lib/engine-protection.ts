@@ -132,12 +132,17 @@ export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
   const depeg: DepegResult = evaluateDepegState(depegInput);
 
   // Derive final system status
+  // DEPEG status ONLY from depeg state machine (manual lists / deregistration rank)
+  // Auto delist score alone should NOT trigger DEPEG — only SURVEILLANCE
   let systemStatus = override.systemStatus;
+  const isInManualList = DEPEG_PRIORITY_MANUAL.includes(input.netuid) || HIGH_RISK_NEAR_DELIST_MANUAL.includes(input.netuid);
   if (depeg.state === "CONFIRMED") {
     systemStatus = "DEPEG";
-  } else if (delistCategory === "DEPEG_PRIORITY") {
+  } else if (delistCategory === "DEPEG_PRIORITY" && isInManualList) {
     systemStatus = "DEPEG";
-  } else if ((depeg.state === "WATCH" || depeg.state === "WAITLIST") && systemStatus === "OK") {
+  } else if (depeg.state === "WATCH" || depeg.state === "WAITLIST") {
+    if (systemStatus === "OK") systemStatus = "SURVEILLANCE";
+  } else if (delistCategory !== "NORMAL" && systemStatus === "OK") {
     systemStatus = "SURVEILLANCE";
   }
 
@@ -149,8 +154,8 @@ export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
 
   return {
     netuid: input.netuid,
-    isOverridden: override.isOverridden || delistCategory === "DEPEG_PRIORITY" || depeg.state === "CONFIRMED",
-    isWarning: override.isWarning || delistCategory === "HIGH_RISK_NEAR_DELIST" || depeg.state === "WATCH" || depeg.state === "WAITLIST",
+    isOverridden: override.isOverridden || (delistCategory === "DEPEG_PRIORITY" && isInManualList) || depeg.state === "CONFIRMED",
+    isWarning: override.isWarning || delistCategory === "HIGH_RISK_NEAR_DELIST" || (delistCategory === "DEPEG_PRIORITY" && !isInManualList) || depeg.state === "WATCH" || depeg.state === "WAITLIST",
     systemStatus,
     overrideReasons: override.overrideReasons,
     delistCategory,
