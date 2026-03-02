@@ -17,6 +17,7 @@
 import type { DecisionOutput } from "./engine-decision";
 import type { SystemStatus } from "./risk-override";
 import type { DelistCategory } from "./delist-risk";
+import { DEPEG_PRIORITY_MANUAL, HIGH_RISK_NEAR_DELIST_MANUAL } from "./delist-risk";
 import type { AlignmentStatus } from "./data-snapshot";
 
 /* ══════════════════════════════════════ */
@@ -133,13 +134,20 @@ export function evaluateRawState(
   settings: DecisionSettings,
 ): DecisionState {
   const h = settings.hysteresis;
+  const netuid = decision.netuid;
+  const isInDepegList = DEPEG_PRIORITY_MANUAL.includes(netuid);
+  const isInHighRiskList = HIGH_RISK_NEAR_DELIST_MANUAL.includes(netuid);
 
-  // Priority 1: Depeg/delist — highest severity, even if data is stale
-  if (decision.delistCategory === "DEPEG_PRIORITY" || decision.delistScore >= h.depegEnter) {
+  // Priority 1: Depeg/delist — ONLY for subnets in manual lists
+  if (isInDepegList && (decision.delistCategory === "DEPEG_PRIORITY" || decision.delistScore >= h.depegEnter)) {
     return "DEPEG_CONFIRMED";
   }
-  if (decision.delistCategory === "HIGH_RISK_NEAR_DELIST" && decision.delistScore >= h.depegEnter * 0.6) {
+  if (isInHighRiskList && decision.delistCategory === "HIGH_RISK_NEAR_DELIST") {
     return "DEPEG_HIGH_RISK";
+  }
+  // Auto-scored high risk subnets NOT in manual lists → OVERRIDE_WARNING at most
+  if (!isInDepegList && !isInHighRiskList && decision.delistScore >= h.depegEnter) {
+    // Don't promote to DEPEG, fall through to override/watch logic
   }
 
   // Priority 2: Override states — critical overrides outrank data quality
