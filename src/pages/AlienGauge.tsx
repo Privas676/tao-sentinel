@@ -487,10 +487,10 @@ export default function AlienGauge() {
   }).slice(0, 3), [enrichedSignals]);
 
   const depegConfirmedSubnets = useMemo(() =>
-    enrichedSignals.filter(s => s.depegState === "DEPEG_CONFIRMED").sort((a, b) => b.depegProbability - a.depegProbability),
+    enrichedSignals.filter(s => s.depegState === "CONFIRMED" || s.depegState === "WAITLIST").sort((a, b) => b.depegProbability - a.depegProbability),
     [enrichedSignals]);
   const depegHighRiskSubnets = useMemo(() =>
-    enrichedSignals.filter(s => s.depegState === "DEPEG_HIGH_RISK").sort((a, b) => b.depegProbability - a.depegProbability),
+    enrichedSignals.filter(s => s.depegState === "WATCH").sort((a, b) => b.depegProbability - a.depegProbability),
     [enrichedSignals]);
 
   // ── Audio alert on new DEPEG_CONFIRMED ──

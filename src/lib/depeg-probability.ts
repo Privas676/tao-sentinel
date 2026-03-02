@@ -1,10 +1,23 @@
 /* ═══════════════════════════════════════ */
-/*   DEPEG PROBABILITY ENGINE v2            */
-/*   Pure price-drop based detection        */
-/*   with tick confirmation + hysteresis    */
+/*   DEPEG / DEREGISTRATION ENGINE v3        */
+/*   Based on Taoflute deregistration rank   */
+/*   NOT price-drop based anymore            */
 /* ═══════════════════════════════════════ */
 
-export type DepegState = "NORMAL" | "DEPEG_HIGH_RISK" | "DEPEG_CONFIRMED";
+import {
+  DEPEG_PRIORITY_MANUAL,
+  HIGH_RISK_NEAR_DELIST_MANUAL,
+} from "./delist-risk";
+
+/**
+ * Depeg state aligned with Taoflute deregistration risk.
+ * - NONE: no deregistration risk
+ * - WATCH: subnet is at risk of deregistration (~top 4-21 in Taoflute ranking)
+ * - WAITLIST: subnet is on the waitlist for deregistration (~top 1-10 in DEPEG_PRIORITY)
+ * - CONFIRMED: deregistration is highly probable (top 1-3 in DEPEG_PRIORITY)
+ * - UNKNOWN: insufficient data to determine
+ */
+export type DepegState = "NONE" | "WATCH" | "WAITLIST" | "CONFIRMED" | "UNKNOWN";
 
 export type DepegInput = {
   netuid: number;
@@ -18,6 +31,12 @@ export type DepegInput = {
   dataConfidence?: number;
   /** Number of days of historical data available */
   historyDays?: number;
+  /** Deregistration rank from Taoflute (1 = highest risk). null if unknown */
+  deregistrationRank?: number | null;
+  /** Whether subnet is on waitlist for deregistration */
+  isWaitlisted?: boolean;
+  /** Whether subnet is in immunity phase (unlikely to be deregistered soon) */
+  immunityPhase?: boolean;
 };
 
 export type DepegResult = {
@@ -25,9 +44,10 @@ export type DepegResult = {
   state: DepegState;
   confirmedTicks: number;
   stateEnteredAt: number;
-  drop24: number | null;   // percent drop (negative = down)
-  drop7: number | null;    // percent drop (negative = down)
+  drop24: number | null;
+  drop7: number | null;
   signals: DepegSignal[];
+  deregistrationRank: number | null;
 };
 
 export type DepegSignal = {
@@ -36,56 +56,76 @@ export type DepegSignal = {
   value?: number;
 };
 
-/* ── Thresholds ── */
+/* ── Deregistration rank derivation from manual lists ── */
 
-/** RISQUE_DEPEG entry thresholds */
-const HIGH_RISK_DROP24 = -0.20;  // -20% over 24h
-const HIGH_RISK_DROP7  = -0.35;  // -35% over 7d
+/**
+ * Derive a deregistration rank from the manual Taoflute-aligned lists.
+ * DEPEG_PRIORITY_MANUAL = top risk (ranks 1..N)
+ * HIGH_RISK_NEAR_DELIST_MANUAL = next tier (ranks N+1..M)
+ * Returns null if subnet is not in any list.
+ */
+function deriveDeregistrationRank(netuid: number): number | null {
+  const depegIdx = DEPEG_PRIORITY_MANUAL.indexOf(netuid);
+  if (depegIdx !== -1) return depegIdx + 1; // rank 1..10
 
-/** DEPEG_CONFIRMED entry thresholds */
-const CONFIRMED_DROP24 = -0.30;  // -30% over 24h
-const CONFIRMED_DROP7  = -0.50;  // -50% over 7d
+  const highRiskIdx = HIGH_RISK_NEAR_DELIST_MANUAL.indexOf(netuid);
+  if (highRiskIdx !== -1) return DEPEG_PRIORITY_MANUAL.length + highRiskIdx + 1; // rank 11..32
 
-/** Ticks required to confirm states */
-const HIGH_RISK_CONFIRM_TICKS = 2;
-const CONFIRMED_CONFIRM_TICKS = 3;
-
-/** Hysteresis exit thresholds (must be sustained for EXIT_TICKS) */
-const EXIT_DROP24 = -0.10;  // better than -10% 24h
-const EXIT_DROP7  = -0.20;  // better than -20% 7d
-const EXIT_TICKS  = 6;
-
-/* ── State cache (per subnet) ── */
-
-type DepegStateEntry = {
-  state: DepegState;
-  confirmedTicks: number;       // ticks meeting current threshold
-  stateEnteredAt: number;
-  exitTicks: number;            // consecutive ticks meeting exit criteria
-  lastDrop24: number | null;
-  lastDrop7: number | null;
-};
-
-const stateCache = new Map<number, DepegStateEntry>();
-
-/** Reset state cache (for testing) */
-export function clearDepegStateCache(): void {
-  stateCache.clear();
+  return null;
 }
 
-/** Get current cached state (for testing/inspection) */
-export function getDepegCachedState(netuid: number): DepegStateEntry | undefined {
-  return stateCache.get(netuid);
+/* ── Public: compute depeg state (v3 — deregistration based) ── */
+
+const DEBUG_DEPEG = false;
+
+/**
+ * Compute depeg state based on Taoflute deregistration logic.
+ * DEPEG = risk of deregistration, NOT price volatility.
+ *
+ * Rules:
+ * - immunityPhase → NONE
+ * - isWaitlisted → WAITLIST
+ * - rank 1-3 → CONFIRMED
+ * - rank 4-21 → WATCH
+ * - rank > 21 or not in list → NONE
+ * - no data → UNKNOWN (but we fallback to manual lists)
+ */
+export function computeDepegState(input: DepegInput): DepegState {
+  // 1) Immunity phase => no depeg
+  if (input.immunityPhase === true) return "NONE";
+
+  // 2) Explicit waitlist
+  if (input.isWaitlisted === true) return "WAITLIST";
+
+  // 3) Use explicit deregistrationRank if provided, otherwise derive from manual lists
+  let rank = input.deregistrationRank;
+  if (rank === undefined || rank === null) {
+    rank = deriveDeregistrationRank(input.netuid);
+  }
+
+  if (DEBUG_DEPEG) {
+    console.log(`[DEPEG-v3] SN-${input.netuid}: rank=${rank}, immunityPhase=${input.immunityPhase}, isWaitlisted=${input.isWaitlisted}`);
+  }
+
+  if (rank === null) return "NONE"; // not in any list = no risk
+
+  // Total listed subnets determines the WATCH boundary
+  const totalListed = DEPEG_PRIORITY_MANUAL.length + HIGH_RISK_NEAR_DELIST_MANUAL.length;
+
+  if (rank <= 3) return "CONFIRMED";
+  if (rank <= totalListed) return "WATCH";
+
+  return "NONE";
 }
 
-/* ── Drop computation ── */
+/* ── Drop computation (kept for informational display only) ── */
 
 function computeDrops(input: DepegInput): { drop24: number | null; drop7: number | null } {
   const { alphaPrice, price24hAgo, price7dAgo } = input;
 
   let drop24: number | null = null;
   if (price24hAgo != null && price24hAgo > 0 && alphaPrice >= 0) {
-    drop24 = (alphaPrice - price24hAgo) / price24hAgo; // negative = price fell
+    drop24 = (alphaPrice - price24hAgo) / price24hAgo;
   }
 
   let drop7: number | null = null;
@@ -98,17 +138,32 @@ function computeDrops(input: DepegInput): { drop24: number | null; drop7: number
 
 /* ── Signal generation ── */
 
-function buildSignals(drop24: number | null, drop7: number | null): DepegSignal[] {
+function buildSignals(drop24: number | null, drop7: number | null, state: DepegState, rank: number | null): DepegSignal[] {
   const signals: DepegSignal[] = [];
 
-  if (drop24 != null) {
+  if (rank != null) {
+    signals.push({
+      code: "DEREG_RANK",
+      label: `Rang déregistration: ${rank}`,
+      value: rank,
+    });
+  }
+
+  if (state !== "NONE" && state !== "UNKNOWN") {
+    signals.push({
+      code: "DEREG_STATE",
+      label: `État: ${depegStateLabel(state, true)}`,
+    });
+  }
+
+  if (drop24 != null && Math.abs(drop24) > 0.05) {
     signals.push({
       code: "DROP_24H",
       label: `Chute 24h: ${(drop24 * 100).toFixed(1)}%`,
       value: Math.round(drop24 * 100),
     });
   }
-  if (drop7 != null) {
+  if (drop7 != null && Math.abs(drop7) > 0.05) {
     signals.push({
       code: "DROP_7D",
       label: `Chute 7j: ${(drop7 * 100).toFixed(1)}%`,
@@ -119,158 +174,52 @@ function buildSignals(drop24: number | null, drop7: number | null): DepegSignal[
   return signals;
 }
 
-/* ── Threshold checks ── */
+/* ── Backward-compatible: computeDepegProbability ── */
 
-function meetsHighRiskThreshold(drop24: number | null, drop7: number | null): boolean {
-  return (drop24 != null && drop24 <= HIGH_RISK_DROP24) ||
-         (drop7 != null && drop7 <= HIGH_RISK_DROP7);
-}
-
-function meetsConfirmedThreshold(drop24: number | null, drop7: number | null): boolean {
-  return (drop24 != null && drop24 <= CONFIRMED_DROP24) ||
-         (drop7 != null && drop7 <= CONFIRMED_DROP7);
-}
-
-function meetsExitCriteria(drop24: number | null, drop7: number | null): boolean {
-  // Both must be above exit threshold (recovered enough)
-  const d24ok = drop24 == null || drop24 > EXIT_DROP24;
-  const d7ok  = drop7 == null || drop7 > EXIT_DROP7;
-  return d24ok && d7ok;
-}
-
-/* ── Guard rails ── */
-
-function canConfirmDepeg(input: DepegInput): boolean {
-  // Cannot confirm if < 7 days of history
-  if (input.historyDays != null && input.historyDays < 7) return false;
-  // Cannot confirm if data confidence < 70%
-  if (input.dataConfidence != null && input.dataConfidence < 70) return false;
-  return true;
-}
-
-/* ── Public: compute probability (backward compat) ── */
-
-/**
- * Compute depeg signals from price drops.
- * Returns drop values and signal breakdown.
- */
 export function computeDepegProbability(input: DepegInput): { probability: number; signals: DepegSignal[]; drop24: number | null; drop7: number | null } {
+  const state = computeDepegState(input);
   const { drop24, drop7 } = computeDrops(input);
-  const signals = buildSignals(drop24, drop7);
+  const rank = input.deregistrationRank ?? deriveDeregistrationRank(input.netuid);
+  const signals = buildSignals(drop24, drop7, state, rank);
 
-  // Simple probability mapping for display
   let probability = 0;
-  if (meetsConfirmedThreshold(drop24, drop7)) {
-    probability = 90;
-  } else if (meetsHighRiskThreshold(drop24, drop7)) {
-    probability = 60;
-  } else {
-    // Mild concern if any drop > 10%
-    const worst = Math.min(drop24 ?? 0, drop7 ?? 0);
-    if (worst < -0.10) {
-      probability = Math.round(Math.min(40, Math.abs(worst) * 200));
-    }
-  }
+  if (state === "CONFIRMED") probability = 90;
+  else if (state === "WAITLIST") probability = 75;
+  else if (state === "WATCH") probability = 40;
 
   return { probability, signals, drop24, drop7 };
 }
 
-/* ── State Machine with hysteresis ── */
+/* ── State Machine wrapper (backward compat for evaluateDepegState) ── */
+
+/** Reset state cache (for testing) — now a no-op since we don't use tick-based state */
+export function clearDepegStateCache(): void {
+  // No-op: v3 is stateless (deregistration rank based)
+}
+
+/** Get current cached state (for testing) — returns undefined since v3 is stateless */
+export function getDepegCachedState(_netuid: number): { state: DepegState; confirmedTicks: number; stateEnteredAt: number; exitTicks: number; lastDrop24: number | null; lastDrop7: number | null } | undefined {
+  return undefined;
+}
 
 /**
- * Evaluate depeg state for a subnet using pure price-drop logic.
- * Uses tick-based confirmation and hysteresis.
+ * Evaluate depeg state — v3: deregistration-rank based, no tick confirmation needed.
  */
-export function evaluateDepegState(input: DepegInput, now: number = Date.now()): DepegResult {
+export function evaluateDepegState(input: DepegInput, _now: number = Date.now()): DepegResult {
+  const state = computeDepegState(input);
   const { drop24, drop7 } = computeDrops(input);
-  const signals = buildSignals(drop24, drop7);
-  const netuid = input.netuid;
-
-  // Get or create state entry
-  let entry = stateCache.get(netuid);
-  if (!entry) {
-    entry = {
-      state: "NORMAL",
-      confirmedTicks: 0,
-      stateEnteredAt: now,
-      exitTicks: 0,
-      lastDrop24: null,
-      lastDrop7: null,
-    };
-    stateCache.set(netuid, entry);
-  }
-
-  const prevState = entry.state;
-
-  // ─── State transitions ───
-
-  if (prevState === "NORMAL") {
-    if (meetsHighRiskThreshold(drop24, drop7)) {
-      entry.confirmedTicks++;
-      if (entry.confirmedTicks >= HIGH_RISK_CONFIRM_TICKS) {
-        entry.state = "DEPEG_HIGH_RISK";
-        entry.stateEnteredAt = now;
-        entry.confirmedTicks = 0;
-        entry.exitTicks = 0;
-      }
-    } else {
-      entry.confirmedTicks = 0;
-    }
-  }
-
-  else if (prevState === "DEPEG_HIGH_RISK") {
-    if (meetsConfirmedThreshold(drop24, drop7) && canConfirmDepeg(input)) {
-      entry.confirmedTicks++;
-      if (entry.confirmedTicks >= CONFIRMED_CONFIRM_TICKS) {
-        entry.state = "DEPEG_CONFIRMED";
-        entry.stateEnteredAt = now;
-        entry.confirmedTicks = 0;
-        entry.exitTicks = 0;
-      }
-    } else if (meetsHighRiskThreshold(drop24, drop7)) {
-      // Stay in HIGH_RISK, reset confirmed tick count for upgrade
-      entry.confirmedTicks = 0;
-    } else {
-      // Dropped below HIGH_RISK threshold → back to NORMAL
-      entry.state = "NORMAL";
-      entry.confirmedTicks = 0;
-      entry.stateEnteredAt = now;
-      entry.exitTicks = 0;
-    }
-  }
-
-  else if (prevState === "DEPEG_CONFIRMED") {
-    // Hysteresis: only exit if drops recover for EXIT_TICKS consecutive scans
-    if (meetsExitCriteria(drop24, drop7)) {
-      entry.exitTicks++;
-      if (entry.exitTicks >= EXIT_TICKS) {
-        entry.state = "NORMAL";
-        entry.confirmedTicks = 0;
-        entry.stateEnteredAt = now;
-        entry.exitTicks = 0;
-      }
-    } else {
-      // Still bad → reset exit counter
-      entry.exitTicks = 0;
-    }
-  }
-
-  entry.lastDrop24 = drop24;
-  entry.lastDrop7 = drop7;
-
-  // Log state transitions
-  if (entry.state !== prevState) {
-    console.log(`[DEPEG] SN-${netuid}: ${prevState} → ${entry.state} | drop24=${drop24 != null ? (drop24 * 100).toFixed(1) + '%' : 'N/A'} | drop7=${drop7 != null ? (drop7 * 100).toFixed(1) + '%' : 'N/A'}`);
-  }
+  const rank = input.deregistrationRank ?? deriveDeregistrationRank(input.netuid);
+  const signals = buildSignals(drop24, drop7, state, rank);
 
   return {
-    netuid,
-    state: entry.state,
-    confirmedTicks: entry.confirmedTicks,
-    stateEnteredAt: entry.stateEnteredAt,
+    netuid: input.netuid,
+    state,
+    confirmedTicks: 0,
+    stateEnteredAt: _now,
     drop24,
     drop7,
     signals,
+    deregistrationRank: rank,
   };
 }
 
@@ -278,16 +227,20 @@ export function evaluateDepegState(input: DepegInput, now: number = Date.now()):
 
 export function depegStateColor(state: DepegState): string {
   switch (state) {
-    case "NORMAL": return "rgba(76,175,80,0.7)";
-    case "DEPEG_HIGH_RISK": return "rgba(255,152,0,0.9)";
-    case "DEPEG_CONFIRMED": return "rgba(229,57,53,0.95)";
+    case "NONE": return "rgba(76,175,80,0.7)";
+    case "WATCH": return "rgba(255,152,0,0.9)";
+    case "WAITLIST": return "rgba(255,87,34,0.9)";
+    case "CONFIRMED": return "rgba(229,57,53,0.95)";
+    case "UNKNOWN": return "rgba(158,158,158,0.5)";
   }
 }
 
 export function depegStateLabel(state: DepegState, fr: boolean = true): string {
   switch (state) {
-    case "NORMAL": return "Normal";
-    case "DEPEG_HIGH_RISK": return fr ? "Risque Depeg" : "Depeg Risk";
-    case "DEPEG_CONFIRMED": return fr ? "Depeg Confirmé" : "Depeg Confirmed";
+    case "NONE": return "Normal";
+    case "WATCH": return fr ? "Risque Dereg" : "Dereg Risk";
+    case "WAITLIST": return fr ? "Liste d'attente" : "Waitlist";
+    case "CONFIRMED": return fr ? "Dereg Confirmé" : "Dereg Confirmed";
+    case "UNKNOWN": return "—";
   }
 }

@@ -133,23 +133,29 @@ export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
 
   // Derive final system status
   let systemStatus = override.systemStatus;
-  if (depeg.state === "DEPEG_CONFIRMED") {
+  if (depeg.state === "CONFIRMED") {
     systemStatus = "DEPEG";
   } else if (delistCategory === "DEPEG_PRIORITY") {
     systemStatus = "DEPEG";
-  } else if (depeg.state === "DEPEG_HIGH_RISK" && systemStatus === "OK") {
+  } else if ((depeg.state === "WATCH" || depeg.state === "WAITLIST") && systemStatus === "OK") {
     systemStatus = "SURVEILLANCE";
   }
 
+  // Depeg probability mapping
+  let depegProbability = 0;
+  if (depeg.state === "CONFIRMED") depegProbability = 90;
+  else if (depeg.state === "WAITLIST") depegProbability = 75;
+  else if (depeg.state === "WATCH") depegProbability = 40;
+
   return {
     netuid: input.netuid,
-    isOverridden: override.isOverridden || delistCategory === "DEPEG_PRIORITY" || depeg.state === "DEPEG_CONFIRMED",
-    isWarning: override.isWarning || delistCategory === "HIGH_RISK_NEAR_DELIST" || depeg.state === "DEPEG_HIGH_RISK",
+    isOverridden: override.isOverridden || delistCategory === "DEPEG_PRIORITY" || depeg.state === "CONFIRMED",
+    isWarning: override.isWarning || delistCategory === "HIGH_RISK_NEAR_DELIST" || depeg.state === "WATCH" || depeg.state === "WAITLIST",
     systemStatus,
     overrideReasons: override.overrideReasons,
     delistCategory,
     delistScore,
-    depegProbability: depeg.drop24 != null || depeg.drop7 != null ? (depeg.state === "DEPEG_CONFIRMED" ? 90 : depeg.state === "DEPEG_HIGH_RISK" ? 60 : 0) : 0,
+    depegProbability,
     depegState: depeg.state,
     depegSignals: depeg.signals.map(s => s.label),
   };

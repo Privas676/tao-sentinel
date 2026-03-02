@@ -407,8 +407,8 @@ export function stateSeverity(state: DecisionState): number {
 /** Returns a human-readable French label */
 export function stateLabel(state: DecisionState): string {
   switch (state) {
-    case "DEPEG_CONFIRMED": return "DEPEG CONFIRMÉ";
-    case "DEPEG_HIGH_RISK": return "RISQUE DEPEG";
+    case "DEPEG_CONFIRMED": return "DEREG CONFIRMÉ";
+    case "DEPEG_HIGH_RISK": return "RISQUE DEREG";
     case "OVERRIDE_CRITICAL": return "OVERRIDE CRITIQUE";
     case "OVERRIDE_WARNING": return "OVERRIDE ALERTE";
     case "DATA_UNSTABLE": return "DONNÉES INSTABLES";
