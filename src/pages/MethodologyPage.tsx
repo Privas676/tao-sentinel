@@ -51,7 +51,7 @@ const content = {
           { name: "Concentration Cap/Liquidité", desc: "Ratio liquidité/capitalisation > 70% — marché illiquide." },
           { name: "Small Cap", desc: "Capitalisation < 20k TAO — vulnérabilité accrue." },
         ],
-        interpretation: `La classification utilise deux niveaux : **DEPEG PRIORITAIRE** (score ≥ 45, action : SORTIR) et **PROCHE DELIST** (score 28–44, action : SURVEILLER). La détection croise des listes manuelles (watchlists) avec une analyse automatique pour minimiser les faux négatifs.`,
+        interpretation: `La classification utilise deux niveaux : **RISQUE DEREG** (score ≥ 45, action : SORTIR) et **PROCHE DELIST** (score 28–44, action : SURVEILLER). La détection croise des listes manuelles (watchlists) avec une analyse automatique pour minimiser les faux négatifs.`,
       },
       {
         id: "confidence",

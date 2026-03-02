@@ -160,11 +160,11 @@ describe("delistCategory helpers", () => {
     expect(delistCategoryColor("NORMAL")).toContain("158,158,158");
   });
   it("labels FR", () => {
-    expect(delistCategoryLabel("DEPEG_PRIORITY", true)).toContain("DEPEG PRIORITAIRE");
+    expect(delistCategoryLabel("DEPEG_PRIORITY", true)).toContain("RISQUE DEREG");
     expect(delistCategoryLabel("HIGH_RISK_NEAR_DELIST", true)).toContain("PROCHE DELIST");
   });
   it("labels EN", () => {
-    expect(delistCategoryLabel("DEPEG_PRIORITY", false)).toContain("DEPEG PRIORITY");
+    expect(delistCategoryLabel("DEPEG_PRIORITY", false)).toContain("DEREG RISK");
     expect(delistCategoryLabel("HIGH_RISK_NEAR_DELIST", false)).toContain("NEAR DELIST");
   });
 });

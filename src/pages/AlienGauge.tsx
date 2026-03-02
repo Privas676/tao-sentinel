@@ -282,7 +282,7 @@ function SubnetPanel({ signal, open, onClose }: { signal: DashSignal | null; ope
             {signal.delistCategory !== "NORMAL" && (
               <div className="font-mono text-[10px] pt-2 border-t border-white/5 flex justify-between">
                 <span style={{ color: signal.delistCategory === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.9)" : "rgba(255,152,0,0.9)" }}>
-                  {signal.delistCategory === "DEPEG_PRIORITY" ? "🔴 DEPEG" : "🟠 Near Delist"}
+                  {signal.delistCategory === "DEPEG_PRIORITY" ? "🔴 RISQUE DEREG" : "🟠 Near Delist"}
                 </span>
                 <span className="text-white/60 font-bold">Score {signal.delistScore}</span>
               </div>

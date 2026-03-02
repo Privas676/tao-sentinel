@@ -346,7 +346,7 @@ export function delistCategoryColor(cat: DelistCategory): string {
 /** Get category label */
 export function delistCategoryLabel(cat: DelistCategory, fr: boolean): string {
   switch (cat) {
-    case "DEPEG_PRIORITY": return fr ? "🔴 DEPEG PRIORITAIRE" : "🔴 DEPEG PRIORITY";
+    case "DEPEG_PRIORITY": return fr ? "🔴 RISQUE DEREG" : "🔴 DEREG RISK";
     case "HIGH_RISK_NEAR_DELIST": return fr ? "🟠 PROCHE DELIST" : "🟠 NEAR DELIST";
     case "NORMAL": return "Normal";
   }

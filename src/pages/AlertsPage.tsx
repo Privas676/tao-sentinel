@@ -567,7 +567,7 @@ function DelistWatchlistView({ fr }: { fr: boolean }) {
       {depegPriority.length > 0 && (
         <div>
           <h3 className="font-mono text-xs tracking-widest mb-3 font-bold" style={{ color: "rgba(229,57,53,0.9)" }}>
-            🔴 {fr ? "DEPEG PRIORITAIRE" : "DEPEG PRIORITY"} ({depegPriority.length})
+            🔴 {fr ? "RISQUE DEREG" : "DEREG RISK"} ({depegPriority.length})
           </h3>
           <div className="space-y-1.5">
             {depegPriority.map(r => (
@@ -622,7 +622,7 @@ function ComparisonTable({ data, fr, scores }: {
     return (
       <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
         style={{ color: col, background: col.replace(/[\d.]+\)$/, "0.1)"), border: `1px solid ${col.replace(/[\d.]+\)$/, "0.2)")}` }}>
-        {r.category === "DEPEG_PRIORITY" ? "DEPEG" : r.category === "HIGH_RISK_NEAR_DELIST" ? (fr ? "PROCHE" : "NEAR") : "OK"}
+        {r.category === "DEPEG_PRIORITY" ? "DEREG" : r.category === "HIGH_RISK_NEAR_DELIST" ? (fr ? "PROCHE" : "NEAR") : "OK"}
       </span>
     );
   };
