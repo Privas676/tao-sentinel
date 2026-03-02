@@ -126,6 +126,87 @@ function scColor(state: SmartCapitalState): string {
 }
 
 /* ═══════════════════════════════════════ */
+/*   INLINE EDIT CELL                      */
+/* ═══════════════════════════════════════ */
+function InlineEditQty({ value, onSave }: { value: number; onSave: (v: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const save = () => {
+    const n = parseFloat(draft);
+    if (!isNaN(n) && n > 0) {
+      onSave(parseFloat(n.toFixed(4)));
+    }
+    setEditing(false);
+  };
+
+  const cancel = () => {
+    setDraft(String(value));
+    setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <span className="cursor-pointer hover:text-white/90 transition-colors" onClick={() => { setDraft(String(value)); setEditing(true); }} title="Cliquer pour éditer">
+        {value.toFixed(2)}
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input ref={inputRef} type="number" value={draft} min={0.01} step={0.01}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
+        className="w-20 bg-white/5 border border-white/15 rounded px-1.5 py-0.5 font-mono text-sm text-white/80 outline-none focus:border-yellow-500/40"
+      />
+      <button onClick={save} className="text-green-400/80 hover:text-green-400 text-xs" title="Sauver">✓</button>
+      <button onClick={cancel} className="text-white/30 hover:text-white/60 text-xs" title="Annuler">✕</button>
+    </span>
+  );
+}
+
+/* ═══════════════════════════════════════ */
+/*        CURRENCY TOGGLE                   */
+/* ═══════════════════════════════════════ */
+const CURRENCY_KEY = "portfolio_display_currency";
+type Currency = "TAO" | "USD";
+
+function useCurrencyToggle() {
+  const [currency, setCurrency] = useState<Currency>(() => {
+    try { return (localStorage.getItem(CURRENCY_KEY) as Currency) || "TAO"; } catch { return "TAO"; }
+  });
+  const toggle = (c: Currency) => { setCurrency(c); localStorage.setItem(CURRENCY_KEY, c); };
+  return { currency, toggle };
+}
+
+function CurrencyToggle({ currency, toggle, fr }: { currency: Currency; toggle: (c: Currency) => void; fr: boolean }) {
+  return (
+    <div className="inline-flex items-center gap-0 rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+      {(["TAO", "USD"] as Currency[]).map(c => (
+        <button key={c} onClick={() => toggle(c)}
+          className="font-mono text-[10px] tracking-wider px-3 py-1.5 transition-all"
+          style={{
+            background: currency === c ? "rgba(255,215,0,0.12)" : "transparent",
+            color: currency === c ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)",
+            borderRight: c === "TAO" ? "1px solid rgba(255,255,255,0.08)" : undefined,
+          }}>
+          {c === "TAO" ? "τ TAO" : "$ USD"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════ */
 /*        MAIN PAGE                        */
 /* ═══════════════════════════════════════ */
 export default function PortfolioPage() {
@@ -135,9 +216,19 @@ export default function PortfolioPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [addNetuid, setAddNetuid] = useState<number>(1);
   const [addQty, setAddQty] = useState<number>(10);
+  const { currency, toggle: toggleCurrency } = useCurrencyToggle();
 
   // ── UNIFIED SCORES (single source of truth) ──
-  const { scores, scoreTimestamp, sparklines, subnetList, dataAlignment, dataAgeDebug } = useSubnetScores();
+  const { scores, scoreTimestamp, sparklines, subnetList, dataAlignment, dataAgeDebug, taoUsd } = useSubnetScores();
+
+  const rate = currency === "USD" ? (taoUsd || 0) : 1;
+  const symbol = currency === "USD" ? "$" : "";
+  const suffix = currency === "TAO" ? " τ" : "";
+
+  const fmtValue = (v: number, decimals = 2) => {
+    const converted = v * rate;
+    return currency === "USD" ? `$${converted.toFixed(2)}` : `${converted.toFixed(decimals)} τ`;
+  };
 
   // Build enriched rows for portfolio positions using UNIFIED scores
   const rows = useMemo(() => {
@@ -145,7 +236,6 @@ export default function PortfolioPage() {
       const netuid = pos.subnet_id;
       const s = scores.get(netuid);
 
-      // Use unified scores directly — NO recalculation
       const opp = s?.opp ?? 0;
       const risk = s?.risk ?? 0;
       const asymmetry = s?.asymmetry ?? 0;
@@ -154,17 +244,15 @@ export default function PortfolioPage() {
       const isOverridden = s?.isOverridden ?? false;
       const systemStatus = s?.systemStatus ?? "OK" as const;
       const confianceData = s?.confianceScore ?? 50;
-      const dataUncertain = false; // TMC decoupled
+      const dataUncertain = false;
       const isBreak = s?.state === "BREAK" || s?.state === "EXIT_FAST";
       const price = s?.consensusPrice ?? 0;
 
-      // Action: RENFORCER instead of ENTRER for owned subnets
       const baseAction = s?.action ?? "WATCH";
       const action: string = baseAction === "ENTER" ? "REINFORCE" : baseAction;
 
       const currentValue = pos.quantity_tao * price;
 
-      // Alert conditions
       const alerts: string[] = [];
       if (isOverridden) alerts.push("Risque critique");
       else if (risk > 70) alerts.push("Risque élevé");
@@ -187,7 +275,7 @@ export default function PortfolioPage() {
     });
   }, [portfolio.positions, scores]);
 
-  // Portfolio totals (weighted aggregates only)
+  // Portfolio totals
   const totals = useMemo(() => {
     const totalTao = rows.reduce((a, r) => a + r.quantity, 0);
     const totalValue = rows.reduce((a, r) => a + r.currentValue, 0);
@@ -210,7 +298,7 @@ export default function PortfolioPage() {
     return { totalTao, totalValue, weightedAS, avgStability, accPct, distPct, highRiskPct };
   }, [rows]);
 
-  // Portfolio alerts (sorted by severity)
+  // Portfolio alerts
   const portfolioAlerts = useMemo(() => {
     return rows
       .filter(r => r.alerts.length > 0)
@@ -232,13 +320,23 @@ export default function PortfolioPage() {
     toast.success(fr ? `SN-${netuid} vendu et archivé ✓` : `SN-${netuid} sold and archived ✓`);
   };
 
+  const handleUpdateQty = (netuid: number, newQty: number) => {
+    portfolio.updateQuantity(netuid, newQty);
+    toast.success(fr ? `Quantité mise à jour ✓` : `Quantity updated ✓`);
+  };
+
   const addPrice = scores.get(addNetuid)?.consensusPrice ?? 0;
 
   return (
     <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
-      <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 mb-1 ml-28">
-        {fr ? "Portefeuille" : "Portfolio"}
-      </h1>
+      {/* ── HEADER with currency toggle ── */}
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 ml-28">
+          {fr ? "Portefeuille" : "Portfolio"}
+        </h1>
+        <CurrencyToggle currency={currency} toggle={toggleCurrency} fr={fr} />
+      </div>
+
       {/* Score timestamp badge */}
       <div className="mb-5 font-mono text-[8px] text-white/20 flex items-center gap-2" title={`Score snapshot: ${scoreTimestamp}`}>
         📊 Scores unifiés — {new Date(scoreTimestamp).toLocaleTimeString()}
@@ -247,8 +345,8 @@ export default function PortfolioPage() {
 
       {/* ── SUMMARY CARDS ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <SummaryCard label={fr ? "Total TAO" : "Total TAO"} value={`${totals.totalTao.toFixed(2)} τ`} color="rgba(255,215,0,0.7)" />
-        <SummaryCard label={fr ? "Valeur estimée" : "Estimated Value"} value={`${totals.totalValue.toFixed(4)} τ`} color="rgba(255,215,0,0.7)" />
+        <SummaryCard label={fr ? "Total TAO" : "Total TAO"} value={fmtValue(totals.totalTao, 2)} color="rgba(255,215,0,0.7)" />
+        <SummaryCard label={fr ? "Valeur estimée" : "Estimated Value"} value={fmtValue(totals.totalValue, 4)} color="rgba(255,215,0,0.7)" />
         <SummaryCard label={fr ? "AS moyen pondéré" : "Weighted AS"} value={`${totals.weightedAS >= 0 ? "+" : ""}${totals.weightedAS.toFixed(0)}`}
           color={totals.weightedAS >= 0 ? "rgba(76,175,80,0.9)" : "rgba(229,57,53,0.9)"} />
         <SummaryCard label={fr ? "Stabilité moy." : "Avg Stability"} value={`${totals.avgStability.toFixed(0)}%`}
@@ -362,7 +460,7 @@ export default function PortfolioPage() {
                 {["SN", fr ? "Nom" : "Name", "TAO", fr ? "Prix" : "Price", fr ? "Valeur" : "Value",
                   fr ? "Prix 7j" : "Price 7d",
                   "Opp", fr ? "Risque" : "Risk", "AS", fr ? "Stabilité" : "Stability",
-                  "Smart Capital", fr ? "Statut" : "Status", "Action", ""].map((h, i) => (
+                  "Smart Capital", fr ? "Statut" : "Status", "Action", "", ""].map((h, i) => (
                   <th key={i} className="py-2 px-2 font-mono text-[8px] tracking-[0.15em] uppercase text-white/25 font-normal">{h}</th>
                 ))}
               </tr>
@@ -398,9 +496,11 @@ export default function PortfolioPage() {
                         }}>OVERRIDE</span>
                       )}
                     </td>
-                    <td className="py-3 px-2 text-sm font-mono text-white/70">{r.quantity.toFixed(2)}</td>
-                    <td className="py-3 px-2 text-sm font-mono text-white/50">{r.price > 0 ? r.price.toFixed(6) : "—"}</td>
-                    <td className="py-3 px-2 text-sm font-mono" style={{ color: "rgba(255,215,0,0.7)" }}>{r.currentValue > 0 ? r.currentValue.toFixed(4) : "—"}</td>
+                    <td className="py-3 px-2 text-sm font-mono text-white/70">
+                      <InlineEditQty value={r.quantity} onSave={(v) => handleUpdateQty(r.netuid, v)} />
+                    </td>
+                    <td className="py-3 px-2 text-sm font-mono text-white/50">{r.price > 0 ? fmtValue(r.price, 6) : "—"}</td>
+                    <td className="py-3 px-2 text-sm font-mono" style={{ color: "rgba(255,215,0,0.7)" }}>{r.currentValue > 0 ? fmtValue(r.currentValue, 4) : "—"}</td>
                     <td className="py-3 px-2 text-center"><Sparkline data={sparklines?.get(r.netuid) || []} /></td>
                     <td className="py-3 px-2 text-sm font-mono font-bold" style={{ color: `rgba(76,175,80,${r.opp > 60 ? 0.9 : 0.5})` }}>{r.opp}</td>
                     <td className="py-3 px-2 text-sm font-mono font-bold" style={{ color: r.risk >= 60 ? "rgba(229,57,53,0.9)" : r.risk >= 40 ? "rgba(255,193,7,0.8)" : "rgba(255,255,255,0.4)" }}>{r.risk}</td>
@@ -420,6 +520,13 @@ export default function PortfolioPage() {
                       }}>
                         {actionLabel}
                       </span>
+                    </td>
+                    {/* TaoStats link */}
+                    <td className="py-3 px-1">
+                      <a href={`https://taostats.io/subnets/${r.netuid}`} target="_blank" rel="noopener noreferrer"
+                        className="text-white/20 hover:text-white/60 transition-colors text-sm" title={`TaoStats SN-${r.netuid}`}>
+                        📈
+                      </a>
                     </td>
                     <td className="py-3 px-2">
                       <div className="flex gap-1">
