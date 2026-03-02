@@ -574,7 +574,7 @@ export default function SubnetsPage() {
                           <div className="pt-1.5 border-t border-white/5">
                             <div className="flex justify-between items-center">
                               <span className="text-[9px]" style={{ color: r.delistCategory === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.9)" : "rgba(255,152,0,0.9)" }}>
-                                {r.delistCategory === "DEPEG_PRIORITY" ? "🔴 DEPEG" : "🟠 Near Delist"}
+                                {r.delistCategory === "DEPEG_PRIORITY" ? "🔴 RISQUE DEREG" : "🟠 Near Delist"}
                               </span>
                               <span className="text-white/60 font-bold text-[9px]">Score {r.delistScore}</span>
                             </div>
