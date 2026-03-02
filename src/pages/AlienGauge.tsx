@@ -737,42 +737,6 @@ export default function AlienGauge() {
             </div>
           )}
 
-          {/* ─── DEPEG CONFIRMED ALERT ─── */}
-          {depegConfirmedSubnets.length > 0 && (
-            <div className="mt-4 rounded-xl overflow-hidden animate-fade-in" style={{
-              background: "rgba(229,57,53,0.06)",
-              border: "1px solid rgba(229,57,53,0.25)",
-              boxShadow: "0 0 30px rgba(229,57,53,0.08), inset 0 0 20px rgba(229,57,53,0.03)",
-            }}>
-              <div className="flex items-center gap-2 px-4 py-2" style={{
-                background: "rgba(229,57,53,0.08)",
-                borderBottom: "1px solid rgba(229,57,53,0.12)",
-              }}>
-                <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: "rgba(229,57,53,0.9)", boxShadow: "0 0 8px rgba(229,57,53,0.6)" }} />
-                <span className="font-mono text-[10px] font-bold tracking-[0.2em] uppercase" style={{ color: "rgba(229,57,53,0.9)" }}>
-                  🚨 DEPEG CONFIRMÉ — {depegConfirmedSubnets.length} subnet{depegConfirmedSubnets.length > 1 ? "s" : ""}
-                </span>
-              </div>
-              <div className="px-4 py-2.5 space-y-1.5">
-                {depegConfirmedSubnets.map(s => {
-                  const dpColor = s.depegProbability >= 85 ? "rgba(229,57,53,0.95)" : s.depegProbability >= 70 ? "rgba(255,152,0,0.9)" : "rgba(255,193,7,0.8)";
-                  return (
-                    <div key={s.netuid} className="flex items-center gap-3 cursor-pointer hover:bg-white/[0.03] rounded-lg px-2 py-1.5 transition-all"
-                      onClick={() => setPanelSignal(s)}>
-                      <span className="font-mono font-bold text-[12px]" style={{ color: "rgba(229,57,53,0.9)" }}>SN-{s.netuid}</span>
-                      <span className="font-mono text-[10px] truncate flex-1" style={{ color: "rgba(255,255,255,0.4)" }}>{s.name}</span>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-10 h-1.5 rounded-full bg-white/5 overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${s.depegProbability}%`, background: dpColor }} />
-                        </div>
-                        <span className="font-mono text-[10px] font-bold" style={{ color: dpColor }}>{s.depegProbability}%</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* ─── DEPEG HIGH RISK ALERT ─── */}
           {depegHighRiskSubnets.length > 0 && depegConfirmedSubnets.length === 0 && (
