@@ -126,6 +126,22 @@
   .card, [class*="Card"] {
     margin-bottom: 24px;
   }
+  /* Scroll hint fade on swipeable tables */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  .overflow-x-auto::after {
+    content: "";
+    position: sticky;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, hsl(var(--background)));
+    display: block;
+    float: right;
+  }
 }
 
 /* ── 7️⃣ Minimum opacity guard ── */
