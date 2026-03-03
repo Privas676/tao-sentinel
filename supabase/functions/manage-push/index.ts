@@ -143,26 +143,14 @@ Deno.serve(async (req) => {
         { global: { headers: { Authorization: authHeader } } }
       );
 
-      // Lovable Cloud compatibility: try JWT claims first, then fallback to getUser.
-      let userId: string | null = null;
-
-      const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
-      if (!claimsErr && claimsData?.claims?.sub) {
-        userId = String(claimsData.claims.sub);
-      }
-
-      if (!userId) {
-        const { data: { user }, error: userErr } = await userClient.auth.getUser(token);
-        if (!userErr && user) {
-          userId = user.id;
-        }
-      }
-
-      if (!userId) {
+      const { data: { user }, error: userErr } = await userClient.auth.getUser(token);
+      if (userErr || !user) {
+        console.error("manage-push auth error:", userErr?.message);
         return new Response(JSON.stringify({ error: "Unauthorized - please sign in first" }), {
           status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      const userId = user.id;
 
       // Insert a test GO event, then invoke send-push-notifications
       const { error: evErr } = await sb.from("events").insert({
