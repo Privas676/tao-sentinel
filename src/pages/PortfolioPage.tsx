@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
+import SwipeHint from "@/components/SwipeHint";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
@@ -218,20 +218,8 @@ export default function PortfolioPage() {
   const [addNetuid, setAddNetuid] = useState<number>(1);
   const [addQty, setAddQty] = useState<number>(10);
   const { currency, toggle: toggleCurrency } = useCurrencyToggle();
-  const isMobile = useIsMobile();
-  const [showSwipeHint, setShowSwipeHint] = useState(false);
 
-  useEffect(() => {
-    if (!isMobile) return;
-    const seen = sessionStorage.getItem("swipe-hint-portfolio-seen");
-    if (seen) return;
-    setShowSwipeHint(true);
-    const timer = setTimeout(() => {
-      setShowSwipeHint(false);
-      sessionStorage.setItem("swipe-hint-portfolio-seen", "1");
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [isMobile]);
+
 
   // ── UNIFIED SCORES (single source of truth) ──
   const { scores, scoreTimestamp, sparklines, subnetList, dataAlignment, dataAgeDebug, taoUsd } = useSubnetScores();
@@ -477,21 +465,7 @@ export default function PortfolioPage() {
         </div>
       ) : (
         <>
-          {showSwipeHint && (
-            <div
-              className="flex items-center justify-center gap-2 py-2 mb-2 rounded-lg font-mono text-[11px] tracking-wider"
-              style={{
-                background: "rgba(255,215,0,0.06)",
-                border: "1px solid rgba(255,215,0,0.12)",
-                color: "rgba(255,215,0,0.6)",
-                animation: "fade-in 0.4s ease-out, swipe-hint-out 0.5s ease-in 2.5s forwards",
-              }}
-            >
-              <span style={{ display: "inline-block", animation: "swipe-arrow 1.2s ease-in-out infinite" }}>→</span>
-              {fr ? "Swipez pour voir plus" : "Swipe for more"}
-              <span style={{ display: "inline-block", animation: "swipe-arrow 1.2s ease-in-out infinite" }}>→</span>
-            </div>
-          )}
+          <SwipeHint storageKey="swipe-hint-portfolio-seen" />
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
           <table className="w-full text-left border-collapse">
             <thead>
