@@ -18,6 +18,10 @@ export default {
         mono: ["JetBrains Mono", "monospace"],
       },
       colors: {
+        gold: {
+          DEFAULT: "hsl(var(--gold))",
+          border: "hsl(var(--gold-border))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
