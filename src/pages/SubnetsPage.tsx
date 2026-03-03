@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
 import DistributionBadge from "@/components/DistributionBadge";
 import { useI18n } from "@/lib/i18n";
@@ -153,6 +154,20 @@ export default function SubnetsPage() {
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const { ownedNetuids, addPosition, isOwned } = useLocalPortfolio();
+  const isMobile = useIsMobile();
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const seen = sessionStorage.getItem("swipe-hint-seen");
+    if (seen) return;
+    setShowSwipeHint(true);
+    const timer = setTimeout(() => {
+      setShowSwipeHint(false);
+      sessionStorage.setItem("swipe-hint-seen", "1");
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isMobile]);
 
   const toggleSort = (col: SortCol) => {
     if (sortCol === col) {
@@ -308,6 +323,23 @@ export default function SubnetsPage() {
           );
         })()}
       </div>
+
+      {/* Swipe hint — mobile only, first visit */}
+      {showSwipeHint && (
+        <div
+          className="flex items-center justify-center gap-2 py-2 mb-2 rounded-lg font-mono text-[11px] tracking-wider animate-fade-in"
+          style={{
+            background: "rgba(255,215,0,0.06)",
+            border: "1px solid rgba(255,215,0,0.12)",
+            color: "rgba(255,215,0,0.6)",
+            animation: "fade-in 0.4s ease-out, swipe-hint-out 0.5s ease-in 2.5s forwards",
+          }}
+        >
+          <span style={{ display: "inline-block", animation: "swipe-arrow 1.2s ease-in-out infinite" }}>→</span>
+          {lang === "fr" ? "Swipez pour voir plus" : "Swipe for more"}
+          <span style={{ display: "inline-block", animation: "swipe-arrow 1.2s ease-in-out infinite" }}>→</span>
+        </div>
+      )}
 
       {/* Table — swipe-friendly on mobile */}
       <div className="overflow-x-auto -webkit-overflow-scrolling-touch relative" style={{ WebkitOverflowScrolling: "touch" }}>
