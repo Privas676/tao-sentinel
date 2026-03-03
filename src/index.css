@@ -147,6 +147,15 @@
 /* ── 7️⃣ Minimum opacity guard ── */
 /* Ensure muted-foreground never goes below 0.65 opacity equivalent */
 
+/* ── Swipe hint animations ── */
+@keyframes swipe-arrow {
+  0%, 100% { transform: translateX(0); opacity: 0.5; }
+  50% { transform: translateX(6px); opacity: 1; }
+}
+@keyframes swipe-hint-out {
+  to { opacity: 0; transform: translateY(-4px); pointer-events: none; }
+}
+
 /* Custom scrollbar for Grafana feel */
 ::-webkit-scrollbar {
   width: 6px;
