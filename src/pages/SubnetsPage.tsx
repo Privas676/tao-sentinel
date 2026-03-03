@@ -242,9 +242,9 @@ export default function SubnetsPage() {
   };
 
   return (
-    <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14 pl-4 sm:pl-6">
+    <div className="h-full w-full bg-background text-foreground p-4 sm:p-6 overflow-auto pt-14 pl-4 sm:pl-6">
       <div className="flex items-center gap-3 mb-5 sm:mb-7 ml-28">
-        <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85">{t("sub.title")}</h1>
+        <h1 className="font-mono text-lg sm:text-xl tracking-widest">{t("sub.title")}</h1>
         <span className="font-mono text-[8px] px-2 py-0.5 rounded cursor-help"
           style={{ background: "rgba(255,215,0,0.06)", color: "rgba(255,215,0,0.5)", border: "1px solid rgba(255,215,0,0.1)" }}
           title={`Score snapshot: ${scoreTimestamp}`}>
