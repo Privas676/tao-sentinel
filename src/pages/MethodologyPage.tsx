@@ -208,7 +208,7 @@ export default function MethodologyPage() {
   const c = content[lang === "fr" ? "fr" : "en"];
 
   return (
-    <div className="h-full w-full bg-[#000] text-white/70 overflow-auto pt-14 px-4 sm:px-8 pb-16">
+    <div className="h-full w-full bg-background text-muted-foreground overflow-auto pt-14 px-4 sm:px-8 pb-16">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <Link

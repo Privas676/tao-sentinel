@@ -53,7 +53,7 @@ function AppLayout() {
   const SIDEBAR_W = 200;
 
   return (
-    <div className="h-screen w-screen flex bg-black overflow-hidden">
+    <div className="h-screen w-screen flex bg-background overflow-hidden">
       {/* Sidebar toggle */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}

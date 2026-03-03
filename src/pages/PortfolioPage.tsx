@@ -331,7 +331,7 @@ export default function PortfolioPage() {
   const addPrice = scores.get(addNetuid)?.consensusPrice ?? 0;
 
   return (
-    <div className="h-full w-full bg-[#000] text-white p-4 sm:p-6 overflow-auto pt-14">
+    <div className="h-full w-full bg-background text-foreground p-4 sm:p-6 overflow-auto pt-14">
       {/* ── HEADER with currency toggle ── */}
       <div className="flex items-center justify-between mb-1">
         <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/85 ml-28">
