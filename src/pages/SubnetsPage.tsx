@@ -309,15 +309,15 @@ export default function SubnetsPage() {
         })()}
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full font-mono text-xs">
+      {/* Table — swipe-friendly on mobile */}
+      <div className="overflow-x-auto -webkit-overflow-scrolling-touch relative" style={{ WebkitOverflowScrolling: "touch" }}>
+        <table className="w-full font-mono text-xs" style={{ minWidth: 1200 }}>
           <thead>
             <tr className="border-b border-white/10 text-white/40">
-              <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("netuid")}>
+              <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors sticky left-0 z-10 bg-background" onClick={() => toggleSort("netuid")}>
                 SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
-              <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("name")}>
+              <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors sticky left-[40px] z-10 bg-background" style={{ boxShadow: "4px 0 8px -2px rgba(0,0,0,0.3)" }} onClick={() => toggleSort("name")}>
                 {t("sub.name")} {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
               <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("dstate")}>
@@ -389,8 +389,8 @@ export default function SubnetsPage() {
                     ...(r.isOverridden ? { background: "rgba(229,57,53,0.03)", borderLeft: "2px solid rgba(229,57,53,0.4)" } : {}),
                   }}
                   onClick={() => window.open(`https://taostats.io/subnets/${r.netuid}`, "_blank")}>
-                  <td className="py-3 px-2 text-white/55 text-sm">{r.netuid}</td>
-                  <td className="py-3 px-2 text-sm" style={{ color: isTop1 ? "rgba(255,248,220,0.95)" : r.isOverridden ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.75)", fontWeight: isTop1 ? 700 : 400 }}>
+                  <td className="py-3 px-2 text-white/55 text-sm sticky left-0 z-[5] bg-background">{r.netuid}</td>
+                  <td className="py-3 px-2 text-sm sticky left-[40px] z-[5] bg-background" style={{ color: isTop1 ? "rgba(255,248,220,0.95)" : r.isOverridden ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.75)", fontWeight: isTop1 ? 700 : 400, boxShadow: "4px 0 8px -2px rgba(0,0,0,0.3)" }}>
                     <span>{r.name}</span>
                     {SPECIAL_SUBNETS[r.netuid] && (
                       <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider"
