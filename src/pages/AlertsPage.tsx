@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useDelistMode } from "@/hooks/use-delist-mode";
@@ -773,6 +774,21 @@ export default function AlertsPage() {
   const [confidenceFilter, setConfidenceFilter] = useState(false);
   const [dismissed, setDismissed] = useState<Map<string, number>>(() => getDismissedAlerts());
   const fr = lang === "fr";
+  const isMobile = useIsMobile();
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const seen = sessionStorage.getItem("swipe-hint-alerts-seen");
+    if (seen) return;
+    setShowSwipeHint(true);
+    const timer = setTimeout(() => {
+      setShowSwipeHint(false);
+      sessionStorage.setItem("swipe-hint-alerts-seen", "1");
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isMobile]);
+
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
   const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, error: pushError } = usePushNotifications();
@@ -1025,6 +1041,23 @@ export default function AlertsPage() {
           </span>
         )}
       </div>
+
+      {/* Swipe hint — mobile only, first visit */}
+      {showSwipeHint && (
+        <div
+          className="flex items-center justify-center gap-2 py-2 mb-2 rounded-lg font-mono text-[11px] tracking-wider"
+          style={{
+            background: "rgba(255,215,0,0.06)",
+            border: "1px solid rgba(255,215,0,0.12)",
+            color: "rgba(255,215,0,0.6)",
+            animation: "fade-in 0.4s ease-out, swipe-hint-out 0.5s ease-in 2.5s forwards",
+          }}
+        >
+          <span style={{ display: "inline-block", animation: "swipe-arrow 1.2s ease-in-out infinite" }}>→</span>
+          {fr ? "Swipez pour voir plus" : "Swipe for more"}
+          <span style={{ display: "inline-block", animation: "swipe-arrow 1.2s ease-in-out infinite" }}>→</span>
+        </div>
+      )}
 
       {/* STATE filter: show DEPEG/DELIST WATCHLIST + state events */}
       {filter === "STATE" ? (
