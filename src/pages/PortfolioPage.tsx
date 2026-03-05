@@ -466,8 +466,8 @@ export default function PortfolioPage() {
       ) : (
         <>
           <SwipeHint storageKey="swipe-hint-portfolio-seen" />
-          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
-          <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto -mx-4 px-0" style={{ WebkitOverflowScrolling: "touch" }}>
+          <table className="text-left border-collapse" style={{ minWidth: 1100 }}>
             <thead>
               <tr className="border-b border-white/[0.06]">
                 {["SN", fr ? "Nom" : "Name", fr ? "TAO investis" : "TAO Invested", "Alpha (qty)",
@@ -475,7 +475,9 @@ export default function PortfolioPage() {
                   fr ? "Prix 7j" : "Price 7d",
                   "Opp", fr ? "Risque" : "Risk", "AS", fr ? "Stabilité" : "Stability",
                   "Smart Capital", fr ? "Statut" : "Status", "Action", "", ""].map((h, i) => (
-                  <th key={i} className="py-2 px-2 font-mono text-[8px] tracking-[0.15em] uppercase text-white/25 font-normal">{h}</th>
+                  <th key={i} className={`py-2 px-2 font-mono text-[8px] tracking-[0.15em] uppercase text-white/25 font-normal whitespace-nowrap ${
+                    i === 0 ? "sticky left-0 z-20 bg-background" : i === 1 ? "sticky left-[40px] z-20 bg-background" : ""
+                  }`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -501,8 +503,8 @@ export default function PortfolioPage() {
                       background: r.isOverridden ? "rgba(229,57,53,0.03)" : undefined,
                       borderLeft: r.isOverridden ? "2px solid rgba(229,57,53,0.4)" : r.alerts.length > 0 ? "2px solid rgba(255,193,7,0.3)" : undefined,
                     }}>
-                    <td className="py-3 px-2 text-white/55 text-sm font-mono">{r.netuid}</td>
-                    <td className="py-3 px-2 text-sm font-mono">
+                    <td className="py-3 px-2 text-white/55 text-sm font-mono sticky left-0 z-10 bg-background">{r.netuid}</td>
+                    <td className="py-3 px-2 text-sm font-mono sticky left-[40px] z-10 bg-background">
                       <span className="text-white/80">{r.name}</span>
                       {r.isOverridden && (
                         <span className="ml-2 text-[8px] px-1.5 py-0.5 rounded" style={{
