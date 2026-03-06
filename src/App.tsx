@@ -48,6 +48,7 @@ function AppLayout() {
     { path: "/alerts", label: t("nav.alerts"), icon: "⚡", badge: unreadCount },
     { path: "/settings", label: t("nav.settings"), icon: "⚙" },
     { path: "/install", label: "Installer", icon: "📲" },
+    { path: "/radar", label: "Radar", icon: "📡" },
     { path: "/methodology", label: lang === "fr" ? "Méthodo" : "Method", icon: "📖" },
   ];
 
