@@ -54,6 +54,7 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
 export default function RadarPage() {
   const { data: radarData, isLoading, error } = useStakeAnalytics();
   const [activeTab, setActiveTab] = useState<TabKey>("capital");
+  const [search, setSearch] = useState("");
 
   // Global averages
   const avgScores = useMemo(() => {
@@ -66,18 +67,28 @@ export default function RadarPage() {
     };
   }, [radarData]);
 
+  // Filter by search
+  const filtered = useMemo(() => {
+    if (!radarData?.length) return [];
+    if (!search.trim()) return radarData;
+    const q = search.trim().toLowerCase();
+    return radarData.filter(
+      (d) => d.subnetName.toLowerCase().includes(q) || String(d.netuid).includes(q)
+    );
+  }, [radarData, search]);
+
   // Sorted data for each tab
   const capitalFlow = useMemo(
-    () => [...(radarData || [])].sort((a, b) => b.scores.capitalMomentum - a.scores.capitalMomentum),
-    [radarData]
+    () => [...filtered].sort((a, b) => b.scores.capitalMomentum - a.scores.capitalMomentum),
+    [filtered]
   );
   const adoptionRadar = useMemo(
-    () => [...(radarData || [])].sort((a, b) => b.scores.healthIndex - a.scores.healthIndex),
-    [radarData]
+    () => [...filtered].sort((a, b) => b.scores.healthIndex - a.scores.healthIndex),
+    [filtered]
   );
   const dumpRiskSorted = useMemo(
-    () => [...(radarData || [])].sort((a, b) => b.scores.dumpRisk - a.scores.dumpRisk),
-    [radarData]
+    () => [...filtered].sort((a, b) => b.scores.dumpRisk - a.scores.dumpRisk),
+    [filtered]
   );
 
   if (isLoading) {
@@ -113,7 +124,7 @@ export default function RadarPage() {
             📡 Radar Intelligence
           </h1>
           <p className="font-mono text-[11px] text-muted-foreground">
-            Détection des flux de capital et narratives émergentes · {radarData.length} subnets analysés
+            Détection des flux de capital et narratives émergentes · {search ? `${filtered.length}/` : ""}{radarData.length} subnets analysés
           </p>
         </div>
 
@@ -142,23 +153,42 @@ export default function RadarPage() {
           </div>
         )}
 
-        {/* Tab Navigation */}
-        <div className="flex gap-1 overflow-x-auto pb-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-mono text-[11px] tracking-wider whitespace-nowrap transition-all"
-              style={{
-                background: activeTab === tab.key ? "rgba(255,255,255,0.08)" : "transparent",
-                color: activeTab === tab.key ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
-                border: activeTab === tab.key ? "1px solid rgba(255,255,255,0.12)" : "1px solid transparent",
-              }}
-            >
-              <span>{tab.icon}</span>
-              <span>{tab.label}</span>
-            </button>
-          ))}
+        {/* Tab Navigation + Search */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="flex gap-1 overflow-x-auto pb-1 flex-1">
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-mono text-[11px] tracking-wider whitespace-nowrap transition-all"
+                style={{
+                  background: activeTab === tab.key ? "rgba(255,255,255,0.08)" : "transparent",
+                  color: activeTab === tab.key ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
+                  border: activeTab === tab.key ? "1px solid rgba(255,255,255,0.12)" : "1px solid transparent",
+                }}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="relative">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un subnet…"
+              className="w-full sm:w-44 px-3 py-1.5 rounded-lg font-mono text-[11px] bg-secondary text-foreground placeholder:text-muted-foreground/50 border border-border focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tab Content */}
@@ -166,8 +196,8 @@ export default function RadarPage() {
           {activeTab === "capital" && <CapitalFlowTable data={capitalFlow} />}
           {activeTab === "adoption" && <AdoptionTable data={adoptionRadar} />}
           {activeTab === "risk" && <DumpRiskTable data={dumpRiskSorted} />}
-          {activeTab === "heatmap" && <TreemapHeatmap data={radarData} />}
-          {activeTab === "smartmoney" && <SmartMoneyPanel data={radarData} />}
+          {activeTab === "heatmap" && <TreemapHeatmap data={filtered} />}
+          {activeTab === "smartmoney" && <SmartMoneyPanel data={filtered} />}
         </div>
       </div>
     </div>
