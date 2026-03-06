@@ -3,12 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   computeRadarScores,
   computeFundamentalsScore,
+  computeDerivedMetrics,
   checkAlerts,
   type StakeSnapshot,
   type StakeDeltas,
   type RadarScores,
   type RadarAlerts,
   type PriceContext,
+  type EconomicContext,
+  type DerivedMetrics,
 } from "@/lib/stake-analytics";
 
 export type SubnetRadarData = {
@@ -19,6 +22,8 @@ export type SubnetRadarData = {
   scores: RadarScores;
   alerts: RadarAlerts;
   priceContext: PriceContext;
+  economicContext: EconomicContext;
+  derivedMetrics: DerivedMetrics;
   stakeChange24hPct: number;
   stakeChange7dPct: number;
   sparklineCapital: number[];
@@ -34,31 +39,68 @@ function median(arr: number[]): number {
 
 const RAO = 1e9;
 
-/** Parse a RAO-scale number to TAO */
 function raoToTao(v: any): number {
   const n = Number(v || 0);
   return n > 1e6 ? n / RAO : n;
 }
 
-/** Compute % change between first and last price in seven_day_prices array */
 function computePriceChanges(sevenDayPrices: any[]): { change1d: number; change7d: number; change30d: number } {
   if (!Array.isArray(sevenDayPrices) || sevenDayPrices.length < 2) {
     return { change1d: 0, change7d: 0, change30d: 0 };
   }
   const latest = Number(sevenDayPrices[sevenDayPrices.length - 1]?.price || 0);
   if (latest <= 0) return { change1d: 0, change7d: 0, change30d: 0 };
-
-  // 1d ago: ~6 data points back (4h intervals, 6 points = 24h)
   const idx1d = Math.max(0, sevenDayPrices.length - 7);
   const price1d = Number(sevenDayPrices[idx1d]?.price || latest);
-  
-  // 7d ago: first element
   const price7d = Number(sevenDayPrices[0]?.price || latest);
-
   return {
     change1d: price1d > 0 ? ((latest - price1d) / price1d) * 100 : 0,
     change7d: price7d > 0 ? ((latest - price7d) / price7d) * 100 : 0,
-    change30d: 0, // Only 7d of data available
+    change30d: 0,
+  };
+}
+
+/** Extract full economic context from Taostats raw_payload */
+function extractEconomicContext(rp: any, rpEntry: any): EconomicContext {
+  const chain = rp?._chain || {};
+  const totalIssued = raoToTao(rp.total_issued ?? rp.total_supply ?? 0);
+  const totalBurned = raoToTao(rp.total_burned ?? 0);
+  const circulatingSupply = raoToTao(rp.circulating_supply ?? 0);
+  const alphaStaked = raoToTao(rp.alpha_staked ?? 0);
+  const alphaInPool = raoToTao(rp.alpha_in_pool ?? 0);
+  const taoInPool = raoToTao(rp.tao_in_pool ?? 0);
+  const totalAlphaPool = alphaInPool + taoInPool;
+  const marketCap = raoToTao(rp.market_cap ?? 0);
+  const vol24h = raoToTao(rp.tao_volume_24_hr ?? 0);
+  const buyVolume = raoToTao(rp.buy_volume ?? rp.tao_buy_volume ?? 0);
+  const sellVolume = raoToTao(rp.sell_volume ?? rp.tao_sell_volume ?? 0);
+  const totalVol = buyVolume + sellVolume;
+
+  return {
+    emissionsPercent: Number(rp.emissions_percent ?? rp.emission_percent ?? chain.emission_percent ?? 0),
+    emissionsPerDay: raoToTao(rp.emissions_per_day ?? chain.emission_per_day ?? 0),
+    minerPerDay: raoToTao(rp.miner_rewards_per_day ?? 0),
+    validatorPerDay: raoToTao(rp.validator_rewards_per_day ?? 0),
+    ownerPerDay: raoToTao(rp.owner_rewards_per_day ?? 0),
+    rootProportion: Number(rp.root_proportion ?? 0),
+    totalIssued,
+    totalBurned,
+    circulatingSupply,
+    maxSupply: raoToTao(rp.max_supply ?? 0),
+    alphaStaked,
+    alphaInPool,
+    taoInPool,
+    alphaPoolPercent: totalAlphaPool > 0 ? (alphaInPool / totalAlphaPool) * 100 : 0,
+    taoPoolPercent: totalAlphaPool > 0 ? (taoInPool / totalAlphaPool) * 100 : 0,
+    fdv: raoToTao(rp.fdv ?? rp.fully_diluted_valuation ?? 0),
+    volumeMarketcapRatio: marketCap > 0 ? vol24h / marketCap : 0,
+    buyVolume,
+    sellVolume,
+    buyersCount: Number(rp.buyers_count ?? rp.unique_buyers ?? 0),
+    sellersCount: Number(rp.sellers_count ?? rp.unique_sellers ?? 0),
+    buyTxCount: Number(rp.buy_tx_count ?? rp.buys_24_hr ?? 0),
+    sellTxCount: Number(rp.sell_tx_count ?? rp.sells_24_hr ?? 0),
+    sentiment: totalVol > 0 ? buyVolume / totalVol : 0.5,
   };
 }
 
@@ -66,7 +108,6 @@ export function useStakeAnalytics() {
   return useQuery({
     queryKey: ["stake-analytics"],
     queryFn: async () => {
-      // Fetch latest stake analytics per subnet (has validators, miners, holders, uid_usage)
       const { data: analytics, error } = await (supabase as any)
         .from("subnet_stake_analytics")
         .select("netuid, holders_count, miners_active, miners_total, validators_active, uid_usage, stake_concentration, large_wallet_inflow, large_wallet_outflow, ts, raw_data")
@@ -75,16 +116,12 @@ export function useStakeAnalytics() {
 
       if (error) throw error;
 
-      // Dedupe to latest per netuid
       const latest = new Map<number, any>();
       for (const row of analytics || []) {
         if (!latest.has(row.netuid)) latest.set(row.netuid, row);
       }
 
-      // Fetch 7d-ago stake analytics for deltas
       const ts7dAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
-      // Use subnet_latest_display (pre-computed view, faster) for lightweight fields
-      // raw_payload fetched separately in batches from subnet_latest
       const [hist7dRes, lightweightRes] = await Promise.all([
         (supabase as any)
           .from("subnet_stake_analytics")
@@ -97,7 +134,7 @@ export function useStakeAnalytics() {
           .select("netuid, price, cap, vol_24h, miners_active"),
       ]);
 
-      // Fetch raw_payload in batches of 30 to avoid statement timeout
+      // Fetch raw_payload in batches
       const netuidBatches: number[][] = [];
       const allNetuids = [...latest.keys()];
       for (let i = 0; i < allNetuids.length; i += 30) {
@@ -114,46 +151,26 @@ export function useStakeAnalytics() {
 
       const dedup = (rows: any[]) => {
         const m = new Map<number, any>();
-        for (const r of rows || []) {
-          if (!m.has(r.netuid)) m.set(r.netuid, r);
-        }
+        for (const r of rows || []) { if (!m.has(r.netuid)) m.set(r.netuid, r); }
         return m;
       };
 
       const map7d = dedup(hist7dRes.data || []);
-      // Merge lightweight + raw_payload
       const lightMap = dedup(lightweightRes.data || []);
       const rawMap = new Map<number, any>();
       for (const res of rawPayloadResults) {
-        for (const row of res.data || []) {
-          rawMap.set(row.netuid, row.raw_payload);
-        }
+        for (const row of res.data || []) rawMap.set(row.netuid, row.raw_payload);
       }
-      // Combine into unified map
       const rawPayloadMap = new Map<number, any>();
       for (const [nid, light] of lightMap) {
         rawPayloadMap.set(nid, { ...light, raw_payload: rawMap.get(nid) || null });
       }
 
-      // Fetch subnet names
       const { data: subnets } = await supabase.from("subnets").select("netuid, name");
       const nameMap = new Map<number, string>();
-      for (const s of subnets || []) {
-        nameMap.set(s.netuid, s.name || `SN-${s.netuid}`);
-      }
+      for (const s of subnets || []) nameMap.set(s.netuid, s.name || `SN-${s.netuid}`);
 
-      // First pass: extract real data from raw_payload
-      type PreCompute = {
-        netuid: number;
-        snapshot: StakeSnapshot;
-        deltas: StakeDeltas;
-        priceContext: PriceContext;
-        fundamentalsScore: number;
-        sparklineCapital: number[];
-        sparklineAdoption: number[];
-      };
-
-      // Compute total emission across all subnets for emission share
+      // Compute total emission for emission share
       let totalEmission = 0;
       const emissionMap = new Map<number, number>();
       for (const [netuid] of latest) {
@@ -163,70 +180,76 @@ export function useStakeAnalytics() {
         totalEmission += emission;
       }
 
+      type PreCompute = {
+        netuid: number;
+        snapshot: StakeSnapshot;
+        deltas: StakeDeltas;
+        priceContext: PriceContext;
+        economicContext: EconomicContext;
+        fundamentalsScore: number;
+        sparklineCapital: number[];
+        sparklineAdoption: number[];
+      };
+
       const preComputed: PreCompute[] = [];
 
       for (const [netuid, row] of latest) {
         const prev7d = map7d.get(netuid);
         const rpEntry = rawPayloadMap.get(netuid);
         const rp = rpEntry?.raw_payload || {};
+        const chain = rp._chain || {};
 
-        // === REAL DATA FROM raw_payload ===
         const alphaStaked = raoToTao(rp.alpha_staked);
         const marketCap = raoToTao(rp.market_cap);
         const vol24h = raoToTao(rp.tao_volume_24_hr);
         const currentPrice = Number(rp.price || rpEntry?.price || 0);
         const emission = emissionMap.get(netuid) || 0;
         const emissionShare = totalEmission > 0 ? (emission / totalEmission) * 100 : 0;
-
-        // Price changes from seven_day_prices array
         const priceChanges = computePriceChanges(rp.seven_day_prices);
 
-        // Active UIDs from chain data (more accurate than subnet_stake_analytics for some subnets)
-        const chainActiveUids = Number(rp._chain?.active_uids || 0);
+        const chainActiveUids = Number(chain.active_uids || 0);
         const minersActive = Math.max(row.miners_active || 0, chainActiveUids);
         const validatorsActive = row.validators_active || 0;
-
-        // Liquidity from raw_payload
         const liquidity = raoToTao(rp.liquidity_raw || rp.liquidity);
 
-        // Whale flows: use per-subnet whale_movements if available, otherwise use stake analytics
-        // Note: subnet_stake_analytics currently has global flows (74/40), so we'll zero them out
-        // unless they differ per subnet
+        // UID data from chain
+        const uidUsed = Number(chain.active_uids ?? rp.active_uids ?? 0);
+        const uidMax = Number(chain.max_n ?? rp.max_n ?? rp.max_uids ?? 0);
+
         const inflow = Number(row.large_wallet_inflow || 0);
         const outflow = Number(row.large_wallet_outflow || 0);
-        // Detect if flows are global (all identical) - if so, scale by emission share
         const adjustedInflow = inflow === 74 ? inflow * (emissionShare / 100) : inflow;
         const adjustedOutflow = outflow === 40 ? outflow * (emissionShare / 100) : outflow;
 
         const snapshot: StakeSnapshot = {
           netuid,
           holdersCount: row.holders_count || 0,
-          stakeTotal: alphaStaked, // Real data from raw_payload
+          stakeTotal: alphaStaked,
           stakeConcentration: Number(row.stake_concentration) || 0,
           top10Stake: [],
           validatorsActive,
           minersTotal: row.miners_total || 0,
           minersActive,
-          uidUsage: Number(row.uid_usage) || 0,
+          uidUsage: uidMax > 0 ? uidUsed / uidMax : Number(row.uid_usage) || 0,
           largeWalletInflow: adjustedInflow,
           largeWalletOutflow: adjustedOutflow,
+          uidUsed,
+          uidMax,
+          registrationCost: raoToTao(rp.registration_cost ?? chain.registration_cost ?? 0),
+          incentiveBurn: raoToTao(rp.incentive_burn ?? 0),
+          recyclePerDay: raoToTao(rp.recycle_per_day ?? 0),
         };
 
-        // Compute deltas
         const miners7d = prev7d?.miners_active || minersActive;
         const holders7d = prev7d?.holders_count || row.holders_count || 0;
         const validators7d = prev7d?.validators_active || validatorsActive;
-
-        // For stake 7d change, use the first price in seven_day_prices as proxy
-        // (price change ≈ stake value change in absence of historical stake data)
         const sevenDayPrices = rp.seven_day_prices || [];
         const firstPrice = Number(sevenDayPrices[0]?.price || currentPrice);
         const stakeChange7d = firstPrice > 0 && currentPrice > 0
-          ? (currentPrice - firstPrice) / firstPrice
-          : 0;
+          ? (currentPrice - firstPrice) / firstPrice : 0;
 
         const deltas: StakeDeltas = {
-          stakeChange24h: priceChanges.change1d / 100, // Convert % to fraction
+          stakeChange24h: priceChanges.change1d / 100,
           stakeChange7d,
           holdersGrowth7d: holders7d > 0 ? ((row.holders_count || 0) - holders7d) / holders7d : 0,
           holdersGrowth30d: 0,
@@ -247,9 +270,9 @@ export function useStakeAnalytics() {
           fearGreed: 50,
         };
 
+        const economicContext = extractEconomicContext(rp, rpEntry);
         const fundamentalsScore = computeFundamentalsScore(snapshot, priceContext);
 
-        // Sparkline from seven_day_prices
         const sparklineCapital = sevenDayPrices.length >= 2
           ? sevenDayPrices.map((p: any) => Number(p.price || 0))
           : [];
@@ -259,22 +282,24 @@ export function useStakeAnalytics() {
           snapshot,
           deltas,
           priceContext,
+          economicContext,
           fundamentalsScore,
           sparklineCapital,
           sparklineAdoption: [],
         });
       }
 
-      // Second pass: cross-subnet medians for fair alpha
+      // Cross-subnet medians
       const prices = preComputed.filter((p) => p.priceContext.currentPrice > 0).map((p) => p.priceContext.currentPrice);
       const fundamentals = preComputed.filter((p) => p.fundamentalsScore > 0).map((p) => p.fundamentalsScore);
       const medianPrice = median(prices);
       const medianFundamentals = median(fundamentals);
 
-      // Third pass: final scores
+      // Final scores
       const results: SubnetRadarData[] = preComputed.map((pc) => {
         const crossSubnet = { medianPrice, medianFundamentals };
-        const scores = computeRadarScores(pc.snapshot, pc.deltas, pc.priceContext, crossSubnet);
+        const dm = computeDerivedMetrics(pc.economicContext, pc.priceContext, pc.snapshot);
+        const scores = computeRadarScores(pc.snapshot, pc.deltas, pc.priceContext, crossSubnet, pc.economicContext, dm);
         const alerts = checkAlerts(pc.snapshot, pc.deltas, scores, pc.priceContext);
 
         return {
@@ -285,6 +310,8 @@ export function useStakeAnalytics() {
           scores,
           alerts,
           priceContext: pc.priceContext,
+          economicContext: pc.economicContext,
+          derivedMetrics: dm,
           stakeChange24hPct: pc.deltas.stakeChange24h * 100,
           stakeChange7dPct: pc.deltas.stakeChange7d * 100,
           sparklineCapital: pc.sparklineCapital,
