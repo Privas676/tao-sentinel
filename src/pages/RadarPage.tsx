@@ -486,15 +486,20 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Conc.</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Price Δ1d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Sell Press.</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Pool Bal.</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">UID Sat.</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Vol/MCap</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Risk</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.slice(0, 30).map((d) => {
+            const eco = d.economicContext;
+            const dm = d.derivedMetrics;
+            const totalVol = eco.buyVolume + eco.sellVolume;
+            const sellPressure = totalVol > 0 ? (eco.sellVolume / totalVol * 100) : 0;
             const volMcap = d.priceContext.marketCap > 0 ? (d.priceContext.vol24h / d.priceContext.marketCap * 100) : 0;
             return (
               <TableRow key={d.netuid}>
@@ -505,9 +510,22 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
                     {d.snapshot.stakeConcentration > 0 ? `${d.snapshot.stakeConcentration.toFixed(0)}%` : "—"}
                   </span>
                 </TableCell>
-                <TableCell className="text-right"><PctChange value={d.priceContext.priceChange1d} /></TableCell>
+                <TableCell className="font-mono text-xs text-right">
+                  {totalVol > 0 ? (
+                    <span style={{ color: sellPressure > 55 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.5)" }}>
+                      {sellPressure.toFixed(0)}%
+                    </span>
+                  ) : "—"}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                  {dm.poolBalance > 0 ? dm.poolBalance.toFixed(2) : "—"}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-right">
+                  <span style={{ color: dm.uidSaturation > 0.9 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.5)" }}>
+                    {d.snapshot.uidMax > 0 ? `${(dm.uidSaturation * 100).toFixed(0)}%` : "—"}
+                  </span>
+                </TableCell>
                 <TableCell className="font-mono text-xs text-right text-muted-foreground">{volMcap > 0 ? `${volMcap.toFixed(1)}%` : "—"}</TableCell>
-                <TableCell className="font-mono text-xs text-right">{d.snapshot.validatorsActive || "—"}</TableCell>
                 <TableCell className="text-right">
                   <span className="font-mono text-xs font-bold" style={{ color: dumpRiskColor(d.scores.dumpRisk) }}>{d.scores.dumpRisk}</span>
                 </TableCell>
