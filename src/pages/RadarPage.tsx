@@ -4,6 +4,9 @@ import {
   healthIndexColor,
   momentumColor as capitalMomentumColor,
   dumpRiskColor,
+  radarScoreColor,
+  narrativeScoreColor,
+  smartMoneyColor,
 } from "@/lib/stake-analytics";
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
@@ -28,21 +31,28 @@ function PctChange({ value }: { value: number }) {
 }
 
 /* ─── Alert Badge ─── */
-function AlertBadge({ active, label, emoji }: { active: boolean; label: string; emoji: string }) {
+function AlertBadge({ active, label, emoji, variant = "warn" }: { active: boolean; label: string; emoji: string; variant?: "warn" | "danger" | "info" | "success" }) {
   if (!active) return null;
+  const colors = {
+    warn: { bg: "rgba(255,193,7,0.15)", fg: "rgba(255,193,7,0.9)", border: "rgba(255,193,7,0.3)" },
+    danger: { bg: "rgba(229,57,53,0.15)", fg: "rgba(229,57,53,0.9)", border: "rgba(229,57,53,0.3)" },
+    info: { bg: "rgba(100,181,246,0.15)", fg: "rgba(100,181,246,0.9)", border: "rgba(100,181,246,0.3)" },
+    success: { bg: "rgba(76,175,80,0.15)", fg: "rgba(76,175,80,0.9)", border: "rgba(76,175,80,0.3)" },
+  }[variant];
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold"
-      style={{ background: "rgba(255,193,7,0.15)", color: "rgba(255,193,7,0.9)", border: "1px solid rgba(255,193,7,0.3)" }}>
+      style={{ background: colors.bg, color: colors.fg, border: `1px solid ${colors.border}` }}>
       {emoji} {label}
     </span>
   );
 }
 
 /* ─── Tabs ─── */
-type TabKey = "capital" | "adoption" | "risk" | "heatmap" | "smartmoney";
+type TabKey = "capital" | "adoption" | "risk" | "heatmap" | "smartmoney" | "narrative";
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "capital", label: "Capital Flow", icon: "💰" },
   { key: "adoption", label: "Adoption Radar", icon: "🚀" },
+  { key: "narrative", label: "Narrative", icon: "📊" },
   { key: "risk", label: "Dump Risk", icon: "⚠️" },
   { key: "heatmap", label: "Heatmap", icon: "🔥" },
   { key: "smartmoney", label: "Smart Money", icon: "🐋" },
@@ -58,12 +68,15 @@ export default function RadarPage() {
 
   // Global averages
   const avgScores = useMemo(() => {
-    if (!radarData?.length) return { health: 0, momentum: 0, dumpRisk: 0 };
+    if (!radarData?.length) return { health: 0, momentum: 0, dumpRisk: 0, radar: 0, narrative: 0, smartMoney: 0 };
     const n = radarData.length;
     return {
       health: Math.round(radarData.reduce((s, d) => s + d.scores.healthIndex, 0) / n),
       momentum: Math.round(radarData.reduce((s, d) => s + d.scores.capitalMomentum, 0) / n),
       dumpRisk: Math.round(radarData.reduce((s, d) => s + d.scores.dumpRisk, 0) / n),
+      radar: Math.round(radarData.reduce((s, d) => s + d.scores.subnetRadarScore, 0) / n),
+      narrative: Math.round(radarData.reduce((s, d) => s + d.scores.narrativeScore, 0) / n),
+      smartMoney: Math.round(radarData.reduce((s, d) => s + d.scores.smartMoneyScore, 0) / n),
     };
   }, [radarData]);
 
@@ -83,11 +96,15 @@ export default function RadarPage() {
     [filtered]
   );
   const adoptionRadar = useMemo(
-    () => [...filtered].sort((a, b) => b.scores.healthIndex - a.scores.healthIndex),
+    () => [...filtered].sort((a, b) => b.scores.subnetRadarScore - a.scores.subnetRadarScore),
     [filtered]
   );
   const dumpRiskSorted = useMemo(
     () => [...filtered].sort((a, b) => b.scores.dumpRisk - a.scores.dumpRisk),
+    [filtered]
+  );
+  const narrativeSorted = useMemo(
+    () => [...filtered].sort((a, b) => b.scores.narrativeScore - a.scores.narrativeScore),
     [filtered]
   );
 
@@ -124,30 +141,42 @@ export default function RadarPage() {
             📡 Radar Intelligence
           </h1>
           <p className="font-mono text-[11px] text-muted-foreground">
-            Détection des flux de capital et narratives émergentes · {search ? `${filtered.length}/` : ""}{radarData.length} subnets analysés
+            Détection des flux de capital, narratives émergentes et risques de dump · {search ? `${filtered.length}/` : ""}{radarData.length} subnets analysés
           </p>
         </div>
 
-        {/* Global Scores */}
-        <div className="grid grid-cols-3 gap-3">
-          <ScoreBadge value={avgScores.health} colorFn={healthIndexColor} label="Health Index" />
-          <ScoreBadge value={avgScores.momentum} colorFn={capitalMomentumColor} label="Capital Momentum" />
+        {/* Global Scores — 6 metrics */}
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <ScoreBadge value={avgScores.radar} colorFn={radarScoreColor} label="Radar Score" />
+          <ScoreBadge value={avgScores.health} colorFn={healthIndexColor} label="Health" />
+          <ScoreBadge value={avgScores.momentum} colorFn={capitalMomentumColor} label="Momentum" />
+          <ScoreBadge value={avgScores.narrative} colorFn={narrativeScoreColor} label="Narrative" />
+          <ScoreBadge value={avgScores.smartMoney} colorFn={smartMoneyColor} label="Smart Money" />
           <ScoreBadge value={avgScores.dumpRisk} colorFn={dumpRiskColor} label="Dump Risk" />
         </div>
 
         {/* Active Alerts */}
-        {radarData.some((d) => d.alerts.earlyAdoption || d.alerts.whaleAccumulation || d.alerts.dumpRiskAlert) && (
+        {radarData.some((d) => d.alerts.earlyAdoption || d.alerts.narrativeStarting || d.alerts.narrativeForming || d.alerts.smartMoneySignal || d.alerts.dumpWarning || d.alerts.dumpExit) && (
           <div className="rounded-lg p-3 space-y-2" style={{ background: "rgba(255,193,7,0.05)", border: "1px solid rgba(255,193,7,0.15)" }}>
             <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">Alertes actives</div>
             <div className="flex flex-wrap gap-2">
-              {radarData.filter((d) => d.alerts.earlyAdoption).map((d) => (
-                <AlertBadge key={`ea-${d.netuid}`} active label={`SN-${d.netuid} Early Adoption`} emoji="🚀" />
+              {radarData.filter((d) => d.alerts.narrativeStarting).map((d) => (
+                <AlertBadge key={`ns-${d.netuid}`} active label={`SN-${d.netuid} Narrative Starting`} emoji="🔮" variant="info" />
               ))}
-              {radarData.filter((d) => d.alerts.whaleAccumulation).map((d) => (
-                <AlertBadge key={`wa-${d.netuid}`} active label={`SN-${d.netuid} Whale Accumulation`} emoji="🐋" />
+              {radarData.filter((d) => d.alerts.earlyAdoption && !d.alerts.narrativeStarting).map((d) => (
+                <AlertBadge key={`ea-${d.netuid}`} active label={`SN-${d.netuid} Early Adoption`} emoji="🚀" variant="success" />
               ))}
-              {radarData.filter((d) => d.alerts.dumpRiskAlert).map((d) => (
-                <AlertBadge key={`dr-${d.netuid}`} active label={`SN-${d.netuid} Dump Risk`} emoji="⚠️" />
+              {radarData.filter((d) => d.alerts.narrativeForming).map((d) => (
+                <AlertBadge key={`nf-${d.netuid}`} active label={`SN-${d.netuid} Narrative Forming`} emoji="📊" variant="info" />
+              ))}
+              {radarData.filter((d) => d.alerts.smartMoneySignal).map((d) => (
+                <AlertBadge key={`sm-${d.netuid}`} active label={`SN-${d.netuid} Smart Money`} emoji="🐋" variant="success" />
+              ))}
+              {radarData.filter((d) => d.alerts.dumpExit).map((d) => (
+                <AlertBadge key={`de-${d.netuid}`} active label={`SN-${d.netuid} EXIT`} emoji="🚨" variant="danger" />
+              ))}
+              {radarData.filter((d) => d.alerts.dumpWarning && !d.alerts.dumpExit).map((d) => (
+                <AlertBadge key={`dw-${d.netuid}`} active label={`SN-${d.netuid} Warning`} emoji="⚠️" variant="warn" />
               ))}
             </div>
           </div>
@@ -195,6 +224,7 @@ export default function RadarPage() {
         <div className="rounded-lg overflow-hidden" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
           {activeTab === "capital" && <CapitalFlowTable data={capitalFlow} />}
           {activeTab === "adoption" && <AdoptionTable data={adoptionRadar} />}
+          {activeTab === "narrative" && <NarrativeTable data={narrativeSorted} />}
           {activeTab === "risk" && <DumpRiskTable data={dumpRiskSorted} />}
           {activeTab === "heatmap" && <TreemapHeatmap data={filtered} />}
           {activeTab === "smartmoney" && <SmartMoneyPanel data={filtered} />}
@@ -263,12 +293,12 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
           <TableRow>
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Holders</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Radar Score</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Holders</TableHead>
             <TableHead className="font-mono text-[10px] text-right">UID%</TableHead>
             <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Health</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -276,19 +306,77 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
             <TableRow key={d.netuid}>
               <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
               <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
-              <TableCell className="font-mono text-xs text-right">{d.snapshot.holdersCount || "—"}</TableCell>
-              <TableCell className="text-right"><PctChange value={d.deltas.holdersGrowth7d * 100} /></TableCell>
+              <TableCell className="text-right">
+                <span className="font-mono text-xs font-bold" style={{ color: radarScoreColor(d.scores.subnetRadarScore) }}>
+                  {d.scores.subnetRadarScore}
+                </span>
+              </TableCell>
               <TableCell className="font-mono text-xs text-right">
-                {d.snapshot.minersActive}/{d.snapshot.minersTotal || "?"}
+                {d.snapshot.minersActive} <PctChange value={d.deltas.minersGrowth7d * 100} />
+              </TableCell>
+              <TableCell className="font-mono text-xs text-right">
+                {d.snapshot.holdersCount || "—"} <PctChange value={d.deltas.holdersGrowth7d * 100} />
               </TableCell>
               <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
               <TableCell className="text-right hidden sm:table-cell">
                 <Sparkline data={(d.sparklineAdoption?.length ?? 0) >= 2 ? d.sparklineAdoption : generateAdoptionSparkline(d)} />
               </TableCell>
               <TableCell className="text-right">
-                <span className="font-mono text-xs font-bold" style={{ color: healthIndexColor(d.scores.healthIndex) }}>
-                  {d.scores.healthIndex}
+                {d.alerts.narrativeStarting ? (
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(156,39,176,0.15)", color: "rgba(156,39,176,0.9)" }}>NARRATIVE</span>
+                ) : d.alerts.earlyAdoption ? (
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(76,175,80,0.15)", color: "rgba(76,175,80,0.9)" }}>EARLY</span>
+                ) : (
+                  <span className="font-mono text-[10px] text-muted-foreground/40">—</span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════ */
+/*        NARRATIVE TABLE (Module 3)       */
+/* ═══════════════════════════════════════ */
+function NarrativeTable({ data }: { data: SubnetRadarData[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="font-mono text-[10px]">SN</TableHead>
+            <TableHead className="font-mono text-[10px]">Nom</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Narrative Score</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Miners Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Holders Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Stake Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.slice(0, 25).map((d) => (
+            <TableRow key={d.netuid}>
+              <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
+              <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
+              <TableCell className="text-right">
+                <span className="font-mono text-xs font-bold" style={{ color: narrativeScoreColor(d.scores.narrativeScore) }}>
+                  {d.scores.narrativeScore}
                 </span>
+              </TableCell>
+              <TableCell className="text-right"><PctChange value={d.deltas.minersGrowth7d * 100} /></TableCell>
+              <TableCell className="text-right"><PctChange value={d.deltas.holdersGrowth7d * 100} /></TableCell>
+              <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
+              <TableCell className="text-right">
+                {d.alerts.narrativeForming ? (
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(156,39,176,0.15)", color: "rgba(156,39,176,0.9)" }}>FORMING</span>
+                ) : d.scores.narrativeScore >= 50 ? (
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(100,181,246,0.15)", color: "rgba(100,181,246,0.9)" }}>WATCH</span>
+                ) : (
+                  <span className="font-mono text-[10px] text-muted-foreground/40">—</span>
+                )}
               </TableCell>
             </TableRow>
           ))}
@@ -314,6 +402,7 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Miners Δ7d</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Risk</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -334,6 +423,15 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
                   {d.scores.dumpRisk}
                 </span>
               </TableCell>
+              <TableCell className="text-right">
+                {d.alerts.dumpExit ? (
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(229,57,53,0.15)", color: "rgba(229,57,53,0.9)" }}>EXIT</span>
+                ) : d.alerts.dumpWarning ? (
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(255,193,7,0.15)", color: "rgba(255,193,7,0.9)" }}>WARNING</span>
+                ) : (
+                  <span className="font-mono text-[10px] text-muted-foreground/40">—</span>
+                )}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -342,7 +440,7 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
   );
 }
 
-/* ─── Sparkline fallbacks (used only when < 2 historical snapshots exist) ─── */
+/* ─── Sparkline fallbacks ─── */
 function generateCapitalSparkline(d: SubnetRadarData): number[] {
   const base = 50;
   const delta = d.stakeChange7dPct / 7;
@@ -360,12 +458,14 @@ function generateAdoptionSparkline(d: SubnetRadarData): number[] {
 /*        SMART MONEY PANEL                */
 /* ═══════════════════════════════════════ */
 function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
-  // Show subnets with significant whale activity
   const whaleActive = data
     .filter((d) => d.snapshot.largeWalletInflow > 0 || d.snapshot.largeWalletOutflow > 0)
     .sort((a, b) => (b.snapshot.largeWalletInflow - b.snapshot.largeWalletOutflow) - (a.snapshot.largeWalletInflow - a.snapshot.largeWalletOutflow));
 
-  // Show top 10 stake concentrations
+  const smartMoneySignals = data
+    .filter((d) => d.alerts.smartMoneySignal)
+    .sort((a, b) => b.scores.smartMoneyScore - a.scores.smartMoneyScore);
+
   const topConcentrated = [...data]
     .filter((d) => d.snapshot.top10Stake?.length > 0)
     .sort((a, b) => b.snapshot.stakeConcentration - a.snapshot.stakeConcentration)
@@ -373,6 +473,45 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
 
   return (
     <div className="p-4 space-y-6">
+      {/* Smart Money Signals */}
+      {smartMoneySignals.length > 0 && (
+        <div>
+          <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">
+            🎯 Smart Money Signals
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="font-mono text-[10px]">SN</TableHead>
+                <TableHead className="font-mono text-[10px]">Nom</TableHead>
+                <TableHead className="font-mono text-[10px] text-right">Score</TableHead>
+                <TableHead className="font-mono text-[10px] text-right">Stake Inflow</TableHead>
+                <TableHead className="font-mono text-[10px] text-right">Whale Activity</TableHead>
+                <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {smartMoneySignals.map((d) => (
+                <TableRow key={d.netuid}>
+                  <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
+                  <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
+                  <TableCell className="text-right">
+                    <span className="font-mono text-xs font-bold" style={{ color: smartMoneyColor(d.scores.smartMoneyScore) }}>{d.scores.smartMoneyScore}</span>
+                  </TableCell>
+                  <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
+                  <TableCell className="font-mono text-xs text-right" style={{ color: "rgba(76,175,80,0.7)" }}>
+                    +{d.snapshot.largeWalletInflow}τ / -{d.snapshot.largeWalletOutflow}τ
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(76,175,80,0.15)", color: "rgba(76,175,80,0.9)" }}>SMART MONEY</span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
       {/* Whale Activity */}
       <div>
         <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">
@@ -412,7 +551,6 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
                 {d.snapshot.stakeConcentration.toFixed(0)}%
               </span>
             </div>
-            {/* Mini bar chart */}
             <div className="flex gap-px h-3 rounded overflow-hidden">
               {d.snapshot.top10Stake.slice(0, 10).map((s: any, i: number) => (
                 <div
