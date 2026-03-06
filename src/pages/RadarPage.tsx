@@ -67,18 +67,28 @@ export default function RadarPage() {
     };
   }, [radarData]);
 
+  // Filter by search
+  const filtered = useMemo(() => {
+    if (!radarData?.length) return [];
+    if (!search.trim()) return radarData;
+    const q = search.trim().toLowerCase();
+    return radarData.filter(
+      (d) => d.subnetName.toLowerCase().includes(q) || String(d.netuid).includes(q)
+    );
+  }, [radarData, search]);
+
   // Sorted data for each tab
   const capitalFlow = useMemo(
-    () => [...(radarData || [])].sort((a, b) => b.scores.capitalMomentum - a.scores.capitalMomentum),
-    [radarData]
+    () => [...filtered].sort((a, b) => b.scores.capitalMomentum - a.scores.capitalMomentum),
+    [filtered]
   );
   const adoptionRadar = useMemo(
-    () => [...(radarData || [])].sort((a, b) => b.scores.healthIndex - a.scores.healthIndex),
-    [radarData]
+    () => [...filtered].sort((a, b) => b.scores.healthIndex - a.scores.healthIndex),
+    [filtered]
   );
   const dumpRiskSorted = useMemo(
-    () => [...(radarData || [])].sort((a, b) => b.scores.dumpRisk - a.scores.dumpRisk),
-    [radarData]
+    () => [...filtered].sort((a, b) => b.scores.dumpRisk - a.scores.dumpRisk),
+    [filtered]
   );
 
   if (isLoading) {
