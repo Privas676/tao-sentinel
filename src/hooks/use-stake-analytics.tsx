@@ -18,6 +18,10 @@ export type SubnetRadarData = {
   alerts: RadarAlerts;
   stakeChange24hPct: number;
   stakeChange7dPct: number;
+  /** Daily stake_total values over last 7 days (oldest→newest) */
+  sparklineCapital: number[];
+  /** Daily adoption composite (holders+miners) over last 7 days (oldest→newest) */
+  sparklineAdoption: number[];
 };
 
 export function useStakeAnalytics() {
