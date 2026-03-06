@@ -665,7 +665,8 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
         <TableBody>
           {data.slice(0, 30).map((d) => {
             const deviation = d.scores.alphaInefficiency;
-            const volMcap = d.priceContext.marketCap > 0 ? (d.priceContext.vol24h / d.priceContext.marketCap * 100) : 0;
+            const eco = d.economicContext;
+            const dm = d.derivedMetrics;
             return (
               <TableRow key={d.netuid}>
                 <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
@@ -682,9 +683,11 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
                   </span>
                 </TableCell>
                 <TableCell className="font-mono text-xs text-right text-muted-foreground">
-                  {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
+                  {eco.circulatingSupply > 0 ? formatTao(eco.circulatingSupply) : "—"}
                 </TableCell>
-                <TableCell className="font-mono text-xs text-right text-muted-foreground">{volMcap > 0 ? `${volMcap.toFixed(1)}%` : "—"}</TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                  {dm.burnRatio > 0 ? `${(dm.burnRatio * 100).toFixed(1)}%` : "—"}
+                </TableCell>
                 <TableCell className="text-right">
                   {d.alerts.alphaUndervalued ? <SignalChip label="UNDERVALUED" color="green" /> :
                    d.alerts.alphaOverpriced ? <SignalChip label="OVERPRICED" color="red" /> :
