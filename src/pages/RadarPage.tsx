@@ -50,6 +50,22 @@ function AlertBadge({ active, label, emoji, variant = "warn" }: { active: boolea
   );
 }
 
+/* ─── Signal Chip ─── */
+function SignalChip({ label, color }: { label: string; color: "red" | "orange" | "green" | "blue" | "purple" }) {
+  const styles = {
+    red: { bg: "rgba(229,57,53,0.15)", fg: "rgba(229,57,53,0.9)" },
+    orange: { bg: "rgba(255,109,0,0.15)", fg: "rgba(255,109,0,0.9)" },
+    green: { bg: "rgba(76,175,80,0.15)", fg: "rgba(76,175,80,0.9)" },
+    blue: { bg: "rgba(100,181,246,0.15)", fg: "rgba(100,181,246,0.9)" },
+    purple: { bg: "rgba(156,39,176,0.15)", fg: "rgba(156,39,176,0.9)" },
+  }[color];
+  return (
+    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: styles.bg, color: styles.fg }}>
+      {label}
+    </span>
+  );
+}
+
 /* ─── Tabs ─── */
 type TabKey = "capital" | "adoption" | "narrative" | "risk" | "heatmap" | "smartmoney" | "bubble" | "validator" | "alpha";
 const TABS: { key: TabKey; label: string; icon: string }[] = [
@@ -63,6 +79,33 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "heatmap", label: "Heatmap", icon: "🔥" },
   { key: "smartmoney", label: "Smart Money", icon: "🐋" },
 ];
+
+/* ─── Helpers ─── */
+function formatTao(v: number): string {
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}Mτ`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}Kτ`;
+  return `${Math.round(v)}τ`;
+}
+
+function formatMcap(v: number): string {
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
+  if (v > 0) return v.toFixed(0);
+  return "—";
+}
+
+function generateCapitalSparkline(d: SubnetRadarData): number[] {
+  const base = 50;
+  const delta = d.stakeChange7dPct / 7;
+  return Array.from({ length: 7 }, (_, i) => base + delta * (i - 3) + (Math.sin(i * 1.2) * 2));
+}
+
+function generateAdoptionSparkline(d: SubnetRadarData): number[] {
+  const base = d.scores.healthIndex;
+  const trend = (d.deltas.holdersGrowth7d + d.deltas.minersGrowth7d) * 50;
+  const step = trend / 7;
+  return Array.from({ length: 7 }, (_, i) => base - trend / 2 + step * i + (Math.cos(i * 0.8) * 1.5));
+}
 
 /* ═══════════════════════════════════════ */
 /*        RADAR PAGE                       */
@@ -270,32 +313,30 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
           <TableRow>
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">MCap τ</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Stake τ</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Price Δ7d</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Momentum</TableHead>
             <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">🐋 In</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">🐋 Out</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 25).map((d) => (
+          {data.slice(0, 30).map((d) => (
             <TableRow key={d.netuid}>
               <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
               <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
+              <TableCell className="font-mono text-xs text-right">{formatMcap(d.priceContext.marketCap)}</TableCell>
               <TableCell className="font-mono text-xs text-right">{formatTao(d.snapshot.stakeTotal)}</TableCell>
-              <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
+              <TableCell className="text-right"><PctChange value={d.priceContext.priceChange7d} /></TableCell>
               <TableCell className="text-right">
                 <span className="font-mono text-xs font-bold" style={{ color: capitalMomentumColor(d.scores.capitalMomentum) }}>{d.scores.capitalMomentum}</span>
               </TableCell>
               <TableCell className="text-right hidden sm:table-cell">
                 <Sparkline data={(d.sparklineCapital?.length ?? 0) >= 2 ? d.sparklineCapital : generateCapitalSparkline(d)} />
               </TableCell>
-              <TableCell className="font-mono text-xs text-right" style={{ color: "rgba(76,175,80,0.7)" }}>
-                {d.snapshot.largeWalletInflow > 0 ? `+${d.snapshot.largeWalletInflow}τ` : "—"}
-              </TableCell>
-              <TableCell className="font-mono text-xs text-right" style={{ color: "rgba(229,57,53,0.7)" }}>
-                {d.snapshot.largeWalletOutflow > 0 ? `-${d.snapshot.largeWalletOutflow}τ` : "—"}
+              <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
               </TableCell>
             </TableRow>
           ))}
@@ -318,14 +359,14 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Radar</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Holders</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
             <TableHead className="font-mono text-[10px] text-right">UID%</TableHead>
             <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 25).map((d) => (
+          {data.slice(0, 30).map((d) => (
             <TableRow key={d.netuid}>
               <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
               <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
@@ -333,7 +374,7 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
                 <span className="font-mono text-xs font-bold" style={{ color: radarScoreColor(d.scores.subnetRadarScore) }}>{d.scores.subnetRadarScore}</span>
               </TableCell>
               <TableCell className="font-mono text-xs text-right">{d.snapshot.minersActive} <PctChange value={d.deltas.minersGrowth7d * 100} /></TableCell>
-              <TableCell className="font-mono text-xs text-right">{d.snapshot.holdersCount || "—"} <PctChange value={d.deltas.holdersGrowth7d * 100} /></TableCell>
+              <TableCell className="font-mono text-xs text-right">{d.snapshot.validatorsActive || "—"}</TableCell>
               <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
               <TableCell className="text-right hidden sm:table-cell">
                 <Sparkline data={(d.sparklineAdoption?.length ?? 0) >= 2 ? d.sparklineAdoption : generateAdoptionSparkline(d)} />
@@ -365,30 +406,36 @@ function NarrativeTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Narrative</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Price Δ7d</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Miners Δ7d</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Holders Δ7d</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Stake Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Val. Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Vol/MCap</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 25).map((d) => (
-            <TableRow key={d.netuid}>
-              <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
-              <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
-              <TableCell className="text-right">
-                <span className="font-mono text-xs font-bold" style={{ color: narrativeScoreColor(d.scores.narrativeScore) }}>{d.scores.narrativeScore}</span>
-              </TableCell>
-              <TableCell className="text-right"><PctChange value={d.deltas.minersGrowth7d * 100} /></TableCell>
-              <TableCell className="text-right"><PctChange value={d.deltas.holdersGrowth7d * 100} /></TableCell>
-              <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
-              <TableCell className="text-right">
-                {d.alerts.narrativeForming ? <SignalChip label="FORMING" color="purple" /> :
-                 d.scores.narrativeScore >= 50 ? <SignalChip label="WATCH" color="blue" /> :
-                 <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
-              </TableCell>
-            </TableRow>
-          ))}
+          {data.slice(0, 30).map((d) => {
+            const volMcap = d.priceContext.marketCap > 0 ? (d.priceContext.vol24h / d.priceContext.marketCap * 100) : 0;
+            return (
+              <TableRow key={d.netuid}>
+                <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
+                <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
+                <TableCell className="text-right">
+                  <span className="font-mono text-xs font-bold" style={{ color: narrativeScoreColor(d.scores.narrativeScore) }}>{d.scores.narrativeScore}</span>
+                </TableCell>
+                <TableCell className="text-right"><PctChange value={d.priceContext.priceChange7d} /></TableCell>
+                <TableCell className="text-right"><PctChange value={d.deltas.minersGrowth7d * 100} /></TableCell>
+                <TableCell className="text-right"><PctChange value={d.deltas.validatorsGrowth7d * 100} /></TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">{volMcap > 0 ? `${volMcap.toFixed(1)}%` : "—"}</TableCell>
+                <TableCell className="text-right">
+                  {d.scores.narrativeScore >= 50 ? <SignalChip label="DOMINANT" color="purple" /> :
+                   d.scores.narrativeScore >= 35 ? <SignalChip label="STRONG" color="blue" /> :
+                   d.scores.narrativeScore >= 20 ? <SignalChip label="EMERGING" color="green" /> :
+                   <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -407,36 +454,39 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Conc.</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Stake Δ7d</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Miners Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Price Δ1d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Vol/MCap</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Risk</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 25).map((d) => (
-            <TableRow key={d.netuid}>
-              <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
-              <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
-              <TableCell className="text-right">
-                <span className="font-mono text-xs" style={{ color: d.snapshot.stakeConcentration > 60 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.5)" }}>
-                  {d.snapshot.stakeConcentration.toFixed(0)}%
-                </span>
-              </TableCell>
-              <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
-              <TableCell className="text-right"><PctChange value={d.deltas.minersGrowth7d * 100} /></TableCell>
-              <TableCell className="font-mono text-xs text-right">{d.snapshot.validatorsActive || "—"}</TableCell>
-              <TableCell className="text-right">
-                <span className="font-mono text-xs font-bold" style={{ color: dumpRiskColor(d.scores.dumpRisk) }}>{d.scores.dumpRisk}</span>
-              </TableCell>
-              <TableCell className="text-right">
-                {d.alerts.dumpExit ? <SignalChip label="EXIT" color="red" /> :
-                 d.alerts.dumpWarning ? <SignalChip label="WARNING" color="orange" /> :
-                 <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
-              </TableCell>
-            </TableRow>
-          ))}
+          {data.slice(0, 30).map((d) => {
+            const volMcap = d.priceContext.marketCap > 0 ? (d.priceContext.vol24h / d.priceContext.marketCap * 100) : 0;
+            return (
+              <TableRow key={d.netuid}>
+                <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
+                <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
+                <TableCell className="text-right">
+                  <span className="font-mono text-xs" style={{ color: d.snapshot.stakeConcentration > 60 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.5)" }}>
+                    {d.snapshot.stakeConcentration > 0 ? `${d.snapshot.stakeConcentration.toFixed(0)}%` : "—"}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right"><PctChange value={d.priceContext.priceChange1d} /></TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">{volMcap > 0 ? `${volMcap.toFixed(1)}%` : "—"}</TableCell>
+                <TableCell className="font-mono text-xs text-right">{d.snapshot.validatorsActive || "—"}</TableCell>
+                <TableCell className="text-right">
+                  <span className="font-mono text-xs font-bold" style={{ color: dumpRiskColor(d.scores.dumpRisk) }}>{d.scores.dumpRisk}</span>
+                </TableCell>
+                <TableCell className="text-right">
+                  {d.alerts.dumpExit ? <SignalChip label="EXIT" color="red" /> :
+                   d.alerts.dumpWarning ? <SignalChip label="WARNING" color="orange" /> :
+                   <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -444,7 +494,7 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
 }
 
 /* ═══════════════════════════════════════ */
-/*        BUBBLE TABLE (Module 1)          */
+/*        BUBBLE TABLE                     */
 /* ═══════════════════════════════════════ */
 function BubbleTable({ data }: { data: SubnetRadarData[] }) {
   return (
@@ -456,30 +506,37 @@ function BubbleTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Price Δ7d</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Miners Δ7d</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Stake Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Vol/MCap</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Bubble Score</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 25).map((d) => (
-            <TableRow key={d.netuid}>
-              <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
-              <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
-              <TableCell className="text-right"><PctChange value={d.priceContext.priceChange7d * 100} /></TableCell>
-              <TableCell className="text-right"><PctChange value={d.deltas.minersGrowth7d * 100} /></TableCell>
-              <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
-              <TableCell className="text-right">
-                <span className="font-mono text-xs font-bold" style={{ color: bubbleScoreColor(d.scores.bubbleScore) }}>{d.scores.bubbleScore}</span>
-              </TableCell>
-              <TableCell className="text-right">
-                {d.alerts.bubbleDump ? <SignalChip label="DUMP" color="red" /> :
-                 d.alerts.bubbleAlert ? <SignalChip label="BUBBLE" color="red" /> :
-                 d.alerts.bubbleOverheat ? <SignalChip label="SURCHAUFFE" color="orange" /> :
-                 <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
-              </TableCell>
-            </TableRow>
-          ))}
+          {data.slice(0, 30).map((d) => {
+            const volMcap = d.priceContext.marketCap > 0 ? (d.priceContext.vol24h / d.priceContext.marketCap * 100) : 0;
+            return (
+              <TableRow key={d.netuid}>
+                <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
+                <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
+                <TableCell className="text-right"><PctChange value={d.priceContext.priceChange7d} /></TableCell>
+                <TableCell className="text-right"><PctChange value={d.deltas.minersGrowth7d * 100} /></TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">{volMcap > 0 ? `${volMcap.toFixed(1)}%` : "—"}</TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                  {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  <span className="font-mono text-xs font-bold" style={{ color: bubbleScoreColor(d.scores.bubbleScore) }}>{d.scores.bubbleScore}</span>
+                </TableCell>
+                <TableCell className="text-right">
+                  {d.alerts.bubbleDump ? <SignalChip label="DUMP" color="red" /> :
+                   d.alerts.bubbleAlert ? <SignalChip label="BUBBLE" color="red" /> :
+                   d.alerts.bubbleOverheat ? <SignalChip label="SURCHAUFFE" color="orange" /> :
+                   <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -487,7 +544,7 @@ function BubbleTable({ data }: { data: SubnetRadarData[] }) {
 }
 
 /* ═══════════════════════════════════════ */
-/*        VALIDATOR TABLE (Module 2)       */
+/*        VALIDATOR TABLE                  */
 /* ═══════════════════════════════════════ */
 function ValidatorTable({ data }: { data: SubnetRadarData[] }) {
   return (
@@ -500,13 +557,13 @@ function ValidatorTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Conc. %</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">UID%</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Manip. Score</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 25).map((d) => (
+          {data.slice(0, 30).map((d) => (
             <TableRow key={d.netuid}>
               <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
               <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
@@ -514,10 +571,12 @@ function ValidatorTable({ data }: { data: SubnetRadarData[] }) {
               <TableCell className="font-mono text-xs text-right">{d.snapshot.minersActive}</TableCell>
               <TableCell className="text-right">
                 <span className="font-mono text-xs" style={{ color: d.snapshot.stakeConcentration > 60 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.5)" }}>
-                  {d.snapshot.stakeConcentration.toFixed(0)}%
+                  {d.snapshot.stakeConcentration > 0 ? `${d.snapshot.stakeConcentration.toFixed(0)}%` : "—"}
                 </span>
               </TableCell>
-              <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
+              <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
+              </TableCell>
               <TableCell className="text-right">
                 <span className="font-mono text-xs font-bold" style={{ color: manipulationScoreColor(d.scores.manipulationScore) }}>{d.scores.manipulationScore}</span>
               </TableCell>
@@ -535,7 +594,7 @@ function ValidatorTable({ data }: { data: SubnetRadarData[] }) {
 }
 
 /* ═══════════════════════════════════════ */
-/*        ALPHA INEFFICIENCY (Module 3)    */
+/*        ALPHA INEFFICIENCY TABLE         */
 /* ═══════════════════════════════════════ */
 function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
   return (
@@ -548,31 +607,34 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Alpha Price</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Fair Value</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Deviation</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">UID%</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Vol/MCap</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 25).map((d) => {
+          {data.slice(0, 30).map((d) => {
             const deviation = d.scores.alphaInefficiency;
+            const volMcap = d.priceContext.marketCap > 0 ? (d.priceContext.vol24h / d.priceContext.marketCap * 100) : 0;
             return (
               <TableRow key={d.netuid}>
                 <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
                 <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
                 <TableCell className="font-mono text-xs text-right">
-                  {d.priceContext.currentPrice > 0 ? d.priceContext.currentPrice.toFixed(4) : "—"}
+                  {d.priceContext.currentPrice > 0 ? d.priceContext.currentPrice.toFixed(6) : "—"}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-right">
-                  {d.scores.fairAlphaPrice > 0 ? d.scores.fairAlphaPrice.toFixed(2) : "—"}
+                  {d.scores.fairAlphaPrice > 0 ? d.scores.fairAlphaPrice.toFixed(6) : "—"}
                 </TableCell>
                 <TableCell className="text-right">
                   <span className="font-mono text-xs font-bold" style={{ color: inefficiencyColor(deviation) }}>
-                    {deviation > 0 ? "+" : ""}{deviation.toFixed(0)}%
+                    {d.scores.fairAlphaPrice > 0 ? `${deviation > 0 ? "+" : ""}${deviation.toFixed(0)}%` : "—"}
                   </span>
                 </TableCell>
-                <TableCell className="font-mono text-xs text-right">{d.snapshot.minersActive}</TableCell>
-                <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                  {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">{volMcap > 0 ? `${volMcap.toFixed(1)}%` : "—"}</TableCell>
                 <TableCell className="text-right">
                   {d.alerts.alphaUndervalued ? <SignalChip label="UNDERVALUED" color="green" /> :
                    d.alerts.alphaOverpriced ? <SignalChip label="OVERPRICED" color="red" /> :
@@ -585,36 +647,6 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
       </Table>
     </div>
   );
-}
-
-/* ─── Signal Chip ─── */
-function SignalChip({ label, color }: { label: string; color: "red" | "orange" | "green" | "blue" | "purple" }) {
-  const styles = {
-    red: { bg: "rgba(229,57,53,0.15)", fg: "rgba(229,57,53,0.9)" },
-    orange: { bg: "rgba(255,109,0,0.15)", fg: "rgba(255,109,0,0.9)" },
-    green: { bg: "rgba(76,175,80,0.15)", fg: "rgba(76,175,80,0.9)" },
-    blue: { bg: "rgba(100,181,246,0.15)", fg: "rgba(100,181,246,0.9)" },
-    purple: { bg: "rgba(156,39,176,0.15)", fg: "rgba(156,39,176,0.9)" },
-  }[color];
-  return (
-    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: styles.bg, color: styles.fg }}>
-      {label}
-    </span>
-  );
-}
-
-/* ─── Sparkline fallbacks ─── */
-function generateCapitalSparkline(d: SubnetRadarData): number[] {
-  const base = 50;
-  const delta = d.stakeChange7dPct / 7;
-  return Array.from({ length: 7 }, (_, i) => base + delta * (i - 3) + (Math.sin(i * 1.2) * 2));
-}
-
-function generateAdoptionSparkline(d: SubnetRadarData): number[] {
-  const base = d.scores.healthIndex;
-  const trend = (d.deltas.holdersGrowth7d + d.deltas.minersGrowth7d) * 50;
-  const step = trend / 7;
-  return Array.from({ length: 7 }, (_, i) => base - trend / 2 + step * i + (Math.cos(i * 0.8) * 1.5));
 }
 
 /* ═══════════════════════════════════════ */
@@ -634,24 +666,30 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
     .sort((a, b) => b.snapshot.stakeConcentration - a.snapshot.stakeConcentration)
     .slice(0, 10);
 
+  // Sort by smart money score for main view
+  const smartMoneySorted = [...data].sort((a, b) => b.scores.smartMoneyScore - a.scores.smartMoneyScore);
+
   return (
     <div className="p-4 space-y-6">
-      {smartMoneySignals.length > 0 && (
-        <div>
-          <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">🎯 Smart Money Signals</div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-mono text-[10px]">SN</TableHead>
-                <TableHead className="font-mono text-[10px]">Nom</TableHead>
-                <TableHead className="font-mono text-[10px] text-right">Score</TableHead>
-                <TableHead className="font-mono text-[10px] text-right">Stake Inflow</TableHead>
-                <TableHead className="font-mono text-[10px] text-right">Whale Activity</TableHead>
-                <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {smartMoneySignals.map((d) => (
+      {/* Smart Money Rankings */}
+      <div>
+        <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">🐋 Smart Money Rankings</div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="font-mono text-[10px]">SN</TableHead>
+              <TableHead className="font-mono text-[10px]">Nom</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Score</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Stake Flow</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">UID%</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {smartMoneySorted.slice(0, 20).map((d) => {
+              const netFlow = d.snapshot.largeWalletInflow - d.snapshot.largeWalletOutflow;
+              return (
                 <TableRow key={d.netuid}>
                   <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
                   <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
@@ -659,65 +697,43 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
                     <span className="font-mono text-xs font-bold" style={{ color: smartMoneyColor(d.scores.smartMoneyScore) }}>{d.scores.smartMoneyScore}</span>
                   </TableCell>
                   <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
-                  <TableCell className="font-mono text-xs text-right" style={{ color: "rgba(76,175,80,0.7)" }}>
-                    +{d.snapshot.largeWalletInflow}τ / -{d.snapshot.largeWalletOutflow}τ
+                  <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                    {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
                   </TableCell>
-                  <TableCell className="text-right"><SignalChip label="SMART MONEY" color="green" /></TableCell>
+                  <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
+                  <TableCell className="text-right">
+                    {d.alerts.smartMoneySignal ? <SignalChip label="SMART MONEY" color="green" /> :
+                     d.scores.smartMoneyScore >= 40 ? <SignalChip label="WATCH" color="blue" /> :
+                     <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
+                  </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      <div>
-        <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">🐋 Mouvements des gros wallets (24h)</div>
-        {whaleActive.length === 0 ? (
-          <div className="font-mono text-xs text-muted-foreground/50 py-4 text-center">Aucun mouvement détecté</div>
-        ) : (
-          <div className="space-y-1">
-            {whaleActive.slice(0, 15).map((d) => {
-              const net = d.snapshot.largeWalletInflow - d.snapshot.largeWalletOutflow;
-              return (
-                <div key={d.netuid} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: "rgba(255,255,255,0.02)" }}>
-                  <span className="font-mono text-xs text-muted-foreground w-8">SN-{d.netuid}</span>
-                  <span className="font-mono text-xs truncate flex-1">{d.subnetName}</span>
-                  <span className="font-mono text-xs" style={{ color: net > 0 ? "rgba(76,175,80,0.8)" : "rgba(229,57,53,0.7)" }}>
-                    {net > 0 ? "↗" : "↘"} {Math.abs(net)}τ net
-                  </span>
-                </div>
               );
             })}
-          </div>
-        )}
+          </TableBody>
+        </Table>
       </div>
 
-      <div>
-        <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">🏦 Top 10 Concentration de Stake</div>
-        {topConcentrated.map((d) => (
-          <div key={d.netuid} className="mb-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-xs font-semibold text-muted-foreground">SN-{d.netuid}</span>
-              <span className="font-mono text-[10px] text-muted-foreground/60">{d.subnetName}</span>
-              <span className="ml-auto font-mono text-xs font-bold" style={{ color: dumpRiskColor(d.snapshot.stakeConcentration) }}>
-                {d.snapshot.stakeConcentration.toFixed(0)}%
-              </span>
+      {topConcentrated.length > 0 && (
+        <div>
+          <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">🏦 Top 10 Concentration de Stake</div>
+          {topConcentrated.map((d) => (
+            <div key={d.netuid} className="mb-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-mono text-xs font-semibold text-muted-foreground">SN-{d.netuid}</span>
+                <span className="font-mono text-[10px] text-muted-foreground/60">{d.subnetName}</span>
+                <span className="ml-auto font-mono text-xs font-bold" style={{ color: dumpRiskColor(d.snapshot.stakeConcentration) }}>
+                  {d.snapshot.stakeConcentration.toFixed(0)}%
+                </span>
+              </div>
+              <div className="flex gap-px h-3 rounded overflow-hidden">
+                {d.snapshot.top10Stake.slice(0, 10).map((s: any, i: number) => (
+                  <div key={i} className="h-full" style={{ width: `${Math.max(s.pct, 2)}%`, background: `rgba(255,193,7,${0.3 + i * 0.07})` }} title={`${s.address}: ${s.stake}τ (${s.pct}%)`} />
+                ))}
+              </div>
             </div>
-            <div className="flex gap-px h-3 rounded overflow-hidden">
-              {d.snapshot.top10Stake.slice(0, 10).map((s: any, i: number) => (
-                <div key={i} className="h-full" style={{ width: `${Math.max(s.pct, 2)}%`, background: `rgba(255,193,7,${0.3 + i * 0.07})` }} title={`${s.address}: ${s.stake}τ (${s.pct}%)`} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
-}
-
-/* ─── Helpers ─── */
-function formatTao(v: number): string {
-  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}Mτ`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}Kτ`;
-  return `${Math.round(v)}τ`;
 }
