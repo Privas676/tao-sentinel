@@ -63,43 +63,54 @@ function computePriceChanges(sevenDayPrices: any[]): { change1d: number; change7
 /** Extract full economic context from Taostats raw_payload */
 function extractEconomicContext(rp: any, rpEntry: any): EconomicContext {
   const chain = rp?._chain || {};
-  const totalIssued = raoToTao(rp.total_issued ?? rp.total_supply ?? 0);
-  const totalBurned = raoToTao(rp.total_burned ?? 0);
-  const circulatingSupply = raoToTao(rp.circulating_supply ?? 0);
+  // Taostats field names (all in RAO):
+  const totalAlpha = raoToTao(rp.total_alpha ?? 0);     // total issued alpha
   const alphaStaked = raoToTao(rp.alpha_staked ?? 0);
   const alphaInPool = raoToTao(rp.alpha_in_pool ?? 0);
-  const taoInPool = raoToTao(rp.tao_in_pool ?? 0);
-  const totalAlphaPool = alphaInPool + taoInPool;
+  const totalTao = raoToTao(rp.total_tao ?? 0);         // tao in pool proxy
+  const totalAlphaPool = alphaInPool + totalTao;
   const marketCap = raoToTao(rp.market_cap ?? 0);
   const vol24h = raoToTao(rp.tao_volume_24_hr ?? 0);
-  const buyVolume = raoToTao(rp.buy_volume ?? rp.tao_buy_volume ?? 0);
-  const sellVolume = raoToTao(rp.sell_volume ?? rp.tao_sell_volume ?? 0);
+
+  // Buy/Sell volumes (Taostats uses tao_buy_volume_24_hr / tao_sell_volume_24_hr)
+  const buyVolume = raoToTao(rp.tao_buy_volume_24_hr ?? 0);
+  const sellVolume = raoToTao(rp.tao_sell_volume_24_hr ?? 0);
   const totalVol = buyVolume + sellVolume;
 
+  // Circulating = total_alpha - alpha_staked (staked is locked)
+  const circulatingSupply = totalAlpha > 0 ? totalAlpha - alphaStaked : 0;
+
+  // Emission per day: chain.emission is per block (~12s), ~7200 blocks/day
+  const emissionPerBlock = Number(chain.emission ?? 0);
+  const emissionsPerDay = raoToTao(emissionPerBlock * 7200);
+
+  // Root proportion from pool data
+  const rootProportion = Number(rp.root_prop ?? 0);
+
   return {
-    emissionsPercent: Number(rp.emissions_percent ?? rp.emission_percent ?? chain.emission_percent ?? 0),
-    emissionsPerDay: raoToTao(rp.emissions_per_day ?? chain.emission_per_day ?? 0),
-    minerPerDay: raoToTao(rp.miner_rewards_per_day ?? 0),
-    validatorPerDay: raoToTao(rp.validator_rewards_per_day ?? 0),
-    ownerPerDay: raoToTao(rp.owner_rewards_per_day ?? 0),
-    rootProportion: Number(rp.root_proportion ?? 0),
-    totalIssued,
-    totalBurned,
+    emissionsPercent: emissionPerBlock > 0 && marketCap > 0 ? (emissionsPerDay / marketCap) * 100 : 0,
+    emissionsPerDay,
+    minerPerDay: 0,       // Not available in current API
+    validatorPerDay: 0,   // Not available in current API
+    ownerPerDay: 0,       // Not available in current API
+    rootProportion,
+    totalIssued: totalAlpha,
+    totalBurned: 0,       // Not directly available; could derive from total_alpha changes
     circulatingSupply,
-    maxSupply: raoToTao(rp.max_supply ?? 0),
+    maxSupply: 0,         // Not available
     alphaStaked,
     alphaInPool,
-    taoInPool,
+    taoInPool: totalTao,
     alphaPoolPercent: totalAlphaPool > 0 ? (alphaInPool / totalAlphaPool) * 100 : 0,
-    taoPoolPercent: totalAlphaPool > 0 ? (taoInPool / totalAlphaPool) * 100 : 0,
-    fdv: raoToTao(rp.fdv ?? rp.fully_diluted_valuation ?? 0),
+    taoPoolPercent: totalAlphaPool > 0 ? (totalTao / totalAlphaPool) * 100 : 0,
+    fdv: totalAlpha > 0 && Number(rp.price ?? 0) > 0 ? totalAlpha * Number(rp.price) : 0,
     volumeMarketcapRatio: marketCap > 0 ? vol24h / marketCap : 0,
     buyVolume,
     sellVolume,
-    buyersCount: Number(rp.buyers_count ?? rp.unique_buyers ?? 0),
-    sellersCount: Number(rp.sellers_count ?? rp.unique_sellers ?? 0),
-    buyTxCount: Number(rp.buy_tx_count ?? rp.buys_24_hr ?? 0),
-    sellTxCount: Number(rp.sell_tx_count ?? rp.sells_24_hr ?? 0),
+    buyersCount: Number(rp.buyers_24_hr ?? 0),
+    sellersCount: Number(rp.sellers_24_hr ?? 0),
+    buyTxCount: Number(rp.buys_24_hr ?? 0),
+    sellTxCount: Number(rp.sells_24_hr ?? 0),
     sentiment: totalVol > 0 ? buyVolume / totalVol : 0.5,
   };
 }
