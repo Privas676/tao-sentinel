@@ -18,6 +18,10 @@ export type SubnetRadarData = {
   alerts: RadarAlerts;
   stakeChange24hPct: number;
   stakeChange7dPct: number;
+  /** Daily stake_total values over last 7 days (oldest→newest) */
+  sparklineCapital: number[];
+  /** Daily adoption composite (holders+miners) over last 7 days (oldest→newest) */
+  sparklineAdoption: number[];
 };
 
 export function useStakeAnalytics() {
@@ -43,7 +47,7 @@ export function useStakeAnalytics() {
       const ts7dAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
       const ts30dAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
 
-      const [hist7d, hist30d] = await Promise.all([
+      const [hist7d, hist30d, histTimeSeries] = await Promise.all([
         (supabase as any)
           .from("subnet_stake_analytics")
           .select("netuid, holders_count, stake_total, miners_active")
@@ -56,6 +60,13 @@ export function useStakeAnalytics() {
           .lte("ts", ts30dAgo)
           .order("ts", { ascending: false })
           .limit(500),
+        // Fetch all snapshots from last 7 days for sparklines
+        (supabase as any)
+          .from("subnet_stake_analytics")
+          .select("netuid, stake_total, holders_count, miners_active, ts")
+          .gte("ts", ts7dAgo)
+          .order("ts", { ascending: true })
+          .limit(1000),
       ]);
 
       const dedup = (rows: any[]) => {
@@ -68,6 +79,19 @@ export function useStakeAnalytics() {
 
       const map7d = dedup(hist7d.data || []);
       const map30d = dedup(hist30d.data || []);
+
+      // Build time-series per netuid for sparklines
+      const timeSeriesMap = new Map<number, { stake: number; holders: number; miners: number; ts: string }[]>();
+      for (const row of histTimeSeries.data || []) {
+        const arr = timeSeriesMap.get(row.netuid) || [];
+        arr.push({
+          stake: Number(row.stake_total) || 0,
+          holders: row.holders_count || 0,
+          miners: row.miners_active || 0,
+          ts: row.ts,
+        });
+        timeSeriesMap.set(row.netuid, arr);
+      }
 
       // Fetch subnet names
       const { data: subnets } = await supabase
@@ -118,6 +142,15 @@ export function useStakeAnalytics() {
         const scores = computeRadarScores(snapshot, deltas);
         const alerts = checkAlerts(snapshot, deltas);
 
+        // Build sparkline data from time-series
+        const series = timeSeriesMap.get(netuid) || [];
+        const sparklineCapital = series.length >= 2
+          ? series.map((s) => s.stake)
+          : []; // empty = will fallback to simulated in UI
+        const sparklineAdoption = series.length >= 2
+          ? series.map((s) => s.holders + s.miners)
+          : [];
+
         results.push({
           netuid,
           subnetName: nameMap.get(netuid) || `SN-${netuid}`,
@@ -127,6 +160,8 @@ export function useStakeAnalytics() {
           alerts,
           stakeChange24hPct: deltas.stakeChange24h * 100,
           stakeChange7dPct: deltas.stakeChange7d * 100,
+          sparklineCapital,
+          sparklineAdoption,
         });
       }
 
