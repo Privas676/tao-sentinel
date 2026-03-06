@@ -109,29 +109,41 @@ export function computeCapitalMomentum(s: StakeSnapshot, d: StakeDeltas, p: Pric
 }
 
 export function computeDumpRisk(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
-  let risk = 15;
+  let risk = 10;
   // Stake concentration (high = risky)
-  if (s.stakeConcentration > 75) risk += 25;
-  else if (s.stakeConcentration > 55) risk += 15;
-  else if (s.stakeConcentration > 35) risk += 8;
-  // Stake outflow
-  if (d.stakeChange7d < -0.15) risk += 20;
-  else if (d.stakeChange7d < -0.05) risk += 12;
-  else if (d.stakeChange7d < 0) risk += 5;
-  // Miner decline
-  if (d.minersGrowth7d < -0.15) risk += 12;
-  else if (d.minersGrowth7d < -0.05) risk += 8;
-  // Price volatility proxy (large negative 1d move)
-  if (p.priceChange1d < -10) risk += 15;
+  if (s.stakeConcentration > 75) risk += 20;
+  else if (s.stakeConcentration > 55) risk += 12;
+  else if (s.stakeConcentration > 35) risk += 6;
+  // Price decline (continuous, using 7d for more differentiation)
+  if (p.priceChange7d < -15) risk += 20;
+  else if (p.priceChange7d < -8) risk += 15;
+  else if (p.priceChange7d < -3) risk += 10;
+  else if (p.priceChange7d < 0) risk += clamp(Math.abs(p.priceChange7d) * 2, 0, 8);
+  // 1d volatility spike
+  if (p.priceChange1d < -10) risk += 12;
   else if (p.priceChange1d < -5) risk += 8;
-  // Low liquidity ratio (vol/mcap)
-  const liqRatio = p.marketCap > 0 ? (p.vol24h / p.marketCap) : 0;
-  if (liqRatio < 0.005) risk += 8;
-  // Validator centralization
-  if (s.validatorsActive <= 2) risk += 10;
-  else if (s.validatorsActive <= 5) risk += 5;
-  // Whale selling
-  if (s.largeWalletOutflow > s.largeWalletInflow * 2 && s.largeWalletOutflow > 10) risk += 8;
+  else if (p.priceChange1d < -2) risk += 4;
+  // Low liquidity ratio (vol/mcap) — continuous scale
+  const liqRatio = p.marketCap > 0 ? p.vol24h / p.marketCap : 0;
+  if (liqRatio < 0.001) risk += 12;
+  else if (liqRatio < 0.005) risk += 8;
+  else if (liqRatio < 0.01) risk += 4;
+  else if (liqRatio > 0.15) risk += 6; // Abnormally high vol = potential dump in progress
+  // Miner decline
+  if (d.minersGrowth7d < -0.15) risk += 10;
+  else if (d.minersGrowth7d < -0.05) risk += 6;
+  // Low emission = less incentive to stay
+  if (p.emissionShare < 0.1 && p.emissionShare >= 0) risk += 8;
+  else if (p.emissionShare < 0.5) risk += 4;
+  // Validator centralization (only if we have data)
+  if (s.validatorsActive > 0) {
+    if (s.validatorsActive <= 2) risk += 8;
+    else if (s.validatorsActive <= 5) risk += 4;
+  }
+  // Stake outflow
+  if (d.stakeChange7d < -0.15) risk += 12;
+  else if (d.stakeChange7d < -0.05) risk += 8;
+  else if (d.stakeChange7d < 0) risk += clamp(Math.abs(d.stakeChange7d) * 40, 0, 6);
   return clamp(Math.round(risk), 0, 100);
 }
 
