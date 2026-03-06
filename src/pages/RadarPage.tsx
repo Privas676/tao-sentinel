@@ -237,6 +237,7 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Δ7d</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
             <TableHead className="font-mono text-[10px] text-right">UID%</TableHead>
+            <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Health</TableHead>
           </TableRow>
         </TableHeader>
