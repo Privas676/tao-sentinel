@@ -4,11 +4,12 @@ import {
   healthIndexColor,
   momentumColor as capitalMomentumColor,
   dumpRiskColor,
-  heatmapColor,
 } from "@/lib/stake-analytics";
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/table";
+import Sparkline from "@/components/radar/Sparkline";
+import TreemapHeatmap from "@/components/radar/TreemapHeatmap";
 
 /* ─── Score Badge ─── */
 function ScoreBadge({ value, colorFn, label }: { value: number; colorFn: (v: number) => string; label: string }) {
