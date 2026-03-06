@@ -105,29 +105,67 @@ export function computeDumpRisk(s: StakeSnapshot, d: StakeDeltas): number {
   return clamp(Math.round(risk), 0, 100);
 }
 
+/* ─── Subnet Radar Score (Module 1) ─── */
+export function computeSubnetRadarScore(s: StakeSnapshot, d: StakeDeltas): number {
+  const minersGrowth = clamp(d.minersGrowth7d * 100, 0, 100);
+  const holdersGrowth = clamp(d.holdersGrowth7d * 100, 0, 100);
+  const stakeInflow = clamp(d.stakeChange7d * 100, 0, 100);
+  const uidUsage = clamp(s.uidUsage * 100, 0, 100);
+  const validatorGrowth = clamp(s.validatorsActive >= 15 ? 80 : s.validatorsActive >= 8 ? 50 : s.validatorsActive >= 3 ? 30 : 10, 0, 100);
+  return clamp(Math.round(
+    0.25 * minersGrowth + 0.25 * holdersGrowth + 0.20 * stakeInflow + 0.15 * uidUsage + 0.15 * validatorGrowth
+  ), 0, 100);
+}
+
+/* ─── Narrative Score (Module 3) ─── */
+export function computeNarrativeScore(_s: StakeSnapshot, d: StakeDeltas): number {
+  const minersGrowth = clamp(d.minersGrowth7d * 100, 0, 100);
+  const holdersGrowth = clamp(d.holdersGrowth7d * 100, 0, 100);
+  const stakeInflow = clamp(d.stakeChange7d * 100, 0, 100);
+  return clamp(Math.round(0.35 * minersGrowth + 0.35 * holdersGrowth + 0.30 * stakeInflow), 0, 100);
+}
+
+/* ─── Smart Money Score (Module 2) ─── */
+export function computeSmartMoneyScore(s: StakeSnapshot, d: StakeDeltas): number {
+  let score = 0;
+  const inflow = s.largeWalletInflow;
+  const outflow = s.largeWalletOutflow;
+  const netFlow = inflow - outflow;
+  score += clamp(netFlow * 2, 0, 40);
+  score += clamp(d.stakeChange7d * 200, 0, 30);
+  if (s.stakeConcentration > 60) score += 15;
+  else if (s.stakeConcentration > 30) score += 10;
+  score += clamp(s.uidUsage * 15, 0, 15);
+  return clamp(Math.round(score), 0, 100);
+}
+
 export function computeRadarScores(s: StakeSnapshot, d: StakeDeltas): RadarScores {
   return {
     healthIndex: computeHealthIndex(s, d),
     capitalMomentum: computeCapitalMomentum(s, d),
     dumpRisk: computeDumpRisk(s, d),
+    subnetRadarScore: computeSubnetRadarScore(s, d),
+    narrativeScore: computeNarrativeScore(s, d),
+    smartMoneyScore: computeSmartMoneyScore(s, d),
   };
 }
 
 /* ─── Alert Conditions ─── */
 
 export function checkAlerts(s: StakeSnapshot, d: StakeDeltas): RadarAlerts {
+  const scores = computeRadarScores(s, d);
   return {
-    earlyAdoption:
-      d.minersGrowth7d > 0.40 &&
-      d.holdersGrowth7d > 0.40 &&
-      d.stakeChange7d > 0.20,
+    earlyAdoption: scores.subnetRadarScore > 70,
+    narrativeStarting: scores.subnetRadarScore > 85,
+    narrativeForming: scores.narrativeScore > 80,
+    smartMoneySignal:
+      s.largeWalletInflow > 5 && d.stakeChange7d > 0.10,
     whaleAccumulation:
-      d.stakeChange7d > 0.25 &&
-      s.largeWalletInflow > 3,
+      d.stakeChange7d > 0.25 && s.largeWalletInflow > 3,
     dumpRiskAlert:
-      s.stakeConcentration > 50 &&
-      d.minersGrowth7d < 0 &&
-      d.stakeChange7d < -0.20,
+      s.stakeConcentration > 50 && d.minersGrowth7d < 0 && d.stakeChange7d < -0.20,
+    dumpWarning: scores.dumpRisk > 60,
+    dumpExit: scores.dumpRisk > 75,
   };
 }
 
