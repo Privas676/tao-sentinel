@@ -16,6 +16,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
 import MethodologyPage from "./pages/MethodologyPage";
 import QuantDiagnosticsPage from "./pages/QuantDiagnosticsPage";
+import RadarPage from "./pages/RadarPage";
 import { Toaster } from "@/components/ui/sonner";
 
 const queryClient = new QueryClient();
