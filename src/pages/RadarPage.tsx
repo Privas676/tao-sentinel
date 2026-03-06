@@ -312,8 +312,7 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
   );
 }
 
-/* ─── Sparkline data generators ─── */
-/** Simulate 7-day trend from current deltas (until historical time-series data is available) */
+/* ─── Sparkline fallbacks (used only when < 2 historical snapshots exist) ─── */
 function generateCapitalSparkline(d: SubnetRadarData): number[] {
   const base = 50;
   const delta = d.stakeChange7dPct / 7;
