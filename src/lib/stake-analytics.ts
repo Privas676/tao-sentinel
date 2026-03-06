@@ -28,6 +28,20 @@ export type StakeDeltas = {
   holdersGrowth7d: number;
   holdersGrowth30d: number;
   minersGrowth7d: number;
+  validatorsGrowth7d: number;
+};
+
+export type PriceContext = {
+  priceChange1d: number;   // % change (already percentage)
+  priceChange7d: number;   // % change
+  priceChange30d: number;  // % change
+  currentPrice: number;
+  liquidity: number;
+  emission: number;
+  emissionShare: number;   // % of total network emission
+  marketCap: number;       // in TAO
+  vol24h: number;          // in TAO
+  fearGreed: number;       // 0-100
 };
 
 export type RadarScores = {
@@ -37,10 +51,10 @@ export type RadarScores = {
   subnetRadarScore: number;
   narrativeScore: number;
   smartMoneyScore: number;
-  bubbleScore: number;           // 0-100 — price vs adoption divergence
-  manipulationScore: number;     // 0-100 — validator capture risk
-  alphaInefficiency: number;     // % deviation from fair value
-  fairAlphaPrice: number;        // computed fair value
+  bubbleScore: number;
+  manipulationScore: number;
+  alphaInefficiency: number;
+  fairAlphaPrice: number;
 };
 
 export type RadarAlerts = {
@@ -52,71 +66,76 @@ export type RadarAlerts = {
   dumpRiskAlert: boolean;
   dumpWarning: boolean;
   dumpExit: boolean;
-  bubbleOverheat: boolean;       // bubbleScore > 60
-  bubbleAlert: boolean;          // bubbleScore > 75
-  bubbleDump: boolean;           // bubbleScore > 85
-  manipSuspicious: boolean;      // manipScore > 65
-  manipRisk: boolean;            // manipScore > 80
-  alphaUndervalued: boolean;     // inefficiency < -30%
-  alphaOverpriced: boolean;      // inefficiency > +40%
+  bubbleOverheat: boolean;
+  bubbleAlert: boolean;
+  bubbleDump: boolean;
+  manipSuspicious: boolean;
+  manipRisk: boolean;
+  alphaUndervalued: boolean;
+  alphaOverpriced: boolean;
 };
 
 /* ─── Score Computation ─── */
 
 export function computeHealthIndex(s: StakeSnapshot, d: StakeDeltas): number {
   let score = 50;
-  // Miners growth
   score += clamp(d.minersGrowth7d * 80, -20, 20);
-  // Holders growth
   score += clamp(d.holdersGrowth7d * 60, -15, 15);
-  // UID usage (higher = healthier)
   score += clamp(s.uidUsage * 20, 0, 15);
-  // Validator decentralization
   if (s.validatorsActive >= 15) score += 10;
   else if (s.validatorsActive >= 8) score += 5;
   else if (s.validatorsActive <= 2) score -= 10;
-  // Stake concentration penalty (high = bad)
   if (s.stakeConcentration > 80) score -= 15;
   else if (s.stakeConcentration > 60) score -= 10;
   else if (s.stakeConcentration > 40) score -= 5;
   return clamp(Math.round(score), 0, 100);
 }
 
-export function computeCapitalMomentum(s: StakeSnapshot, d: StakeDeltas): number {
+export function computeCapitalMomentum(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
   let score = 50;
   // Stake inflow velocity
   score += clamp(d.stakeChange7d * 150, -25, 25);
   // Holders growth
   score += clamp(d.holdersGrowth7d * 80, -15, 15);
+  // Price momentum (7d % change)
+  score += clamp(p.priceChange7d / 5, -10, 10);
   // Whale activity (net flow)
   const netWhaleFlow = s.largeWalletInflow - s.largeWalletOutflow;
-  score += clamp(netWhaleFlow / 50, -10, 10);
+  if (netWhaleFlow > 100) score += 10;
+  else if (netWhaleFlow > 10) score += 5;
+  else if (netWhaleFlow < -100) score -= 10;
+  else if (netWhaleFlow < -10) score -= 5;
   return clamp(Math.round(score), 0, 100);
 }
 
-export function computeDumpRisk(s: StakeSnapshot, d: StakeDeltas): number {
+export function computeDumpRisk(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
   let risk = 15;
   // Stake concentration (high = risky)
-  if (s.stakeConcentration > 75) risk += 30;
-  else if (s.stakeConcentration > 55) risk += 20;
-  else if (s.stakeConcentration > 35) risk += 10;
+  if (s.stakeConcentration > 75) risk += 25;
+  else if (s.stakeConcentration > 55) risk += 15;
+  else if (s.stakeConcentration > 35) risk += 8;
   // Stake outflow
-  if (d.stakeChange7d < -0.15) risk += 25;
-  else if (d.stakeChange7d < -0.05) risk += 15;
+  if (d.stakeChange7d < -0.15) risk += 20;
+  else if (d.stakeChange7d < -0.05) risk += 12;
   else if (d.stakeChange7d < 0) risk += 5;
   // Miner decline
-  if (d.minersGrowth7d < -0.15) risk += 15;
-  else if (d.minersGrowth7d < -0.05) risk += 10;
-  else if (d.minersGrowth7d < 0) risk += 5;
+  if (d.minersGrowth7d < -0.15) risk += 12;
+  else if (d.minersGrowth7d < -0.05) risk += 8;
+  // Price volatility proxy (large negative 1d move)
+  if (p.priceChange1d < -10) risk += 15;
+  else if (p.priceChange1d < -5) risk += 8;
+  // Low liquidity ratio (vol/mcap)
+  const liqRatio = p.marketCap > 0 ? (p.vol24h / p.marketCap) : 0;
+  if (liqRatio < 0.005) risk += 8;
   // Validator centralization
   if (s.validatorsActive <= 2) risk += 10;
   else if (s.validatorsActive <= 5) risk += 5;
   // Whale selling
-  if (s.largeWalletOutflow > s.largeWalletInflow * 2) risk += 10;
+  if (s.largeWalletOutflow > s.largeWalletInflow * 2 && s.largeWalletOutflow > 10) risk += 8;
   return clamp(Math.round(risk), 0, 100);
 }
 
-/* ─── Subnet Radar Score (Module 1) ─── */
+/* ─── Subnet Radar Score ─── */
 export function computeSubnetRadarScore(s: StakeSnapshot, d: StakeDeltas): number {
   const minersGrowth = clamp(d.minersGrowth7d * 100, 0, 100);
   const holdersGrowth = clamp(d.holdersGrowth7d * 100, 0, 100);
@@ -128,103 +147,130 @@ export function computeSubnetRadarScore(s: StakeSnapshot, d: StakeDeltas): numbe
   ), 0, 100);
 }
 
-/* ─── Narrative Score (Module 3) ─── */
-export function computeNarrativeScore(_s: StakeSnapshot, d: StakeDeltas): number {
-  const minersGrowth = clamp(d.minersGrowth7d * 100, 0, 100);
-  const holdersGrowth = clamp(d.holdersGrowth7d * 100, 0, 100);
-  const stakeInflow = clamp(d.stakeChange7d * 100, 0, 100);
-  return clamp(Math.round(0.35 * minersGrowth + 0.35 * holdersGrowth + 0.30 * stakeInflow), 0, 100);
+/* ─── Narrative Score ─── */
+export function computeNarrativeScore(_s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
+  // Price momentum (% change already)
+  const priceMomentum = clamp(p.priceChange7d, -100, 100);
+  const stakeInflow = clamp(d.stakeChange7d * 100, -100, 100);
+  const minersGrowth = clamp(d.minersGrowth7d * 100, -100, 100);
+  const validatorsGrowth = clamp(d.validatorsGrowth7d * 100, -100, 100);
+  // Volume change proxy: high vol/mcap = high activity
+  const volChange = p.marketCap > 0 ? clamp((p.vol24h / p.marketCap) * 500, 0, 100) : 0;
+
+  const raw = 0.30 * priceMomentum + 0.25 * stakeInflow + 0.20 * minersGrowth + 0.15 * validatorsGrowth + 0.10 * volChange;
+  return clamp(Math.round(raw), 0, 100);
 }
 
-/* ─── Smart Money Score (Module 2) ─── */
-export function computeSmartMoneyScore(s: StakeSnapshot, d: StakeDeltas): number {
+/* ─── Smart Money Score ─── */
+export function computeSmartMoneyScore(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
   let score = 0;
-  const inflow = s.largeWalletInflow;
-  const outflow = s.largeWalletOutflow;
-  const netFlow = inflow - outflow;
-  score += clamp(netFlow * 2, 0, 40);
+  const netFlow = s.largeWalletInflow - s.largeWalletOutflow;
+  // Net flow contribution (scaled for real TAO amounts)
+  if (netFlow > 100) score += 40;
+  else if (netFlow > 50) score += 30;
+  else if (netFlow > 10) score += 20;
+  else if (netFlow > 0) score += 10;
+  // Stake inflow
   score += clamp(d.stakeChange7d * 200, 0, 30);
-  if (s.stakeConcentration > 60) score += 15;
-  else if (s.stakeConcentration > 30) score += 10;
+  // Emission share (higher emission = more attractive)
+  if (p.emissionShare > 5) score += 15;
+  else if (p.emissionShare > 2) score += 10;
+  else if (p.emissionShare > 0.5) score += 5;
+  // Active miners = real network usage
   score += clamp(s.uidUsage * 15, 0, 15);
   return clamp(Math.round(score), 0, 100);
 }
 
 /* ─── Bubble Score ─── */
-export type PriceContext = {
-  priceChange7d: number;   // fractional
-  priceChange30d: number;  // fractional
-  currentPrice: number;
-  liquidity: number;
-  emission: number;        // from raw_data.chain.emission
-};
-
 export function computeBubbleScore(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
-  const priceGrowth = clamp(p.priceChange7d * 100, 0, 100);
+  // Price growth vs adoption divergence
+  const priceGrowth = clamp(p.priceChange7d, 0, 100);
   const minersGrowth = clamp(d.minersGrowth7d * 100, 0, 100);
   const holdersGrowth = clamp(d.holdersGrowth7d * 100, 0, 100);
   const stakeGrowth = clamp(d.stakeChange7d * 100, 0, 100);
-  return clamp(Math.round(
-    0.40 * priceGrowth - 0.25 * minersGrowth - 0.20 * holdersGrowth - 0.15 * stakeGrowth
-  ), 0, 100);
+  // Liquidity ratio (vol/mcap — low = more bubble-like)
+  const liqRatio = p.marketCap > 0 ? clamp((p.vol24h / p.marketCap) * 100, 0, 100) : 50;
+
+  const raw = 0.40 * priceGrowth - 0.25 * minersGrowth - 0.20 * holdersGrowth - 0.15 * liqRatio;
+  return clamp(Math.round(raw), 0, 100);
 }
 
 /* ─── Manipulation Score ─── */
-export function computeManipulationScore(s: StakeSnapshot): number {
+export function computeManipulationScore(s: StakeSnapshot, p: PriceContext): number {
   let score = 0;
-  const valEmissionPct = s.validatorsActive > 0 ? clamp(s.stakeConcentration, 0, 100) : 0;
-  score += 0.35 * valEmissionPct;
-  const valConcentration = s.validatorsActive <= 2 ? 90 : s.validatorsActive <= 5 ? 70 : s.validatorsActive <= 10 ? 40 : 15;
-  score += 0.30 * valConcentration;
-  const rewardSkew = s.validatorsActive <= 3 && s.stakeConcentration > 50 ? 80 : s.stakeConcentration > 70 ? 60 : 20;
-  score += 0.20 * rewardSkew;
+  // Validator concentration (fewer validators = more centralized)
+  const valConcentration = s.validatorsActive <= 2 ? 90 : s.validatorsActive <= 5 ? 70 : s.validatorsActive <= 10 ? 40 : s.validatorsActive <= 15 ? 25 : 10;
+  score += 0.35 * valConcentration;
+  // Stake concentration as proxy for reward skew
+  const stakeConc = clamp(s.stakeConcentration, 0, 100);
+  score += 0.30 * stakeConc;
+  // Emission share (high emission + low validators = suspicious)
+  const emissionFactor = p.emissionShare > 5 && s.validatorsActive <= 5 ? 80 :
+    p.emissionShare > 3 && s.validatorsActive <= 8 ? 50 :
+    p.emissionShare > 1 ? 30 : 15;
+  score += 0.20 * emissionFactor;
+  // Low miner activity
   const lowMinerRewards = s.minersActive <= 2 ? 80 : s.minersActive <= 10 ? 50 : s.uidUsage < 0.1 ? 40 : 10;
   score += 0.15 * lowMinerRewards;
   return clamp(Math.round(score), 0, 100);
 }
 
 /* ─── Alpha Price Inefficiency ─── */
-export function computeFairAlphaPrice(s: StakeSnapshot, p: PriceContext): number {
-  const minersLog = s.minersActive > 0 ? Math.log(s.minersActive + 1) / Math.log(256) : 0;
-  const stakeNorm = clamp(s.stakeTotal / 1e6, 0, 1);
-  const burnRate = clamp(p.emission / 1e9, 0, 1);
-  const uidUsage = s.uidUsage;
-  const liqDepth = clamp(p.liquidity / 1e6, 0, 1);
-  const fairScore = 0.35 * minersLog + 0.25 * stakeNorm + 0.15 * burnRate + 0.15 * uidUsage + 0.10 * liqDepth;
-  return fairScore * 100;
+// Compute a fundamentals score (0-100) that represents the "real value" of a subnet
+export function computeFundamentalsScore(s: StakeSnapshot, p: PriceContext): number {
+  // Miners activity (log scale, 256 max = 100%)
+  const minersScore = s.minersActive > 0 ? clamp(Math.log(s.minersActive + 1) / Math.log(257) * 100, 0, 100) : 0;
+  // Stake depth (log scale)
+  const stakeScore = s.stakeTotal > 0 ? clamp(Math.log(s.stakeTotal + 1) / Math.log(1e7) * 100, 0, 100) : 0;
+  // Emission share
+  const emissionScore = clamp(p.emissionShare * 10, 0, 100);
+  // Volume activity
+  const volScore = p.vol24h > 0 ? clamp(Math.log(p.vol24h + 1) / Math.log(1e5) * 100, 0, 100) : 0;
+  // Liquidity ratio
+  const liqScore = p.marketCap > 0 ? clamp((p.vol24h / p.marketCap) * 1000, 0, 100) : 0;
+
+  return 0.35 * minersScore + 0.25 * stakeScore + 0.20 * emissionScore + 0.10 * volScore + 0.10 * liqScore;
+}
+
+// Fair price is relative: median price * (this subnet's fundamentals / median fundamentals)
+// This is called at the hook level with cross-subnet context
+export function computeFairAlphaPrice(fundamentalsScore: number, medianPrice: number, medianFundamentals: number): number {
+  if (medianFundamentals <= 0 || medianPrice <= 0) return 0;
+  return medianPrice * (fundamentalsScore / medianFundamentals);
 }
 
 export function computeAlphaInefficiency(realPrice: number, fairPrice: number): number {
-  if (fairPrice <= 0) return 0;
+  if (fairPrice <= 0 || realPrice <= 0) return 0;
   return ((realPrice - fairPrice) / fairPrice) * 100;
 }
 
-export function computeRadarScores(s: StakeSnapshot, d: StakeDeltas, p?: PriceContext): RadarScores {
-  const pc: PriceContext = p || { priceChange7d: 0, priceChange30d: 0, currentPrice: 0, liquidity: 0, emission: 0 };
-  const fairAlpha = computeFairAlphaPrice(s, pc);
+export function computeRadarScores(s: StakeSnapshot, d: StakeDeltas, p: PriceContext, crossSubnet?: { medianPrice: number; medianFundamentals: number }): RadarScores {
+  const fundamentals = computeFundamentalsScore(s, p);
+  const fairAlpha = crossSubnet
+    ? computeFairAlphaPrice(fundamentals, crossSubnet.medianPrice, crossSubnet.medianFundamentals)
+    : 0;
   return {
     healthIndex: computeHealthIndex(s, d),
-    capitalMomentum: computeCapitalMomentum(s, d),
-    dumpRisk: computeDumpRisk(s, d),
+    capitalMomentum: computeCapitalMomentum(s, d, p),
+    dumpRisk: computeDumpRisk(s, d, p),
     subnetRadarScore: computeSubnetRadarScore(s, d),
-    narrativeScore: computeNarrativeScore(s, d),
-    smartMoneyScore: computeSmartMoneyScore(s, d),
-    bubbleScore: computeBubbleScore(s, d, pc),
-    manipulationScore: computeManipulationScore(s),
-    alphaInefficiency: computeAlphaInefficiency(pc.currentPrice, fairAlpha),
+    narrativeScore: computeNarrativeScore(s, d, p),
+    smartMoneyScore: computeSmartMoneyScore(s, d, p),
+    bubbleScore: computeBubbleScore(s, d, p),
+    manipulationScore: computeManipulationScore(s, p),
+    alphaInefficiency: crossSubnet ? computeAlphaInefficiency(p.currentPrice, fairAlpha) : 0,
     fairAlphaPrice: fairAlpha,
   };
 }
 
 /* ─── Alert Conditions ─── */
 
-export function checkAlerts(s: StakeSnapshot, d: StakeDeltas, p?: PriceContext): RadarAlerts {
-  const scores = computeRadarScores(s, d, p);
+export function checkAlerts(s: StakeSnapshot, d: StakeDeltas, scores: RadarScores, p: PriceContext): RadarAlerts {
   return {
     earlyAdoption: scores.subnetRadarScore > 70,
     narrativeStarting: scores.subnetRadarScore > 85,
     narrativeForming: scores.narrativeScore > 80,
-    smartMoneySignal: s.largeWalletInflow > 5 && d.stakeChange7d > 0.10,
+    smartMoneySignal: (s.largeWalletInflow - s.largeWalletOutflow) > 10 && d.stakeChange7d > 0.05,
     whaleAccumulation: d.stakeChange7d > 0.25 && s.largeWalletInflow > 3,
     dumpRiskAlert: s.stakeConcentration > 50 && d.minersGrowth7d < 0 && d.stakeChange7d < -0.20,
     dumpWarning: scores.dumpRisk > 60,
@@ -234,8 +280,8 @@ export function checkAlerts(s: StakeSnapshot, d: StakeDeltas, p?: PriceContext):
     bubbleDump: scores.bubbleScore > 85,
     manipSuspicious: scores.manipulationScore > 65,
     manipRisk: scores.manipulationScore > 80,
-    alphaUndervalued: scores.alphaInefficiency < -30 && (p?.currentPrice ?? 0) > 0,
-    alphaOverpriced: scores.alphaInefficiency > 40 && (p?.currentPrice ?? 0) > 0,
+    alphaUndervalued: scores.alphaInefficiency < -30 && p.currentPrice > 0 && scores.fairAlphaPrice > 0,
+    alphaOverpriced: scores.alphaInefficiency > 40 && p.currentPrice > 0 && scores.fairAlphaPrice > 0,
   };
 }
 

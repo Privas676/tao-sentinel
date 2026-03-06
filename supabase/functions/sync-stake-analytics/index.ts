@@ -25,12 +25,6 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3): P
   return await fetch(url, options);
 }
 
-function extractStake(chain: any): number {
-  if (!chain) return 0;
-  const raw = Number(chain.total_stake ?? chain.alpha_staked ?? 0);
-  return raw > 1e6 ? raw / RAO : raw;
-}
-
 function dedupeLatest(rows: any[]): Map<number, any> {
   const map = new Map<number, any>();
   for (const r of rows || []) {
@@ -50,7 +44,7 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("TAOSTATS_API_KEY")!;
     const headers = { Authorization: apiKey, Accept: "application/json" };
 
-    // 1. Get latest metrics for all subnets
+    // 1. Get latest metrics with full raw_payload for all subnets
     const { data: latestMetrics, error: latestErr } = await sb
       .from("subnet_latest")
       .select("netuid, raw_payload, miners_active, ts");
@@ -64,31 +58,25 @@ Deno.serve(async (req) => {
     const netuidList = latestMetrics.map((m) => m.netuid).filter(Boolean) as number[];
     const now = Date.now();
     const ts24hAgo = new Date(now - 24 * 3600_000).toISOString();
-
-    // 2. Get historical data for stake changes (24h ago, 7d ago)
     const ts7dAgo = new Date(now - 7 * 86400_000).toISOString();
-    const [hist24h, hist7d] = await Promise.all([
-      sb.from("subnet_metrics_ts").select("netuid, raw_payload")
-        .in("netuid", netuidList).lte("ts", ts24hAgo)
-        .order("ts", { ascending: false }).limit(500),
-      sb.from("subnet_metrics_ts").select("netuid, raw_payload")
-        .in("netuid", netuidList).lte("ts", ts7dAgo)
-        .order("ts", { ascending: false }).limit(500),
+
+    // 2. Get historical stake analytics for delta calculations
+    const [prevAnalyticsRes, hist7dRes] = await Promise.all([
+      sb.from("subnet_stake_analytics")
+        .select("netuid, holders_count, stake_concentration, validators_active, stake_total, miners_active")
+        .in("netuid", netuidList)
+        .order("ts", { ascending: false })
+        .limit(500),
+      sb.from("subnet_stake_analytics")
+        .select("netuid, stake_total, miners_active, holders_count, validators_active")
+        .in("netuid", netuidList)
+        .lte("ts", ts7dAgo)
+        .order("ts", { ascending: false })
+        .limit(500),
     ]);
+    const prevMap = dedupeLatest(prevAnalyticsRes.data || []);
 
-    const map24h = dedupeLatest(hist24h.data || []);
-    const map7d = dedupeLatest(hist7d.data || []);
-
-    // 3. Get previous stake analytics for holders history
-    const { data: prevAnalytics } = await sb
-      .from("subnet_stake_analytics")
-      .select("netuid, holders_count, stake_concentration, validators_active")
-      .in("netuid", netuidList)
-      .order("ts", { ascending: false })
-      .limit(500);
-    const prevMap = dedupeLatest(prevAnalytics || []);
-
-    // 4. Round-robin metagraph fetch from Taostats
+    // 3. Round-robin metagraph fetch from Taostats
     const minuteOfHour = new Date().getMinutes();
     const totalSlices = Math.ceil(netuidList.length / SUBNETS_PER_RUN);
     const sliceIndex = Math.floor(minuteOfHour / 15) % totalSlices;
@@ -114,23 +102,34 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 5. Get whale movements for last 24h
+    // 4. Get whale movements per subnet for last 24h
     const { data: recentWhales } = await sb
       .from("whale_movements")
-      .select("direction, amount_tao")
+      .select("direction, amount_tao, netuid")
       .gte("detected_at", ts24hAgo);
 
-    const totalInflow = (recentWhales || [])
-      .filter((w) => w.direction === "IN")
-      .reduce((s, w) => s + Number(w.amount_tao), 0);
-    const totalOutflow = (recentWhales || [])
-      .filter((w) => w.direction === "OUT")
-      .reduce((s, w) => s + Number(w.amount_tao), 0);
+    // Per-subnet whale flows
+    const whaleFlowMap = new Map<number, { inflow: number; outflow: number }>();
+    for (const w of recentWhales || []) {
+      const nid = w.netuid || 0;
+      const entry = whaleFlowMap.get(nid) || { inflow: 0, outflow: 0 };
+      if (w.direction === "IN") entry.inflow += Number(w.amount_tao);
+      else entry.outflow += Number(w.amount_tao);
+      whaleFlowMap.set(nid, entry);
+    }
+    // Also aggregate non-subnet-specific whales
+    const globalWhales = whaleFlowMap.get(0) || { inflow: 0, outflow: 0 };
 
-    // 6. Compute analytics for all subnets
+    // Compute total emission for emission share calculation
+    let totalEmission = 0;
+    for (const m of latestMetrics) {
+      const chain = (m.raw_payload as any)?._chain || {};
+      totalEmission += Number(chain.emission || 0);
+    }
+
+    // 5. Compute analytics for all subnets
     const rows: any[] = [];
     const tsRounded = new Date().toISOString();
-    const subnetCount = netuidList.length || 1;
 
     for (const m of latestMetrics) {
       const nid = m.netuid as number;
@@ -139,11 +138,28 @@ Deno.serve(async (req) => {
       const payload = m.raw_payload as any;
       const chain = payload?._chain || {};
 
-      const stakeTotal = extractStake(chain);
+      // Extract real stake from raw_payload (alpha_staked is in rao)
+      const alphaStaked = Number(payload?.alpha_staked || 0) / RAO;
+      const totalTao = Number(payload?.total_tao || 0) / RAO;
+      const stakeTotal = alphaStaked > 0 ? alphaStaked : totalTao;
+
       const minersActive = Number(chain.active_uids ?? m.miners_active ?? 0);
       const minersTotal = Number(chain.total_neurons ?? 0);
       const maxN = Number(chain.max_n ?? 256);
       const uidUsage = maxN > 0 ? minersActive / maxN : 0;
+
+      // Emission data
+      const emission = Number(chain.emission || 0);
+      const emissionShare = totalEmission > 0 ? (emission / totalEmission) * 100 : 0;
+
+      // Price data from raw_payload
+      const price = Number(payload?.price || 0);
+      const marketCap = Number(payload?.market_cap || 0) / RAO;
+      const vol24h = Number(payload?.tao_volume_24_hr || 0) / RAO;
+      const priceChange1d = Number(payload?.price_change_1_day || 0);
+      const priceChange1w = Number(payload?.price_change_1_week || 0);
+      const priceChange1m = Number(payload?.price_change_1_month || 0);
+      const fgi = Number(payload?.fear_and_greed_index || 50);
 
       // Metagraph-derived metrics
       let holdersCount = 0;
@@ -188,6 +204,11 @@ Deno.serve(async (req) => {
         validatorsActive = prev?.validators_active || 0;
       }
 
+      // Per-subnet whale flows (fallback to share of global if no subnet-specific data)
+      const subnetWhales = whaleFlowMap.get(nid);
+      const whaleInflow = subnetWhales ? Math.round(subnetWhales.inflow) : 0;
+      const whaleOutflow = subnetWhales ? Math.round(subnetWhales.outflow) : 0;
+
       rows.push({
         netuid: nid,
         ts: tsRounded,
@@ -199,13 +220,27 @@ Deno.serve(async (req) => {
         miners_total: minersTotal,
         miners_active: minersActive,
         uid_usage: Math.round(uidUsage * 1000) / 1000,
-        large_wallet_inflow: Math.round(totalInflow / subnetCount),
-        large_wallet_outflow: Math.round(totalOutflow / subnetCount),
-        raw_data: { chain, metagraph_available: metagraphData.has(nid) },
+        large_wallet_inflow: whaleInflow,
+        large_wallet_outflow: whaleOutflow,
+        raw_data: {
+          chain,
+          metagraph_available: metagraphData.has(nid),
+          emission,
+          emission_share: Math.round(emissionShare * 100) / 100,
+          price,
+          market_cap: marketCap,
+          vol_24h: vol24h,
+          price_change_1d: priceChange1d,
+          price_change_1w: priceChange1w,
+          price_change_1m: priceChange1m,
+          fear_greed: fgi,
+          alpha_staked: alphaStaked,
+          total_tao: totalTao,
+        },
       });
     }
 
-    // 7. Insert
+    // 6. Insert
     if (rows.length > 0) {
       const { error: insertErr } = await sb.from("subnet_stake_analytics").insert(rows);
       if (insertErr) throw new Error(`Insert failed: ${insertErr.message}`);
