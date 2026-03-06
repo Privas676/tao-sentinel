@@ -31,23 +31,34 @@ export type StakeDeltas = {
 };
 
 export type RadarScores = {
-  healthIndex: number;       // 0-100
-  capitalMomentum: number;   // 0-100
-  dumpRisk: number;          // 0-100
-  subnetRadarScore: number;  // 0-100 — adoption précoce
-  narrativeScore: number;    // 0-100 — potentiel viral
-  smartMoneyScore: number;   // 0-100 — activité whale
+  healthIndex: number;
+  capitalMomentum: number;
+  dumpRisk: number;
+  subnetRadarScore: number;
+  narrativeScore: number;
+  smartMoneyScore: number;
+  bubbleScore: number;           // 0-100 — price vs adoption divergence
+  manipulationScore: number;     // 0-100 — validator capture risk
+  alphaInefficiency: number;     // % deviation from fair value
+  fairAlphaPrice: number;        // computed fair value
 };
 
 export type RadarAlerts = {
-  earlyAdoption: boolean;       // radarScore > 70
-  narrativeStarting: boolean;   // radarScore > 85
-  narrativeForming: boolean;    // narrativeScore > 80
-  smartMoneySignal: boolean;    // whale conditions
+  earlyAdoption: boolean;
+  narrativeStarting: boolean;
+  narrativeForming: boolean;
+  smartMoneySignal: boolean;
   whaleAccumulation: boolean;
   dumpRiskAlert: boolean;
-  dumpWarning: boolean;         // dumpRisk > 60
-  dumpExit: boolean;            // dumpRisk > 75
+  dumpWarning: boolean;
+  dumpExit: boolean;
+  bubbleOverheat: boolean;       // bubbleScore > 60
+  bubbleAlert: boolean;          // bubbleScore > 75
+  bubbleDump: boolean;           // bubbleScore > 85
+  manipSuspicious: boolean;      // manipScore > 65
+  manipRisk: boolean;            // manipScore > 80
+  alphaUndervalued: boolean;     // inefficiency < -30%
+  alphaOverpriced: boolean;      // inefficiency > +40%
 };
 
 /* ─── Score Computation ─── */
@@ -139,7 +150,58 @@ export function computeSmartMoneyScore(s: StakeSnapshot, d: StakeDeltas): number
   return clamp(Math.round(score), 0, 100);
 }
 
-export function computeRadarScores(s: StakeSnapshot, d: StakeDeltas): RadarScores {
+/* ─── Bubble Score ─── */
+export type PriceContext = {
+  priceChange7d: number;   // fractional
+  priceChange30d: number;  // fractional
+  currentPrice: number;
+  liquidity: number;
+  emission: number;        // from raw_data.chain.emission
+};
+
+export function computeBubbleScore(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
+  const priceGrowth = clamp(p.priceChange7d * 100, 0, 100);
+  const minersGrowth = clamp(d.minersGrowth7d * 100, 0, 100);
+  const holdersGrowth = clamp(d.holdersGrowth7d * 100, 0, 100);
+  const stakeGrowth = clamp(d.stakeChange7d * 100, 0, 100);
+  return clamp(Math.round(
+    0.40 * priceGrowth - 0.25 * minersGrowth - 0.20 * holdersGrowth - 0.15 * stakeGrowth
+  ), 0, 100);
+}
+
+/* ─── Manipulation Score ─── */
+export function computeManipulationScore(s: StakeSnapshot): number {
+  let score = 0;
+  const valEmissionPct = s.validatorsActive > 0 ? clamp(s.stakeConcentration, 0, 100) : 0;
+  score += 0.35 * valEmissionPct;
+  const valConcentration = s.validatorsActive <= 2 ? 90 : s.validatorsActive <= 5 ? 70 : s.validatorsActive <= 10 ? 40 : 15;
+  score += 0.30 * valConcentration;
+  const rewardSkew = s.validatorsActive <= 3 && s.stakeConcentration > 50 ? 80 : s.stakeConcentration > 70 ? 60 : 20;
+  score += 0.20 * rewardSkew;
+  const lowMinerRewards = s.minersActive <= 2 ? 80 : s.minersActive <= 10 ? 50 : s.uidUsage < 0.1 ? 40 : 10;
+  score += 0.15 * lowMinerRewards;
+  return clamp(Math.round(score), 0, 100);
+}
+
+/* ─── Alpha Price Inefficiency ─── */
+export function computeFairAlphaPrice(s: StakeSnapshot, p: PriceContext): number {
+  const minersLog = s.minersActive > 0 ? Math.log(s.minersActive + 1) / Math.log(256) : 0;
+  const stakeNorm = clamp(s.stakeTotal / 1e6, 0, 1);
+  const burnRate = clamp(p.emission / 1e9, 0, 1);
+  const uidUsage = s.uidUsage;
+  const liqDepth = clamp(p.liquidity / 1e6, 0, 1);
+  const fairScore = 0.35 * minersLog + 0.25 * stakeNorm + 0.15 * burnRate + 0.15 * uidUsage + 0.10 * liqDepth;
+  return fairScore * 100;
+}
+
+export function computeAlphaInefficiency(realPrice: number, fairPrice: number): number {
+  if (fairPrice <= 0) return 0;
+  return ((realPrice - fairPrice) / fairPrice) * 100;
+}
+
+export function computeRadarScores(s: StakeSnapshot, d: StakeDeltas, p?: PriceContext): RadarScores {
+  const pc: PriceContext = p || { priceChange7d: 0, priceChange30d: 0, currentPrice: 0, liquidity: 0, emission: 0 };
+  const fairAlpha = computeFairAlphaPrice(s, pc);
   return {
     healthIndex: computeHealthIndex(s, d),
     capitalMomentum: computeCapitalMomentum(s, d),
@@ -147,25 +209,33 @@ export function computeRadarScores(s: StakeSnapshot, d: StakeDeltas): RadarScore
     subnetRadarScore: computeSubnetRadarScore(s, d),
     narrativeScore: computeNarrativeScore(s, d),
     smartMoneyScore: computeSmartMoneyScore(s, d),
+    bubbleScore: computeBubbleScore(s, d, pc),
+    manipulationScore: computeManipulationScore(s),
+    alphaInefficiency: computeAlphaInefficiency(pc.currentPrice, fairAlpha),
+    fairAlphaPrice: fairAlpha,
   };
 }
 
 /* ─── Alert Conditions ─── */
 
-export function checkAlerts(s: StakeSnapshot, d: StakeDeltas): RadarAlerts {
-  const scores = computeRadarScores(s, d);
+export function checkAlerts(s: StakeSnapshot, d: StakeDeltas, p?: PriceContext): RadarAlerts {
+  const scores = computeRadarScores(s, d, p);
   return {
     earlyAdoption: scores.subnetRadarScore > 70,
     narrativeStarting: scores.subnetRadarScore > 85,
     narrativeForming: scores.narrativeScore > 80,
-    smartMoneySignal:
-      s.largeWalletInflow > 5 && d.stakeChange7d > 0.10,
-    whaleAccumulation:
-      d.stakeChange7d > 0.25 && s.largeWalletInflow > 3,
-    dumpRiskAlert:
-      s.stakeConcentration > 50 && d.minersGrowth7d < 0 && d.stakeChange7d < -0.20,
+    smartMoneySignal: s.largeWalletInflow > 5 && d.stakeChange7d > 0.10,
+    whaleAccumulation: d.stakeChange7d > 0.25 && s.largeWalletInflow > 3,
+    dumpRiskAlert: s.stakeConcentration > 50 && d.minersGrowth7d < 0 && d.stakeChange7d < -0.20,
     dumpWarning: scores.dumpRisk > 60,
     dumpExit: scores.dumpRisk > 75,
+    bubbleOverheat: scores.bubbleScore > 60,
+    bubbleAlert: scores.bubbleScore > 75,
+    bubbleDump: scores.bubbleScore > 85,
+    manipSuspicious: scores.manipulationScore > 65,
+    manipRisk: scores.manipulationScore > 80,
+    alphaUndervalued: scores.alphaInefficiency < -30,
+    alphaOverpriced: scores.alphaInefficiency > 40,
   };
 }
 
@@ -192,7 +262,6 @@ export function dumpRiskColor(risk: number): string {
 }
 
 export function heatmapColor(value: number): string {
-  // 0 = cold (blue), 50 = neutral, 100 = hot (red)
   if (value >= 80) return "rgba(229,57,53,0.7)";
   if (value >= 60) return "rgba(255,109,0,0.6)";
   if (value >= 40) return "rgba(255,193,7,0.5)";
@@ -217,4 +286,26 @@ export function smartMoneyColor(score: number): string {
   if (score >= 70) return "rgba(76,175,80,0.9)";
   if (score >= 40) return "rgba(255,193,7,0.8)";
   return "rgba(255,255,255,0.3)";
+}
+
+export function bubbleScoreColor(score: number): string {
+  if (score >= 85) return "rgba(229,57,53,0.9)";
+  if (score >= 75) return "rgba(229,57,53,0.7)";
+  if (score >= 60) return "rgba(255,109,0,0.8)";
+  return "rgba(255,255,255,0.3)";
+}
+
+export function manipulationScoreColor(score: number): string {
+  if (score >= 80) return "rgba(229,57,53,0.9)";
+  if (score >= 65) return "rgba(255,109,0,0.8)";
+  if (score >= 40) return "rgba(255,193,7,0.8)";
+  return "rgba(255,255,255,0.3)";
+}
+
+export function inefficiencyColor(pct: number): string {
+  if (pct < -30) return "rgba(76,175,80,0.9)";
+  if (pct < -10) return "rgba(76,175,80,0.6)";
+  if (pct > 40) return "rgba(229,57,53,0.9)";
+  if (pct > 15) return "rgba(255,109,0,0.7)";
+  return "rgba(255,255,255,0.4)";
 }

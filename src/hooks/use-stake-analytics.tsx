@@ -7,6 +7,7 @@ import {
   type StakeDeltas,
   type RadarScores,
   type RadarAlerts,
+  type PriceContext,
 } from "@/lib/stake-analytics";
 
 export type SubnetRadarData = {
@@ -16,11 +17,10 @@ export type SubnetRadarData = {
   deltas: StakeDeltas;
   scores: RadarScores;
   alerts: RadarAlerts;
+  priceContext: PriceContext;
   stakeChange24hPct: number;
   stakeChange7dPct: number;
-  /** Daily stake_total values over last 7 days (oldest→newest) */
   sparklineCapital: number[];
-  /** Daily adoption composite (holders+miners) over last 7 days (oldest→newest) */
   sparklineAdoption: number[];
 };
 
@@ -43,11 +43,12 @@ export function useStakeAnalytics() {
         if (!latest.has(row.netuid)) latest.set(row.netuid, row);
       }
 
-      // Fetch 7d-ago analytics for growth computation
       const ts7dAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
       const ts30dAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
+      const date7dAgo = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+      const date30dAgo = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
 
-      const [hist7d, hist30d, histTimeSeries] = await Promise.all([
+      const [hist7d, hist30d, histTimeSeries, priceLatest, price7d, price30d, metricsLatest] = await Promise.all([
         (supabase as any)
           .from("subnet_stake_analytics")
           .select("netuid, holders_count, stake_total, miners_active")
@@ -60,13 +61,36 @@ export function useStakeAnalytics() {
           .lte("ts", ts30dAgo)
           .order("ts", { ascending: false })
           .limit(500),
-        // Fetch all snapshots from last 7 days for sparklines
         (supabase as any)
           .from("subnet_stake_analytics")
           .select("netuid, stake_total, holders_count, miners_active, ts")
           .gte("ts", ts7dAgo)
           .order("ts", { ascending: true })
           .limit(1000),
+        // Latest daily prices
+        (supabase as any)
+          .from("subnet_price_daily")
+          .select("netuid, price_close, date")
+          .order("date", { ascending: false })
+          .limit(500),
+        // 7d ago prices
+        (supabase as any)
+          .from("subnet_price_daily")
+          .select("netuid, price_close")
+          .lte("date", date7dAgo)
+          .order("date", { ascending: false })
+          .limit(500),
+        // 30d ago prices
+        (supabase as any)
+          .from("subnet_price_daily")
+          .select("netuid, price_close")
+          .lte("date", date30dAgo)
+          .order("date", { ascending: false })
+          .limit(500),
+        // Latest metrics for liquidity
+        supabase
+          .from("subnet_latest_display")
+          .select("netuid, price, liquidity"),
       ]);
 
       const dedup = (rows: any[]) => {
@@ -79,6 +103,10 @@ export function useStakeAnalytics() {
 
       const map7d = dedup(hist7d.data || []);
       const map30d = dedup(hist30d.data || []);
+      const priceLatestMap = dedup(priceLatest.data || []);
+      const price7dMap = dedup(price7d.data || []);
+      const price30dMap = dedup(price30d.data || []);
+      const metricsMap = dedup(metricsLatest.data || []);
 
       // Build time-series per netuid for sparklines
       const timeSeriesMap = new Map<number, { stake: number; holders: number; miners: number; ts: string }[]>();
@@ -132,24 +160,35 @@ export function useStakeAnalytics() {
         const miners7d = prev7d?.miners_active || minersNow;
 
         const deltas: StakeDeltas = {
-          stakeChange24h: 0, // computed server-side from metrics_ts
+          stakeChange24h: 0,
           stakeChange7d: stake7d > 0 ? (stakeNow - stake7d) / stake7d : 0,
           holdersGrowth7d: holders7d > 0 ? (holdersNow - holders7d) / holders7d : 0,
           holdersGrowth30d: holders30d > 0 ? (holdersNow - holders30d) / holders30d : 0,
           minersGrowth7d: miners7d > 0 ? (minersNow - miners7d) / miners7d : 0,
         };
 
-        const scores = computeRadarScores(snapshot, deltas);
-        const alerts = checkAlerts(snapshot, deltas);
+        // Build price context
+        const priceNow = Number(priceLatestMap.get(netuid)?.price_close) || 0;
+        const pricePrev7d = Number(price7dMap.get(netuid)?.price_close) || priceNow;
+        const pricePrev30d = Number(price30dMap.get(netuid)?.price_close) || priceNow;
+        const metrics = metricsMap.get(netuid);
+        const emission = Number(row.raw_data?.chain?.emission) || 0;
+
+        const priceContext: PriceContext = {
+          priceChange7d: pricePrev7d > 0 ? (priceNow - pricePrev7d) / pricePrev7d : 0,
+          priceChange30d: pricePrev30d > 0 ? (priceNow - pricePrev30d) / pricePrev30d : 0,
+          currentPrice: priceNow || Number(metrics?.price) || 0,
+          liquidity: Number(metrics?.liquidity) || 0,
+          emission,
+        };
+
+        const scores = computeRadarScores(snapshot, deltas, priceContext);
+        const alerts = checkAlerts(snapshot, deltas, priceContext);
 
         // Build sparkline data from time-series
         const series = timeSeriesMap.get(netuid) || [];
-        const sparklineCapital = series.length >= 2
-          ? series.map((s) => s.stake)
-          : []; // empty = will fallback to simulated in UI
-        const sparklineAdoption = series.length >= 2
-          ? series.map((s) => s.holders + s.miners)
-          : [];
+        const sparklineCapital = series.length >= 2 ? series.map((s) => s.stake) : [];
+        const sparklineAdoption = series.length >= 2 ? series.map((s) => s.holders + s.miners) : [];
 
         results.push({
           netuid,
@@ -158,6 +197,7 @@ export function useStakeAnalytics() {
           deltas,
           scores,
           alerts,
+          priceContext,
           stakeChange24hPct: deltas.stakeChange24h * 100,
           stakeChange7dPct: deltas.stakeChange7d * 100,
           sparklineCapital,
