@@ -83,7 +83,8 @@ export function useStakeAnalytics() {
 
       // Fetch 7d-ago stake analytics for deltas
       const ts7dAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
-      // Fetch lightweight fields + raw_payload separately to avoid DB timeout
+      // Use subnet_latest_display (pre-computed view, faster) for lightweight fields
+      // raw_payload fetched separately in batches from subnet_latest
       const [hist7dRes, lightweightRes] = await Promise.all([
         (supabase as any)
           .from("subnet_stake_analytics")
@@ -91,8 +92,8 @@ export function useStakeAnalytics() {
           .lte("ts", ts7dAgo)
           .order("ts", { ascending: false })
           .limit(500),
-        (supabase as any)
-          .from("subnet_latest")
+        supabase
+          .from("subnet_latest_display")
           .select("netuid, price, cap, vol_24h, miners_active"),
       ]);
 
