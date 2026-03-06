@@ -737,7 +737,8 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
           </TableHeader>
           <TableBody>
             {smartMoneySorted.slice(0, 20).map((d) => {
-              const netFlow = d.snapshot.largeWalletInflow - d.snapshot.largeWalletOutflow;
+              const eco = d.economicContext;
+              const totalVol = eco.buyVolume + eco.sellVolume;
               return (
                 <TableRow key={d.netuid}>
                   <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
@@ -745,11 +746,20 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
                   <TableCell className="text-right">
                     <span className="font-mono text-xs font-bold" style={{ color: smartMoneyColor(d.scores.smartMoneyScore) }}>{d.scores.smartMoneyScore}</span>
                   </TableCell>
-                  <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
+                  <TableCell className="font-mono text-xs text-right">
+                    {totalVol > 0 ? (
+                      <span>
+                        <span style={{ color: "rgba(76,175,80,0.8)" }}>{formatTao(eco.buyVolume)}</span>
+                        <span className="text-muted-foreground/40">/</span>
+                        <span style={{ color: "rgba(229,57,53,0.7)" }}>{formatTao(eco.sellVolume)}</span>
+                      </span>
+                    ) : "—"}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-right">{eco.buyersCount > 0 ? eco.buyersCount : "—"}</TableCell>
+                  <TableCell className="font-mono text-xs text-right">{eco.sellersCount > 0 ? eco.sellersCount : "—"}</TableCell>
                   <TableCell className="font-mono text-xs text-right text-muted-foreground">
                     {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
                   <TableCell className="text-right">
                     {d.alerts.smartMoneySignal ? <SignalChip label="SMART MONEY" color="green" /> :
                      d.scores.smartMoneyScore >= 40 ? <SignalChip label="WATCH" color="blue" /> :
