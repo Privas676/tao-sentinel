@@ -69,8 +69,10 @@ function analyzeMetagraph(neurons: any[]): {
   const stakers = new Set<string>();
   const stakesByAddr: Record<string, number> = {};
   let validatorsActive = 0;
+  let sampleNeuron: any = null;
 
   for (const neuron of neurons) {
+    if (!sampleNeuron) sampleNeuron = neuron;
     const coldkey = neuron.coldkey?.ss58 || neuron.coldkey || "";
     if (coldkey) {
       stakers.add(coldkey);
@@ -87,6 +89,14 @@ function analyzeMetagraph(neurons: any[]): {
   const totalFromMeta = sorted.reduce((s, x) => s + x.stake, 0);
   const top10Total = sorted.slice(0, 10).reduce((s, x) => s + x.stake, 0);
   const stakeConcentration = totalFromMeta > 0 ? (top10Total / totalFromMeta) * 100 : 0;
+
+  // Debug: log metagraph analysis results
+  console.log(`[META-DEBUG] neurons=${neurons.length}, stakers=${stakers.size}, validators=${validatorsActive}, totalStake=${totalFromMeta.toFixed(2)}, top10=${top10Total.toFixed(2)}, conc=${stakeConcentration.toFixed(1)}%`);
+  if (sampleNeuron) {
+    const keys = Object.keys(sampleNeuron).join(",");
+    console.log(`[META-DEBUG] sample neuron keys: ${keys}`);
+    console.log(`[META-DEBUG] sample coldkey=${JSON.stringify(sampleNeuron.coldkey)}, stake=${sampleNeuron.stake}, total_stake=${sampleNeuron.total_stake}`);
+  }
 
   const top10Stake = sorted.slice(0, 10).map((x) => ({
     address: x.address.slice(0, 8) + "…",
