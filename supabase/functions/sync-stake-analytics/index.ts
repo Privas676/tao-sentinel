@@ -179,14 +179,7 @@ Deno.serve(async (req) => {
         const res = await fetchWithRetry(url, { headers });
         if (res.ok) {
           const json = await res.json();
-          const metaVal = json.data || json;
-          const isArr = Array.isArray(metaVal);
-          console.log(`[METAGRAPH-STORE] SN-${nid}: isArray=${isArr}, type=${typeof metaVal}, hasData=${!!json.data}, keys=${!isArr && metaVal ? Object.keys(metaVal).slice(0,5).join(",") : "arr:" + (isArr ? metaVal.length : 0)}`);
-          if (isArr && metaVal.length > 0) {
-            const sample = metaVal[0];
-            console.log(`[METAGRAPH-STORE] SN-${nid} sample keys: ${Object.keys(sample).slice(0,10).join(",")}`);
-          }
-          metagraphData.set(nid, metaVal);
+          metagraphData.set(nid, json.data || json);
         } else {
           console.log(`Metagraph SN-${nid}: ${res.status}`);
           await res.text();
