@@ -89,11 +89,11 @@ function extractEconomicContext(rp: any, rpEntry: any, totalNetworkEmission: num
     ? (emissionPerBlock / totalNetworkEmission) * 100
     : 0;
 
-  // Root proportion (owner cut)
+  // Root proportion (for reference, not owner cut)
   const rootProportion = Number(rp.root_prop ?? 0);
 
-  // Rewards distribution: owner gets rootProportion, rest split 50/50 miner/validator
-  const ownerPerDay = emissionsPerDay * rootProportion;
+  // Rewards distribution: owner gets 18% (Bittensor protocol default), rest split 50/50
+  const ownerPerDay = emissionsPerDay * OWNER_TAKE;
   const remainingPerDay = emissionsPerDay - ownerPerDay;
   const minerPerDay = remainingPerDay * 0.5;
   const validatorPerDay = remainingPerDay * 0.5;
