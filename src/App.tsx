@@ -16,6 +16,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
 import MethodologyPage from "./pages/MethodologyPage";
 import QuantDiagnosticsPage from "./pages/QuantDiagnosticsPage";
+import RadarPage from "./pages/RadarPage";
 import { Toaster } from "@/components/ui/sonner";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ function AppLayout() {
     { path: "/alerts", label: t("nav.alerts"), icon: "⚡", badge: unreadCount },
     { path: "/settings", label: t("nav.settings"), icon: "⚙" },
     { path: "/install", label: "Installer", icon: "📲" },
+    { path: "/radar", label: "Radar", icon: "📡" },
     { path: "/methodology", label: lang === "fr" ? "Méthodo" : "Method", icon: "📖" },
   ];
 
@@ -151,6 +153,7 @@ function AppLayout() {
           <Route path="/install" element={<InstallPage />} />
           <Route path="/methodology" element={<MethodologyPage />} />
           <Route path="/quant-diagnostics" element={<QuantDiagnosticsPage />} />
+          <Route path="/radar" element={<RadarPage />} />
         </Routes>
       </div>
     </div>
