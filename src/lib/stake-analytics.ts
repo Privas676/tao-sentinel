@@ -234,8 +234,8 @@ export function checkAlerts(s: StakeSnapshot, d: StakeDeltas, p?: PriceContext):
     bubbleDump: scores.bubbleScore > 85,
     manipSuspicious: scores.manipulationScore > 65,
     manipRisk: scores.manipulationScore > 80,
-    alphaUndervalued: scores.alphaInefficiency < -30,
-    alphaOverpriced: scores.alphaInefficiency > 40,
+    alphaUndervalued: scores.alphaInefficiency < -30 && (p?.currentPrice ?? 0) > 0,
+    alphaOverpriced: scores.alphaInefficiency > 40 && (p?.currentPrice ?? 0) > 0,
   };
 }
 
