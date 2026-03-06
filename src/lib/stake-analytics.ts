@@ -199,3 +199,22 @@ export function heatmapColor(value: number): string {
   if (value >= 20) return "rgba(76,175,80,0.4)";
   return "rgba(100,181,246,0.3)";
 }
+
+export function radarScoreColor(score: number): string {
+  if (score >= 85) return "rgba(156,39,176,0.9)";
+  if (score >= 70) return "rgba(76,175,80,0.8)";
+  if (score >= 40) return "rgba(255,193,7,0.8)";
+  return "rgba(255,255,255,0.3)";
+}
+
+export function narrativeScoreColor(score: number): string {
+  if (score >= 80) return "rgba(156,39,176,0.9)";
+  if (score >= 50) return "rgba(100,181,246,0.8)";
+  return "rgba(255,255,255,0.3)";
+}
+
+export function smartMoneyColor(score: number): string {
+  if (score >= 70) return "rgba(76,175,80,0.9)";
+  if (score >= 40) return "rgba(255,193,7,0.8)";
+  return "rgba(255,255,255,0.3)";
+}
