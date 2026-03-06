@@ -166,7 +166,7 @@ export default function RadarPage() {
           {activeTab === "capital" && <CapitalFlowTable data={capitalFlow} />}
           {activeTab === "adoption" && <AdoptionTable data={adoptionRadar} />}
           {activeTab === "risk" && <DumpRiskTable data={dumpRiskSorted} />}
-          {activeTab === "heatmap" && <HeatmapGrid data={radarData} />}
+          {activeTab === "heatmap" && <TreemapHeatmap data={radarData} />}
           {activeTab === "smartmoney" && <SmartMoneyPanel data={radarData} />}
         </div>
       </div>
