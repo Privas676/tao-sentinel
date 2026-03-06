@@ -188,6 +188,7 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Stake τ</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Δ7d</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Momentum</TableHead>
+            <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
             <TableHead className="font-mono text-[10px] text-right">🐋 In</TableHead>
             <TableHead className="font-mono text-[10px] text-right">🐋 Out</TableHead>
           </TableRow>
