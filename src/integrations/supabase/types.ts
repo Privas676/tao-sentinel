@@ -486,6 +486,65 @@ export type Database = {
           },
         ]
       }
+      subnet_stake_analytics: {
+        Row: {
+          holders_count: number | null
+          id: number
+          large_wallet_inflow: number | null
+          large_wallet_outflow: number | null
+          miners_active: number | null
+          miners_total: number | null
+          netuid: number
+          raw_data: Json | null
+          stake_concentration: number | null
+          stake_total: number | null
+          top10_stake: Json | null
+          ts: string
+          uid_usage: number | null
+          validators_active: number | null
+        }
+        Insert: {
+          holders_count?: number | null
+          id?: never
+          large_wallet_inflow?: number | null
+          large_wallet_outflow?: number | null
+          miners_active?: number | null
+          miners_total?: number | null
+          netuid: number
+          raw_data?: Json | null
+          stake_concentration?: number | null
+          stake_total?: number | null
+          top10_stake?: Json | null
+          ts?: string
+          uid_usage?: number | null
+          validators_active?: number | null
+        }
+        Update: {
+          holders_count?: number | null
+          id?: never
+          large_wallet_inflow?: number | null
+          large_wallet_outflow?: number | null
+          miners_active?: number | null
+          miners_total?: number | null
+          netuid?: number
+          raw_data?: Json | null
+          stake_concentration?: number | null
+          stake_total?: number | null
+          top10_stake?: Json | null
+          ts?: string
+          uid_usage?: number | null
+          validators_active?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subnet_stake_analytics_netuid_fkey"
+            columns: ["netuid"]
+            isOneToOne: false
+            referencedRelation: "subnets"
+            referencedColumns: ["netuid"]
+          },
+        ]
+      }
       subnets: {
         Row: {
           first_seen_at: string | null
