@@ -259,12 +259,23 @@ Deno.serve(async (req) => {
 
       // Priority 1: Metagraph data (most accurate - has neuron-level stake analysis)
       const meta = metagraphData.get(nid);
-      if (meta && Array.isArray(meta)) {
-        const analysis = analyzeMetagraph(meta);
-        holdersCount = analysis.holdersCount;
-        stakeConcentration = analysis.stakeConcentration;
-        top10Stake = analysis.top10Stake;
-        validatorsActive = analysis.validatorsActive;
+      if (meta) {
+        const isArr = Array.isArray(meta);
+        const metaType = typeof meta;
+        const metaKeys = meta && !isArr ? Object.keys(meta).slice(0, 10).join(",") : "N/A";
+        console.log(`[META-DEBUG] SN-${nid}: isArray=${isArr}, type=${metaType}, keys=${metaKeys}, length=${isArr ? meta.length : "N/A"}`);
+        
+        // Handle both array format and object-with-data format
+        const neurons = isArr ? meta : (Array.isArray(meta.data) ? meta.data : null);
+        
+        if (neurons && neurons.length > 0) {
+          const analysis = analyzeMetagraph(neurons);
+          holdersCount = analysis.holdersCount;
+          stakeConcentration = analysis.stakeConcentration;
+          top10Stake = analysis.top10Stake;
+          validatorsActive = analysis.validatorsActive;
+          console.log(`[META-DEBUG] SN-${nid}: conc=${stakeConcentration.toFixed(1)}%, holders=${holdersCount}, validators=${validatorsActive}`);
+        }
       } else {
         // Priority 2: Bulk Taostats subnet data (has validator count, registration info)
         if (bulkSN) {
