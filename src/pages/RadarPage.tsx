@@ -217,7 +217,7 @@ function ActiveAlerts({ data }: { data: SubnetRadarData[] }) {
   return (
     <div className="rounded-lg p-3 space-y-2" style={{ background: "rgba(255,193,7,0.05)", border: "1px solid rgba(255,193,7,0.15)" }}>
       <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">Alertes actives</div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto scrollbar-thin">
         {data.filter((d) => d.alerts.bubbleDump).map((d) => (
           <AlertBadge key={`bd-${d.netuid}`} active label={`SN-${d.netuid} Probable Dump`} emoji="🫧" variant="danger" />
         ))}
