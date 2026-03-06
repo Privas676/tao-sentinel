@@ -312,58 +312,19 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
   );
 }
 
-/* ═══════════════════════════════════════ */
-/*        HEATMAP GRID                     */
-/* ═══════════════════════════════════════ */
-function HeatmapGrid({ data }: { data: SubnetRadarData[] }) {
-  const metrics = [
-    { key: "adoption", label: "Adoption", getValue: (d: SubnetRadarData) => d.scores.healthIndex },
-    { key: "capital", label: "Capital", getValue: (d: SubnetRadarData) => d.scores.capitalMomentum },
-    { key: "risk", label: "Risk", getValue: (d: SubnetRadarData) => d.scores.dumpRisk },
-    { key: "uid", label: "UID Usage", getValue: (d: SubnetRadarData) => d.snapshot.uidUsage * 100 },
-  ];
+/* ─── Sparkline data generators ─── */
+/** Simulate 7-day trend from current deltas (until historical time-series data is available) */
+function generateCapitalSparkline(d: SubnetRadarData): number[] {
+  const base = 50;
+  const delta = d.stakeChange7dPct / 7;
+  return Array.from({ length: 7 }, (_, i) => base + delta * (i - 3) + (Math.sin(i * 1.2) * 2));
+}
 
-  const sorted = [...data].sort((a, b) => a.netuid - b.netuid);
-
-  return (
-    <div className="overflow-x-auto p-4">
-      <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-3">
-        Carte de chaleur — {data.length} subnets × 4 axes
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs font-mono">
-          <thead>
-            <tr>
-              <th className="text-left px-2 py-1 text-muted-foreground text-[10px]">SN</th>
-              {metrics.map((m) => (
-                <th key={m.key} className="text-center px-2 py-1 text-muted-foreground text-[10px]">{m.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.slice(0, 40).map((d) => (
-              <tr key={d.netuid}>
-                <td className="px-2 py-0.5 text-muted-foreground font-semibold">{d.netuid}</td>
-                {metrics.map((m) => {
-                  const v = Math.round(m.getValue(d));
-                  return (
-                    <td key={m.key} className="px-1 py-0.5 text-center">
-                      <div
-                        className="rounded px-2 py-0.5 inline-block min-w-[36px]"
-                        style={{ background: heatmapColor(v), color: "rgba(255,255,255,0.9)" }}
-                      >
-                        {v}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+function generateAdoptionSparkline(d: SubnetRadarData): number[] {
+  const base = d.scores.healthIndex;
+  const trend = (d.deltas.holdersGrowth7d + d.deltas.minersGrowth7d) * 50;
+  const step = trend / 7;
+  return Array.from({ length: 7 }, (_, i) => base - trend / 2 + step * i + (Math.cos(i * 0.8) * 1.5));
 }
 
 /* ═══════════════════════════════════════ */
