@@ -142,6 +142,15 @@ export function useStakeAnalytics() {
         const scores = computeRadarScores(snapshot, deltas);
         const alerts = checkAlerts(snapshot, deltas);
 
+        // Build sparkline data from time-series
+        const series = timeSeriesMap.get(netuid) || [];
+        const sparklineCapital = series.length >= 2
+          ? series.map((s) => s.stake)
+          : []; // empty = will fallback to simulated in UI
+        const sparklineAdoption = series.length >= 2
+          ? series.map((s) => s.holders + s.miners)
+          : [];
+
         results.push({
           netuid,
           subnetName: nameMap.get(netuid) || `SN-${netuid}`,
@@ -151,6 +160,8 @@ export function useStakeAnalytics() {
           alerts,
           stakeChange24hPct: deltas.stakeChange24h * 100,
           stakeChange7dPct: deltas.stakeChange7d * 100,
+          sparklineCapital,
+          sparklineAdoption,
         });
       }
 
