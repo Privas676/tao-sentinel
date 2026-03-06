@@ -38,7 +38,8 @@ function median(arr: number[]): number {
 }
 
 const RAO = 1e9;
-const BLOCKS_PER_DAY = 20_000; // Bittensor block time ≈ 4.3s
+const BLOCKS_PER_DAY = 20_180; // Bittensor block time ≈ 4.28s → 86400/4.28
+const OWNER_TAKE = 0.18; // Bittensor default delegate/owner take (18%)
 
 function raoToTao(v: any): number {
   const n = Number(v || 0);
@@ -88,11 +89,11 @@ function extractEconomicContext(rp: any, rpEntry: any, totalNetworkEmission: num
     ? (emissionPerBlock / totalNetworkEmission) * 100
     : 0;
 
-  // Root proportion (owner cut)
+  // Root proportion (for reference, not owner cut)
   const rootProportion = Number(rp.root_prop ?? 0);
 
-  // Rewards distribution: owner gets rootProportion, rest split 50/50 miner/validator
-  const ownerPerDay = emissionsPerDay * rootProportion;
+  // Rewards distribution: owner gets 18% (Bittensor protocol default), rest split 50/50
+  const ownerPerDay = emissionsPerDay * OWNER_TAKE;
   const remainingPerDay = emissionsPerDay - ownerPerDay;
   const minerPerDay = remainingPerDay * 0.5;
   const validatorPerDay = remainingPerDay * 0.5;
@@ -234,14 +235,15 @@ export function useStakeAnalytics() {
         const emissionShare = totalEmission > 0 ? (emission / totalEmission) * 100 : 0;
         const priceChanges = computePriceChanges(rp.seven_day_prices);
 
-        const chainActiveUids = Number(chain.active_uids || 0);
-        const minersActive = Math.max(row.miners_active || 0, chainActiveUids);
-        const validatorsActive = row.validators_active || 0;
+        // Chain data: use correct Taostats field names
+        const chainActiveMiners = Number(chain.active_miners ?? chain.active_uids ?? 0);
+        const minersActive = Math.max(row.miners_active || 0, chainActiveMiners);
+        const validatorsActive = Math.max(row.validators_active || 0, Number(chain.active_validators ?? 0));
         const liquidity = raoToTao(rp.liquidity_raw || rp.liquidity);
 
-        // UID data from chain
-        const uidUsed = Number(chain.active_uids ?? rp.active_uids ?? 0);
-        const uidMax = Number(chain.max_n ?? rp.max_n ?? rp.max_uids ?? 0);
+        // UID data: active_keys = registered UIDs, max_neurons = max UIDs
+        const uidUsed = Number(chain.active_keys ?? chain.active_uids ?? rp.active_uids ?? 0);
+        const uidMax = Number(chain.max_neurons ?? chain.max_n ?? rp.max_n ?? 0);
 
         const inflow = Number(row.large_wallet_inflow || 0);
         const outflow = Number(row.large_wallet_outflow || 0);
@@ -262,9 +264,9 @@ export function useStakeAnalytics() {
           largeWalletOutflow: adjustedOutflow,
           uidUsed,
           uidMax,
-          registrationCost: raoToTao(rp.registration_cost ?? chain.registration_cost ?? 0),
-          incentiveBurn: raoToTao(rp.incentive_burn ?? 0),
-          recyclePerDay: raoToTao(rp.recycle_per_day ?? 0),
+          registrationCost: raoToTao(chain.registration_cost ?? rp.registration_cost ?? 0),
+          incentiveBurn: Number(chain.incentive_burn ?? rp.incentive_burn ?? 0),
+          recyclePerDay: raoToTao(chain.recycled_24_hours ?? rp.recycle_per_day ?? 0),
         };
 
         const miners7d = prev7d?.miners_active || minersActive;
