@@ -138,10 +138,15 @@ function layoutStrip(
 export default function TreemapHeatmap({ data }: { data: SubnetRadarData[] }) {
   const [mode, setMode] = useState<HeatMode>("capital");
 
-  // Use stakeTotal as proxy for market cap; filter zero-cap
+  // Use stakeTotal as proxy for market cap; fallback to equal sizing if all zero
   const filtered = useMemo(() => {
-    return data.filter((d) => d.snapshot.stakeTotal > 0);
+    const withStake = data.filter((d) => d.snapshot.stakeTotal > 0);
+    // If no subnet has stake data, show all with equal sizing
+    if (withStake.length === 0) return data;
+    return withStake;
   }, [data]);
+
+  const allZeroStake = useMemo(() => data.every((d) => d.snapshot.stakeTotal === 0), [data]);
 
   const excluded = data.length - filtered.length;
 
