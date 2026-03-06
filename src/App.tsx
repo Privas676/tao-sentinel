@@ -153,6 +153,7 @@ function AppLayout() {
           <Route path="/install" element={<InstallPage />} />
           <Route path="/methodology" element={<MethodologyPage />} />
           <Route path="/quant-diagnostics" element={<QuantDiagnosticsPage />} />
+          <Route path="/radar" element={<RadarPage />} />
         </Routes>
       </div>
     </div>
