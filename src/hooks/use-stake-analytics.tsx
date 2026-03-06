@@ -62,43 +62,58 @@ function computePriceChanges(sevenDayPrices: any[]): { change1d: number; change7
 }
 
 /** Extract full economic context from Taostats raw_payload */
-function extractEconomicContext(rp: any, rpEntry: any): EconomicContext {
+function extractEconomicContext(rp: any, rpEntry: any, totalNetworkEmission: number): EconomicContext {
   const chain = rp?._chain || {};
   // Taostats field names (all in RAO):
-  const totalAlpha = raoToTao(rp.total_alpha ?? 0);     // total issued alpha
+  const totalAlpha = raoToTao(rp.total_alpha ?? 0);
   const alphaStaked = raoToTao(rp.alpha_staked ?? 0);
   const alphaInPool = raoToTao(rp.alpha_in_pool ?? 0);
-  const totalTao = raoToTao(rp.total_tao ?? 0);         // tao in pool proxy
+  const totalTao = raoToTao(rp.total_tao ?? rp.protocol_provided_tao ?? 0);
   const totalAlphaPool = alphaInPool + totalTao;
   const marketCap = raoToTao(rp.market_cap ?? 0);
   const vol24h = raoToTao(rp.tao_volume_24_hr ?? 0);
 
-  // Buy/Sell volumes (Taostats uses tao_buy_volume_24_hr / tao_sell_volume_24_hr)
   const buyVolume = raoToTao(rp.tao_buy_volume_24_hr ?? 0);
   const sellVolume = raoToTao(rp.tao_sell_volume_24_hr ?? 0);
   const totalVol = buyVolume + sellVolume;
 
-  // Circulating = total_alpha - alpha_staked (staked is locked)
   const circulatingSupply = totalAlpha > 0 ? totalAlpha - alphaStaked : 0;
 
-  // Emission per day: chain.emission is per block (~12s), ~7200 blocks/day
+  // Emission: _chain.emission is rao per block, ~20,000 blocks/day (~4.3s/block)
   const emissionPerBlock = Number(chain.emission ?? 0);
-  const emissionsPerDay = raoToTao(emissionPerBlock * 7200);
+  const emissionsPerDay = raoToTao(emissionPerBlock * BLOCKS_PER_DAY);
 
-  // Root proportion from pool data
+  // Emissions % = subnet share of total network emission
+  const emissionsPercent = totalNetworkEmission > 0
+    ? (emissionPerBlock / totalNetworkEmission) * 100
+    : 0;
+
+  // Root proportion (owner cut)
   const rootProportion = Number(rp.root_prop ?? 0);
 
+  // Rewards distribution: owner gets rootProportion, rest split 50/50 miner/validator
+  const ownerPerDay = emissionsPerDay * rootProportion;
+  const remainingPerDay = emissionsPerDay - ownerPerDay;
+  const minerPerDay = remainingPerDay * 0.5;
+  const validatorPerDay = remainingPerDay * 0.5;
+
+  // Max supply: Bittensor subnets have 21M max supply
+  const maxSupply = 21_000_000;
+
+  // Total burned: max_supply - total_issued (approximation)
+  const totalBurned = totalAlpha > 0 && maxSupply > totalAlpha ? maxSupply - totalAlpha : 0;
+
   return {
-    emissionsPercent: emissionPerBlock > 0 && marketCap > 0 ? (emissionsPerDay / marketCap) * 100 : 0,
+    emissionsPercent,
     emissionsPerDay,
-    minerPerDay: 0,       // Not available in current API
-    validatorPerDay: 0,   // Not available in current API
-    ownerPerDay: 0,       // Not available in current API
+    minerPerDay,
+    validatorPerDay,
+    ownerPerDay,
     rootProportion,
     totalIssued: totalAlpha,
-    totalBurned: 0,       // Not directly available; could derive from total_alpha changes
+    totalBurned,
     circulatingSupply,
-    maxSupply: 0,         // Not available
+    maxSupply,
     alphaStaked,
     alphaInPool,
     taoInPool: totalTao,
