@@ -47,7 +47,7 @@ export function useStakeAnalytics() {
       const ts7dAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
       const ts30dAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
 
-      const [hist7d, hist30d] = await Promise.all([
+      const [hist7d, hist30d, histTimeSeries] = await Promise.all([
         (supabase as any)
           .from("subnet_stake_analytics")
           .select("netuid, holders_count, stake_total, miners_active")
@@ -60,6 +60,13 @@ export function useStakeAnalytics() {
           .lte("ts", ts30dAgo)
           .order("ts", { ascending: false })
           .limit(500),
+        // Fetch all snapshots from last 7 days for sparklines
+        (supabase as any)
+          .from("subnet_stake_analytics")
+          .select("netuid, stake_total, holders_count, miners_active, ts")
+          .gte("ts", ts7dAgo)
+          .order("ts", { ascending: true })
+          .limit(1000),
       ]);
 
       const dedup = (rows: any[]) => {
