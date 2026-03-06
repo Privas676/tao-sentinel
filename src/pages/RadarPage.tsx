@@ -54,6 +54,7 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
 export default function RadarPage() {
   const { data: radarData, isLoading, error } = useStakeAnalytics();
   const [activeTab, setActiveTab] = useState<TabKey>("capital");
+  const [search, setSearch] = useState("");
 
   // Global averages
   const avgScores = useMemo(() => {
