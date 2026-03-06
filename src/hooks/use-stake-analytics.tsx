@@ -150,32 +150,28 @@ export function useStakeAnalytics() {
       }
 
       const ts7dAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [hist7dRes, lightweightRes] = await Promise.all([
+
+      // Fetch 7d history + raw_payload from subnet_latest (NOT subnet_latest_display which times out)
+      const netuidBatches: number[][] = [];
+      const allNetuids = [...latest.keys()];
+      for (let i = 0; i < allNetuids.length; i += 30) {
+        netuidBatches.push(allNetuids.slice(i, i + 30));
+      }
+
+      const [hist7dRes, ...rawPayloadResults] = await Promise.all([
         (supabase as any)
           .from("subnet_stake_analytics")
           .select("netuid, holders_count, miners_active, validators_active")
           .lte("ts", ts7dAgo)
           .order("ts", { ascending: false })
           .limit(500),
-        supabase
-          .from("subnet_latest_display")
-          .select("netuid, price, cap, vol_24h, miners_active"),
-      ]);
-
-      // Fetch raw_payload in batches
-      const netuidBatches: number[][] = [];
-      const allNetuids = [...latest.keys()];
-      for (let i = 0; i < allNetuids.length; i += 30) {
-        netuidBatches.push(allNetuids.slice(i, i + 30));
-      }
-      const rawPayloadResults = await Promise.all(
-        netuidBatches.map((batch) =>
+        ...netuidBatches.map((batch) =>
           (supabase as any)
             .from("subnet_latest")
-            .select("netuid, raw_payload")
+            .select("netuid, price, cap, vol_24h, miners_active, raw_payload")
             .in("netuid", batch)
-        )
-      );
+        ),
+      ]);
 
       const dedup = (rows: any[]) => {
         const m = new Map<number, any>();
@@ -184,14 +180,13 @@ export function useStakeAnalytics() {
       };
 
       const map7d = dedup(hist7dRes.data || []);
-      const lightMap = dedup(lightweightRes.data || []);
-      const rawMap = new Map<number, any>();
-      for (const res of rawPayloadResults) {
-        for (const row of res.data || []) rawMap.set(row.netuid, row.raw_payload);
-      }
       const rawPayloadMap = new Map<number, any>();
-      for (const [nid, light] of lightMap) {
-        rawPayloadMap.set(nid, { ...light, raw_payload: rawMap.get(nid) || null });
+      for (const res of rawPayloadResults) {
+        for (const row of res.data || []) {
+          if (!rawPayloadMap.has(row.netuid)) {
+            rawPayloadMap.set(row.netuid, row);
+          }
+        }
       }
 
       const { data: subnets } = await supabase.from("subnets").select("netuid, name");
