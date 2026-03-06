@@ -236,7 +236,7 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
                 </span>
               </TableCell>
               <TableCell className="text-right hidden sm:table-cell">
-                <Sparkline data={d.sparklineCapital.length >= 2 ? d.sparklineCapital : generateCapitalSparkline(d)} />
+                <Sparkline data={(d.sparklineCapital?.length ?? 0) >= 2 ? d.sparklineCapital : generateCapitalSparkline(d)} />
               </TableCell>
               <TableCell className="font-mono text-xs text-right" style={{ color: "rgba(76,175,80,0.7)" }}>
                 {d.snapshot.largeWalletInflow > 0 ? `+${d.snapshot.largeWalletInflow}τ` : "—"}
@@ -283,7 +283,7 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
               </TableCell>
               <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
               <TableCell className="text-right hidden sm:table-cell">
-                <Sparkline data={d.sparklineAdoption.length >= 2 ? d.sparklineAdoption : generateAdoptionSparkline(d)} />
+                <Sparkline data={(d.sparklineAdoption?.length ?? 0) >= 2 ? d.sparklineAdoption : generateAdoptionSparkline(d)} />
               </TableCell>
               <TableCell className="text-right">
                 <span className="font-mono text-xs font-bold" style={{ color: healthIndexColor(d.scores.healthIndex) }}>
