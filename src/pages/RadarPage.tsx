@@ -655,10 +655,10 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Alpha Price</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Fair Value</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Fair (MCap/Circ)</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Deviation</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Vol/MCap</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Circ. Supply</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Burn Ratio</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
