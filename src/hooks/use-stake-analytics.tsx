@@ -264,9 +264,9 @@ export function useStakeAnalytics() {
           largeWalletOutflow: adjustedOutflow,
           uidUsed,
           uidMax,
-          registrationCost: raoToTao(rp.registration_cost ?? chain.registration_cost ?? 0),
-          incentiveBurn: raoToTao(rp.incentive_burn ?? 0),
-          recyclePerDay: raoToTao(rp.recycle_per_day ?? 0),
+          registrationCost: raoToTao(chain.registration_cost ?? rp.registration_cost ?? 0),
+          incentiveBurn: Number(chain.incentive_burn ?? rp.incentive_burn ?? 0),
+          recyclePerDay: raoToTao(chain.recycled_24_hours ?? rp.recycle_per_day ?? 0),
         };
 
         const miners7d = prev7d?.miners_active || minersActive;
