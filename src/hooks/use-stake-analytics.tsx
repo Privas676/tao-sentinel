@@ -32,6 +32,8 @@ function median(arr: number[]): number {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+const RAO = 1e9;
+
 export function useStakeAnalytics() {
   return useQuery({
     queryKey: ["stake-analytics"],
@@ -53,7 +55,7 @@ export function useStakeAnalytics() {
 
       const ts7dAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
 
-      const [hist7d, histTimeSeries, metricsLatest] = await Promise.all([
+      const [hist7d, histTimeSeries, metricsLatest, rawPayloadsRes] = await Promise.all([
         (supabase as any)
           .from("subnet_stake_analytics")
           .select("netuid, holders_count, stake_total, miners_active, validators_active")
@@ -66,10 +68,14 @@ export function useStakeAnalytics() {
           .gte("ts", ts7dAgo)
           .order("ts", { ascending: true })
           .limit(1000),
-        // Latest metrics for price, liquidity, cap, vol, raw_payload
+        // Latest metrics (without raw_payload to avoid 500 timeout)
         supabase
           .from("subnet_latest_display")
-          .select("netuid, price, liquidity, cap, vol_24h, raw_payload"),
+          .select("netuid, price, liquidity, cap, vol_24h, miners_active"),
+        // Raw payload from subnet_latest (lighter view, no fx join)
+        (supabase as any)
+          .from("subnet_latest")
+          .select("netuid, raw_payload"),
       ]);
 
       const dedup = (rows: any[]) => {
@@ -82,6 +88,7 @@ export function useStakeAnalytics() {
 
       const map7d = dedup(hist7d.data || []);
       const metricsMap = dedup(metricsLatest.data || []);
+      const rawPayloadMap = dedup(rawPayloadsRes.data || []);
 
       // Build time-series per netuid for sparklines
       const timeSeriesMap = new Map<number, { stake: number; holders: number; miners: number; ts: string }[]>();
@@ -105,6 +112,20 @@ export function useStakeAnalytics() {
         nameMap.set(s.netuid, s.name || `SN-${s.netuid}`);
       }
 
+      // Compute total emission for emission share
+      let totalEmission = 0;
+      for (const [, row] of latest) {
+        const rawData = row.raw_data || {};
+        totalEmission += Number(rawData.emission || 0);
+      }
+      // If no emission in raw_data yet, compute from rawPayloads
+      if (totalEmission === 0) {
+        for (const [, entry] of rawPayloadMap) {
+          const payload = entry?.raw_payload || {};
+          totalEmission += Number(payload?._chain?.emission || 0);
+        }
+      }
+
       // First pass: build snapshots, deltas, and price contexts
       type PreCompute = {
         netuid: number;
@@ -122,10 +143,13 @@ export function useStakeAnalytics() {
         const prev7d = map7d.get(netuid);
         const rawData = row.raw_data || {};
         const metrics = metricsMap.get(netuid);
-        const rawPayload = (metrics?.raw_payload as any) || {};
+        const rawPayloadEntry = rawPayloadMap.get(netuid);
+        const rawPayload = rawPayloadEntry?.raw_payload || {};
 
-        // Use raw_data from stake_analytics (enriched by edge function)
-        const stakeTotal = Number(rawData.alpha_staked || row.stake_total) || Number(rawPayload.alpha_staked || 0) / 1e9;
+        // Extract stake: prefer enriched raw_data, fallback to raw_payload
+        const alphaStakedRaw = Number(rawPayload?.alpha_staked || 0);
+        const alphaStaked = alphaStakedRaw > 1e6 ? alphaStakedRaw / RAO : alphaStakedRaw;
+        const stakeTotal = Number(rawData.alpha_staked) || Number(row.stake_total) || alphaStaked;
 
         const snapshot: StakeSnapshot = {
           netuid,
@@ -159,16 +183,25 @@ export function useStakeAnalytics() {
           validatorsGrowth7d: validators7d > 0 ? (validatorsNow - validators7d) / validators7d : 0,
         };
 
-        // Build price context from raw_data (edge function enriched) + subnet_latest_display
-        const emission = Number(rawData.emission || 0);
-        const emissionShare = Number(rawData.emission_share || 0);
-        const marketCap = Number(rawData.market_cap || metrics?.cap || 0);
-        const vol24h = Number(rawData.vol_24h || metrics?.vol_24h || 0);
-        const currentPrice = Number(rawData.price || metrics?.price || 0);
-        const priceChange1d = Number(rawData.price_change_1d || rawPayload?.price_change_1_day || 0);
-        const priceChange7d = Number(rawData.price_change_1w || rawPayload?.price_change_1_week || 0);
-        const priceChange30d = Number(rawData.price_change_1m || rawPayload?.price_change_1_month || 0);
-        const fearGreed = Number(rawData.fear_greed || rawPayload?.fear_and_greed_index || 50);
+        // Build price context from multiple sources
+        // Priority: enriched raw_data (new edge function) > raw_payload (Taostats) > metrics (display view)
+        const emission = Number(rawData.emission || rawPayload?._chain?.emission || 0);
+        const emissionShareFromRawData = Number(rawData.emission_share || 0);
+        const emissionShare = emissionShareFromRawData > 0
+          ? emissionShareFromRawData
+          : totalEmission > 0 ? (emission / totalEmission) * 100 : 0;
+
+        const marketCapRaw = Number(rawPayload?.market_cap || 0);
+        const marketCap = Number(rawData.market_cap) || (marketCapRaw > 1e6 ? marketCapRaw / RAO : marketCapRaw) || Number(metrics?.cap) || 0;
+
+        const vol24hRaw = Number(rawPayload?.tao_volume_24_hr || 0);
+        const vol24h = Number(rawData.vol_24h) || (vol24hRaw > 1e6 ? vol24hRaw / RAO : vol24hRaw) || Number(metrics?.vol_24h) || 0;
+
+        const currentPrice = Number(rawData.price) || Number(rawPayload?.price) || Number(metrics?.price) || 0;
+        const priceChange1d = Number(rawData.price_change_1d) || Number(rawPayload?.price_change_1_day) || 0;
+        const priceChange7d = Number(rawData.price_change_1w) || Number(rawPayload?.price_change_1_week) || 0;
+        const priceChange30d = Number(rawData.price_change_1m) || Number(rawPayload?.price_change_1_month) || 0;
+        const fearGreed = Number(rawData.fear_greed) || Number(rawPayload?.fear_and_greed_index) || 50;
 
         const priceContext: PriceContext = {
           priceChange1d,
