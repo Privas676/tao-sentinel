@@ -31,23 +31,34 @@ export type StakeDeltas = {
 };
 
 export type RadarScores = {
-  healthIndex: number;       // 0-100
-  capitalMomentum: number;   // 0-100
-  dumpRisk: number;          // 0-100
-  subnetRadarScore: number;  // 0-100 — adoption précoce
-  narrativeScore: number;    // 0-100 — potentiel viral
-  smartMoneyScore: number;   // 0-100 — activité whale
+  healthIndex: number;
+  capitalMomentum: number;
+  dumpRisk: number;
+  subnetRadarScore: number;
+  narrativeScore: number;
+  smartMoneyScore: number;
+  bubbleScore: number;           // 0-100 — price vs adoption divergence
+  manipulationScore: number;     // 0-100 — validator capture risk
+  alphaInefficiency: number;     // % deviation from fair value
+  fairAlphaPrice: number;        // computed fair value
 };
 
 export type RadarAlerts = {
-  earlyAdoption: boolean;       // radarScore > 70
-  narrativeStarting: boolean;   // radarScore > 85
-  narrativeForming: boolean;    // narrativeScore > 80
-  smartMoneySignal: boolean;    // whale conditions
+  earlyAdoption: boolean;
+  narrativeStarting: boolean;
+  narrativeForming: boolean;
+  smartMoneySignal: boolean;
   whaleAccumulation: boolean;
   dumpRiskAlert: boolean;
-  dumpWarning: boolean;         // dumpRisk > 60
-  dumpExit: boolean;            // dumpRisk > 75
+  dumpWarning: boolean;
+  dumpExit: boolean;
+  bubbleOverheat: boolean;       // bubbleScore > 60
+  bubbleAlert: boolean;          // bubbleScore > 75
+  bubbleDump: boolean;           // bubbleScore > 85
+  manipSuspicious: boolean;      // manipScore > 65
+  manipRisk: boolean;            // manipScore > 80
+  alphaUndervalued: boolean;     // inefficiency < -30%
+  alphaOverpriced: boolean;      // inefficiency > +40%
 };
 
 /* ─── Score Computation ─── */
