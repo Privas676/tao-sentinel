@@ -211,19 +211,28 @@ export function computeBubbleScore(s: StakeSnapshot, d: StakeDeltas, p: PriceCon
 export function computeManipulationScore(s: StakeSnapshot, p: PriceContext): number {
   let score = 0;
   // Validator concentration (fewer validators = more centralized)
-  const valConcentration = s.validatorsActive <= 2 ? 90 : s.validatorsActive <= 5 ? 70 : s.validatorsActive <= 10 ? 40 : s.validatorsActive <= 15 ? 25 : 10;
+  // When validators=0 (no data), use miners as proxy
+  let valConcentration: number;
+  if (s.validatorsActive > 0) {
+    valConcentration = s.validatorsActive <= 2 ? 90 : s.validatorsActive <= 5 ? 70 : s.validatorsActive <= 10 ? 40 : s.validatorsActive <= 15 ? 25 : 10;
+  } else {
+    // No validator data: use miner count as proxy (few miners = more centralized)
+    valConcentration = s.minersActive <= 1 ? 75 : s.minersActive <= 5 ? 55 : s.minersActive <= 20 ? 35 : s.minersActive <= 50 ? 20 : 10;
+  }
   score += 0.35 * valConcentration;
   // Stake concentration as proxy for reward skew
   const stakeConc = clamp(s.stakeConcentration, 0, 100);
-  score += 0.30 * stakeConc;
-  // Emission share (high emission + low validators = suspicious)
-  const emissionFactor = p.emissionShare > 5 && s.validatorsActive <= 5 ? 80 :
-    p.emissionShare > 3 && s.validatorsActive <= 8 ? 50 :
-    p.emissionShare > 1 ? 30 : 15;
-  score += 0.20 * emissionFactor;
-  // Low miner activity
-  const lowMinerRewards = s.minersActive <= 2 ? 80 : s.minersActive <= 10 ? 50 : s.uidUsage < 0.1 ? 40 : 10;
-  score += 0.15 * lowMinerRewards;
+  score += 0.25 * stakeConc;
+  // Emission share (high emission + few active participants = suspicious)
+  const activeCount = s.validatorsActive > 0 ? s.validatorsActive : s.minersActive;
+  const emissionFactor = p.emissionShare > 5 && activeCount <= 5 ? 80 :
+    p.emissionShare > 3 && activeCount <= 10 ? 60 :
+    p.emissionShare > 1.5 ? 40 :
+    p.emissionShare > 0.5 ? 25 : 10;
+  score += 0.25 * emissionFactor;
+  // Low miner activity / UID usage
+  const lowActivity = s.minersActive <= 1 ? 80 : s.minersActive <= 5 ? 60 : s.minersActive <= 20 ? 40 : s.uidUsage < 0.1 ? 30 : 10;
+  score += 0.15 * lowActivity;
   return clamp(Math.round(score), 0, 100);
 }
 
