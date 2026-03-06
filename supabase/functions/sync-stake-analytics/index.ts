@@ -76,7 +76,8 @@ function analyzeMetagraph(neurons: any[]): {
     const coldkey = neuron.coldkey?.ss58 || neuron.coldkey || "";
     if (coldkey) {
       stakers.add(coldkey);
-      const s = Number(neuron.stake ?? neuron.total_stake ?? 0) / RAO;
+      // Taostats uses alpha_stake/total_alpha_stake (stake field is deprecated/always 0)
+      const s = Number(neuron.total_alpha_stake ?? neuron.alpha_stake ?? neuron.stake ?? 0) / RAO;
       stakesByAddr[coldkey] = (stakesByAddr[coldkey] || 0) + s;
     }
     if (neuron.is_validator || neuron.validator_permit) validatorsActive++;
