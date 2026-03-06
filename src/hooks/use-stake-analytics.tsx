@@ -297,7 +297,7 @@ export function useStakeAnalytics() {
           fearGreed: 50,
         };
 
-        const economicContext = extractEconomicContext(rp, rpEntry);
+        const economicContext = extractEconomicContext(rp, rpEntry, totalEmission);
         const fundamentalsScore = computeFundamentalsScore(snapshot, priceContext);
 
         const sparklineCapital = sevenDayPrices.length >= 2
