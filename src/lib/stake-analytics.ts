@@ -1,7 +1,6 @@
 /* ═══════════════════════════════════════ */
 /*   STAKE ANALYTICS ENGINE                */
-/*   Health Index · Capital Momentum ·     */
-/*   Dump Risk from on-chain stake data    */
+/*   Full Bittensor Economic Model         */
 /* ═══════════════════════════════════════ */
 
 import { clamp } from "./gauge-engine";
@@ -20,10 +19,46 @@ export type StakeSnapshot = {
   uidUsage: number; // 0-1
   largeWalletInflow: number;
   largeWalletOutflow: number;
+  // Network
+  uidUsed: number;
+  uidMax: number;
+  registrationCost: number;
+  incentiveBurn: number;
+  recyclePerDay: number;
+};
+
+export type EconomicContext = {
+  // Economics
+  emissionsPercent: number;
+  emissionsPerDay: number;
+  minerPerDay: number;
+  validatorPerDay: number;
+  ownerPerDay: number;
+  rootProportion: number;
+  totalIssued: number;
+  totalBurned: number;
+  circulatingSupply: number;
+  maxSupply: number;
+  // Liquidity
+  alphaStaked: number;
+  alphaInPool: number;
+  taoInPool: number;
+  alphaPoolPercent: number;
+  taoPoolPercent: number;
+  fdv: number;
+  volumeMarketcapRatio: number;
+  // Trading
+  buyVolume: number;
+  sellVolume: number;
+  buyersCount: number;
+  sellersCount: number;
+  buyTxCount: number;
+  sellTxCount: number;
+  sentiment: number; // buy_volume / (buy_volume + sell_volume)
 };
 
 export type StakeDeltas = {
-  stakeChange24h: number; // fractional change
+  stakeChange24h: number;
   stakeChange7d: number;
   holdersGrowth7d: number;
   holdersGrowth30d: number;
@@ -32,17 +67,39 @@ export type StakeDeltas = {
 };
 
 export type PriceContext = {
-  priceChange1d: number;   // % change (already percentage)
-  priceChange7d: number;   // % change
-  priceChange30d: number;  // % change
+  priceChange1d: number;
+  priceChange7d: number;
+  priceChange30d: number;
   currentPrice: number;
   liquidity: number;
   emission: number;
-  emissionShare: number;   // % of total network emission
-  marketCap: number;       // in TAO
-  vol24h: number;          // in TAO
-  fearGreed: number;       // 0-100
+  emissionShare: number;
+  marketCap: number;
+  vol24h: number;
+  fearGreed: number;
 };
+
+/* ─── Derived Metrics ─── */
+
+export type DerivedMetrics = {
+  uidSaturation: number;       // uid_used / uid_max (0-1)
+  emissionPower: number;       // emissions_percent * emissions_per_day
+  emissionEfficiency: number;  // emissions_per_day / market_cap
+  poolBalance: number;         // tao_pool_percent / alpha_pool_percent
+  tradingPressure: number;     // buy_volume - sell_volume
+  burnRatio: number;           // total_burned / total_issued
+};
+
+export function computeDerivedMetrics(eco: EconomicContext, p: PriceContext, s: StakeSnapshot): DerivedMetrics {
+  return {
+    uidSaturation: s.uidMax > 0 ? s.uidUsed / s.uidMax : 0,
+    emissionPower: eco.emissionsPercent * eco.emissionsPerDay,
+    emissionEfficiency: p.marketCap > 0 ? eco.emissionsPerDay / p.marketCap : 0,
+    poolBalance: eco.alphaPoolPercent > 0 ? eco.taoPoolPercent / eco.alphaPoolPercent : 0,
+    tradingPressure: eco.buyVolume - eco.sellVolume,
+    burnRatio: eco.totalIssued > 0 ? eco.totalBurned / eco.totalIssued : 0,
+  };
+}
 
 export type RadarScores = {
   healthIndex: number;
@@ -91,118 +148,140 @@ export function computeHealthIndex(s: StakeSnapshot, d: StakeDeltas): number {
   return clamp(Math.round(score), 0, 100);
 }
 
-export function computeCapitalMomentum(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
+/* ─── Capital Flow (REFACTORED) ─── */
+export function computeCapitalMomentum(s: StakeSnapshot, d: StakeDeltas, p: PriceContext, eco?: EconomicContext, dm?: DerivedMetrics): number {
   let score = 50;
-  // Stake inflow velocity
+  // Net stake flow
+  const netFlow = s.largeWalletInflow - s.largeWalletOutflow;
   score += clamp(d.stakeChange7d * 150, -25, 25);
-  // Holders growth
-  score += clamp(d.holdersGrowth7d * 80, -15, 15);
-  // Price momentum (7d % change)
-  score += clamp(p.priceChange7d / 5, -10, 10);
-  // Whale activity (net flow)
-  const netWhaleFlow = s.largeWalletInflow - s.largeWalletOutflow;
-  if (netWhaleFlow > 100) score += 10;
-  else if (netWhaleFlow > 10) score += 5;
-  else if (netWhaleFlow < -100) score -= 10;
-  else if (netWhaleFlow < -10) score -= 5;
+  // Volume/MCap ratio (real liquidity activity)
+  const volMcap = eco?.volumeMarketcapRatio ?? (p.marketCap > 0 ? p.vol24h / p.marketCap : 0);
+  score += clamp(volMcap * 200, 0, 15);
+  // Stake growth
+  score += clamp(d.holdersGrowth7d * 80, -10, 10);
+  // Whale flow
+  if (netFlow > 100) score += 10;
+  else if (netFlow > 10) score += 5;
+  else if (netFlow < -100) score -= 10;
+  else if (netFlow < -10) score -= 5;
+  // Trading pressure (buy - sell)
+  if (dm && dm.tradingPressure !== 0) {
+    const pressureNorm = p.marketCap > 0 ? dm.tradingPressure / p.marketCap : 0;
+    score += clamp(pressureNorm * 500, -10, 10);
+  }
   return clamp(Math.round(score), 0, 100);
 }
 
-export function computeDumpRisk(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
+/* ─── Dump Risk (REFACTORED) ─── */
+export function computeDumpRisk(s: StakeSnapshot, d: StakeDeltas, p: PriceContext, eco?: EconomicContext, dm?: DerivedMetrics): number {
   let risk = 10;
-  // Stake concentration (high = risky)
-  if (s.stakeConcentration > 75) risk += 20;
-  else if (s.stakeConcentration > 55) risk += 12;
-  else if (s.stakeConcentration > 35) risk += 6;
-  // Price decline (continuous, using 7d for more differentiation)
-  if (p.priceChange7d < -15) risk += 20;
-  else if (p.priceChange7d < -8) risk += 15;
-  else if (p.priceChange7d < -3) risk += 10;
-  else if (p.priceChange7d < 0) risk += clamp(Math.abs(p.priceChange7d) * 2, 0, 8);
-  // 1d volatility spike
-  if (p.priceChange1d < -10) risk += 12;
-  else if (p.priceChange1d < -5) risk += 8;
-  else if (p.priceChange1d < -2) risk += 4;
-  // Low liquidity ratio (vol/mcap) — continuous scale
-  const liqRatio = p.marketCap > 0 ? p.vol24h / p.marketCap : 0;
-  if (liqRatio < 0.001) risk += 12;
-  else if (liqRatio < 0.005) risk += 8;
-  else if (liqRatio < 0.01) risk += 4;
-  else if (liqRatio > 0.15) risk += 6; // Abnormally high vol = potential dump in progress
-  // Miner decline
-  if (d.minersGrowth7d < -0.15) risk += 10;
-  else if (d.minersGrowth7d < -0.05) risk += 6;
-  // Low emission = less incentive to stay
-  if (p.emissionShare < 0.1 && p.emissionShare >= 0) risk += 8;
-  else if (p.emissionShare < 0.5) risk += 4;
-  // Validator centralization (only if we have data)
-  if (s.validatorsActive > 0) {
-    if (s.validatorsActive <= 2) risk += 8;
-    else if (s.validatorsActive <= 5) risk += 4;
+  // Liquidity drop: pool imbalance
+  if (dm && dm.poolBalance > 0) {
+    if (dm.poolBalance < 0.3) risk += 12;      // very imbalanced
+    else if (dm.poolBalance < 0.6) risk += 8;
+    else if (dm.poolBalance > 3) risk += 6;     // alpha-heavy pool
   }
   // Stake outflow
   if (d.stakeChange7d < -0.15) risk += 12;
   else if (d.stakeChange7d < -0.05) risk += 8;
   else if (d.stakeChange7d < 0) risk += clamp(Math.abs(d.stakeChange7d) * 40, 0, 6);
+  // Pool imbalance (sell pressure)
+  if (eco && (eco.buyVolume + eco.sellVolume) > 0) {
+    const sellPressure = eco.sellVolume / (eco.buyVolume + eco.sellVolume);
+    if (sellPressure > 0.7) risk += 12;
+    else if (sellPressure > 0.55) risk += 8;
+    else if (sellPressure > 0.45) risk += 4;
+  } else {
+    // Fallback: price-based
+    if (p.priceChange1d < -10) risk += 12;
+    else if (p.priceChange1d < -5) risk += 8;
+    else if (p.priceChange1d < -2) risk += 4;
+  }
+  // UID saturation stress
+  if (dm && dm.uidSaturation > 0) {
+    if (dm.uidSaturation > 0.95) risk += 8;
+    else if (dm.uidSaturation > 0.85) risk += 4;
+  }
+  // Vol/MCap anomaly
+  const liqRatio = p.marketCap > 0 ? p.vol24h / p.marketCap : 0;
+  if (liqRatio < 0.001) risk += 10;
+  else if (liqRatio < 0.005) risk += 6;
+  else if (liqRatio > 0.15) risk += 6;
+  // Stake concentration
+  if (s.stakeConcentration > 75) risk += 15;
+  else if (s.stakeConcentration > 55) risk += 10;
+  else if (s.stakeConcentration > 35) risk += 5;
+  // Low emission
+  if (p.emissionShare < 0.1 && p.emissionShare >= 0) risk += 6;
+  else if (p.emissionShare < 0.5) risk += 3;
+  // Validator centralization
+  if (s.validatorsActive > 0 && s.validatorsActive <= 2) risk += 6;
+  else if (s.validatorsActive > 0 && s.validatorsActive <= 5) risk += 3;
+  // Miner decline
+  if (d.minersGrowth7d < -0.15) risk += 8;
+  else if (d.minersGrowth7d < -0.05) risk += 4;
   return clamp(Math.round(risk), 0, 100);
 }
 
-/* ─── Subnet Radar Score ─── */
-export function computeSubnetRadarScore(s: StakeSnapshot, d: StakeDeltas): number {
+/* ─── Subnet Radar / Adoption (REFACTORED) ─── */
+export function computeSubnetRadarScore(s: StakeSnapshot, d: StakeDeltas, dm?: DerivedMetrics): number {
+  // UID saturation (0-100)
+  const uidSat = dm ? clamp(dm.uidSaturation * 100, 0, 100) : clamp(s.uidUsage * 100, 0, 100);
   const minersGrowth = clamp(d.minersGrowth7d * 100, 0, 100);
-  const holdersGrowth = clamp(d.holdersGrowth7d * 100, 0, 100);
-  const stakeInflow = clamp(d.stakeChange7d * 100, 0, 100);
-  const uidUsage = clamp(s.uidUsage * 100, 0, 100);
-  const validatorGrowth = clamp(s.validatorsActive >= 15 ? 80 : s.validatorsActive >= 8 ? 50 : s.validatorsActive >= 3 ? 30 : 10, 0, 100);
-  return clamp(Math.round(
-    0.25 * minersGrowth + 0.25 * holdersGrowth + 0.20 * stakeInflow + 0.15 * uidUsage + 0.15 * validatorGrowth
-  ), 0, 100);
+  const validatorsGrowth = clamp(
+    s.validatorsActive >= 15 ? 80 : s.validatorsActive >= 8 ? 50 : s.validatorsActive >= 3 ? 30 : 10,
+    0, 100
+  );
+  // AdoptionScore = 0.4 * uid_saturation + 0.3 * miners_growth + 0.3 * validators_growth
+  return clamp(Math.round(0.40 * uidSat + 0.30 * minersGrowth + 0.30 * validatorsGrowth), 0, 100);
 }
 
 /* ─── Narrative Score ─── */
 export function computeNarrativeScore(_s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
-  // Price momentum (% change already)
   const priceMomentum = clamp(p.priceChange7d, -100, 100);
   const stakeInflow = clamp(d.stakeChange7d * 100, -100, 100);
   const minersGrowth = clamp(d.minersGrowth7d * 100, -100, 100);
   const validatorsGrowth = clamp(d.validatorsGrowth7d * 100, -100, 100);
-  // Volume change proxy: high vol/mcap = high activity
   const volChange = p.marketCap > 0 ? clamp((p.vol24h / p.marketCap) * 500, 0, 100) : 0;
-
   const raw = 0.30 * priceMomentum + 0.25 * stakeInflow + 0.20 * minersGrowth + 0.15 * validatorsGrowth + 0.10 * volChange;
   return clamp(Math.round(raw), 0, 100);
 }
 
-/* ─── Smart Money Score ─── */
-export function computeSmartMoneyScore(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
+/* ─── Smart Money (REFACTORED) ─── */
+export function computeSmartMoneyScore(s: StakeSnapshot, d: StakeDeltas, p: PriceContext, eco?: EconomicContext): number {
   let score = 0;
-  const netFlow = s.largeWalletInflow - s.largeWalletOutflow;
-  // Net flow contribution (scaled for real TAO amounts)
-  if (netFlow > 100) score += 40;
-  else if (netFlow > 50) score += 30;
-  else if (netFlow > 10) score += 20;
-  else if (netFlow > 0) score += 10;
-  // Stake inflow
-  score += clamp(d.stakeChange7d * 200, 0, 30);
-  // Emission share (higher emission = more attractive)
+  // Trading pressure: buy vs sell volume
+  if (eco && (eco.buyVolume + eco.sellVolume) > 0) {
+    const buyRatio = eco.buyVolume / (eco.buyVolume + eco.sellVolume);
+    score += clamp(buyRatio * 50, 0, 50);
+    // Buyer growth proxy: more buyers than sellers
+    if (eco.buyersCount > eco.sellersCount * 1.5) score += 15;
+    else if (eco.buyersCount > eco.sellersCount) score += 8;
+  } else {
+    // Fallback: whale net flow
+    const netFlow = s.largeWalletInflow - s.largeWalletOutflow;
+    if (netFlow > 100) score += 40;
+    else if (netFlow > 50) score += 30;
+    else if (netFlow > 10) score += 20;
+    else if (netFlow > 0) score += 10;
+  }
+  // Whale activity (stake inflow)
+  score += clamp(d.stakeChange7d * 200, 0, 20);
+  // Emission share (higher = more attractive)
   if (p.emissionShare > 5) score += 15;
   else if (p.emissionShare > 2) score += 10;
   else if (p.emissionShare > 0.5) score += 5;
-  // Active miners = real network usage
+  // Active miners = real usage
   score += clamp(s.uidUsage * 15, 0, 15);
   return clamp(Math.round(score), 0, 100);
 }
 
 /* ─── Bubble Score ─── */
 export function computeBubbleScore(s: StakeSnapshot, d: StakeDeltas, p: PriceContext): number {
-  // Price growth vs adoption divergence
   const priceGrowth = clamp(p.priceChange7d, 0, 100);
   const minersGrowth = clamp(d.minersGrowth7d * 100, 0, 100);
   const holdersGrowth = clamp(d.holdersGrowth7d * 100, 0, 100);
-  const stakeGrowth = clamp(d.stakeChange7d * 100, 0, 100);
-  // Liquidity ratio (vol/mcap — low = more bubble-like)
   const liqRatio = p.marketCap > 0 ? clamp((p.vol24h / p.marketCap) * 100, 0, 100) : 50;
-
   const raw = 0.40 * priceGrowth - 0.25 * minersGrowth - 0.20 * holdersGrowth - 0.15 * liqRatio;
   return clamp(Math.round(raw), 0, 100);
 }
@@ -210,54 +289,43 @@ export function computeBubbleScore(s: StakeSnapshot, d: StakeDeltas, p: PriceCon
 /* ─── Manipulation Score ─── */
 export function computeManipulationScore(s: StakeSnapshot, p: PriceContext): number {
   let score = 0;
-  // Validator concentration (fewer validators = more centralized)
-  // When validators=0 (no data), use miners as proxy
   let valConcentration: number;
   if (s.validatorsActive > 0) {
     valConcentration = s.validatorsActive <= 2 ? 90 : s.validatorsActive <= 5 ? 70 : s.validatorsActive <= 10 ? 40 : s.validatorsActive <= 15 ? 25 : 10;
   } else {
-    // No validator data: use miner count as proxy (few miners = more centralized)
     valConcentration = s.minersActive <= 1 ? 75 : s.minersActive <= 5 ? 55 : s.minersActive <= 20 ? 35 : s.minersActive <= 50 ? 20 : 10;
   }
   score += 0.35 * valConcentration;
-  // Stake concentration as proxy for reward skew
   const stakeConc = clamp(s.stakeConcentration, 0, 100);
   score += 0.25 * stakeConc;
-  // Emission share (high emission + few active participants = suspicious)
   const activeCount = s.validatorsActive > 0 ? s.validatorsActive : s.minersActive;
   const emissionFactor = p.emissionShare > 5 && activeCount <= 5 ? 80 :
     p.emissionShare > 3 && activeCount <= 10 ? 60 :
     p.emissionShare > 1.5 ? 40 :
     p.emissionShare > 0.5 ? 25 : 10;
   score += 0.25 * emissionFactor;
-  // Low miner activity / UID usage
   const lowActivity = s.minersActive <= 1 ? 80 : s.minersActive <= 5 ? 60 : s.minersActive <= 20 ? 40 : s.uidUsage < 0.1 ? 30 : 10;
   score += 0.15 * lowActivity;
   return clamp(Math.round(score), 0, 100);
 }
 
-/* ─── Alpha Price Inefficiency ─── */
-// Compute a fundamentals score (0-100) that represents the "real value" of a subnet
-export function computeFundamentalsScore(s: StakeSnapshot, p: PriceContext): number {
-  // Miners activity (log scale, 256 max = 100%)
-  const minersScore = s.minersActive > 0 ? clamp(Math.log(s.minersActive + 1) / Math.log(257) * 100, 0, 100) : 0;
-  // Stake depth (log scale)
-  const stakeScore = s.stakeTotal > 0 ? clamp(Math.log(s.stakeTotal + 1) / Math.log(1e7) * 100, 0, 100) : 0;
-  // Emission share
-  const emissionScore = clamp(p.emissionShare * 10, 0, 100);
-  // Volume activity
-  const volScore = p.vol24h > 0 ? clamp(Math.log(p.vol24h + 1) / Math.log(1e5) * 100, 0, 100) : 0;
-  // Liquidity ratio
-  const liqScore = p.marketCap > 0 ? clamp((p.vol24h / p.marketCap) * 1000, 0, 100) : 0;
-
-  return 0.35 * minersScore + 0.25 * stakeScore + 0.20 * emissionScore + 0.10 * volScore + 0.10 * liqScore;
+/* ─── Alpha Fair Value (REFACTORED) ─── */
+// New model: fair_alpha = market_cap / circulating_supply
+export function computeFairAlphaPrice(_s: StakeSnapshot, p: PriceContext, eco?: EconomicContext): number {
+  if (eco && eco.circulatingSupply > 0 && p.marketCap > 0) {
+    return p.marketCap / eco.circulatingSupply;
+  }
+  return 0;
 }
 
-// Fair price is relative: median price * (this subnet's fundamentals / median fundamentals)
-// This is called at the hook level with cross-subnet context
-export function computeFairAlphaPrice(fundamentalsScore: number, medianPrice: number, medianFundamentals: number): number {
-  if (medianFundamentals <= 0 || medianPrice <= 0) return 0;
-  return medianPrice * (fundamentalsScore / medianFundamentals);
+// Keep legacy for cross-subnet fallback
+export function computeFundamentalsScore(s: StakeSnapshot, p: PriceContext): number {
+  const minersScore = s.minersActive > 0 ? clamp(Math.log(s.minersActive + 1) / Math.log(257) * 100, 0, 100) : 0;
+  const stakeScore = s.stakeTotal > 0 ? clamp(Math.log(s.stakeTotal + 1) / Math.log(1e7) * 100, 0, 100) : 0;
+  const emissionScore = clamp(p.emissionShare * 10, 0, 100);
+  const volScore = p.vol24h > 0 ? clamp(Math.log(p.vol24h + 1) / Math.log(1e5) * 100, 0, 100) : 0;
+  const liqScore = p.marketCap > 0 ? clamp((p.vol24h / p.marketCap) * 1000, 0, 100) : 0;
+  return 0.35 * minersScore + 0.25 * stakeScore + 0.20 * emissionScore + 0.10 * volScore + 0.10 * liqScore;
 }
 
 export function computeAlphaInefficiency(realPrice: number, fairPrice: number): number {
@@ -265,21 +333,29 @@ export function computeAlphaInefficiency(realPrice: number, fairPrice: number): 
   return ((realPrice - fairPrice) / fairPrice) * 100;
 }
 
-export function computeRadarScores(s: StakeSnapshot, d: StakeDeltas, p: PriceContext, crossSubnet?: { medianPrice: number; medianFundamentals: number }): RadarScores {
-  const fundamentals = computeFundamentalsScore(s, p);
-  const fairAlpha = crossSubnet
-    ? computeFairAlphaPrice(fundamentals, crossSubnet.medianPrice, crossSubnet.medianFundamentals)
-    : 0;
+export function computeRadarScores(
+  s: StakeSnapshot, d: StakeDeltas, p: PriceContext,
+  crossSubnet?: { medianPrice: number; medianFundamentals: number },
+  eco?: EconomicContext, dm?: DerivedMetrics,
+): RadarScores {
+  // Fair alpha: prefer new model (mcap/circulating), fallback to cross-subnet
+  let fairAlpha = computeFairAlphaPrice(s, p, eco);
+  if (fairAlpha <= 0 && crossSubnet) {
+    const fundamentals = computeFundamentalsScore(s, p);
+    fairAlpha = crossSubnet.medianPrice > 0 && crossSubnet.medianFundamentals > 0
+      ? crossSubnet.medianPrice * (fundamentals / crossSubnet.medianFundamentals)
+      : 0;
+  }
   return {
     healthIndex: computeHealthIndex(s, d),
-    capitalMomentum: computeCapitalMomentum(s, d, p),
-    dumpRisk: computeDumpRisk(s, d, p),
-    subnetRadarScore: computeSubnetRadarScore(s, d),
+    capitalMomentum: computeCapitalMomentum(s, d, p, eco, dm),
+    dumpRisk: computeDumpRisk(s, d, p, eco, dm),
+    subnetRadarScore: computeSubnetRadarScore(s, d, dm),
     narrativeScore: computeNarrativeScore(s, d, p),
-    smartMoneyScore: computeSmartMoneyScore(s, d, p),
+    smartMoneyScore: computeSmartMoneyScore(s, d, p, eco),
     bubbleScore: computeBubbleScore(s, d, p),
     manipulationScore: computeManipulationScore(s, p),
-    alphaInefficiency: crossSubnet ? computeAlphaInefficiency(p.currentPrice, fairAlpha) : 0,
+    alphaInefficiency: computeAlphaInefficiency(p.currentPrice, fairAlpha),
     fairAlphaPrice: fairAlpha,
   };
 }

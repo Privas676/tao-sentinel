@@ -315,31 +315,51 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">MCap τ</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Stake τ</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Price Δ7d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Buy/Sell</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Stake Flow</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Momentum</TableHead>
             <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Em./day</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 30).map((d) => (
-            <TableRow key={d.netuid}>
-              <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
-              <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
-              <TableCell className="font-mono text-xs text-right">{formatMcap(d.priceContext.marketCap)}</TableCell>
-              <TableCell className="font-mono text-xs text-right">{formatTao(d.snapshot.stakeTotal)}</TableCell>
-              <TableCell className="text-right"><PctChange value={d.priceContext.priceChange7d} /></TableCell>
-              <TableCell className="text-right">
-                <span className="font-mono text-xs font-bold" style={{ color: capitalMomentumColor(d.scores.capitalMomentum) }}>{d.scores.capitalMomentum}</span>
-              </TableCell>
-              <TableCell className="text-right hidden sm:table-cell">
-                <Sparkline data={(d.sparklineCapital?.length ?? 0) >= 2 ? d.sparklineCapital : generateCapitalSparkline(d)} />
-              </TableCell>
-              <TableCell className="font-mono text-xs text-right text-muted-foreground">
-                {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
-              </TableCell>
-            </TableRow>
-          ))}
+          {data.slice(0, 30).map((d) => {
+            const eco = d.economicContext;
+            const totalVol = eco.buyVolume + eco.sellVolume;
+            const buyPct = totalVol > 0 ? (eco.buyVolume / totalVol * 100).toFixed(0) : "—";
+            const sellPct = totalVol > 0 ? (eco.sellVolume / totalVol * 100).toFixed(0) : "—";
+            return (
+              <TableRow key={d.netuid}>
+                <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
+                <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
+                <TableCell className="font-mono text-xs text-right">{formatMcap(d.priceContext.marketCap)}</TableCell>
+                <TableCell className="font-mono text-xs text-right">{formatTao(d.snapshot.stakeTotal)}</TableCell>
+                <TableCell className="font-mono text-xs text-right">
+                  {totalVol > 0 ? (
+                    <span>
+                      <span style={{ color: "rgba(76,175,80,0.8)" }}>{buyPct}%</span>
+                      <span className="text-muted-foreground/40">/</span>
+                      <span style={{ color: "rgba(229,57,53,0.7)" }}>{sellPct}%</span>
+                    </span>
+                  ) : "—"}
+                </TableCell>
+                <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
+                <TableCell className="text-right">
+                  <span className="font-mono text-xs font-bold" style={{ color: capitalMomentumColor(d.scores.capitalMomentum) }}>{d.scores.capitalMomentum}</span>
+                </TableCell>
+                <TableCell className="text-right hidden sm:table-cell">
+                  <Sparkline data={(d.sparklineCapital?.length ?? 0) >= 2 ? d.sparklineCapital : generateCapitalSparkline(d)} />
+                </TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                  {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                  {eco.emissionsPerDay > 0 ? formatTao(eco.emissionsPerDay) : "—"}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -360,34 +380,46 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Radar</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">UID%</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">UID Sat.</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Burn Ratio</TableHead>
             <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 30).map((d) => (
-            <TableRow key={d.netuid}>
-              <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
-              <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
-              <TableCell className="text-right">
-                <span className="font-mono text-xs font-bold" style={{ color: radarScoreColor(d.scores.subnetRadarScore) }}>{d.scores.subnetRadarScore}</span>
-              </TableCell>
-              <TableCell className="font-mono text-xs text-right">{d.snapshot.minersActive} <PctChange value={d.deltas.minersGrowth7d * 100} /></TableCell>
-              <TableCell className="font-mono text-xs text-right">{d.snapshot.validatorsActive || "—"}</TableCell>
-              <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
-              <TableCell className="text-right hidden sm:table-cell">
-                <Sparkline data={(d.sparklineAdoption?.length ?? 0) >= 2 ? d.sparklineAdoption : generateAdoptionSparkline(d)} />
-              </TableCell>
-              <TableCell className="text-right">
-                {d.alerts.narrativeStarting ? (
-                  <SignalChip label="NARRATIVE" color="purple" />
-                ) : d.alerts.earlyAdoption ? (
-                  <SignalChip label="EARLY" color="green" />
-                ) : <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
-              </TableCell>
-            </TableRow>
-          ))}
+          {data.slice(0, 30).map((d) => {
+            const dm = d.derivedMetrics;
+            return (
+              <TableRow key={d.netuid}>
+                <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
+                <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
+                <TableCell className="text-right">
+                  <span className="font-mono text-xs font-bold" style={{ color: radarScoreColor(d.scores.subnetRadarScore) }}>{d.scores.subnetRadarScore}</span>
+                </TableCell>
+                <TableCell className="font-mono text-xs text-right">{d.snapshot.minersActive} <PctChange value={d.deltas.minersGrowth7d * 100} /></TableCell>
+                <TableCell className="font-mono text-xs text-right">{d.snapshot.validatorsActive || "—"}</TableCell>
+                <TableCell className="font-mono text-xs text-right">
+                  <span style={{ color: dm.uidSaturation > 0.9 ? "rgba(229,57,53,0.8)" : dm.uidSaturation > 0.7 ? "rgba(255,193,7,0.8)" : "rgba(76,175,80,0.8)" }}>
+                    {d.snapshot.uidMax > 0 ? `${(dm.uidSaturation * 100).toFixed(0)}%` : `${(d.snapshot.uidUsage * 100).toFixed(0)}%`}
+                  </span>
+                  {d.snapshot.uidMax > 0 && <span className="text-muted-foreground/40 text-[9px] ml-0.5">{d.snapshot.uidUsed}/{d.snapshot.uidMax}</span>}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                  {dm.burnRatio > 0 ? `${(dm.burnRatio * 100).toFixed(1)}%` : "—"}
+                </TableCell>
+                <TableCell className="text-right hidden sm:table-cell">
+                  <Sparkline data={(d.sparklineAdoption?.length ?? 0) >= 2 ? d.sparklineAdoption : generateAdoptionSparkline(d)} />
+                </TableCell>
+                <TableCell className="text-right">
+                  {d.alerts.narrativeStarting ? (
+                    <SignalChip label="NARRATIVE" color="purple" />
+                  ) : d.alerts.earlyAdoption ? (
+                    <SignalChip label="EARLY" color="green" />
+                  ) : <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -454,15 +486,20 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Conc.</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Price Δ1d</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Sell Press.</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Pool Bal.</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">UID Sat.</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Vol/MCap</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Risk</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.slice(0, 30).map((d) => {
+            const eco = d.economicContext;
+            const dm = d.derivedMetrics;
+            const totalVol = eco.buyVolume + eco.sellVolume;
+            const sellPressure = totalVol > 0 ? (eco.sellVolume / totalVol * 100) : 0;
             const volMcap = d.priceContext.marketCap > 0 ? (d.priceContext.vol24h / d.priceContext.marketCap * 100) : 0;
             return (
               <TableRow key={d.netuid}>
@@ -473,9 +510,22 @@ function DumpRiskTable({ data }: { data: SubnetRadarData[] }) {
                     {d.snapshot.stakeConcentration > 0 ? `${d.snapshot.stakeConcentration.toFixed(0)}%` : "—"}
                   </span>
                 </TableCell>
-                <TableCell className="text-right"><PctChange value={d.priceContext.priceChange1d} /></TableCell>
+                <TableCell className="font-mono text-xs text-right">
+                  {totalVol > 0 ? (
+                    <span style={{ color: sellPressure > 55 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.5)" }}>
+                      {sellPressure.toFixed(0)}%
+                    </span>
+                  ) : "—"}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                  {dm.poolBalance > 0 ? dm.poolBalance.toFixed(2) : "—"}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-right">
+                  <span style={{ color: dm.uidSaturation > 0.9 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.5)" }}>
+                    {d.snapshot.uidMax > 0 ? `${(dm.uidSaturation * 100).toFixed(0)}%` : "—"}
+                  </span>
+                </TableCell>
                 <TableCell className="font-mono text-xs text-right text-muted-foreground">{volMcap > 0 ? `${volMcap.toFixed(1)}%` : "—"}</TableCell>
-                <TableCell className="font-mono text-xs text-right">{d.snapshot.validatorsActive || "—"}</TableCell>
                 <TableCell className="text-right">
                   <span className="font-mono text-xs font-bold" style={{ color: dumpRiskColor(d.scores.dumpRisk) }}>{d.scores.dumpRisk}</span>
                 </TableCell>
@@ -605,17 +655,18 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Alpha Price</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Fair Value</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Fair (MCap/Circ)</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Deviation</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Vol/MCap</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Circ. Supply</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Burn Ratio</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.slice(0, 30).map((d) => {
             const deviation = d.scores.alphaInefficiency;
-            const volMcap = d.priceContext.marketCap > 0 ? (d.priceContext.vol24h / d.priceContext.marketCap * 100) : 0;
+            const eco = d.economicContext;
+            const dm = d.derivedMetrics;
             return (
               <TableRow key={d.netuid}>
                 <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
@@ -632,9 +683,11 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
                   </span>
                 </TableCell>
                 <TableCell className="font-mono text-xs text-right text-muted-foreground">
-                  {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
+                  {eco.circulatingSupply > 0 ? formatTao(eco.circulatingSupply) : "—"}
                 </TableCell>
-                <TableCell className="font-mono text-xs text-right text-muted-foreground">{volMcap > 0 ? `${volMcap.toFixed(1)}%` : "—"}</TableCell>
+                <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                  {dm.burnRatio > 0 ? `${(dm.burnRatio * 100).toFixed(1)}%` : "—"}
+                </TableCell>
                 <TableCell className="text-right">
                   {d.alerts.alphaUndervalued ? <SignalChip label="UNDERVALUED" color="green" /> :
                    d.alerts.alphaOverpriced ? <SignalChip label="OVERPRICED" color="red" /> :
@@ -666,12 +719,10 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
     .sort((a, b) => b.snapshot.stakeConcentration - a.snapshot.stakeConcentration)
     .slice(0, 10);
 
-  // Sort by smart money score for main view
   const smartMoneySorted = [...data].sort((a, b) => b.scores.smartMoneyScore - a.scores.smartMoneyScore);
 
   return (
     <div className="p-4 space-y-6">
-      {/* Smart Money Rankings */}
       <div>
         <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">🐋 Smart Money Rankings</div>
         <Table>
@@ -680,15 +731,17 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
               <TableHead className="font-mono text-[10px]">SN</TableHead>
               <TableHead className="font-mono text-[10px]">Nom</TableHead>
               <TableHead className="font-mono text-[10px] text-right">Score</TableHead>
-              <TableHead className="font-mono text-[10px] text-right">Stake Flow</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Buy/Sell</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Buyers</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Sellers</TableHead>
               <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
-              <TableHead className="font-mono text-[10px] text-right">UID%</TableHead>
               <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {smartMoneySorted.slice(0, 20).map((d) => {
-              const netFlow = d.snapshot.largeWalletInflow - d.snapshot.largeWalletOutflow;
+              const eco = d.economicContext;
+              const totalVol = eco.buyVolume + eco.sellVolume;
               return (
                 <TableRow key={d.netuid}>
                   <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
@@ -696,11 +749,20 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
                   <TableCell className="text-right">
                     <span className="font-mono text-xs font-bold" style={{ color: smartMoneyColor(d.scores.smartMoneyScore) }}>{d.scores.smartMoneyScore}</span>
                   </TableCell>
-                  <TableCell className="text-right"><PctChange value={d.stakeChange7dPct} /></TableCell>
+                  <TableCell className="font-mono text-xs text-right">
+                    {totalVol > 0 ? (
+                      <span>
+                        <span style={{ color: "rgba(76,175,80,0.8)" }}>{formatTao(eco.buyVolume)}</span>
+                        <span className="text-muted-foreground/40">/</span>
+                        <span style={{ color: "rgba(229,57,53,0.7)" }}>{formatTao(eco.sellVolume)}</span>
+                      </span>
+                    ) : "—"}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-right">{eco.buyersCount > 0 ? eco.buyersCount : "—"}</TableCell>
+                  <TableCell className="font-mono text-xs text-right">{eco.sellersCount > 0 ? eco.sellersCount : "—"}</TableCell>
                   <TableCell className="font-mono text-xs text-right text-muted-foreground">
                     {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
                   <TableCell className="text-right">
                     {d.alerts.smartMoneySignal ? <SignalChip label="SMART MONEY" color="green" /> :
                      d.scores.smartMoneyScore >= 40 ? <SignalChip label="WATCH" color="blue" /> :
