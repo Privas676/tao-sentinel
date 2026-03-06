@@ -34,12 +34,20 @@ export type RadarScores = {
   healthIndex: number;       // 0-100
   capitalMomentum: number;   // 0-100
   dumpRisk: number;          // 0-100
+  subnetRadarScore: number;  // 0-100 — adoption précoce
+  narrativeScore: number;    // 0-100 — potentiel viral
+  smartMoneyScore: number;   // 0-100 — activité whale
 };
 
 export type RadarAlerts = {
-  earlyAdoption: boolean;
+  earlyAdoption: boolean;       // radarScore > 70
+  narrativeStarting: boolean;   // radarScore > 85
+  narrativeForming: boolean;    // narrativeScore > 80
+  smartMoneySignal: boolean;    // whale conditions
   whaleAccumulation: boolean;
   dumpRiskAlert: boolean;
+  dumpWarning: boolean;         // dumpRisk > 60
+  dumpExit: boolean;            // dumpRisk > 75
 };
 
 /* ─── Score Computation ─── */
