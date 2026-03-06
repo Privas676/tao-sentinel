@@ -38,7 +38,8 @@ function median(arr: number[]): number {
 }
 
 const RAO = 1e9;
-const BLOCKS_PER_DAY = 20_000; // Bittensor block time ≈ 4.3s
+const BLOCKS_PER_DAY = 20_180; // Bittensor block time ≈ 4.28s → 86400/4.28
+const OWNER_TAKE = 0.18; // Bittensor default delegate/owner take (18%)
 
 function raoToTao(v: any): number {
   const n = Number(v || 0);
