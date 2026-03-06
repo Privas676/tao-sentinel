@@ -206,7 +206,7 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
                 </span>
               </TableCell>
               <TableCell className="text-right hidden sm:table-cell">
-                <Sparkline data={generateCapitalSparkline(d)} />
+                <Sparkline data={d.sparklineCapital.length >= 2 ? d.sparklineCapital : generateCapitalSparkline(d)} />
               </TableCell>
               <TableCell className="font-mono text-xs text-right" style={{ color: "rgba(76,175,80,0.7)" }}>
                 {d.snapshot.largeWalletInflow > 0 ? `+${d.snapshot.largeWalletInflow}τ` : "—"}
