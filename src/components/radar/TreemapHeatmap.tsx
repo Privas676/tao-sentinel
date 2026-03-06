@@ -156,10 +156,11 @@ export default function TreemapHeatmap({ data }: { data: SubnetRadarData[] }) {
 
   const rects = useMemo(() => {
     const items = filtered
-      .map((d) => ({ netuid: d.netuid, area: d.snapshot.stakeTotal, data: d }))
-      .sort((a, b) => b.area - a.area);
+      .map((d) => ({ netuid: d.netuid, area: allZeroStake ? 1 : d.snapshot.stakeTotal, data: d }))
+      .sort((a, b) => b.area - a.area)
+      .slice(0, 60); // limit for performance
     return squarify(items, W, H);
-  }, [filtered]);
+  }, [filtered, allZeroStake]);
 
   return (
     <div className="p-4 space-y-3">
