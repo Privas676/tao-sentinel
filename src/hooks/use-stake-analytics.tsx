@@ -83,18 +83,33 @@ export function useStakeAnalytics() {
 
       // Fetch 7d-ago stake analytics for deltas
       const ts7dAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const [hist7dRes, rawPayloadsRes] = await Promise.all([
+      // Fetch lightweight fields + raw_payload separately to avoid DB timeout
+      const [hist7dRes, lightweightRes] = await Promise.all([
         (supabase as any)
           .from("subnet_stake_analytics")
           .select("netuid, holders_count, miners_active, validators_active")
           .lte("ts", ts7dAgo)
           .order("ts", { ascending: false })
           .limit(500),
-        // Raw payload has ALL real data: alpha_staked, price, market_cap, volume, emission, seven_day_prices
         (supabase as any)
           .from("subnet_latest")
-          .select("netuid, raw_payload, price, cap, vol_24h, miners_active"),
+          .select("netuid, price, cap, vol_24h, miners_active"),
       ]);
+
+      // Fetch raw_payload in batches of 30 to avoid statement timeout
+      const netuidBatches: number[][] = [];
+      const allNetuids = [...latest.keys()];
+      for (let i = 0; i < allNetuids.length; i += 30) {
+        netuidBatches.push(allNetuids.slice(i, i + 30));
+      }
+      const rawPayloadResults = await Promise.all(
+        netuidBatches.map((batch) =>
+          (supabase as any)
+            .from("subnet_latest")
+            .select("netuid, raw_payload")
+            .in("netuid", batch)
+        )
+      );
 
       const dedup = (rows: any[]) => {
         const m = new Map<number, any>();
@@ -105,7 +120,19 @@ export function useStakeAnalytics() {
       };
 
       const map7d = dedup(hist7dRes.data || []);
-      const rawPayloadMap = dedup(rawPayloadsRes.data || []);
+      // Merge lightweight + raw_payload
+      const lightMap = dedup(lightweightRes.data || []);
+      const rawMap = new Map<number, any>();
+      for (const res of rawPayloadResults) {
+        for (const row of res.data || []) {
+          rawMap.set(row.netuid, row.raw_payload);
+        }
+      }
+      // Combine into unified map
+      const rawPayloadMap = new Map<number, any>();
+      for (const [nid, light] of lightMap) {
+        rawPayloadMap.set(nid, { ...light, raw_payload: rawMap.get(nid) || null });
+      }
 
       // Fetch subnet names
       const { data: subnets } = await supabase.from("subnets").select("netuid, name");
