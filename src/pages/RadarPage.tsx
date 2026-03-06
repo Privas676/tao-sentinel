@@ -716,12 +716,10 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
     .sort((a, b) => b.snapshot.stakeConcentration - a.snapshot.stakeConcentration)
     .slice(0, 10);
 
-  // Sort by smart money score for main view
   const smartMoneySorted = [...data].sort((a, b) => b.scores.smartMoneyScore - a.scores.smartMoneyScore);
 
   return (
     <div className="p-4 space-y-6">
-      {/* Smart Money Rankings */}
       <div>
         <div className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground mb-2">🐋 Smart Money Rankings</div>
         <Table>
@@ -730,9 +728,10 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
               <TableHead className="font-mono text-[10px]">SN</TableHead>
               <TableHead className="font-mono text-[10px]">Nom</TableHead>
               <TableHead className="font-mono text-[10px] text-right">Score</TableHead>
-              <TableHead className="font-mono text-[10px] text-right">Stake Flow</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Buy/Sell</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Buyers</TableHead>
+              <TableHead className="font-mono text-[10px] text-right">Sellers</TableHead>
               <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
-              <TableHead className="font-mono text-[10px] text-right">UID%</TableHead>
               <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
             </TableRow>
           </TableHeader>
