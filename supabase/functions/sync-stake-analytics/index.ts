@@ -113,18 +113,38 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("TAOSTATS_API_KEY")!;
     const headers = { Authorization: apiKey, Accept: "application/json" };
 
-    // 1. Get latest metrics with full raw_payload for all subnets
-    const { data: latestMetrics, error: latestErr } = await sb
+    // 1. Get lightweight subnet list (no raw_payload to avoid timeout)
+    const { data: subnetList, error: listErr } = await sb
       .from("subnet_latest")
-      .select("netuid, raw_payload, miners_active, ts");
-    if (latestErr) throw new Error(`Failed to fetch latest: ${latestErr.message}`);
-    if (!latestMetrics?.length) {
+      .select("netuid, miners_active, ts");
+    if (listErr) throw new Error(`Failed to fetch latest: ${listErr.message}`);
+    if (!subnetList?.length) {
       return new Response(JSON.stringify({ ok: true, message: "No data" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const netuidList = latestMetrics.map((m) => m.netuid).filter(Boolean) as number[];
+    const netuidList = subnetList.map((m) => m.netuid).filter(Boolean) as number[];
+
+    // Fetch raw_payload in batches of 30 to avoid statement timeout
+    const rawPayloadMap = new Map<number, any>();
+    const BATCH_SIZE = 30;
+    for (let i = 0; i < netuidList.length; i += BATCH_SIZE) {
+      const batch = netuidList.slice(i, i + BATCH_SIZE);
+      const { data: batchData } = await sb
+        .from("subnet_latest")
+        .select("netuid, raw_payload")
+        .in("netuid", batch);
+      for (const row of batchData || []) {
+        if (row.netuid) rawPayloadMap.set(row.netuid as number, row.raw_payload);
+      }
+    }
+
+    // Merge into unified latestMetrics
+    const latestMetrics = subnetList.map((m) => ({
+      ...m,
+      raw_payload: rawPayloadMap.get(m.netuid as number) || null,
+    }));
     const now = Date.now();
     const ts24hAgo = new Date(now - 24 * 3600_000).toISOString();
 
