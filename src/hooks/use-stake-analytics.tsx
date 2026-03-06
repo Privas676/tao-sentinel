@@ -80,6 +80,19 @@ export function useStakeAnalytics() {
       const map7d = dedup(hist7d.data || []);
       const map30d = dedup(hist30d.data || []);
 
+      // Build time-series per netuid for sparklines
+      const timeSeriesMap = new Map<number, { stake: number; holders: number; miners: number; ts: string }[]>();
+      for (const row of histTimeSeries.data || []) {
+        const arr = timeSeriesMap.get(row.netuid) || [];
+        arr.push({
+          stake: Number(row.stake_total) || 0,
+          holders: row.holders_count || 0,
+          miners: row.miners_active || 0,
+          ts: row.ts,
+        });
+        timeSeriesMap.set(row.netuid, arr);
+      }
+
       // Fetch subnet names
       const { data: subnets } = await supabase
         .from("subnets")
