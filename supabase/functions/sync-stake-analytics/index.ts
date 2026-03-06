@@ -69,14 +69,13 @@ function analyzeMetagraph(neurons: any[]): {
   const stakers = new Set<string>();
   const stakesByAddr: Record<string, number> = {};
   let validatorsActive = 0;
-  let sampleNeuron: any = null;
 
   for (const neuron of neurons) {
-    if (!sampleNeuron) sampleNeuron = neuron;
     const coldkey = neuron.coldkey?.ss58 || neuron.coldkey || "";
     if (coldkey) {
       stakers.add(coldkey);
-      const s = Number(neuron.stake ?? neuron.total_stake ?? 0) / RAO;
+      // Taostats uses total_alpha_stake/alpha_stake (stake field is deprecated/always 0)
+      const s = Number(neuron.total_alpha_stake ?? neuron.alpha_stake ?? neuron.stake ?? 0) / RAO;
       stakesByAddr[coldkey] = (stakesByAddr[coldkey] || 0) + s;
     }
     if (neuron.is_validator || neuron.validator_permit) validatorsActive++;
@@ -89,14 +88,6 @@ function analyzeMetagraph(neurons: any[]): {
   const totalFromMeta = sorted.reduce((s, x) => s + x.stake, 0);
   const top10Total = sorted.slice(0, 10).reduce((s, x) => s + x.stake, 0);
   const stakeConcentration = totalFromMeta > 0 ? (top10Total / totalFromMeta) * 100 : 0;
-
-  // Debug: log metagraph analysis results
-  console.log(`[META-DEBUG] neurons=${neurons.length}, stakers=${stakers.size}, validators=${validatorsActive}, totalStake=${totalFromMeta.toFixed(2)}, top10=${top10Total.toFixed(2)}, conc=${stakeConcentration.toFixed(1)}%`);
-  if (sampleNeuron) {
-    const keys = Object.keys(sampleNeuron).join(",");
-    console.log(`[META-DEBUG] sample neuron keys: ${keys}`);
-    console.log(`[META-DEBUG] sample coldkey=${JSON.stringify(sampleNeuron.coldkey)}, stake=${sampleNeuron.stake}, total_stake=${sampleNeuron.total_stake}`);
-  }
 
   const top10Stake = sorted.slice(0, 10).map((x) => ({
     address: x.address.slice(0, 8) + "…",
@@ -188,14 +179,7 @@ Deno.serve(async (req) => {
         const res = await fetchWithRetry(url, { headers });
         if (res.ok) {
           const json = await res.json();
-          const metaVal = json.data || json;
-          const isArr = Array.isArray(metaVal);
-          console.log(`[METAGRAPH-STORE] SN-${nid}: isArray=${isArr}, type=${typeof metaVal}, hasData=${!!json.data}, keys=${!isArr && metaVal ? Object.keys(metaVal).slice(0,5).join(",") : "arr:" + (isArr ? metaVal.length : 0)}`);
-          if (isArr && metaVal.length > 0) {
-            const sample = metaVal[0];
-            console.log(`[METAGRAPH-STORE] SN-${nid} sample keys: ${Object.keys(sample).slice(0,10).join(",")}`);
-          }
-          metagraphData.set(nid, metaVal);
+          metagraphData.set(nid, json.data || json);
         } else {
           console.log(`Metagraph SN-${nid}: ${res.status}`);
           await res.text();
@@ -267,21 +251,13 @@ Deno.serve(async (req) => {
       // Priority 1: Metagraph data (most accurate - has neuron-level stake analysis)
       const meta = metagraphData.get(nid);
       if (meta) {
-        const isArr = Array.isArray(meta);
-        const metaType = typeof meta;
-        const metaKeys = meta && !isArr ? Object.keys(meta).slice(0, 10).join(",") : "N/A";
-        console.log(`[META-DEBUG] SN-${nid}: isArray=${isArr}, type=${metaType}, keys=${metaKeys}, length=${isArr ? meta.length : "N/A"}`);
-        
-        // Handle both array format and object-with-data format
-        const neurons = isArr ? meta : (Array.isArray(meta.data) ? meta.data : null);
-        
+        const neurons = Array.isArray(meta) ? meta : (Array.isArray(meta.data) ? meta.data : null);
         if (neurons && neurons.length > 0) {
           const analysis = analyzeMetagraph(neurons);
           holdersCount = analysis.holdersCount;
           stakeConcentration = analysis.stakeConcentration;
           top10Stake = analysis.top10Stake;
           validatorsActive = analysis.validatorsActive;
-          console.log(`[META-DEBUG] SN-${nid}: conc=${stakeConcentration.toFixed(1)}%, holders=${holdersCount}, validators=${validatorsActive}`);
         }
       } else {
         // Priority 2: Bulk Taostats subnet data (has validator count, registration info)
@@ -367,26 +343,6 @@ Deno.serve(async (req) => {
       `bulk: ${bulkSubnetData.size}, validators: ${withValidators}/${rows.length}, conc: ${withConcentration}/${rows.length}`
     );
 
-    // Collect debug info about metagraph structure
-    const metaDebug: any[] = [];
-    for (const [nid, meta] of metagraphData) {
-      const isArr = Array.isArray(meta);
-      const hasDataProp = meta && typeof meta === "object" && "data" in meta;
-      const neurons = isArr ? meta : (Array.isArray(meta?.data) ? meta.data : null);
-      metaDebug.push({
-        netuid: nid,
-        isArray: isArr,
-        type: typeof meta,
-        topKeys: meta && !isArr ? Object.keys(meta).slice(0, 8) : [],
-        neuronCount: neurons?.length || 0,
-        hasDataProp,
-        sampleKeys: neurons?.[0] ? Object.keys(neurons[0]).slice(0, 10) : [],
-        sampleStake: neurons?.[0]?.stake,
-        sampleTotalStake: neurons?.[0]?.total_stake,
-        sampleColdkey: typeof neurons?.[0]?.coldkey,
-      });
-    }
-
     return new Response(
       JSON.stringify({
         ok: true,
@@ -395,7 +351,6 @@ Deno.serve(async (req) => {
         bulkSubnets: bulkSubnetData.size,
         withValidators,
         withConcentration,
-        metaDebug,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
