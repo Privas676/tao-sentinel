@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 const RAO = 1e9;
-const SUBNETS_PER_RUN = 3;
+const METAGRAPH_PER_RUN = 5;
 const REQUEST_DELAY_MS = 4000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -31,6 +31,75 @@ function dedupeLatest(rows: any[]): Map<number, any> {
     if (!map.has(r.netuid)) map.set(r.netuid, r);
   }
   return map;
+}
+
+/** Fetch bulk subnet data from Taostats subnet/latest/v1 (single call, all subnets) */
+async function fetchBulkSubnetData(headers: Record<string, string>): Promise<Map<number, any>> {
+  const map = new Map<number, any>();
+  try {
+    const url = "https://api.taostats.io/api/subnet/latest/v1";
+    const res = await fetchWithRetry(url, { headers });
+    if (res.ok) {
+      const json = await res.json();
+      const subnets = json.data || json;
+      if (Array.isArray(subnets)) {
+        for (const s of subnets) {
+          const nid = Number(s.netuid);
+          if (nid > 0) map.set(nid, s);
+        }
+      }
+      console.log(`Bulk subnet data: ${map.size} subnets fetched`);
+    } else {
+      console.log(`Bulk subnet fetch failed: ${res.status}`);
+      await res.text();
+    }
+  } catch (e) {
+    console.error("Bulk subnet fetch error:", e);
+  }
+  return map;
+}
+
+/** Extract validator/concentration data from metagraph neurons */
+function analyzeMetagraph(neurons: any[]): {
+  holdersCount: number;
+  stakeConcentration: number;
+  top10Stake: any[];
+  validatorsActive: number;
+} {
+  const stakers = new Set<string>();
+  const stakesByAddr: Record<string, number> = {};
+  let validatorsActive = 0;
+
+  for (const neuron of neurons) {
+    const coldkey = neuron.coldkey?.ss58 || neuron.coldkey || "";
+    if (coldkey) {
+      stakers.add(coldkey);
+      const s = Number(neuron.stake ?? neuron.total_stake ?? 0) / RAO;
+      stakesByAddr[coldkey] = (stakesByAddr[coldkey] || 0) + s;
+    }
+    if (neuron.is_validator || neuron.validator_permit) validatorsActive++;
+  }
+
+  const sorted = Object.entries(stakesByAddr)
+    .map(([addr, stake]) => ({ address: addr, stake }))
+    .sort((a, b) => b.stake - a.stake);
+
+  const totalFromMeta = sorted.reduce((s, x) => s + x.stake, 0);
+  const top10Total = sorted.slice(0, 10).reduce((s, x) => s + x.stake, 0);
+  const stakeConcentration = totalFromMeta > 0 ? (top10Total / totalFromMeta) * 100 : 0;
+
+  const top10Stake = sorted.slice(0, 10).map((x) => ({
+    address: x.address.slice(0, 8) + "…",
+    stake: Math.round(x.stake),
+    pct: totalFromMeta > 0 ? Math.round((x.stake / totalFromMeta) * 100) : 0,
+  }));
+
+  return {
+    holdersCount: stakers.size,
+    stakeConcentration,
+    top10Stake,
+    validatorsActive,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -58,30 +127,27 @@ Deno.serve(async (req) => {
     const netuidList = latestMetrics.map((m) => m.netuid).filter(Boolean) as number[];
     const now = Date.now();
     const ts24hAgo = new Date(now - 24 * 3600_000).toISOString();
-    const ts7dAgo = new Date(now - 7 * 86400_000).toISOString();
 
-    // 2. Get historical stake analytics for delta calculations
-    const [prevAnalyticsRes, hist7dRes] = await Promise.all([
+    // 2. Parallel: fetch previous analytics, bulk subnet data from Taostats, whale movements
+    const [prevAnalyticsRes, bulkSubnetData, whalesRes] = await Promise.all([
       sb.from("subnet_stake_analytics")
-        .select("netuid, holders_count, stake_concentration, validators_active, stake_total, miners_active")
+        .select("netuid, holders_count, stake_concentration, validators_active, stake_total, miners_active, top10_stake")
         .in("netuid", netuidList)
         .order("ts", { ascending: false })
         .limit(500),
-      sb.from("subnet_stake_analytics")
-        .select("netuid, stake_total, miners_active, holders_count, validators_active")
-        .in("netuid", netuidList)
-        .lte("ts", ts7dAgo)
-        .order("ts", { ascending: false })
-        .limit(500),
+      fetchBulkSubnetData(headers),
+      sb.from("whale_movements")
+        .select("direction, amount_tao, netuid")
+        .gte("detected_at", ts24hAgo),
     ]);
     const prevMap = dedupeLatest(prevAnalyticsRes.data || []);
 
-    // 3. Round-robin metagraph fetch from Taostats
+    // 3. Round-robin metagraph fetch for detailed stake concentration analysis
     const minuteOfHour = new Date().getMinutes();
-    const totalSlices = Math.ceil(netuidList.length / SUBNETS_PER_RUN);
+    const totalSlices = Math.ceil(netuidList.length / METAGRAPH_PER_RUN);
     const sliceIndex = Math.floor(minuteOfHour / 15) % totalSlices;
-    const start = sliceIndex * SUBNETS_PER_RUN;
-    const metagraphBatch = netuidList.slice(start, start + SUBNETS_PER_RUN);
+    const start = sliceIndex * METAGRAPH_PER_RUN;
+    const metagraphBatch = netuidList.slice(start, start + METAGRAPH_PER_RUN);
 
     const metagraphData = new Map<number, any>();
     for (let i = 0; i < metagraphBatch.length; i++) {
@@ -102,25 +168,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Get whale movements per subnet for last 24h
-    const { data: recentWhales } = await sb
-      .from("whale_movements")
-      .select("direction, amount_tao, netuid")
-      .gte("detected_at", ts24hAgo);
-
-    // Per-subnet whale flows
+    // 4. Whale flows per subnet
     const whaleFlowMap = new Map<number, { inflow: number; outflow: number }>();
-    for (const w of recentWhales || []) {
+    for (const w of whalesRes.data || []) {
       const nid = w.netuid || 0;
       const entry = whaleFlowMap.get(nid) || { inflow: 0, outflow: 0 };
       if (w.direction === "IN") entry.inflow += Number(w.amount_tao);
       else entry.outflow += Number(w.amount_tao);
       whaleFlowMap.set(nid, entry);
     }
-    // Also aggregate non-subnet-specific whales
-    const globalWhales = whaleFlowMap.get(0) || { inflow: 0, outflow: 0 };
 
-    // Compute total emission for emission share calculation
+    // Compute total emission for emission share
     let totalEmission = 0;
     for (const m of latestMetrics) {
       const chain = (m.raw_payload as any)?._chain || {};
@@ -137,8 +195,10 @@ Deno.serve(async (req) => {
 
       const payload = m.raw_payload as any;
       const chain = payload?._chain || {};
+      const bulkSN = bulkSubnetData.get(nid);
+      const prev = prevMap.get(nid);
 
-      // Extract real stake from raw_payload (alpha_staked is in rao)
+      // Extract real stake from raw_payload
       const alphaStaked = Number(payload?.alpha_staked || 0) / RAO;
       const totalTao = Number(payload?.total_tao || 0) / RAO;
       const stakeTotal = alphaStaked > 0 ? alphaStaked : totalTao;
@@ -152,7 +212,7 @@ Deno.serve(async (req) => {
       const emission = Number(chain.emission || 0);
       const emissionShare = totalEmission > 0 ? (emission / totalEmission) * 100 : 0;
 
-      // Price data from raw_payload
+      // Price data
       const price = Number(payload?.price || 0);
       const marketCap = Number(payload?.market_cap || 0) / RAO;
       const vol24h = Number(payload?.tao_volume_24_hr || 0) / RAO;
@@ -161,50 +221,54 @@ Deno.serve(async (req) => {
       const priceChange1m = Number(payload?.price_change_1_month || 0);
       const fgi = Number(payload?.fear_and_greed_index || 50);
 
-      // Metagraph-derived metrics
+      // === Determine validators, holders, concentration ===
       let holdersCount = 0;
       let stakeConcentration = 0;
       let top10Stake: any[] = [];
       let validatorsActive = 0;
 
+      // Priority 1: Metagraph data (most accurate - has neuron-level stake analysis)
       const meta = metagraphData.get(nid);
       if (meta && Array.isArray(meta)) {
-        const stakers = new Set<string>();
-        const stakesByAddr: Record<string, number> = {};
-
-        for (const neuron of meta) {
-          const coldkey = neuron.coldkey?.ss58 || neuron.coldkey || "";
-          if (coldkey) {
-            stakers.add(coldkey);
-            const s = Number(neuron.stake ?? neuron.total_stake ?? 0) / RAO;
-            stakesByAddr[coldkey] = (stakesByAddr[coldkey] || 0) + s;
-          }
-          if (neuron.is_validator || neuron.validator_permit) validatorsActive++;
+        const analysis = analyzeMetagraph(meta);
+        holdersCount = analysis.holdersCount;
+        stakeConcentration = analysis.stakeConcentration;
+        top10Stake = analysis.top10Stake;
+        validatorsActive = analysis.validatorsActive;
+      } else {
+        // Priority 2: Bulk Taostats subnet data (has validator count, registration info)
+        if (bulkSN) {
+          // Extract validator count from bulk subnet data
+          // Taostats subnet/latest returns fields like num_validators, active_validators
+          validatorsActive = Number(
+            bulkSN.active_validators ?? bulkSN.num_validators ?? bulkSN.validators ?? 0
+          );
+          // Registration-based holder estimate
+          const regCount = Number(bulkSN.registration_count ?? bulkSN.registrations ?? 0);
+          if (regCount > 0) holdersCount = regCount;
         }
 
-        holdersCount = stakers.size;
+        // Priority 3: Previous analytics data (carry forward from last metagraph scan)
+        if (!validatorsActive && prev) {
+          validatorsActive = prev.validators_active || 0;
+        }
+        if (!holdersCount && prev) {
+          holdersCount = prev.holders_count || 0;
+        }
+        if (prev) {
+          stakeConcentration = Number(prev.stake_concentration || 0);
+          top10Stake = prev.top10_stake || [];
+        }
 
-        const sorted = Object.entries(stakesByAddr)
-          .map(([addr, stake]) => ({ address: addr, stake }))
-          .sort((a, b) => b.stake - a.stake);
-
-        const totalFromMeta = sorted.reduce((s, x) => s + x.stake, 0);
-        const top10Total = sorted.slice(0, 10).reduce((s, x) => s + x.stake, 0);
-        stakeConcentration = totalFromMeta > 0 ? (top10Total / totalFromMeta) * 100 : 0;
-        top10Stake = sorted.slice(0, 10).map((x) => ({
-          address: x.address.slice(0, 8) + "…",
-          stake: Math.round(x.stake),
-          pct: totalFromMeta > 0 ? Math.round((x.stake / totalFromMeta) * 100) : 0,
-        }));
-      } else {
-        // Use previous data
-        const prev = prevMap.get(nid);
-        holdersCount = prev?.holders_count || 0;
-        stakeConcentration = Number(prev?.stake_concentration || 0);
-        validatorsActive = prev?.validators_active || 0;
+        // Priority 4: Chain data fallback for validators
+        if (!validatorsActive) {
+          // Estimate validators from chain data: typically ~10-20% of total neurons have permits
+          const validatorPermits = Number(chain.validator_permits ?? 0);
+          if (validatorPermits > 0) validatorsActive = validatorPermits;
+        }
       }
 
-      // Per-subnet whale flows (fallback to share of global if no subnet-specific data)
+      // Per-subnet whale flows
       const subnetWhales = whaleFlowMap.get(nid);
       const whaleInflow = subnetWhales ? Math.round(subnetWhales.inflow) : 0;
       const whaleOutflow = subnetWhales ? Math.round(subnetWhales.outflow) : 0;
@@ -225,6 +289,7 @@ Deno.serve(async (req) => {
         raw_data: {
           chain,
           metagraph_available: metagraphData.has(nid),
+          bulk_subnet_available: bulkSubnetData.has(nid),
           emission,
           emission_share: Math.round(emissionShare * 100) / 100,
           price,
@@ -246,11 +311,23 @@ Deno.serve(async (req) => {
       if (insertErr) throw new Error(`Insert failed: ${insertErr.message}`);
     }
 
+    // Log summary with validator coverage
+    const withValidators = rows.filter((r) => r.validators_active > 0).length;
+    const withConcentration = rows.filter((r) => r.stake_concentration > 0).length;
     console.log(
-      `Stake analytics: ${rows.length} subnets, ${metagraphData.size} metagraphs (slice ${sliceIndex + 1}/${totalSlices})`
+      `Stake analytics: ${rows.length} subnets, ${metagraphData.size} metagraphs (slice ${sliceIndex + 1}/${totalSlices}), ` +
+      `bulk: ${bulkSubnetData.size}, validators: ${withValidators}/${rows.length}, conc: ${withConcentration}/${rows.length}`
     );
+
     return new Response(
-      JSON.stringify({ ok: true, processed: rows.length, metagraphs: metagraphData.size }),
+      JSON.stringify({
+        ok: true,
+        processed: rows.length,
+        metagraphs: metagraphData.size,
+        bulkSubnets: bulkSubnetData.size,
+        withValidators,
+        withConcentration,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
