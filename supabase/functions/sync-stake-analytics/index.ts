@@ -343,26 +343,6 @@ Deno.serve(async (req) => {
       `bulk: ${bulkSubnetData.size}, validators: ${withValidators}/${rows.length}, conc: ${withConcentration}/${rows.length}`
     );
 
-    // Collect debug info about metagraph structure
-    const metaDebug: any[] = [];
-    for (const [nid, meta] of metagraphData) {
-      const isArr = Array.isArray(meta);
-      const hasDataProp = meta && typeof meta === "object" && "data" in meta;
-      const neurons = isArr ? meta : (Array.isArray(meta?.data) ? meta.data : null);
-      metaDebug.push({
-        netuid: nid,
-        isArray: isArr,
-        type: typeof meta,
-        topKeys: meta && !isArr ? Object.keys(meta).slice(0, 8) : [],
-        neuronCount: neurons?.length || 0,
-        hasDataProp,
-        sampleKeys: neurons?.[0] ? Object.keys(neurons[0]).slice(0, 10) : [],
-        sampleStake: neurons?.[0]?.stake,
-        sampleTotalStake: neurons?.[0]?.total_stake,
-        sampleColdkey: typeof neurons?.[0]?.coldkey,
-      });
-    }
-
     return new Response(
       JSON.stringify({
         ok: true,
@@ -371,7 +351,6 @@ Deno.serve(async (req) => {
         bulkSubnets: bulkSubnetData.size,
         withValidators,
         withConcentration,
-        metaDebug,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
