@@ -253,7 +253,7 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
               </TableCell>
               <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
               <TableCell className="text-right hidden sm:table-cell">
-                <Sparkline data={generateAdoptionSparkline(d)} />
+                <Sparkline data={d.sparklineAdoption.length >= 2 ? d.sparklineAdoption : generateAdoptionSparkline(d)} />
               </TableCell>
               <TableCell className="text-right">
                 <span className="font-mono text-xs font-bold" style={{ color: healthIndexColor(d.scores.healthIndex) }}>
