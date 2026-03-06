@@ -252,6 +252,9 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
                 {d.snapshot.minersActive}/{d.snapshot.minersTotal || "?"}
               </TableCell>
               <TableCell className="font-mono text-xs text-right">{(d.snapshot.uidUsage * 100).toFixed(0)}%</TableCell>
+              <TableCell className="text-right hidden sm:table-cell">
+                <Sparkline data={generateAdoptionSparkline(d)} />
+              </TableCell>
               <TableCell className="text-right">
                 <span className="font-mono text-xs font-bold" style={{ color: healthIndexColor(d.scores.healthIndex) }}>
                   {d.scores.healthIndex}
