@@ -124,7 +124,7 @@ export default function RadarPage() {
             📡 Radar Intelligence
           </h1>
           <p className="font-mono text-[11px] text-muted-foreground">
-            Détection des flux de capital et narratives émergentes · {radarData.length} subnets analysés
+            Détection des flux de capital et narratives émergentes · {search ? `${filtered.length}/` : ""}{radarData.length} subnets analysés
           </p>
         </div>
 
