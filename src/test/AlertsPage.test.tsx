@@ -10,6 +10,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       select: () => ({
         order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }),
         eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }),
+        gte: () => Promise.resolve({ count: 0, error: null }),
       }),
     }),
   },
@@ -88,29 +89,28 @@ describe("AlertsPage", () => {
 
   it("renders page title", () => {
     renderAlerts();
-    expect(screen.getByText("ALERTES")).toBeInTheDocument();
+    expect(screen.getByText("Risk & Alerts")).toBeInTheDocument();
   });
 
   it("shows empty state when no events", () => {
     renderAlerts([]);
-    expect(screen.getByText("Aucune alerte")).toBeInTheDocument();
+    expect(screen.getByText(/Aucune alerte/)).toBeInTheDocument();
   });
 
-  it("renders filter buttons", () => {
+  it("renders tab buttons", () => {
     renderAlerts();
-    expect(screen.getByText("Groupés")).toBeInTheDocument();
-    expect(screen.getByText("Tout")).toBeInTheDocument();
-    expect(screen.getByText("🎯 Stratégiques")).toBeInTheDocument();
-    expect(screen.getByText("⛔ Overrides")).toBeInTheDocument();
-    expect(screen.getByText("🐋 Whales")).toBeInTheDocument();
-    expect(screen.getByText("🔴 États")).toBeInTheDocument();
-    expect(screen.getByText("🧠 Smart")).toBeInTheDocument();
+    expect(screen.getByText("Toutes")).toBeInTheDocument();
+    expect(screen.getByText("Critiques")).toBeInTheDocument();
+    expect(screen.getByText("Warnings")).toBeInTheDocument();
+    expect(screen.getByText("Overrides")).toBeInTheDocument();
+    expect(screen.getByText("Portfolio")).toBeInTheDocument();
   });
 
-  it("renders essential/total counters", () => {
+  it("renders KPI chips", () => {
     renderAlerts([]);
-    expect(screen.getByText(/Essentiel/)).toBeInTheDocument();
-    expect(screen.getByText(/Total/)).toBeInTheDocument();
+    expect(screen.getByText("CRITIQUES")).toBeInTheDocument();
+    expect(screen.getByText("WARNINGS")).toBeInTheDocument();
+    expect(screen.getByText("OVERRIDES")).toBeInTheDocument();
   });
 
   it("renders events when data is available", () => {
@@ -134,60 +134,35 @@ describe("AlertsPage", () => {
     expect(screen.getByText(/WHALE/)).toBeInTheDocument();
   });
 
-  it("shows whale direction SORTIE for OUT", () => {
-    const events = [makeEvent(1, "WHALE_MOVE", 3, 2, { direction: "OUT", amount_tao: 1500 })];
-    renderAlerts(events);
-    expect(screen.getByText(/SORTIE/)).toBeInTheDocument();
-  });
-
-  it("clicking filter changes displayed events", () => {
+  it("clicking tab changes displayed events", () => {
     const events = [
       makeEvent(1, "WHALE_MOVE", 3, 2, { direction: "IN", amount_tao: 500 }),
       makeEvent(2, "BREAK", 5, 3),
     ];
     renderAlerts(events);
-    fireEvent.click(screen.getByText("🐋 Whales"));
-    // After whale filter, whale events visible or empty state shown
-    const whaleEls = screen.queryAllByText(/WHALE/);
+    fireEvent.click(screen.getByText("Critiques"));
+    // After critical filter, only critical events should show
+    const breakEls = screen.queryAllByText(/ZONE CRITIQUE/);
     const emptyEls = screen.queryAllByText(/Aucune alerte/);
-    expect(whaleEls.length + emptyEls.length).toBeGreaterThanOrEqual(1);
+    expect(breakEls.length + emptyEls.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("shows strict mode badge when overrides are filtered", () => {
+  it("renders view mode toggle", () => {
     renderAlerts([]);
-    expect(screen.queryByText(/Strict/)).toBeNull();
+    expect(screen.getByText("Flux")).toBeInTheDocument();
+    expect(screen.getByText("Par subnet")).toBeInTheDocument();
   });
 
-  it("shows noise toggle button", () => {
+  it("renders why-it-matters section", () => {
+    renderAlerts([]);
+    expect(screen.getByText(/Pourquoi c'est important/)).toBeInTheDocument();
+  });
+
+  it("shows dismissed count after dismissing", () => {
+    // Dismissed alerts are tracked in localStorage
+    const key = "alerts-dismissed";
+    localStorage.setItem(key, JSON.stringify({ "BREAK::5::2025": Date.now() }));
     renderAlerts([makeEvent(1, "BREAK", 5, 3)]);
-    expect(screen.getByText(/Afficher le bruit/)).toBeInTheDocument();
-  });
-
-  it("shows confidence filter button", () => {
-    renderAlerts([]);
-    expect(screen.getByText(/Confiance ≥ 70%/)).toBeInTheDocument();
-  });
-
-  it("clicking States filter shows delist watchlist", () => {
-    renderAlerts([]);
-    fireEvent.click(screen.getByText("🔴 États"));
-    expect(screen.getByText(/Aucun subnet en risque de delist/)).toBeInTheDocument();
-  });
-
-  it("renders compression stat when events are grouped", () => {
-    const events = [
-      makeEvent(1, "BREAK", 5, 3),
-      makeEvent(2, "BREAK", 5, 3),
-      makeEvent(3, "GO", 8, 1),
-    ];
-    renderAlerts(events);
-    const compressionBadges = screen.queryAllByText(/bruit/);
-    expect(compressionBadges.length).toBeGreaterThanOrEqual(0);
-  });
-
-  it("dismiss button exists on event rows", () => {
-    const events = [makeEvent(1, "BREAK", 5, 3)];
-    renderAlerts(events);
-    expect(screen.getByText(/Traité/)).toBeInTheDocument();
+    expect(screen.getByText(/alertes traitées/)).toBeInTheDocument();
   });
 });
