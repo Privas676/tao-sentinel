@@ -218,37 +218,38 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <div className="flex-1 flex flex-col h-full min-w-0 transition-all duration-300">
         {/* ─ TOPBAR ─ */}
         <header
-          className="h-12 flex items-center gap-3 px-4 flex-shrink-0 border-b"
+          className="h-11 flex items-center gap-3 px-4 flex-shrink-0 border-b"
           style={{
-            background: "hsla(0,0%,5%,0.95)",
-            borderColor: "hsl(var(--border))",
-            backdropFilter: "blur(12px)",
+            background: "hsla(0,0%,5%,0.97)",
+            borderColor: "hsla(0,0%,100%,0.04)",
+            backdropFilter: "blur(16px)",
           }}
         >
           {/* Sidebar toggle */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex items-center justify-center w-8 h-8 rounded-md transition-all hover:scale-105 active:scale-95"
+            className="flex items-center justify-center w-7 h-7 rounded-md transition-all hover:scale-105 active:scale-95"
             style={{
-              background: sidebarOpen ? "hsla(var(--gold), 0.08)" : "transparent",
+              background: sidebarOpen ? "hsla(var(--gold), 0.06)" : "transparent",
               color: sidebarOpen ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))",
             }}
           >
-            <span className="font-mono text-sm">{sidebarOpen ? "✕" : "☰"}</span>
+            <span className="font-mono text-xs">{sidebarOpen ? "✕" : "☰"}</span>
           </button>
 
           {/* Page title */}
           <h1
-            className="font-mono text-xs tracking-[0.15em] uppercase font-semibold truncate"
-            style={{ color: "hsl(var(--gold))", opacity: 0.85 }}
+            className="font-mono text-[11px] tracking-[0.18em] uppercase font-semibold truncate"
+            style={{ color: "hsl(var(--gold))", opacity: 0.75 }}
           >
             {pageTitle}
           </h1>
 
-          {/* Right side — contextual slot */}
+          {/* Right side */}
           <div className="ml-auto flex items-center gap-2">
             <span
-              className="font-mono text-[8px] tracking-wider text-muted-foreground hidden sm:inline"
+              className="font-mono text-[7px] tracking-[0.12em] text-muted-foreground hidden sm:inline"
+              style={{ opacity: 0.4 }}
             >
               v4.0
             </span>
