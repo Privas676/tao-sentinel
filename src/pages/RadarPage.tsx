@@ -455,6 +455,7 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
         </TableBody>
       </Table>
     </div>
+    </TooltipProvider>
   );
 }
 
