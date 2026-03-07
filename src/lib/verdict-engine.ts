@@ -312,11 +312,11 @@ function computeStructureStability(s: StakeSnapshot, d: StakeDeltas, extStabilit
   } else {
     score += 25; // neutral
   }
-  // Concentration: lower = more stable
-  if (s.stakeConcentration < 30) score += 20;
-  else if (s.stakeConcentration < 50) score += 14;
-  else if (s.stakeConcentration < 70) score += 6;
-  else score += 0;
+  // Concentration: lower = more stable (Bittensor-calibrated)
+  if (s.stakeConcentration < 80) score += 20;
+  else if (s.stakeConcentration < 92) score += 14;
+  else if (s.stakeConcentration < 98) score += 8;
+  else score += 3;
   // Miners stable or growing
   if (d.minersGrowth7d > 0) score += 15;
   else if (d.minersGrowth7d > -0.05) score += 10;
