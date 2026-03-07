@@ -435,13 +435,14 @@ function computeSellPressureScore(eco: EconomicContext, p: PriceContext): number
 }
 
 /* ── Concentration risk (0-100) ── */
+/* Bittensor subnets typically have 90-100% top-10 concentration; calibrated accordingly */
 function computeConcentrationRisk(s: StakeSnapshot): number {
   let score = 0;
-  // Stake concentration
-  if (s.stakeConcentration > 80) score += 45;
-  else if (s.stakeConcentration > 60) score += 32;
-  else if (s.stakeConcentration > 40) score += 18;
-  else if (s.stakeConcentration > 20) score += 8;
+  // Stake concentration — Bittensor-calibrated brackets
+  if (s.stakeConcentration > 98) score += 25;
+  else if (s.stakeConcentration > 95) score += 18;
+  else if (s.stakeConcentration > 85) score += 12;
+  else if (s.stakeConcentration > 70) score += 6;
   else score += 0;
   // Validator centralization
   if (s.validatorsActive <= 1) score += 30;
