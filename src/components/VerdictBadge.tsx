@@ -5,7 +5,7 @@
 /* ═══════════════════════════════════════ */
 
 import type { Verdict, ConfidenceLevel } from "@/lib/verdict-engine";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /* ── Colors ── */
 
