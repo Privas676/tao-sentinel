@@ -97,7 +97,9 @@ export function computeDerivedMetrics(eco: EconomicContext, p: PriceContext, s: 
     emissionEfficiency: p.marketCap > 0 ? eco.emissionsPerDay / p.marketCap : 0,
     poolBalance: eco.alphaPoolPercent > 0 ? eco.taoPoolPercent / eco.alphaPoolPercent : 0,
     tradingPressure: eco.buyVolume - eco.sellVolume,
-    burnRatio: eco.emissionsPerDay > 0 ? s.recyclePerDay / eco.emissionsPerDay : 0,
+    burnRatio: eco.emissionsPerDay > 0
+      ? Math.min(s.recyclePerDay / eco.emissionsPerDay, 10)  // cap at 1000% to filter aberrant data
+      : 0,
   };
 }
 

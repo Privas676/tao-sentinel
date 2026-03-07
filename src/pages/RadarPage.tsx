@@ -20,9 +20,10 @@ import Sparkline from "@/components/radar/Sparkline";
 import TreemapHeatmap from "@/components/radar/TreemapHeatmap";
 import AMMPricingTable from "@/components/radar/AMMPricingTable";
 
-/* ─── Burn Ratio formatter: always show value even if tiny ─── */
+/* ─── Burn Ratio formatter: capped values flagged ─── */
 function formatBurnRatio(ratio: number): string {
   if (ratio <= 0) return "—";
+  if (ratio >= 10) return "≥1000%⚠";
   const pct = ratio * 100;
   if (pct < 0.01) return "<0.01%";
   if (pct < 0.1) return `${pct.toFixed(2)}%`;
