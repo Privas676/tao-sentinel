@@ -137,8 +137,8 @@ export default function SubnetDetailPage() {
     );
   }
 
-  const conv = convictionLevel(s, verdict);
-  const urg = urgency(s, fr);
+  const decision = buildSubnetDecision(s, verdict, fr);
+  const urg = urgency(decision, fr);
   const eco = radar?.economicContext;
   const dm = radar?.derivedMetrics;
   const sn = radar?.snapshot;
