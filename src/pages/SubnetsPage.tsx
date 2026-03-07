@@ -498,9 +498,9 @@ export default function SubnetsPage() {
                   </tr>
                 ) : rows.map((r, idx) => {
                   const actionLabel = r.action === "ENTER" ? (fr ? "Entrer" : "Enter") : r.action === "EXIT" ? (fr ? "Sortir" : "Exit") : r.action === "HOLD" ? "Hold" : r.action === "STAKE" ? "Stake" : r.action;
-                  const convColor = r.convictionLevel === "HIGH" ? "hsl(145,65%,48%)" : r.convictionLevel === "MEDIUM" ? "hsl(38,92%,55%)" : "hsl(var(--muted-foreground))";
-                  const liqColor = r.liquidityLevel === "HIGH" ? "hsl(145,65%,48%)" : r.liquidityLevel === "MEDIUM" ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)";
-                  const structColor = r.structureLevel === "HEALTHY" ? "hsl(145,65%,48%)" : r.structureLevel === "FRAGILE" ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)";
+                  const convColor = r.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : r.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
+                  const liqColor = r.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : r.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
+                  const structColor = r.structureLevel === "HEALTHY" ? "hsl(var(--signal-go))" : r.structureLevel === "FRAGILE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
                   return (
                     <tr
                       key={r.netuid}
