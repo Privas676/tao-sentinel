@@ -150,7 +150,7 @@ describe("computeVerdict — Safety guards", () => {
 
   it("G5: blocks RENTRE on strong emissions but extreme concentration", () => {
     const input = makeInput({
-      snapshot: makeSnapshot({ stakeConcentration: 80 }),
+      snapshot: makeSnapshot({ stakeConcentration: 99 }),
       deltas: makeDeltas({ stakeChange7d: 0.25 }),
       economicContext: makeEco({ emissionsPercent: 3, sentiment: 0.7, emissionsPerDay: 600 }),
       priceContext: makePrice({ priceChange7d: 20, emissionShare: 3 }),
