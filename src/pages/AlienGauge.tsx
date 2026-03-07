@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { VerdictBadge, VerdictRow, verdictColor, verdictIcon } from "@/components/VerdictBadge";
 import { Link } from "react-router-dom";
