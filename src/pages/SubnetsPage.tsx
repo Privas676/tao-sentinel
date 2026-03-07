@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useColumnConfig, ColumnConfigPanel, type ColumnKey } from "@/components/ColumnConfig";
 import SwipeHint from "@/components/SwipeHint";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
@@ -150,6 +151,7 @@ function scColor(state: SmartCapitalState): string {
 }
 
 export default function SubnetsPage() {
+  const navigate = useNavigate();
   const { t, lang } = useI18n();
   const [mode, setMode] = useState<ViewMode>("all");
   const [healthPanel, setHealthPanel] = useState<null | any>(null);
@@ -440,7 +442,7 @@ export default function SubnetsPage() {
                     ...(isTop1 ? { background: "rgba(255,215,0,0.02)", borderLeft: "2px solid rgba(255,215,0,0.3)" } : {}),
                     ...(r.isOverridden ? { background: "rgba(229,57,53,0.03)", borderLeft: "2px solid rgba(229,57,53,0.4)" } : {}),
                   }}
-                  onClick={() => window.open(`https://taostats.io/subnets/${r.netuid}`, "_blank")}>
+                  onClick={() => navigate(`/subnets/${r.netuid}`)}>
                   <td className="py-3 px-2 text-white/55 text-sm sticky left-0 z-[5] bg-background">{r.netuid}</td>
                   <td className="py-3 px-2 text-sm sticky left-[40px] z-[5] bg-background" style={{ color: isTop1 ? "rgba(255,248,220,0.95)" : r.isOverridden ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.75)", fontWeight: isTop1 ? 700 : 400, boxShadow: "4px 0 8px -2px rgba(0,0,0,0.3)" }}>
                     <span>{r.name}</span>
