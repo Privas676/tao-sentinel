@@ -673,11 +673,11 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
   // ── Decision logic ──
   let verdict: Verdict;
 
-  if (exitRisk >= 50) {
+  if (exitRisk >= 55) {
     verdict = "SORS";
   } else if (entryScore >= 55 && exitRisk < 42) {
     verdict = "RENTRE";
-  } else if (holdScore >= 55 && exitRisk < 50) {
+  } else if (holdScore >= 50 && exitRisk < 55) {
     verdict = "HOLD";
   } else {
     // Conflict → prudent HOLD
