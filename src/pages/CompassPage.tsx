@@ -262,20 +262,20 @@ export default function CompassPage() {
   const rskGlobal = riskColor(globalRisk);
   const [panelSignal, setPanelSignal] = useState<DashSignal | null>(null);
 
-  // ── Drivers (computed from real data) ──
+  // ── Drivers (computed from real data — no overlap with hero metrics) ──
   const drivers = useMemo(() => {
     const avgMom = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + s.momentumScore, 0) / enrichedSignals.length) : 0;
     const avgLiqEff = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + (s.quality || 50), 0) / enrichedSignals.length) : 50;
-    const avgConc = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + (s.stability || 50), 0) / enrichedSignals.length) : 50;
     const sellPressure = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => s.action === "EXIT" || s.risk > 70).length / enrichedSignals.length * 100) : 0;
+    const entryRatio = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => s.action === "ENTER").length / enrichedSignals.length * 100) : 0;
     return [
-      { icon: "💰", label: fr ? "Capital Flow" : "Capital Flow", value: smartCapital.state === "ACCUMULATION" ? "In" : smartCapital.state === "DISTRIBUTION" ? "Out" : "—", num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? "hsl(145,65%,48%)" : smartCapital.state === "DISTRIBUTION" ? "hsl(4,80%,50%)" : "hsl(var(--muted-foreground))" },
-      { icon: "🧠", label: "Smart Money", value: scLabel, num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? "hsl(145,65%,48%)" : smartCapital.state === "DISTRIBUTION" ? "hsl(4,80%,50%)" : "hsl(var(--muted-foreground))" },
+      { icon: "💰", label: fr ? "Smart Capital" : "Smart Capital", value: smartCapital.state === "ACCUMULATION" ? "Accum." : smartCapital.state === "DISTRIBUTION" ? "Distrib." : "Stable", num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? "hsl(145,65%,48%)" : smartCapital.state === "DISTRIBUTION" ? "hsl(4,80%,50%)" : "hsl(var(--muted-foreground))" },
+      { icon: "📈", label: "Momentum", value: `${avgMom}`, num: avgMom, color: avgMom >= 55 ? "hsl(145,65%,48%)" : avgMom >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
       { icon: "💧", label: fr ? "Liquidité" : "Liquidity", value: `${avgLiqEff}%`, num: avgLiqEff, color: avgLiqEff >= 60 ? "hsl(145,65%,48%)" : avgLiqEff >= 40 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
-      { icon: "🔒", label: fr ? "Concentration" : "Validator Conc.", value: `${avgConc}%`, num: avgConc, color: avgConc >= 60 ? "hsl(145,65%,48%)" : avgConc >= 40 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
       { icon: "📉", label: fr ? "Pression vente" : "Sell Pressure", value: `${sellPressure}%`, num: sellPressure, color: sellPressure <= 15 ? "hsl(145,65%,48%)" : sellPressure <= 30 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
+      { icon: "🎯", label: fr ? "Taux entrée" : "Entry Rate", value: `${entryRatio}%`, num: entryRatio, color: entryRatio >= 10 ? "hsl(145,65%,48%)" : entryRatio >= 3 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
     ];
-  }, [enrichedSignals, smartCapital, fr, scLabel]);
+  }, [enrichedSignals, smartCapital, fr]);
 
   // ── Tactical summary ──
   const tacticalSummary = useMemo(() => {
