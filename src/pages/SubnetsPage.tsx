@@ -119,15 +119,15 @@ function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
 
           {/* Conviction & Momentum */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg px-3 py-2" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+            <div className="rounded-lg px-3 py-2 bg-muted/30 border border-border">
               <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase">CONVICTION</div>
-              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.convictionLevel === "HIGH" ? "hsl(145,65%,48%)" : row.convictionLevel === "MEDIUM" ? "hsl(38,92%,55%)" : "hsl(var(--muted-foreground))" }}>
+              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : row.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))" }}>
                 {row.convictionLevel}
               </div>
             </div>
-            <div className="rounded-lg px-3 py-2" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+            <div className="rounded-lg px-3 py-2 bg-muted/30 border border-border">
               <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase">MOMENTUM</div>
-              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.momentumScore >= 55 ? "hsl(145,65%,48%)" : row.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>
+              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.momentumScore >= 55 ? "hsl(var(--signal-go))" : row.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))" }}>
                 {Math.round(row.momentumScore)}
               </div>
             </div>
