@@ -18,6 +18,7 @@ import MethodologyPage from "./pages/MethodologyPage";
 import QuantDiagnosticsPage from "./pages/QuantDiagnosticsPage";
 import RadarPage from "./pages/RadarPage";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const queryClient = new QueryClient();
 
@@ -164,10 +165,12 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <I18nProvider>
-        <BrowserRouter>
-          <AppLayout />
-        </BrowserRouter>
-        <Toaster />
+        <TooltipProvider delayDuration={200}>
+          <BrowserRouter>
+            <AppLayout />
+          </BrowserRouter>
+          <Toaster />
+        </TooltipProvider>
       </I18nProvider>
     </AuthProvider>
   </QueryClientProvider>
