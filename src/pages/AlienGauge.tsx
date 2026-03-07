@@ -438,36 +438,6 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
     { title: "🟡 HOLD", items: topHold, count: countHold, color: "rgba(255,193,7,0.35)" },
     { title: "🔴 SORS", items: topSors, count: countSors, color: "rgba(229,57,53,0.4)" },
   ];
-
-  /* ── Macro drivers ── */
-  const drivers = useMemo(() => {
-    const list: { icon: string; label: string; value: string; color: string }[] = [];
-
-    // Regime
-    const regime = sentinelIndex >= 70 ? "Favorable" : sentinelIndex >= 45 ? "Neutre" : "Défavorable";
-    const regimeColor = sentinelIndex >= 70 ? "rgba(76,175,80,0.85)" : sentinelIndex >= 45 ? "rgba(255,193,7,0.85)" : "rgba(229,57,53,0.85)";
-    list.push({ icon: "📊", label: "Régime", value: `${regime} (${sentinelIndex})`, color: regimeColor });
-
-    // Smart Capital
-    const scColor = smartCapitalState === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapitalState === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "rgba(255,248,220,0.5)";
-    list.push({ icon: "🧠", label: "Smart Capital", value: smartCapitalState, color: scColor });
-
-    // Stability
-    const stabColor = globalStability >= 65 ? "rgba(76,175,80,0.85)" : globalStability >= 40 ? "rgba(255,193,7,0.85)" : "rgba(229,57,53,0.85)";
-    list.push({ icon: "⚖", label: "Stabilité", value: `${globalStability}%`, color: stabColor });
-
-    // Data confidence
-    const confColor = confianceScore >= 70 ? "rgba(76,175,80,0.85)" : confianceScore >= 45 ? "rgba(255,193,7,0.85)" : "rgba(229,57,53,0.85)";
-    list.push({ icon: "📡", label: "Data", value: `${confianceScore}%`, color: confColor });
-
-    // Momentum global
-    const avgMom = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + s.momentumScore, 0) / enrichedSignals.length) : 0;
-    const momColor = avgMom >= 60 ? "rgba(76,175,80,0.85)" : avgMom >= 35 ? "rgba(255,193,7,0.85)" : "rgba(229,57,53,0.85)";
-    list.push({ icon: "📈", label: "Momentum", value: `${avgMom}`, color: momColor });
-
-    return list;
-  }, [sentinelIndex, smartCapitalState, globalStability, confianceScore, enrichedSignals]);
-
   return (
     <div className="mt-6 space-y-5">
       {/* ═══ MACRO DRIVERS ═══ */}
