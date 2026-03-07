@@ -4,7 +4,7 @@ import { ammEfficiencyColor, slippageColor } from "@/lib/stake-analytics";
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/table";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 function formatTao(v: number): string {
   if (v >= 1e6) return `${(v / 1e6).toFixed(1)}Mτ`;
@@ -47,37 +47,29 @@ export default function AMMPricingTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Pool Bal.</span></TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{POOL_BALANCE_TOOLTIP}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Pool Bal.</span></TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{POOL_BALANCE_TOOLTIP}</TooltipContent>
+              </Tooltip>
             </TableHead>
             <TableHead className="font-mono text-[10px] text-right">Depth τ</TableHead>
             <TableHead className="font-mono text-[10px] text-right">
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Slip. 1τ</span></TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{SLIPPAGE_TOOLTIP}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Slip. 1τ</span></TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{SLIPPAGE_TOOLTIP}</TooltipContent>
+              </Tooltip>
             </TableHead>
             <TableHead className="font-mono text-[10px] text-right">
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Slip. 10τ</span></TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{SLIPPAGE_TOOLTIP}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Slip. 10τ</span></TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{SLIPPAGE_TOOLTIP}</TooltipContent>
+              </Tooltip>
             </TableHead>
             <TableHead className="font-mono text-[10px] text-right">
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Spread</span></TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{SPREAD_TOOLTIP}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Spread</span></TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{SPREAD_TOOLTIP}</TooltipContent>
+              </Tooltip>
             </TableHead>
             <TableHead className="font-mono text-[10px] text-right">AMM Score</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>

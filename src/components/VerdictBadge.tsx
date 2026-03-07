@@ -5,7 +5,7 @@
 /* ═══════════════════════════════════════ */
 
 import type { Verdict, ConfidenceLevel } from "@/lib/verdict-engine";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /* ── Colors ── */
 
@@ -88,56 +88,54 @@ export function VerdictBadgeWithTooltip({ verdict, confidence, positiveReasons, 
   size?: "sm" | "md";
 }) {
   return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="cursor-help">
-            <VerdictBadge verdict={verdict} confidence={confidence} size={size} />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="font-mono text-[10px] max-w-[280px]">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 font-bold text-[11px]" style={{ color: verdictColor(verdict) }}>
-              {verdictIcon(verdict)} {verdict} — confiance {confidence}
-            </div>
-
-            {/* Sub-scores */}
-            <div className="grid grid-cols-3 gap-2 py-1 border-y border-white/10">
-              <div className="text-center">
-                <div className="text-[8px] text-white/30 tracking-widest">ENTRY</div>
-                <div className="font-bold" style={{ color: entryScore >= 70 ? "rgba(76,175,80,0.9)" : entryScore >= 50 ? "rgba(255,193,7,0.8)" : "rgba(255,255,255,0.4)" }}>{entryScore}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-[8px] text-white/30 tracking-widest">HOLD</div>
-                <div className="font-bold" style={{ color: holdScore >= 60 ? "rgba(76,175,80,0.9)" : holdScore >= 40 ? "rgba(255,193,7,0.8)" : "rgba(255,255,255,0.4)" }}>{holdScore}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-[8px] text-white/30 tracking-widest">EXIT RISK</div>
-                <div className="font-bold" style={{ color: exitRisk >= 60 ? "rgba(229,57,53,0.9)" : exitRisk >= 40 ? "rgba(255,193,7,0.8)" : "rgba(76,175,80,0.7)" }}>{exitRisk}</div>
-              </div>
-            </div>
-
-            {/* Positive reasons */}
-            {positiveReasons.length > 0 && (
-              <div>
-                {positiveReasons.map((r, i) => (
-                  <div key={i} className="text-[9px]" style={{ color: "rgba(76,175,80,0.8)" }}>✓ {r}</div>
-                ))}
-              </div>
-            )}
-
-            {/* Negative reasons */}
-            {negativeReasons.length > 0 && (
-              <div>
-                {negativeReasons.map((r, i) => (
-                  <div key={i} className="text-[9px]" style={{ color: "rgba(229,57,53,0.8)" }}>✗ {r}</div>
-                ))}
-              </div>
-            )}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-help">
+          <VerdictBadge verdict={verdict} confidence={confidence} size={size} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="font-mono text-[10px] max-w-[280px]">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 font-bold text-[11px]" style={{ color: verdictColor(verdict) }}>
+            {verdictIcon(verdict)} {verdict} — confiance {confidence}
           </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+
+          {/* Sub-scores */}
+          <div className="grid grid-cols-3 gap-2 py-1 border-y border-white/10">
+            <div className="text-center">
+              <div className="text-[8px] text-white/30 tracking-widest">ENTRY</div>
+              <div className="font-bold" style={{ color: entryScore >= 70 ? "rgba(76,175,80,0.9)" : entryScore >= 50 ? "rgba(255,193,7,0.8)" : "rgba(255,255,255,0.4)" }}>{entryScore}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[8px] text-white/30 tracking-widest">HOLD</div>
+              <div className="font-bold" style={{ color: holdScore >= 60 ? "rgba(76,175,80,0.9)" : holdScore >= 40 ? "rgba(255,193,7,0.8)" : "rgba(255,255,255,0.4)" }}>{holdScore}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[8px] text-white/30 tracking-widest">EXIT RISK</div>
+              <div className="font-bold" style={{ color: exitRisk >= 60 ? "rgba(229,57,53,0.9)" : exitRisk >= 40 ? "rgba(255,193,7,0.8)" : "rgba(76,175,80,0.7)" }}>{exitRisk}</div>
+            </div>
+          </div>
+
+          {/* Positive reasons */}
+          {positiveReasons.length > 0 && (
+            <div>
+              {positiveReasons.map((r, i) => (
+                <div key={i} className="text-[9px]" style={{ color: "rgba(76,175,80,0.8)" }}>✓ {r}</div>
+              ))}
+            </div>
+          )}
+
+          {/* Negative reasons */}
+          {negativeReasons.length > 0 && (
+            <div>
+              {negativeReasons.map((r, i) => (
+                <div key={i} className="text-[9px]" style={{ color: "rgba(229,57,53,0.8)" }}>✗ {r}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

@@ -30,7 +30,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
 import { evaluateKillSwitch, type KillSwitchResult } from "@/lib/push-kill-switch";
 import { useAuditLogger } from "@/hooks/use-audit-log";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /* ═══════════════════════════════════════ */
 /*     TAO PRICE TICKER (compact)          */
@@ -45,31 +45,29 @@ function TaoPriceTicker({ taoUsd, scoreTimestamp }: { taoUsd: number | null; sco
   const ageLabel = ageMin < 1 ? "< 1 min" : `${ageMin} min`;
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            className="inline-flex items-center gap-1.5 font-mono cursor-help px-2 py-0.5 rounded"
-            style={{
-              fontSize: 10,
-              background: "rgba(255,215,0,0.04)",
-              border: "1px solid rgba(255,215,0,0.1)",
-              color: taoUsd ? "rgba(255,248,220,0.75)" : "rgba(255,255,255,0.3)",
-            }}
-          >
-            <span style={{ fontSize: 7 }}>{dot}</span>
-            <span style={{ fontWeight: 600 }}>TAO</span>
-            <span>{taoUsd ? `$${taoUsd.toFixed(2)}` : "—"}</span>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="font-mono text-[10px]">
-          <p>Dernière MAJ : {new Date(scoreTimestamp).toLocaleTimeString()}</p>
-          <p>Fraîcheur : il y a {ageLabel}</p>
-          <p>Source : signals_latest</p>
-          {!taoUsd && <p style={{ color: "rgba(229,57,53,0.8)" }}>⚠ Données indisponibles</p>}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="inline-flex items-center gap-1.5 font-mono cursor-help px-2 py-0.5 rounded"
+          style={{
+            fontSize: 10,
+            background: "rgba(255,215,0,0.04)",
+            border: "1px solid rgba(255,215,0,0.1)",
+            color: taoUsd ? "rgba(255,248,220,0.75)" : "rgba(255,255,255,0.3)",
+          }}
+        >
+          <span style={{ fontSize: 7 }}>{dot}</span>
+          <span style={{ fontWeight: 600 }}>TAO</span>
+          <span>{taoUsd ? `$${taoUsd.toFixed(2)}` : "—"}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="font-mono text-[10px]">
+        <p>Dernière MAJ : {new Date(scoreTimestamp).toLocaleTimeString()}</p>
+        <p>Fraîcheur : il y a {ageLabel}</p>
+        <p>Source : signals_latest</p>
+        {!taoUsd && <p style={{ color: "rgba(229,57,53,0.8)" }}>⚠ Données indisponibles</p>}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
