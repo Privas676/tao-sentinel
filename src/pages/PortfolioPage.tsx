@@ -48,7 +48,7 @@ function KPIChip({ label, value, color, sub }: { label: string; value: string | 
 function Metric({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
     <div className="flex justify-between items-center py-[5px]">
-      <span className="text-muted-foreground/55 text-[11px]">{label}</span>
+      <span className="text-muted-foreground text-[11px]">{label}</span>
       <span className="font-mono text-[12px] font-medium" style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
     </div>
   );
