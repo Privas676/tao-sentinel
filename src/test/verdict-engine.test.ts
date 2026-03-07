@@ -111,7 +111,7 @@ describe("computeVerdict — HOLD", () => {
 describe("computeVerdict — SORS", () => {
   it("returns SORS for high exit risk", () => {
     const input = makeInput({
-      snapshot: makeSnapshot({ validatorsActive: 1, minersActive: 3, stakeConcentration: 85 }),
+      snapshot: makeSnapshot({ validatorsActive: 1, minersActive: 3, stakeConcentration: 99 }),
       deltas: makeDeltas({ stakeChange7d: -0.25, minersGrowth7d: -0.20 }),
       economicContext: makeEco({ sentiment: 0.25, sellVolume: 80, buyVolume: 20, sellersCount: 30, buyersCount: 5 }),
       priceContext: makePrice({ priceChange7d: -30, priceChange1d: -12, liquidity: 5, vol24h: 2 }),
@@ -119,7 +119,7 @@ describe("computeVerdict — SORS", () => {
     });
     const result = computeVerdict(input);
     expect(result.verdict).toBe("SORS");
-    expect(result.exitRisk).toBeGreaterThanOrEqual(50);
+    expect(result.exitRisk).toBeGreaterThanOrEqual(55);
   });
 });
 
