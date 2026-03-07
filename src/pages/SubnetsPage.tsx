@@ -142,7 +142,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
           {/* Sparkline */}
           {row.spark.length > 0 && (
             <div className="rounded-lg px-3 py-2 bg-muted/20 border border-border flex items-center gap-3">
-              <span className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase">7D</span>
+              <span className="font-mono text-[7px] text-muted-foreground tracking-widest uppercase">7D</span>
               <SparklineMini data={row.spark} width={120} height={24} />
             </div>
           )}
