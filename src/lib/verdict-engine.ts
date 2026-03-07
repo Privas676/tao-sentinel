@@ -1,23 +1,36 @@
-/* ═══════════════════════════════════════ */
-/*   VERDICT ENGINE v2                       */
-/*   RENTRE / HOLD / SORS                    */
-/*   Based on 3 sub-scores:                  */
-/*   - ENTRY_SCORE (rotation quality)        */
-/*   - HOLD_SCORE  (conservation quality)    */
-/*   - EXIT_RISK   (danger probability)      */
-/* ═══════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════ */
+/*   VERDICT ENGINE v3 — FROM SCRATCH                         */
+/*   4 PILLARS: Momentum, AMM, Risk, Data Quality             */
+/*   RENTRE / HOLD / SORS with auditable rules                */
+/*   Every rule is explicit, traceable, and visible in UI      */
+/* ═══════════════════════════════════════════════════════════ */
 
 import { clamp } from "./gauge-types";
-import type { StakeSnapshot, StakeDeltas, PriceContext, EconomicContext, DerivedMetrics, RadarScores } from "./stake-analytics";
+import type {
+  StakeSnapshot, StakeDeltas, PriceContext,
+  EconomicContext, DerivedMetrics, AMMMetrics,
+} from "./stake-analytics";
+import { computeAMMMetrics } from "./stake-analytics";
 
-/* ── Types ── */
+/* ══════════════════════════════════════ */
+/*  TYPES                                  */
+/* ══════════════════════════════════════ */
 
 export type Verdict = "RENTRE" | "HOLD" | "SORS";
 export type ConfidenceLevel = "forte" | "moyenne" | "faible";
+export type DataReliability = "stable" | "partial" | "suspect" | "stale";
 
 export type VerdictReason = {
   label: string;
   positive: boolean;
+  pillar: "momentum" | "amm" | "risk" | "data";
+};
+
+export type PillarScore = {
+  score: number;      // 0-100
+  weight: number;     // 0-1
+  label: string;
+  components: { name: string; value: number; max: number }[];
 };
 
 export type VerdictResult = {
@@ -29,639 +42,462 @@ export type VerdictResult = {
   exitRisk: number;      // 0-100
   positiveReasons: string[];  // max 3
   negativeReasons: string[];  // max 3
-  /** Full scored reason list for detailed views */
   allReasons: VerdictReason[];
+  /** v3: per-pillar breakdown for full auditability */
+  pillars: {
+    momentum: PillarScore;
+    amm: PillarScore;
+    risk: PillarScore;
+    dataQuality: PillarScore;
+  };
+  /** v3: data reliability status */
+  dataReliability: DataReliability;
 };
 
-/* ── Input from combined data sources ── */
+/* ══════════════════════════════════════ */
+/*  INPUT                                  */
+/* ══════════════════════════════════════ */
 
 export type VerdictInput = {
   netuid: number;
-  // From stake-analytics
   snapshot: StakeSnapshot;
   deltas: StakeDeltas;
   priceContext: PriceContext;
   economicContext: EconomicContext;
   derivedMetrics: DerivedMetrics;
-  radarScores: RadarScores;
-  // From unified scores (optional enrichment)
-  momentum?: number;         // 0-100
-  stability?: number;        // 0-100
+  // Optional enrichment from unified scores
+  radarScores?: any;         // kept for backward compat, NOT used in v3 verdict
+  momentum?: number;
+  stability?: number;
   dataConfidence?: number;   // 0-100
   isWhitelisted?: boolean;
-  // From old engine (cross-check)
-  oldEngineRisk?: number;    // 0-100 from useSubnetScores
-  isOverridden?: boolean;    // from protection engine
-  systemStatus?: string;     // "DEPEG" | "SURVEILLANCE" | etc.
+  oldEngineRisk?: number;
+  isOverridden?: boolean;
+  systemStatus?: string;
 };
 
-/* ── Helpers ── */
+/* ══════════════════════════════════════════════════════════ */
+/*  PILLAR A — MOMENTUM / FLUX (weight: 0.30)                */
+/*  What it measures: capital flow direction & price trend     */
+/*  Sources: price changes, stake flow, buy/sell ratio         */
+/* ══════════════════════════════════════════════════════════ */
 
-/** Treat stakeConcentration=0 as "unknown" with a moderate default */
-function effectiveConcentration(s: StakeSnapshot): number {
-  return s.stakeConcentration <= 0 ? 80 : s.stakeConcentration;
-}
+function computeMomentumPillar(
+  d: StakeDeltas, p: PriceContext, eco: EconomicContext,
+): PillarScore {
+  const components: PillarScore["components"] = [];
 
-/* ═══════════════════════════════════════ */
-/*  COMPONENT SCORES                        */
-/* ═══════════════════════════════════════ */
+  // A1. Price trend 7d (0-25)
+  let priceTrend = 0;
+  if (p.priceChange7d > 15) priceTrend = 25;
+  else if (p.priceChange7d > 5) priceTrend = 20;
+  else if (p.priceChange7d > 0) priceTrend = 14;
+  else if (p.priceChange7d > -5) priceTrend = 8;
+  else if (p.priceChange7d > -15) priceTrend = 3;
+  else priceTrend = 0;
+  components.push({ name: "Prix 7j", value: priceTrend, max: 25 });
 
-/* ── A. Capital Rotation Score (0-100) ── */
-function computeCapitalRotationScore(
-  d: StakeDeltas, s: StakeSnapshot, p: PriceContext, eco: EconomicContext, dm: DerivedMetrics,
-): number {
-  let score = 0;
+  // A2. Price trend 1d (short-term confirmation) (0-15)
+  let priceShort = 0;
+  if (p.priceChange1d > 5) priceShort = 15;
+  else if (p.priceChange1d > 1) priceShort = 12;
+  else if (p.priceChange1d > -2) priceShort = 8;
+  else if (p.priceChange1d > -5) priceShort = 3;
+  else priceShort = 0;
+  components.push({ name: "Prix 1j", value: priceShort, max: 15 });
 
-  // Stake flow 7d (strongest signal)
-  if (d.stakeChange7d > 0.15) score += 30;
-  else if (d.stakeChange7d > 0.05) score += 22;
-  else if (d.stakeChange7d > 0.01) score += 12;
-  else if (d.stakeChange7d > -0.02) score += 5;
-  else if (d.stakeChange7d > -0.10) score += 0;
-  else score -= 5;
+  // A3. Stake flow 7d (strongest signal) (0-30)
+  let stakeFlow = 0;
+  if (d.stakeChange7d > 0.15) stakeFlow = 30;
+  else if (d.stakeChange7d > 0.05) stakeFlow = 24;
+  else if (d.stakeChange7d > 0.01) stakeFlow = 16;
+  else if (d.stakeChange7d > -0.02) stakeFlow = 8;
+  else if (d.stakeChange7d > -0.10) stakeFlow = 2;
+  else stakeFlow = 0;
+  components.push({ name: "Stake flow 7j", value: stakeFlow, max: 30 });
 
-  // Buy/sell ratio (sentiment)
-  if (eco.sentiment > 0.65) score += 25;
-  else if (eco.sentiment > 0.55) score += 18;
-  else if (eco.sentiment > 0.48) score += 10;
-  else if (eco.sentiment > 0.40) score += 3;
-  else score += 0;
+  // A4. Buy/Sell ratio (observed sentiment) (0-20)
+  let buySell = 0;
+  if (eco.sentiment > 0.65) buySell = 20;
+  else if (eco.sentiment > 0.55) buySell = 16;
+  else if (eco.sentiment > 0.48) buySell = 10;
+  else if (eco.sentiment > 0.40) buySell = 5;
+  else buySell = 0;
+  components.push({ name: "Buy/Sell", value: buySell, max: 20 });
 
-  // Net whale flow
-  const netFlow = s.largeWalletInflow - s.largeWalletOutflow;
-  if (netFlow > 50) score += 20;
-  else if (netFlow > 10) score += 14;
-  else if (netFlow > 0) score += 7;
-  else if (netFlow > -20) score += 2;
-  else score += 0;
-
-  // Momentum (price trend alignment)
-  if (p.priceChange7d > 15) score += 15;
-  else if (p.priceChange7d > 5) score += 12;
-  else if (p.priceChange7d > 0) score += 7;
-  else if (p.priceChange7d > -5) score += 3;
-  else score += 0;
-
-  // Emission share growth proxy
-  if (p.emissionShare > 3) score += 10;
-  else if (p.emissionShare > 1) score += 7;
-  else if (p.emissionShare > 0.3) score += 3;
-  else score += 0;
-
-  return clamp(Math.round(score), 0, 100);
-}
-
-/* ── B. Emissions Score (0-100) ── */
-function computeEmissionsScore(eco: EconomicContext, p: PriceContext): number {
-  let score = 0;
-
-  // Emissions % of network
-  if (eco.emissionsPercent > 4) score += 35;
-  else if (eco.emissionsPercent > 2) score += 28;
-  else if (eco.emissionsPercent > 1) score += 20;
-  else if (eco.emissionsPercent > 0.3) score += 12;
-  else score += 4;
-
-  // Emissions per day (absolute strength)
-  if (eco.emissionsPerDay > 500) score += 25;
-  else if (eco.emissionsPerDay > 100) score += 20;
-  else if (eco.emissionsPerDay > 30) score += 14;
-  else if (eco.emissionsPerDay > 5) score += 8;
-  else score += 2;
-
-  // Emission efficiency (emissions/mcap)
-  const eff = p.marketCap > 0 ? eco.emissionsPerDay / p.marketCap : 0;
-  if (eff > 0.005) score += 20;
-  else if (eff > 0.001) score += 15;
-  else if (eff > 0.0005) score += 10;
-  else if (eff > 0.0001) score += 5;
-  else score += 0;
-
-  // Reward distribution health
-  const hasDistribution = eco.minerPerDay > 0 && eco.validatorPerDay > 0;
-  if (hasDistribution) score += 10;
-  else score += 2;
-
-  // Volume/MCap ratio (liquidity supports emissions)
-  if (eco.volumeMarketcapRatio > 0.05) score += 10;
-  else if (eco.volumeMarketcapRatio > 0.01) score += 7;
-  else if (eco.volumeMarketcapRatio > 0.003) score += 4;
-  else score += 0;
-
-  return clamp(Math.round(score), 0, 100);
-}
-
-/* ── C. Market Structure Score (0-100) ── */
-function computeMarketStructureScore(p: PriceContext, eco: EconomicContext, dm: DerivedMetrics): number {
-  let score = 0;
-
-  // Volume/MCap (tradability)
+  // A5. Volume activity (0-10)
+  let volActivity = 0;
   const volMcap = eco.volumeMarketcapRatio;
-  if (volMcap > 0.08) score += 30;
-  else if (volMcap > 0.03) score += 24;
-  else if (volMcap > 0.01) score += 18;
-  else if (volMcap > 0.003) score += 10;
-  else score += 2;
+  if (volMcap > 0.05) volActivity = 10;
+  else if (volMcap > 0.01) volActivity = 7;
+  else if (volMcap > 0.003) volActivity = 4;
+  else volActivity = 0;
+  components.push({ name: "Volume/MCap", value: volActivity, max: 10 });
 
-  // Pool balance (AMM health)
-  if (dm.poolBalance > 0.7 && dm.poolBalance < 1.5) score += 25;
-  else if (dm.poolBalance > 0.4 && dm.poolBalance < 2.5) score += 18;
-  else if (dm.poolBalance > 0.2) score += 10;
-  else score += 2;
+  const score = clamp(priceTrend + priceShort + stakeFlow + buySell + volActivity, 0, 100);
 
-  // Liquidity depth
-  if (p.liquidity > 1000) score += 20;
-  else if (p.liquidity > 200) score += 15;
-  else if (p.liquidity > 50) score += 10;
-  else if (p.liquidity > 10) score += 5;
-  else score += 0;
-
-  // Market cap (size = stability)
-  if (p.marketCap > 5000) score += 15;
-  else if (p.marketCap > 1000) score += 12;
-  else if (p.marketCap > 200) score += 8;
-  else if (p.marketCap > 50) score += 4;
-  else score += 0;
-
-  // Price stability (not crashing)
-  if (p.priceChange1d > -3) score += 10;
-  else if (p.priceChange1d > -8) score += 5;
-  else score += 0;
-
-  return clamp(Math.round(score), 0, 100);
+  return { score, weight: 0.30, label: "Momentum / Flux", components };
 }
 
-/* ── D. Adoption Quality Score (0-100) ── */
-function computeAdoptionQualityScore(s: StakeSnapshot, d: StakeDeltas, dm: DerivedMetrics): number {
-  let score = 0;
+/* ══════════════════════════════════════════════════════════ */
+/*  PILLAR B — AMM / EXÉCUTION (weight: 0.25)                */
+/*  What it measures: can you actually trade this?             */
+/*  Sources: pool depth, slippage, spread, pool balance        */
+/* ══════════════════════════════════════════════════════════ */
 
-  // Validator count
-  if (s.validatorsActive >= 20) score += 25;
-  else if (s.validatorsActive >= 10) score += 20;
-  else if (s.validatorsActive >= 5) score += 12;
-  else if (s.validatorsActive >= 2) score += 5;
-  else score += 0;
+function computeAMMPillar(
+  eco: EconomicContext, p: PriceContext, dm: DerivedMetrics,
+): PillarScore {
+  const components: PillarScore["components"] = [];
+  const amm = computeAMMMetrics(eco);
 
-  // Miners count (real network usage)
-  if (s.minersActive >= 100) score += 25;
-  else if (s.minersActive >= 50) score += 20;
-  else if (s.minersActive >= 20) score += 14;
-  else if (s.minersActive >= 5) score += 7;
-  else score += 0;
+  // B1. Pool depth (0-30) — log-scaled
+  let depth = 0;
+  if (amm.poolDepth > 100_000) depth = 30;
+  else if (amm.poolDepth > 10_000) depth = 25;
+  else if (amm.poolDepth > 1_000) depth = 18;
+  else if (amm.poolDepth > 100) depth = 12;
+  else if (amm.poolDepth > 10) depth = 5;
+  else depth = 0;
+  components.push({ name: "Profondeur pool", value: depth, max: 30 });
 
-  // UID saturation (utilization)
-  const sat = dm.uidSaturation;
-  if (sat > 0.8 && d.minersGrowth7d > 0) score += 15; // full + growing = strong
-  else if (sat > 0.6) score += 12;
-  else if (sat > 0.3) score += 8;
-  else score += 2;
+  // B2. Slippage 1τ (0-25) — lower is better
+  let slip1 = 0;
+  if (amm.slippageBps1Tao <= 0 && eco.taoInPool > 0) slip1 = 25;
+  else if (amm.slippageBps1Tao <= 2) slip1 = 22;
+  else if (amm.slippageBps1Tao <= 5) slip1 = 18;
+  else if (amm.slippageBps1Tao <= 10) slip1 = 14;
+  else if (amm.slippageBps1Tao <= 30) slip1 = 8;
+  else if (amm.slippageBps1Tao <= 100) slip1 = 3;
+  else slip1 = 0;
+  components.push({ name: "Slippage 1τ", value: slip1, max: 25 });
 
-  // Miners growth (dynamic)
-  if (d.minersGrowth7d > 0.10) score += 15;
-  else if (d.minersGrowth7d > 0.02) score += 10;
-  else if (d.minersGrowth7d > -0.02) score += 5;
-  else score += 0;
+  // B3. Spread bid/ask (0-20) — lower is better
+  let spread = 0;
+  if (amm.spreadBps <= 1) spread = 20;
+  else if (amm.spreadBps <= 3) spread = 16;
+  else if (amm.spreadBps <= 10) spread = 12;
+  else if (amm.spreadBps <= 30) spread = 6;
+  else if (amm.spreadBps <= 100) spread = 2;
+  else spread = 0;
+  components.push({ name: "Spread", value: spread, max: 20 });
 
-  // Validators growth
-  if (d.validatorsGrowth7d > 0.05) score += 10;
-  else if (d.validatorsGrowth7d > 0) score += 7;
-  else if (d.validatorsGrowth7d >= -0.05) score += 3;
-  else score += 0;
+  // B4. Pool balance — closer to 1.0 = healthier (0-15)
+  let balance = 0;
+  if (dm.poolBalance > 0.7 && dm.poolBalance < 1.5) balance = 15;
+  else if (dm.poolBalance > 0.4 && dm.poolBalance < 2.5) balance = 10;
+  else if (dm.poolBalance > 0.2 && dm.poolBalance < 5) balance = 5;
+  else balance = 0;
+  components.push({ name: "Pool balance", value: balance, max: 15 });
 
-  // Concentration penalty — Bittensor-calibrated (90%+ is normal)
-  if (s.stakeConcentration > 98) score -= 8;
-  else if (s.stakeConcentration > 95) score -= 4;
+  // B5. Market cap (tradable size) (0-10)
+  let mcap = 0;
+  if (p.marketCap > 5000) mcap = 10;
+  else if (p.marketCap > 1000) mcap = 8;
+  else if (p.marketCap > 200) mcap = 5;
+  else if (p.marketCap > 50) mcap = 2;
+  else mcap = 0;
+  components.push({ name: "Market cap", value: mcap, max: 10 });
 
-  return clamp(Math.round(score), 0, 100);
+  const score = clamp(depth + slip1 + spread + balance + mcap, 0, 100);
+
+  return { score, weight: 0.25, label: "AMM / Exécution", components };
 }
 
-/* ── E. Narrative Confirmation Score (0-100) ── */
-function computeNarrativeConfirmation(radarScores: RadarScores): number {
-  // Weak signal: based on existing narrative + smart money scores
-  const raw = radarScores.narrativeScore * 0.5 + radarScores.smartMoneyScore * 0.5;
-  return clamp(Math.round(raw), 0, 100);
-}
+/* ══════════════════════════════════════════════════════════ */
+/*  PILLAR C — RISK / STRUCTURE (weight: 0.30)                */
+/*  What it measures: structural fragility & danger signals    */
+/*  INVERTED: higher = MORE risk → we compute riskScore,       */
+/*  then contribution = 100 - riskScore for the entry side     */
+/* ══════════════════════════════════════════════════════════ */
 
-/* ═══════════════════════════════════════ */
-/*  ENTRY_SCORE                              */
-/* ═══════════════════════════════════════ */
+function computeRiskPillar(
+  s: StakeSnapshot, d: StakeDeltas, p: PriceContext,
+  eco: EconomicContext, dm: DerivedMetrics,
+): PillarScore {
+  const components: PillarScore["components"] = [];
 
-export function computeEntryScore(input: VerdictInput): number {
-  const { snapshot: s, deltas: d, priceContext: p, economicContext: eco, derivedMetrics: dm, radarScores } = input;
-
-  const capitalRotation = computeCapitalRotationScore(d, s, p, eco, dm);
-  const emissions = computeEmissionsScore(eco, p);
-  const marketStructure = computeMarketStructureScore(p, eco, dm);
-  const adoption = computeAdoptionQualityScore(s, d, dm);
-  const narrative = computeNarrativeConfirmation(radarScores);
-
-  return clamp(Math.round(
-    0.35 * capitalRotation +
-    0.25 * emissions +
-    0.20 * marketStructure +
-    0.15 * adoption +
-    0.05 * narrative
-  ), 0, 100);
-}
-
-/* ═══════════════════════════════════════ */
-/*  HOLD_SCORE                               */
-/* ═══════════════════════════════════════ */
-
-/* ── Momentum persistence (0-100) ── */
-function computeMomentumPersistence(p: PriceContext, d: StakeDeltas, extMomentum?: number): number {
-  let score = 0;
-  // External momentum if available
-  if (extMomentum != null) {
-    score += clamp(extMomentum * 0.4, 0, 40);
-  } else {
-    // Price momentum proxy
-    if (p.priceChange7d > 10) score += 30;
-    else if (p.priceChange7d > 3) score += 22;
-    else if (p.priceChange7d > -2) score += 12;
-    else score += 0;
-  }
-  // Stake persistence
-  if (d.stakeChange7d > 0.05) score += 25;
-  else if (d.stakeChange7d > 0) score += 18;
-  else if (d.stakeChange7d > -0.05) score += 8;
-  else score += 0;
-  // 1d trend (short-term confirm)
-  if (p.priceChange1d > 2) score += 15;
-  else if (p.priceChange1d > -1) score += 10;
-  else if (p.priceChange1d > -5) score += 4;
-  else score += 0;
-  // Volume consistency
-  const volMcap = p.marketCap > 0 ? p.vol24h / p.marketCap : 0;
-  if (volMcap > 0.02) score += 10;
-  else if (volMcap > 0.005) score += 6;
-  else score += 2;
-  return clamp(Math.round(score), 0, 100);
-}
-
-/* ── Emissions stability (0-100) ── */
-function computeEmissionsStability(eco: EconomicContext): number {
-  let score = 50; // neutral baseline
-  if (eco.emissionsPerDay > 100) score += 20;
-  else if (eco.emissionsPerDay > 20) score += 12;
-  else score += 0;
-  if (eco.emissionsPercent > 1) score += 15;
-  else if (eco.emissionsPercent > 0.3) score += 8;
-  else score -= 5;
-  // Reward distribution exists
-  if (eco.minerPerDay > 0 && eco.validatorPerDay > 0) score += 10;
-  // Sentiment stable
-  if (eco.sentiment > 0.45 && eco.sentiment < 0.65) score += 5; // balanced
-  return clamp(Math.round(score), 0, 100);
-}
-
-/* ── Structure stability (0-100) ── */
-function computeStructureStability(s: StakeSnapshot, d: StakeDeltas, extStability?: number): number {
-  let score = 0;
-  if (extStability != null) {
-    score += clamp(extStability * 0.5, 0, 50);
-  } else {
-    score += 25; // neutral
-  }
-  // Concentration: lower = more stable (Bittensor-calibrated)
-  if (s.stakeConcentration < 80) score += 20;
-  else if (s.stakeConcentration < 92) score += 14;
-  else if (s.stakeConcentration < 98) score += 8;
-  else score += 3;
-  // Miners stable or growing
-  if (d.minersGrowth7d > 0) score += 15;
-  else if (d.minersGrowth7d > -0.05) score += 10;
-  else score += 0;
-  // UID usage healthy
-  if (s.uidUsage > 0.5) score += 10;
-  else if (s.uidUsage > 0.2) score += 6;
-  else score += 2;
-  return clamp(Math.round(score), 0, 100);
-}
-
-/* ── Validator quality (0-100) ── */
-function computeValidatorQuality(s: StakeSnapshot): number {
-  let score = 0;
-  if (s.validatorsActive >= 20) score += 40;
-  else if (s.validatorsActive >= 10) score += 30;
-  else if (s.validatorsActive >= 5) score += 18;
-  else if (s.validatorsActive >= 2) score += 8;
-  else score += 0;
-  // Validator/miner ratio (healthy = miners > validators)
-  const ratio = s.validatorsActive > 0 ? s.minersActive / s.validatorsActive : 0;
-  if (ratio > 5) score += 25;
-  else if (ratio > 2) score += 18;
-  else if (ratio > 1) score += 10;
-  else score += 3;
-  // Concentration inverse (Bittensor-calibrated)
-  if (s.stakeConcentration < 85) score += 20;
-  else if (s.stakeConcentration < 95) score += 14;
-  else score += 5;
-  // Miners count (real usage)
-  if (s.minersActive >= 50) score += 15;
-  else if (s.minersActive >= 20) score += 10;
-  else if (s.minersActive >= 5) score += 5;
-  else score += 0;
-  return clamp(Math.round(score), 0, 100);
-}
-
-/* ── Liquidity survival (0-100) ── */
-function computeLiquiditySurvival(p: PriceContext, dm: DerivedMetrics): number {
-  let score = 0;
-  // Pool balance (closer to 1 = healthier)
-  if (dm.poolBalance > 0.6 && dm.poolBalance < 1.8) score += 35;
-  else if (dm.poolBalance > 0.3 && dm.poolBalance < 3) score += 22;
-  else score += 8;
-  // Absolute liquidity
-  if (p.liquidity > 500) score += 25;
-  else if (p.liquidity > 100) score += 18;
-  else if (p.liquidity > 20) score += 10;
-  else score += 2;
-  // Volume (some activity)
-  if (p.vol24h > 50) score += 20;
-  else if (p.vol24h > 10) score += 14;
-  else if (p.vol24h > 1) score += 7;
-  else score += 0;
-  // MCap stability
-  if (p.marketCap > 500) score += 15;
-  else if (p.marketCap > 100) score += 10;
-  else score += 3;
-  return clamp(Math.round(score), 0, 100);
-}
-
-export function computeHoldScore(input: VerdictInput): number {
-  const { snapshot: s, deltas: d, priceContext: p, economicContext: eco, derivedMetrics: dm } = input;
-
-  const momentumPersistence = computeMomentumPersistence(p, d, input.momentum);
-  const emissionsStability = computeEmissionsStability(eco);
-  const structureStability = computeStructureStability(s, d, input.stability);
-  const validatorQuality = computeValidatorQuality(s);
-  const liquiditySurvival = computeLiquiditySurvival(p, dm);
-
-  return clamp(Math.round(
-    0.30 * momentumPersistence +
-    0.25 * emissionsStability +
-    0.20 * structureStability +
-    0.15 * validatorQuality +
-    0.10 * liquiditySurvival
-  ), 0, 100);
-}
-
-/* ═══════════════════════════════════════ */
-/*  EXIT_RISK                                */
-/* ═══════════════════════════════════════ */
-
-/* ── Sell pressure score (0-100) ── */
-function computeSellPressureScore(eco: EconomicContext, p: PriceContext): number {
-  let score = 0;
-  // Sell dominance
+  // C1. Sell pressure (0-25) — higher = more risk
+  let sellPressure = 0;
   const totalVol = eco.buyVolume + eco.sellVolume;
   if (totalVol > 0) {
     const sellRatio = eco.sellVolume / totalVol;
-    if (sellRatio > 0.75) score += 40;
-    else if (sellRatio > 0.60) score += 28;
-    else if (sellRatio > 0.52) score += 15;
-    else score += 5;
+    if (sellRatio > 0.75) sellPressure = 25;
+    else if (sellRatio > 0.60) sellPressure = 18;
+    else if (sellRatio > 0.52) sellPressure = 10;
+    else sellPressure = 3;
   } else {
-    // Price-based fallback
-    if (p.priceChange1d < -10) score += 35;
-    else if (p.priceChange1d < -5) score += 22;
-    else if (p.priceChange1d < -2) score += 10;
-    else score += 5;
+    // No volume data — use price as fallback
+    if (p.priceChange1d < -10) sellPressure = 22;
+    else if (p.priceChange1d < -5) sellPressure = 14;
+    else sellPressure = 5;
   }
-  // Sellers > buyers
-  if (eco.sellersCount > eco.buyersCount * 2) score += 25;
-  else if (eco.sellersCount > eco.buyersCount * 1.3) score += 15;
-  else if (eco.sellersCount > eco.buyersCount) score += 8;
-  else score += 0;
-  // Price crash 7d
-  if (p.priceChange7d < -25) score += 25;
-  else if (p.priceChange7d < -10) score += 15;
-  else if (p.priceChange7d < -3) score += 8;
-  else score += 0;
-  // Volume spike without price increase (distribution)
-  const volMcap = p.marketCap > 0 ? p.vol24h / p.marketCap : 0;
-  if (volMcap > 0.1 && p.priceChange1d < 0) score += 10;
-  return clamp(Math.round(score), 0, 100);
+  components.push({ name: "Pression vendeuse", value: sellPressure, max: 25 });
+
+  // C2. Concentration risk (0-20) — Bittensor-calibrated
+  let concentration = 0;
+  const effConc = s.stakeConcentration <= 0 ? 80 : s.stakeConcentration;
+  if (effConc > 98) concentration = 20;
+  else if (effConc > 95) concentration = 14;
+  else if (effConc > 85) concentration = 8;
+  else concentration = 2;
+  components.push({ name: "Concentration", value: concentration, max: 20 });
+
+  // C3. Validator fragility (0-20)
+  let valRisk = 0;
+  if (s.validatorsActive <= 1) valRisk = 20;
+  else if (s.validatorsActive <= 3) valRisk = 15;
+  else if (s.validatorsActive <= 5) valRisk = 8;
+  else if (s.validatorsActive <= 10) valRisk = 3;
+  else valRisk = 0;
+  components.push({ name: "Fragilité validators", value: valRisk, max: 20 });
+
+  // C4. Liquidity risk (0-15)
+  let liqRisk = 0;
+  if (p.liquidity < 5) liqRisk = 15;
+  else if (p.liquidity < 20) liqRisk = 12;
+  else if (p.liquidity < 100) liqRisk = 7;
+  else if (p.liquidity < 500) liqRisk = 2;
+  else liqRisk = 0;
+  components.push({ name: "Risque liquidité", value: liqRisk, max: 15 });
+
+  // C5. UID saturation stagnation (0-10)
+  let satRisk = 0;
+  if (dm.uidSaturation > 0.95 && d.minersGrowth7d <= 0) satRisk = 10;
+  else if (dm.uidSaturation > 0.90 && d.minersGrowth7d <= 0) satRisk = 6;
+  else if (dm.uidSaturation > 0.95 && d.minersGrowth7d > 0) satRisk = 3; // full but growing
+  else satRisk = 0;
+  components.push({ name: "Saturation UID", value: satRisk, max: 10 });
+
+  // C6. Emissions / burn stress (0-10)
+  let emitRisk = 0;
+  if (dm.burnRatio < 0.01 && eco.emissionsPerDay > 50) emitRisk = 10; // heavy emissions, no burn
+  else if (dm.burnRatio < 0.1 && eco.emissionsPerDay > 100) emitRisk = 6;
+  else if (eco.emissionsPerDay < 1) emitRisk = 3; // too low, dying
+  else emitRisk = 0;
+  components.push({ name: "Stress émissions/burn", value: emitRisk, max: 10 });
+
+  // Total risk score (0-100, higher = riskier)
+  const riskScore = clamp(sellPressure + concentration + valRisk + liqRisk + satRisk + emitRisk, 0, 100);
+
+  return { score: riskScore, weight: 0.30, label: "Risque / Structure", components };
 }
 
-/* ── Concentration risk (0-100) ── */
-/* Bittensor subnets typically have 90-100% top-10 concentration; calibrated accordingly */
-function computeConcentrationRisk(s: StakeSnapshot): number {
-  let score = 0;
-  // Stake concentration — Bittensor-calibrated brackets
-  if (s.stakeConcentration > 98) score += 25;
-  else if (s.stakeConcentration > 95) score += 18;
-  else if (s.stakeConcentration > 85) score += 12;
-  else if (s.stakeConcentration > 70) score += 6;
-  else score += 0;
-  // Validator centralization
-  if (s.validatorsActive <= 1) score += 30;
-  else if (s.validatorsActive <= 3) score += 22;
-  else if (s.validatorsActive <= 5) score += 12;
-  else if (s.validatorsActive <= 10) score += 5;
-  else score += 0;
-  // Few miners = fragile
-  if (s.minersActive <= 2) score += 25;
-  else if (s.minersActive <= 10) score += 15;
-  else if (s.minersActive <= 30) score += 8;
-  else score += 0;
-  return clamp(Math.round(score), 0, 100);
+/* ══════════════════════════════════════════════════════════ */
+/*  PILLAR D — DATA QUALITY (weight: 0.15)                    */
+/*  What it measures: can we trust the data?                   */
+/*  Sources: freshness, completeness, consistency              */
+/* ══════════════════════════════════════════════════════════ */
+
+function computeDataQualityPillar(
+  p: PriceContext, eco: EconomicContext, s: StakeSnapshot,
+  dataConfidence?: number,
+): PillarScore {
+  const components: PillarScore["components"] = [];
+
+  // D1. External data confidence if available (0-30)
+  let confScore = 15; // default neutral
+  if (dataConfidence != null) {
+    confScore = clamp(Math.round(dataConfidence * 0.3), 0, 30);
+  }
+  components.push({ name: "Confiance API", value: confScore, max: 30 });
+
+  // D2. Price data available & non-zero (0-20)
+  let priceData = 0;
+  if (p.currentPrice > 0 && p.marketCap > 0) priceData = 20;
+  else if (p.currentPrice > 0) priceData = 12;
+  else priceData = 0;
+  components.push({ name: "Données prix", value: priceData, max: 20 });
+
+  // D3. Volume & liquidity data present (0-20)
+  let volumeData = 0;
+  if (p.vol24h > 0 && p.liquidity > 0) volumeData = 20;
+  else if (p.vol24h > 0 || p.liquidity > 0) volumeData = 10;
+  else volumeData = 0;
+  components.push({ name: "Données volume/liq", value: volumeData, max: 20 });
+
+  // D4. Economic data completeness (0-15)
+  let ecoData = 0;
+  let ecoFieldsPresent = 0;
+  if (eco.emissionsPerDay > 0) ecoFieldsPresent++;
+  if (eco.buyVolume > 0 || eco.sellVolume > 0) ecoFieldsPresent++;
+  if (eco.taoInPool > 0) ecoFieldsPresent++;
+  if (eco.circulatingSupply > 0) ecoFieldsPresent++;
+  if (eco.buyersCount > 0 || eco.sellersCount > 0) ecoFieldsPresent++;
+  ecoData = clamp(Math.round((ecoFieldsPresent / 5) * 15), 0, 15);
+  components.push({ name: "Données économiques", value: ecoData, max: 15 });
+
+  // D5. Structural data (validators/miners known) (0-15)
+  let structData = 0;
+  if (s.validatorsActive > 0 && s.minersActive > 0) structData = 15;
+  else if (s.validatorsActive > 0 || s.minersActive > 0) structData = 8;
+  else structData = 0;
+  components.push({ name: "Données structure", value: structData, max: 15 });
+
+  const score = clamp(confScore + priceData + volumeData + ecoData + structData, 0, 100);
+
+  return { score, weight: 0.15, label: "Qualité données", components };
 }
 
-/* ── Liquidity risk (0-100) ── */
-function computeLiquidityRisk(p: PriceContext, dm: DerivedMetrics, eco: EconomicContext): number {
-  let score = 0;
-  // Very low liquidity
-  if (p.liquidity < 5) score += 40;
-  else if (p.liquidity < 20) score += 28;
-  else if (p.liquidity < 100) score += 15;
-  else if (p.liquidity < 500) score += 6;
-  else score += 0;
-  // Pool imbalance
-  if (dm.poolBalance < 0.2 || dm.poolBalance > 5) score += 25;
-  else if (dm.poolBalance < 0.4 || dm.poolBalance > 3) score += 15;
-  else if (dm.poolBalance < 0.6 || dm.poolBalance > 2) score += 6;
-  else score += 0;
-  // Volume/MCap (no liquidity = can't exit)
-  const volMcap = eco.volumeMarketcapRatio;
-  if (volMcap < 0.001) score += 25;
-  else if (volMcap < 0.005) score += 15;
-  else if (volMcap < 0.01) score += 6;
-  else score += 0;
-  // Very small mcap
-  if (p.marketCap < 10) score += 10;
-  else if (p.marketCap < 50) score += 5;
-  return clamp(Math.round(score), 0, 100);
+/* ══════════════════════════════════════════════════════════ */
+/*  DATA RELIABILITY CLASSIFICATION                           */
+/* ══════════════════════════════════════════════════════════ */
+
+function classifyDataReliability(dq: PillarScore, dataConfidence?: number): DataReliability {
+  if (dataConfidence != null && dataConfidence < 20) return "stale";
+  if (dq.score < 30) return "suspect";
+  if (dq.score < 55) return "partial";
+  return "stable";
 }
 
-/* ── Flow reversal (0-100) ── */
-function computeFlowReversal(d: StakeDeltas, s: StakeSnapshot): number {
-  let score = 0;
-  // Stake outflow
-  if (d.stakeChange7d < -0.20) score += 40;
-  else if (d.stakeChange7d < -0.10) score += 28;
-  else if (d.stakeChange7d < -0.03) score += 15;
-  else if (d.stakeChange7d < 0) score += 5;
-  else score += 0;
-  // Miners declining
-  if (d.minersGrowth7d < -0.15) score += 25;
-  else if (d.minersGrowth7d < -0.05) score += 15;
-  else if (d.minersGrowth7d < 0) score += 5;
-  else score += 0;
-  // Whale outflow
-  const netFlow = s.largeWalletInflow - s.largeWalletOutflow;
-  if (netFlow < -50) score += 25;
-  else if (netFlow < -10) score += 15;
-  else if (netFlow < 0) score += 5;
-  else score += 0;
-  // Validators declining
-  if (d.validatorsGrowth7d < -0.10) score += 10;
-  else if (d.validatorsGrowth7d < 0) score += 3;
-  return clamp(Math.round(score), 0, 100);
-}
+/* ══════════════════════════════════════════════════════════ */
+/*  COMPOSITE SCORES                                          */
+/*  entryScore: how attractive is entering?                    */
+/*  holdScore:  how safe is holding?                           */
+/*  exitRisk:   how dangerous is staying?                      */
+/* ══════════════════════════════════════════════════════════ */
 
-/* ── Saturation risk (0-100) ── */
-function computeSaturationRisk(s: StakeSnapshot, d: StakeDeltas, dm: DerivedMetrics): number {
-  let score = 0;
-  const sat = dm.uidSaturation;
-  // Saturated with no growth = stagnation
-  if (sat > 0.95 && d.minersGrowth7d <= 0) score += 40;
-  else if (sat > 0.90 && d.minersGrowth7d <= 0) score += 28;
-  else if (sat > 0.95 && d.minersGrowth7d > 0) score += 15; // saturated but growing
-  else if (sat > 0.80) score += 8;
-  else score += 0;
-  // No room to grow
-  if (s.uidMax > 0 && s.uidUsed >= s.uidMax && d.minersGrowth7d < 0) score += 30;
-  else if (s.uidMax > 0 && s.uidMax - s.uidUsed < 10) score += 15;
-  else score += 0;
-  // High concentration + saturation (Bittensor-calibrated)
-  if (s.stakeConcentration > 98 && sat > 0.8) score += 20;
-  else if (s.stakeConcentration > 95 && sat > 0.9) score += 10;
-  // Low miners despite saturation
-  if (sat > 0.8 && s.minersActive < 10) score += 10;
-  return clamp(Math.round(score), 0, 100);
-}
+export function computeEntryScore(input: VerdictInput): number {
+  const mom = computeMomentumPillar(input.deltas, input.priceContext, input.economicContext);
+  const amm = computeAMMPillar(input.economicContext, input.priceContext, input.derivedMetrics);
+  const risk = computeRiskPillar(input.snapshot, input.deltas, input.priceContext, input.economicContext, input.derivedMetrics);
+  const dq = computeDataQualityPillar(input.priceContext, input.economicContext, input.snapshot, input.dataConfidence);
 
-export function computeExitRisk(input: VerdictInput): number {
-  const { snapshot: s, deltas: d, priceContext: p, economicContext: eco, derivedMetrics: dm } = input;
-
-  const sellPressure = computeSellPressureScore(eco, p);
-  const concentration = computeConcentrationRisk(s);
-  const liquidity = computeLiquidityRisk(p, dm, eco);
-  const flowReversal = computeFlowReversal(d, s);
-  const saturation = computeSaturationRisk(s, d, dm);
-
+  // Entry = momentum + AMM quality - risk + data quality bonus
   return clamp(Math.round(
-    0.30 * sellPressure +
-    0.25 * concentration +
-    0.20 * liquidity +
-    0.15 * flowReversal +
-    0.10 * saturation
+    mom.score * 0.35 +
+    amm.score * 0.30 +
+    (100 - risk.score) * 0.25 +  // invert: low risk = good for entry
+    dq.score * 0.10
   ), 0, 100);
 }
 
-/* ═══════════════════════════════════════ */
-/*  CONFIDENCE                               */
-/* ═══════════════════════════════════════ */
+export function computeHoldScore(input: VerdictInput): number {
+  const mom = computeMomentumPillar(input.deltas, input.priceContext, input.economicContext);
+  const amm = computeAMMPillar(input.economicContext, input.priceContext, input.derivedMetrics);
+  const risk = computeRiskPillar(input.snapshot, input.deltas, input.priceContext, input.economicContext, input.derivedMetrics);
 
-function computeConfidence(input: VerdictInput, entryScore: number, holdScore: number, exitRisk: number): ConfidenceLevel {
-  // Count aligned signal families (5 families)
+  // Hold = moderate momentum ok + decent AMM + low risk
+  return clamp(Math.round(
+    mom.score * 0.25 +
+    amm.score * 0.30 +
+    (100 - risk.score) * 0.45   // risk is the main driver for hold decisions
+  ), 0, 100);
+}
+
+export function computeExitRisk(input: VerdictInput): number {
+  const risk = computeRiskPillar(input.snapshot, input.deltas, input.priceContext, input.economicContext, input.derivedMetrics);
+  return risk.score; // direct: higher = more dangerous
+}
+
+/* ══════════════════════════════════════════════════════════ */
+/*  CONFIDENCE — based on signal alignment + data quality      */
+/* ══════════════════════════════════════════════════════════ */
+
+function computeConfidence(
+  mom: PillarScore, amm: PillarScore, risk: PillarScore, dq: PillarScore,
+  reliability: DataReliability,
+): ConfidenceLevel {
+  // If data is unreliable, confidence is always faible
+  if (reliability === "stale" || reliability === "suspect") return "faible";
+
+  // Count strong signals (pillars with clear direction)
   let aligned = 0;
-  const { snapshot: s, deltas: d, priceContext: p, economicContext: eco, derivedMetrics: dm } = input;
+  if (mom.score > 60 || mom.score < 25) aligned++;     // clear momentum direction
+  if (amm.score > 60) aligned++;                         // clearly tradable
+  if (risk.score > 55 || risk.score < 25) aligned++;     // clear risk signal
+  if (dq.score > 60) aligned++;                           // good data
 
-  // A. Capital rotation signal (clear direction)
-  const capitalClear = d.stakeChange7d > 0.03 || d.stakeChange7d < -0.05;
-  if (capitalClear) aligned++;
-
-  // B. Emissions signal (meaningful emissions)
-  if (eco.emissionsPerDay > 10 && eco.emissionsPercent > 0.2) aligned++;
-
-  // C. Market structure signal (tradable)
-  if (eco.volumeMarketcapRatio > 0.005 && p.liquidity > 20) aligned++;
-
-  // D. Adoption signal (real usage)
-  if (s.minersActive >= 5 && s.validatorsActive >= 3) aligned++;
-
-  // E. Risk signal (clear risk or safety)
-  if (exitRisk > 55 || exitRisk < 30) aligned++;
-
-  // Data confidence penalty
-  if (input.dataConfidence != null && input.dataConfidence < 40) {
-    return "faible";
-  }
-
-  if (aligned >= 4) return "forte";
+  if (aligned >= 3) return "forte";
   if (aligned >= 2) return "moyenne";
   return "faible";
 }
 
-/* ═══════════════════════════════════════ */
-/*  REASONS (human-readable)                 */
-/* ═══════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════ */
+/*  REASONS — auditable, traceable, max 3 per polarity        */
+/* ══════════════════════════════════════════════════════════ */
 
-function collectReasons(input: VerdictInput, entryScore: number, holdScore: number, exitRisk: number): VerdictReason[] {
+function collectReasons(input: VerdictInput): VerdictReason[] {
   const reasons: VerdictReason[] = [];
   const { snapshot: s, deltas: d, priceContext: p, economicContext: eco, derivedMetrics: dm } = input;
+  const amm = computeAMMMetrics(eco);
 
-  // Capital flow
-  if (d.stakeChange7d > 0.05) reasons.push({ label: "Flux de stake en hausse 7j", positive: true });
-  else if (d.stakeChange7d < -0.05) reasons.push({ label: "Flux de stake en baisse 7j", positive: false });
+  // ── Momentum reasons ──
+  if (d.stakeChange7d > 0.05)
+    reasons.push({ label: "Flux de stake en hausse 7j", positive: true, pillar: "momentum" });
+  else if (d.stakeChange7d < -0.05)
+    reasons.push({ label: "Flux de stake en baisse 7j", positive: false, pillar: "momentum" });
 
-  // Sentiment
-  if (eco.sentiment > 0.6) reasons.push({ label: "Pression acheteuse dominante", positive: true });
-  else if (eco.sentiment < 0.4) reasons.push({ label: "Pression vendeuse élevée", positive: false });
+  if (p.priceChange7d > 10)
+    reasons.push({ label: "Momentum prix positif (+"+Math.round(p.priceChange7d)+"%)", positive: true, pillar: "momentum" });
+  else if (p.priceChange7d < -15)
+    reasons.push({ label: "Chute prix 7j ("+Math.round(p.priceChange7d)+"%)", positive: false, pillar: "momentum" });
 
-  // Emissions
-  if (eco.emissionsPerDay > 100 && eco.emissionsPercent > 1) reasons.push({ label: "Émissions solides", positive: true });
-  else if (eco.emissionsPerDay < 5) reasons.push({ label: "Émissions très faibles", positive: false });
+  if (eco.sentiment > 0.60)
+    reasons.push({ label: "Pression acheteuse dominante", positive: true, pillar: "momentum" });
+  else if (eco.sentiment < 0.38)
+    reasons.push({ label: "Pression vendeuse élevée", positive: false, pillar: "momentum" });
 
-  // Validators
-  if (s.validatorsActive >= 15) reasons.push({ label: "Structure validators saine", positive: true });
-  else if (s.validatorsActive <= 2) reasons.push({ label: "Très peu de validators", positive: false });
+  // ── AMM reasons ──
+  if (amm.poolDepth > 10_000)
+    reasons.push({ label: "Profondeur pool solide ("+Math.round(amm.poolDepth)+"τ)", positive: true, pillar: "amm" });
+  else if (amm.poolDepth < 50 && amm.poolDepth > 0)
+    reasons.push({ label: "Pool très faible ("+Math.round(amm.poolDepth)+"τ)", positive: false, pillar: "amm" });
 
-  // Miners
-  if (s.minersActive >= 50 && d.minersGrowth7d > 0) reasons.push({ label: "Adoption mineurs en croissance", positive: true });
-  else if (s.minersActive < 5) reasons.push({ label: "Très peu de mineurs actifs", positive: false });
-  else if (d.minersGrowth7d < -0.10) reasons.push({ label: "Baisse des mineurs", positive: false });
+  if (amm.slippageBps1Tao <= 5 && eco.taoInPool > 0)
+    reasons.push({ label: "Slippage négligeable", positive: true, pillar: "amm" });
+  else if (amm.slippageBps1Tao > 50)
+    reasons.push({ label: "Slippage élevé ("+amm.slippageBps1Tao+"bp)", positive: false, pillar: "amm" });
 
-  // Concentration
-  if (s.stakeConcentration > 98) reasons.push({ label: "Concentration stake extrême", positive: false });
-  else if (s.stakeConcentration < 85) reasons.push({ label: "Stake relativement distribué", positive: true });
+  if (dm.poolBalance < 0.3 && dm.poolBalance > 0)
+    reasons.push({ label: "Déséquilibre pool critique", positive: false, pillar: "amm" });
 
-  // Liquidity
-  if (p.liquidity > 500) reasons.push({ label: "Liquidité correcte", positive: true });
-  else if (p.liquidity < 20) reasons.push({ label: "Sous-liquidité critique", positive: false });
+  // ── Risk reasons ──
+  if (s.validatorsActive >= 15)
+    reasons.push({ label: "Structure validators saine ("+s.validatorsActive+")", positive: true, pillar: "risk" });
+  else if (s.validatorsActive <= 2)
+    reasons.push({ label: "Très peu de validators ("+s.validatorsActive+")", positive: false, pillar: "risk" });
 
-  // UID saturation
-  if (dm.uidSaturation > 0.95 && d.minersGrowth7d <= 0) reasons.push({ label: "Saturé sans croissance", positive: false });
+  if (s.minersActive >= 50 && d.minersGrowth7d > 0)
+    reasons.push({ label: "Adoption mineurs en croissance", positive: true, pillar: "risk" });
+  else if (s.minersActive < 5)
+    reasons.push({ label: "Très peu de mineurs ("+s.minersActive+")", positive: false, pillar: "risk" });
 
-  // Pool balance
-  if (dm.poolBalance < 0.3) reasons.push({ label: "Déséquilibre pool critique", positive: false });
+  const effConc = s.stakeConcentration <= 0 ? 80 : s.stakeConcentration;
+  if (effConc > 98)
+    reasons.push({ label: "Concentration stake extrême ("+Math.round(effConc)+"%)", positive: false, pillar: "risk" });
+  else if (effConc < 85)
+    reasons.push({ label: "Stake relativement distribué", positive: true, pillar: "risk" });
 
-  // Price momentum
-  if (p.priceChange7d > 10) reasons.push({ label: "Momentum prix positif", positive: true });
-  else if (p.priceChange7d < -15) reasons.push({ label: "Chute de prix 7j", positive: false });
+  if (p.liquidity > 500)
+    reasons.push({ label: "Liquidité correcte", positive: true, pillar: "risk" });
+  else if (p.liquidity < 20)
+    reasons.push({ label: "Sous-liquidité critique ("+Math.round(p.liquidity)+"τ)", positive: false, pillar: "risk" });
 
-  // Whale flow
-  const netFlow = s.largeWalletInflow - s.largeWalletOutflow;
-  if (netFlow > 30) reasons.push({ label: "Afflux whale significatif", positive: true });
-  else if (netFlow < -30) reasons.push({ label: "Sortie whale significative", positive: false });
+  if (dm.uidSaturation > 0.95 && d.minersGrowth7d <= 0)
+    reasons.push({ label: "UID saturé sans croissance", positive: false, pillar: "risk" });
 
-  // Volume
-  if (eco.volumeMarketcapRatio > 0.05) reasons.push({ label: "Volume/MCap élevé", positive: true });
-  else if (eco.volumeMarketcapRatio < 0.001) reasons.push({ label: "Volume quasi nul", positive: false });
+  if (dm.burnRatio < 0.01 && eco.emissionsPerDay > 50)
+    reasons.push({ label: "Emissions élevées sans burn", positive: false, pillar: "risk" });
+
+  // ── Data reasons ──
+  if (p.currentPrice <= 0 || p.marketCap <= 0)
+    reasons.push({ label: "Données prix manquantes", positive: false, pillar: "data" });
+
+  if (eco.taoInPool <= 0 && eco.alphaInPool <= 0)
+    reasons.push({ label: "Données pool indisponibles", positive: false, pillar: "data" });
 
   return reasons;
 }
 
-/* ═══════════════════════════════════════ */
-/*  MAIN VERDICT                             */
-/* ═══════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════ */
+/*  MAIN VERDICT — explicit rules, no opaque scoring          */
+/* ══════════════════════════════════════════════════════════ */
 
 export function computeVerdict(input: VerdictInput): VerdictResult {
-  // Whitelisted subnets (e.g. ROOT) → forced HOLD
+  // ── Whitelisted subnets (e.g. ROOT) → forced HOLD ──
   if (input.isWhitelisted) {
+    const neutralPillar: PillarScore = { score: 50, weight: 0.25, label: "N/A", components: [] };
     return {
       netuid: input.netuid,
       verdict: "HOLD",
@@ -671,47 +507,75 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
       exitRisk: 10,
       positiveReasons: ["Subnet système (réseau principal)"],
       negativeReasons: [],
-      allReasons: [{ label: "Subnet système (réseau principal)", positive: true }],
+      allReasons: [{ label: "Subnet système (réseau principal)", positive: true, pillar: "risk" }],
+      pillars: { momentum: neutralPillar, amm: neutralPillar, risk: { ...neutralPillar, score: 10 }, dataQuality: { ...neutralPillar, score: 80 } },
+      dataReliability: "stable",
     };
   }
 
-  // Normalize: treat stakeConcentration=0 as "unknown" → moderate default
-  const normalizedInput: VerdictInput = {
-    ...input,
-    snapshot: {
-      ...input.snapshot,
-      stakeConcentration: effectiveConcentration(input.snapshot),
-    },
-  };
+  // ── Compute all 4 pillars ──
+  const momentum = computeMomentumPillar(input.deltas, input.priceContext, input.economicContext);
+  const amm = computeAMMPillar(input.economicContext, input.priceContext, input.derivedMetrics);
+  const risk = computeRiskPillar(input.snapshot, input.deltas, input.priceContext, input.economicContext, input.derivedMetrics);
+  const dataQuality = computeDataQualityPillar(input.priceContext, input.economicContext, input.snapshot, input.dataConfidence);
+  const dataReliability = classifyDataReliability(dataQuality, input.dataConfidence);
 
-  const entryScore = computeEntryScore(normalizedInput);
-  const holdScore = computeHoldScore(normalizedInput);
-  const exitRisk = computeExitRisk(normalizedInput);
-  const confidence = computeConfidence(normalizedInput, entryScore, holdScore, exitRisk);
-  const allReasons = collectReasons(normalizedInput, entryScore, holdScore, exitRisk);
+  // ── Composite scores ──
+  const entryScore = clamp(Math.round(
+    momentum.score * 0.35 +
+    amm.score * 0.30 +
+    (100 - risk.score) * 0.25 +
+    dataQuality.score * 0.10
+  ), 0, 100);
 
-  // ── Decision logic ──
+  const holdScore = clamp(Math.round(
+    momentum.score * 0.25 +
+    amm.score * 0.30 +
+    (100 - risk.score) * 0.45
+  ), 0, 100);
+
+  const exitRisk = risk.score;
+
+  const confidence = computeConfidence(momentum, amm, risk, dataQuality, dataReliability);
+  const allReasons = collectReasons(input);
+
+  // ══════════════════════════════════════
+  //  VERDICT DECISION — explicit rules
+  // ══════════════════════════════════════
+
   let verdict: Verdict;
 
-  if (exitRisk >= 55) {
+  // Rule 1: Insufficient data → prudent HOLD
+  if (dataReliability === "stale" || dataReliability === "suspect") {
+    verdict = "HOLD"; // prudent, will show "données insuffisantes" in UI
+  }
+  // Rule 2: High risk → SORS
+  else if (exitRisk >= 55) {
     verdict = "SORS";
-  } else if (entryScore >= 55 && exitRisk < 42) {
+  }
+  // Rule 3: Strong entry conditions → RENTRE
+  else if (entryScore >= 55 && exitRisk < 40 && momentum.score >= 40 && amm.score >= 30) {
     verdict = "RENTRE";
-  } else if (holdScore >= 50 && exitRisk < 55) {
+  }
+  // Rule 4: Decent hold conditions → HOLD
+  else if (holdScore >= 45 && exitRisk < 55) {
     verdict = "HOLD";
-  } else {
-    // Conflict → prudent HOLD
+  }
+  // Rule 5: Conflict → prudent HOLD
+  else {
     verdict = "HOLD";
   }
 
-  // ── Safety guards ──
+  // ══════════════════════════════════════
+  //  SAFETY GUARDS — explicit, auditable
+  // ══════════════════════════════════════
 
   // G1: Very few validators → block RENTRE
   if (input.snapshot.validatorsActive <= 2 && verdict === "RENTRE") {
     verdict = "HOLD";
   }
 
-  // G2: UID saturated + no growth → upgrade risk
+  // G2: UID saturated + no growth → block RENTRE
   if (input.derivedMetrics.uidSaturation > 0.95 && input.deltas.minersGrowth7d <= 0 && verdict === "RENTRE") {
     verdict = "HOLD";
   }
@@ -726,25 +590,22 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
     verdict = "HOLD";
   }
 
-  // G5: Strong emissions but extreme concentration → don't upgrade (Bittensor: only >98%)
-  if (input.economicContext.emissionsPercent > 2 && normalizedInput.snapshot.stakeConcentration > 98 && verdict === "RENTRE") {
-    verdict = "HOLD";
+  // G5: Extreme concentration + significant emissions → block RENTRE
+  if (input.economicContext.emissionsPercent > 2 && (input.snapshot.stakeConcentration > 98 || (input.snapshot.stakeConcentration <= 0 && true)) && verdict === "RENTRE") {
+    // Only apply if concentration is truly extreme (>98) — stakeConcentration=0 means unknown, don't penalize
+    if (input.snapshot.stakeConcentration > 98) verdict = "HOLD";
   }
 
   // G6: Override/Depeg from protection engine → force SORS
-  if (input.isOverridden && verdict !== "SORS") {
-    verdict = "SORS";
-  }
-  if (input.systemStatus === "DEPEG" && verdict !== "SORS") {
-    verdict = "SORS";
-  }
+  if (input.isOverridden) verdict = "SORS";
+  if (input.systemStatus === "DEPEG") verdict = "SORS";
 
-  // G7: Old engine high risk cross-check → force SORS if old risk >= 70
+  // G7: Old engine high risk cross-check (transitional safety net)
   if (input.oldEngineRisk != null && input.oldEngineRisk >= 70 && verdict !== "SORS") {
     verdict = "SORS";
   }
 
-  // Slice top 3 positive/negative reasons
+  // ── Slice top 3 reasons per polarity ──
   const positiveReasons = allReasons.filter(r => r.positive).slice(0, 3).map(r => r.label);
   const negativeReasons = allReasons.filter(r => !r.positive).slice(0, 3).map(r => r.label);
 
@@ -758,6 +619,8 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
     positiveReasons,
     negativeReasons,
     allReasons,
+    pillars: { momentum, amm, risk, dataQuality },
+    dataReliability,
   };
 }
 
