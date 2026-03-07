@@ -5,15 +5,8 @@ import { useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
-import { useDelistMode } from "@/hooks/use-delist-mode";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
-import {
-  evaluateAllDelistRisks,
-  delistCategoryColor,
-  type DelistRiskResult,
-  type SubnetMetricsForDelist,
-} from "@/lib/delist-risk";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   RISK & ALERTS — Decision Vigilance Center             */
@@ -303,10 +296,10 @@ function AlertCard({ group, fr, scores, onDismiss }: {
   const subnet = ev.netuid != null ? scores.get(ev.netuid) : null;
   const confidence = subnet?.confianceScore ?? null;
 
-  const borderColor = sev === "critical" ? "border-l-destructive/50" : sev === "warning" ? "border-l-signal-hold/50" : "border-l-border";
+  const borderStyle = sev === "critical" ? { borderLeftColor: BREAK } : sev === "warning" ? { borderLeftColor: WARN } : {};
 
   return (
-    <div className={`rounded-lg border border-border bg-card overflow-hidden border-l-[3px] ${borderColor}`}>
+    <div className="rounded-lg border border-border bg-card overflow-hidden border-l-[3px]" style={borderStyle}>
       <div
         className={`px-4 py-3 ${group.count > 1 ? "cursor-pointer" : ""}`}
         onClick={() => group.count > 1 && setExpanded(!expanded)}
@@ -323,7 +316,6 @@ function AlertCard({ group, fr, scores, onDismiss }: {
           <span className="font-mono text-[10px] font-bold" style={{ color: info.color }}>
             {info.icon} {info.label}
           </span>
-          <span className="font-mono text-[9px] text-muted-foreground/30 tracking-wider">{info.category}</span>
           {ev.netuid != null && (
             <Link to={`/subnets/${ev.netuid}`} onClick={e => e.stopPropagation()} className="font-mono text-[11px] text-foreground/60 hover:text-foreground transition-colors">
               SN-{ev.netuid}
