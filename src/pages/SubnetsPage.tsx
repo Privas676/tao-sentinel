@@ -238,7 +238,7 @@ export default function SubnetsPage() {
         }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, mode, ownedNetuids, sparklines, sortCol, sortDir, decisionStates]);
+  }, [scoresList, mode, ownedNetuids, sparklines, sortCol, sortDir, decisionStates, verdicts]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
