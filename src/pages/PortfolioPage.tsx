@@ -482,7 +482,7 @@ export default function PortfolioPage() {
             <SectionTitle icon="📜" title={fr ? "Historique" : "History"} />
             <div className="px-5 py-3 space-y-1">
               {portfolio.archive.slice(-8).reverse().map((a, i) => (
-                <div key={i} className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground/30 py-1 border-b border-border last:border-0">
+                <div key={i} className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground py-1 border-b border-border last:border-0">
                   <span>SN-{a.subnet_id}</span>
                   <span>{a.quantity_tao.toFixed(2)} τ</span>
                   {a.pnl_estimated !== undefined && (
