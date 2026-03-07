@@ -405,7 +405,7 @@ export default function PortfolioPage() {
                       "Subnet", fr ? "Position" : "Position", fr ? "Poids" : "Weight",
                       "Conv.", "Risk", "Fit", "Action", "Mom.", ""
                     ].map((h, i) => (
-                      <th key={i} className="py-2.5 px-3 font-mono text-[8px] tracking-[0.15em] uppercase text-muted-foreground/30 font-normal whitespace-nowrap">{h}</th>
+                      <th key={i} className="py-2.5 px-3 font-mono text-[8px] tracking-[0.15em] uppercase text-muted-foreground font-normal whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
