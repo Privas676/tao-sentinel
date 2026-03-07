@@ -529,6 +529,7 @@ function RiskMonitorTable({ data }: { data: SubnetRadarData[] }) {
 /* ═══════════════════════════════════════ */
 function EconomicsTable({ data }: { data: SubnetRadarData[] }) {
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
