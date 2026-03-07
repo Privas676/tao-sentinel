@@ -188,7 +188,7 @@ export default function SubnetDetailPage() {
             </div>
 
             {/* Primary decision strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <KPIChip label="CONVICTION" value={`${conv.level} (${conv.score})`} color={convColor(conv.level)} />
               <KPIChip label="CONFIDENCE" value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
               <KPIChip label="RISK" value={s.risk} color={riskColor(s.risk)} />
