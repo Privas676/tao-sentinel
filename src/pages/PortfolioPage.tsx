@@ -7,52 +7,11 @@ import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
 import { toast } from "sonner";
+import { SectionCard, SectionTitle, KPIChip, Metric, Sparkline, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   PORTFOLIO COMMANDER — Strategic Cockpit               */
 /* ═══════════════════════════════════════════════════════ */
-
-/* ── Design tokens ── */
-const GOLD = "hsl(var(--gold))";
-const GO = "hsl(var(--signal-go))";
-const WARN = "hsl(var(--signal-go-spec))";
-const BREAK = "hsl(var(--signal-break))";
-const MUTED = "hsl(var(--muted-foreground))";
-
-/* ── Reusable atoms ── */
-
-function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-border bg-card ${className}`}>{children}</div>;
-}
-
-function SectionTitle({ icon, title, badge }: { icon: string; title: string; badge?: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2.5 px-5 py-3 border-b border-border">
-      <span className="text-sm opacity-70">{icon}</span>
-      <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-gold">{title}</h2>
-      {badge && <div className="ml-auto">{badge}</div>}
-    </div>
-  );
-}
-
-function KPIChip({ label, value, color, sub }: { label: string; value: string | number; color?: string; sub?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2.5 bg-muted/25 border border-border min-w-0">
-      <span className="font-mono text-[7px] text-muted-foreground tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
-      <span className="font-mono text-[14px] font-bold leading-none" style={{ color }}>{value}</span>
-      {sub && <span className="font-mono text-[8px] text-muted-foreground mt-0.5">{sub}</span>}
-    </div>
-  );
-}
-
-function Metric({ label, value, color }: { label: string; value: string | number; color?: string }) {
-  return (
-    <div className="flex justify-between items-center py-[5px]">
-      <span className="text-muted-foreground text-[11px]">{label}</span>
-      <span className="font-mono text-[12px] font-medium" style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
-    </div>
-  );
-}
 
 function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: number; height?: number }) {
   if (data.length < 2) return <span className="text-muted-foreground text-[9px]">—</span>;
