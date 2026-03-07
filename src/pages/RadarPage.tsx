@@ -527,7 +527,6 @@ function RiskMonitorTable({ data }: { data: SubnetRadarData[] }) {
 /* ═══════════════════════════════════════ */
 function EconomicsTable({ data }: { data: SubnetRadarData[] }) {
   return (
-    <TooltipProvider delayDuration={200}>
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
@@ -537,12 +536,10 @@ function EconomicsTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Em./day</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
             <TableHead className="font-mono text-[10px] text-right">
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Burn Ratio</span></TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{BURN_RATIO_TOOLTIP}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Burn Ratio</span></TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{BURN_RATIO_TOOLTIP}</TooltipContent>
+              </Tooltip>
             </TableHead>
             <TableHead className="font-mono text-[10px] text-right">Circ. Supply</TableHead>
             <TableHead className="font-mono text-[10px] text-right">UID Sat.</TableHead>
@@ -592,7 +589,6 @@ function EconomicsTable({ data }: { data: SubnetRadarData[] }) {
         </TableBody>
       </Table>
     </div>
-    </TooltipProvider>
   );
 }
 

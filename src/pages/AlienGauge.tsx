@@ -30,7 +30,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
 import { evaluateKillSwitch, type KillSwitchResult } from "@/lib/push-kill-switch";
 import { useAuditLogger } from "@/hooks/use-audit-log";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /* ═══════════════════════════════════════ */
 /*     TAO PRICE TICKER (compact)          */

@@ -183,7 +183,6 @@ export default function TreemapHeatmap({ data }: { data: SubnetRadarData[] }) {
       </div>
 
       {/* Treemap */}
-      <TooltipProvider delayDuration={100}>
         <div className="w-full overflow-hidden rounded-lg" style={{ border: "1px solid hsl(var(--border))" }}>
           <svg
             viewBox={`0 0 ${W} ${H}`}
@@ -269,7 +268,6 @@ export default function TreemapHeatmap({ data }: { data: SubnetRadarData[] }) {
             })}
           </svg>
         </div>
-      </TooltipProvider>
 
       {/* Footer */}
       <div className="flex justify-between font-mono text-[10px] text-muted-foreground/50">

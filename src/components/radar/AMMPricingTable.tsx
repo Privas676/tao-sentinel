@@ -66,12 +66,10 @@ export default function AMMPricingTable({ data }: { data: SubnetRadarData[] }) {
               </Tooltip>
             </TableHead>
             <TableHead className="font-mono text-[10px] text-right">
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Spread</span></TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{SPREAD_TOOLTIP}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Spread</span></TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{SPREAD_TOOLTIP}</TooltipContent>
+              </Tooltip>
             </TableHead>
             <TableHead className="font-mono text-[10px] text-right">AMM Score</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
