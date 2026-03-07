@@ -368,6 +368,20 @@ export default function PortfolioPage() {
           color={stabilityColor(totals.avgStability)} />
       </div>
 
+      {/* ── VERDICT SUMMARY ── */}
+      {rows.length > 0 && (() => {
+        const conserver = rows.filter(r => r.verdict?.verdict === "HOLD" || r.verdict?.verdict === "RENTRE").length;
+        const alleger = rows.filter(r => r.verdict?.verdict === "HOLD" && r.verdict.confidence === "faible").length;
+        const sortir = rows.filter(r => r.verdict?.verdict === "SORS").length;
+        return (
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <MiniStat label={fr ? "🟢 Conserver" : "🟢 Keep"} value={`${conserver}`} color="rgba(76,175,80,0.8)" />
+            <MiniStat label={fr ? "🟡 Surveiller" : "🟡 Watch"} value={`${alleger}`} color="rgba(255,193,7,0.8)" />
+            <MiniStat label={fr ? "🔴 Sortir" : "🔴 Exit"} value={`${sortir}`} color={sortir > 0 ? "rgba(229,57,53,0.9)" : "rgba(255,255,255,0.4)"} />
+          </div>
+        );
+      })()}
+
       {/* ── MINI DASHBOARD ── */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         <MiniStat label={fr ? "Accumulation" : "Accumulation"} value={`${totals.accPct}%`} color="rgba(76,175,80,0.8)" />
