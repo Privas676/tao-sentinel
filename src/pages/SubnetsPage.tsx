@@ -120,7 +120,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[420px] border-l border-border bg-background text-foreground overflow-y-auto p-0">
-        {/* ── Header band ── */}
+        {/* ── Header: SN + Action + Signal ── */}
         <div className="px-5 pt-5 pb-4 border-b border-border">
           <SheetHeader>
             <div className="flex items-center justify-between">
@@ -131,30 +131,27 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
               <StatusBadge type={row.statusLevel === "DANGER" ? "danger" : row.statusLevel === "WATCH" ? "warning" : "success"} label={row.statusLevel} />
             </div>
           </SheetHeader>
-
-          {/* Action badge centered */}
-          <div className="flex items-center justify-center mt-4">
+          <div className="flex items-center justify-between mt-3">
             <ActionBadge action={row.action === "ENTER" ? "RENTRE" : row.action === "EXIT" ? "SORS" : row.action === "STAKE" ? "RENFORCER" : "HOLD"} />
+            <span className="font-mono text-[11px] font-bold text-foreground/80">{row.signalPrincipal}</span>
           </div>
         </div>
 
         {/* ── Body ── */}
         <div className="px-5 py-4 space-y-4">
 
-          {/* Signal principal */}
-          <div className="rounded-lg px-3 py-2.5 bg-muted/40 border border-border">
-            <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-1">SIGNAL PRINCIPAL</div>
-            <div className="font-mono text-[12px] font-bold text-foreground/90">{row.signalPrincipal}</div>
+          {/* Primary decision metrics — 2x2 */}
+          <div className="grid grid-cols-2 gap-2">
+            <MetricMini label="CONVICTION" value={row.convictionLevel} color={row.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : row.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))"} />
+            <MetricMini label="RISK" value={row.risk} color={riskColor(row.risk)} />
           </div>
 
-          {/* Metrics grid — 2x3 */}
-          <div className="grid grid-cols-3 gap-2">
-            <MetricMini label="CONVICTION" value={row.convictionLevel} color={row.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : row.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))"} />
-            <MetricMini label="CONFIDENCE" value={`${row.confianceScore}%`} color={confianceColor(row.confianceScore)} />
-            <MetricMini label="RISK" value={row.risk} color={riskColor(row.risk)} />
-            <MetricMini label="MOMENTUM" value={Math.round(row.momentumScore)} color={row.momentumScore >= 55 ? "hsl(var(--signal-go))" : row.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
+          {/* Secondary metrics — 2x2 */}
+          <div className="grid grid-cols-4 gap-2">
+            <MetricMini label="MOM." value={Math.round(row.momentumScore)} color={row.momentumScore >= 55 ? "hsl(var(--signal-go))" : row.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
             <MetricMini label="OPP" value={row.opp} color={opportunityColor(row.opp)} />
-            <MetricMini label={fr ? "LIQ." : "LIQ."} value={row.liquidityLevel} color={row.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : row.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
+            <MetricMini label="CONF" value={`${row.confianceScore}%`} color={confianceColor(row.confianceScore)} />
+            <MetricMini label="LIQ." value={row.liquidityLevel === "HIGH" ? "●" : row.liquidityLevel === "MEDIUM" ? "◐" : "○"} color={row.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : row.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
           </div>
 
           {/* Sparkline */}
@@ -165,24 +162,9 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
             </div>
           )}
 
-          {/* 3 Reasons */}
-          {top3.length > 0 && (
-            <div className="rounded-lg p-3 bg-muted/20 border border-border">
-              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
-                {fr ? "POINTS CLÉS" : "KEY POINTS"}
-              </div>
-              {top3.map((r, i) => (
-                <div key={i} className="flex items-center gap-2 mb-1.5 last:mb-0">
-                  <span className="text-[10px]" style={{ color: toneColor(r.tone) }}>{r.icon}</span>
-                  <span className="font-mono text-[11px] text-foreground/80">{r.text}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Thesis */}
           {thesis.length > 0 && (
-            <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-go), 0.03)", border: "1px solid hsla(var(--signal-go), 0.08)" }}>
+            <div className="rounded-lg p-3 bg-primary/[0.03] border border-primary/10">
               <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
                 {fr ? "THÈSE" : "THESIS"}
               </div>
@@ -192,7 +174,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
 
           {/* Invalidation */}
           {invalidation.length > 0 && (
-            <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-break), 0.03)", border: "1px solid hsla(var(--signal-break), 0.08)" }}>
+            <div className="rounded-lg p-3 bg-destructive/[0.03] border border-destructive/10">
               <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
                 INVALIDATION
               </div>
@@ -214,9 +196,6 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
               ))}
             </div>
           )}
-
-          {/* Confidence bar */}
-          <ConfidenceBar value={row.confianceScore} label="DATA CONFIDENCE" height={4} />
         </div>
 
         {/* ── Footer CTAs ── */}
