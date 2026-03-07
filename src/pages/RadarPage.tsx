@@ -713,7 +713,7 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
                   {eco.circulatingSupply > 0 ? formatTao(eco.circulatingSupply) : "—"}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-right text-muted-foreground">
-                  {dm.burnRatio > 0 ? `${(dm.burnRatio * 100).toFixed(1)}%` : "—"}
+                  {formatBurnRatio(dm.burnRatio)}
                 </TableCell>
                 <TableCell className="text-right">
                   {d.alerts.alphaUndervalued ? <SignalChip label="UNDERVALUED" color="green" /> :
