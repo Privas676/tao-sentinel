@@ -74,6 +74,9 @@ export function useSubnetVerdicts(): VerdictSummary {
         stability: unifiedScore?.stability,
         dataConfidence: unifiedScore?.confianceScore,
         isWhitelisted,
+        oldEngineRisk: unifiedScore?.risk,
+        isOverridden: unifiedScore?.isOverridden,
+        systemStatus: unifiedScore?.systemStatus,
       };
 
       const result = computeVerdict(input);

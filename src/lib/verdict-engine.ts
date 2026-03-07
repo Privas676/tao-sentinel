@@ -49,7 +49,18 @@ export type VerdictInput = {
   stability?: number;        // 0-100
   dataConfidence?: number;   // 0-100
   isWhitelisted?: boolean;
+  // From old engine (cross-check)
+  oldEngineRisk?: number;    // 0-100 from useSubnetScores
+  isOverridden?: boolean;    // from protection engine
+  systemStatus?: string;     // "DEPEG" | "SURVEILLANCE" | etc.
 };
+
+/* ── Helpers ── */
+
+/** Treat stakeConcentration=0 as "unknown" with a moderate default */
+function effectiveConcentration(s: StakeSnapshot): number {
+  return s.stakeConcentration <= 0 ? 80 : s.stakeConcentration;
+}
 
 /* ═══════════════════════════════════════ */
 /*  COMPONENT SCORES                        */
@@ -217,9 +228,9 @@ function computeAdoptionQualityScore(s: StakeSnapshot, d: StakeDeltas, dm: Deriv
   else if (d.validatorsGrowth7d >= -0.05) score += 3;
   else score += 0;
 
-  // Concentration penalty
-  if (s.stakeConcentration > 75) score -= 10;
-  else if (s.stakeConcentration > 55) score -= 5;
+  // Concentration penalty — Bittensor-calibrated (90%+ is normal)
+  if (s.stakeConcentration > 98) score -= 8;
+  else if (s.stakeConcentration > 95) score -= 4;
 
   return clamp(Math.round(score), 0, 100);
 }
@@ -312,11 +323,11 @@ function computeStructureStability(s: StakeSnapshot, d: StakeDeltas, extStabilit
   } else {
     score += 25; // neutral
   }
-  // Concentration: lower = more stable
-  if (s.stakeConcentration < 30) score += 20;
-  else if (s.stakeConcentration < 50) score += 14;
-  else if (s.stakeConcentration < 70) score += 6;
-  else score += 0;
+  // Concentration: lower = more stable (Bittensor-calibrated)
+  if (s.stakeConcentration < 80) score += 20;
+  else if (s.stakeConcentration < 92) score += 14;
+  else if (s.stakeConcentration < 98) score += 8;
+  else score += 3;
   // Miners stable or growing
   if (d.minersGrowth7d > 0) score += 15;
   else if (d.minersGrowth7d > -0.05) score += 10;
@@ -342,10 +353,10 @@ function computeValidatorQuality(s: StakeSnapshot): number {
   else if (ratio > 2) score += 18;
   else if (ratio > 1) score += 10;
   else score += 3;
-  // Concentration inverse
-  if (s.stakeConcentration < 40) score += 20;
-  else if (s.stakeConcentration < 60) score += 12;
-  else score += 3;
+  // Concentration inverse (Bittensor-calibrated)
+  if (s.stakeConcentration < 85) score += 20;
+  else if (s.stakeConcentration < 95) score += 14;
+  else score += 5;
   // Miners count (real usage)
   if (s.minersActive >= 50) score += 15;
   else if (s.minersActive >= 20) score += 10;
@@ -435,13 +446,14 @@ function computeSellPressureScore(eco: EconomicContext, p: PriceContext): number
 }
 
 /* ── Concentration risk (0-100) ── */
+/* Bittensor subnets typically have 90-100% top-10 concentration; calibrated accordingly */
 function computeConcentrationRisk(s: StakeSnapshot): number {
   let score = 0;
-  // Stake concentration
-  if (s.stakeConcentration > 80) score += 45;
-  else if (s.stakeConcentration > 60) score += 32;
-  else if (s.stakeConcentration > 40) score += 18;
-  else if (s.stakeConcentration > 20) score += 8;
+  // Stake concentration — Bittensor-calibrated brackets
+  if (s.stakeConcentration > 98) score += 25;
+  else if (s.stakeConcentration > 95) score += 18;
+  else if (s.stakeConcentration > 85) score += 12;
+  else if (s.stakeConcentration > 70) score += 6;
   else score += 0;
   // Validator centralization
   if (s.validatorsActive <= 1) score += 30;
@@ -523,9 +535,9 @@ function computeSaturationRisk(s: StakeSnapshot, d: StakeDeltas, dm: DerivedMetr
   if (s.uidMax > 0 && s.uidUsed >= s.uidMax && d.minersGrowth7d < 0) score += 30;
   else if (s.uidMax > 0 && s.uidMax - s.uidUsed < 10) score += 15;
   else score += 0;
-  // High concentration + saturation
-  if (s.stakeConcentration > 60 && sat > 0.8) score += 20;
-  else if (s.stakeConcentration > 40 && sat > 0.9) score += 10;
+  // High concentration + saturation (Bittensor-calibrated)
+  if (s.stakeConcentration > 98 && sat > 0.8) score += 20;
+  else if (s.stakeConcentration > 95 && sat > 0.9) score += 10;
   // Low miners despite saturation
   if (sat > 0.8 && s.minersActive < 10) score += 10;
   return clamp(Math.round(score), 0, 100);
@@ -614,8 +626,8 @@ function collectReasons(input: VerdictInput, entryScore: number, holdScore: numb
   else if (d.minersGrowth7d < -0.10) reasons.push({ label: "Baisse des mineurs", positive: false });
 
   // Concentration
-  if (s.stakeConcentration > 70) reasons.push({ label: "Concentration stake excessive", positive: false });
-  else if (s.stakeConcentration < 30) reasons.push({ label: "Stake bien distribué", positive: true });
+  if (s.stakeConcentration > 98) reasons.push({ label: "Concentration stake extrême", positive: false });
+  else if (s.stakeConcentration < 85) reasons.push({ label: "Stake relativement distribué", positive: true });
 
   // Liquidity
   if (p.liquidity > 500) reasons.push({ label: "Liquidité correcte", positive: true });
@@ -663,20 +675,29 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
     };
   }
 
-  const entryScore = computeEntryScore(input);
-  const holdScore = computeHoldScore(input);
-  const exitRisk = computeExitRisk(input);
-  const confidence = computeConfidence(input, entryScore, holdScore, exitRisk);
-  const allReasons = collectReasons(input, entryScore, holdScore, exitRisk);
+  // Normalize: treat stakeConcentration=0 as "unknown" → moderate default
+  const normalizedInput: VerdictInput = {
+    ...input,
+    snapshot: {
+      ...input.snapshot,
+      stakeConcentration: effectiveConcentration(input.snapshot),
+    },
+  };
+
+  const entryScore = computeEntryScore(normalizedInput);
+  const holdScore = computeHoldScore(normalizedInput);
+  const exitRisk = computeExitRisk(normalizedInput);
+  const confidence = computeConfidence(normalizedInput, entryScore, holdScore, exitRisk);
+  const allReasons = collectReasons(normalizedInput, entryScore, holdScore, exitRisk);
 
   // ── Decision logic ──
   let verdict: Verdict;
 
-  if (exitRisk >= 50) {
+  if (exitRisk >= 55) {
     verdict = "SORS";
   } else if (entryScore >= 55 && exitRisk < 42) {
     verdict = "RENTRE";
-  } else if (holdScore >= 55 && exitRisk < 50) {
+  } else if (holdScore >= 50 && exitRisk < 55) {
     verdict = "HOLD";
   } else {
     // Conflict → prudent HOLD
@@ -705,9 +726,22 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
     verdict = "HOLD";
   }
 
-  // G5: Strong emissions but extreme concentration → don't upgrade
-  if (input.economicContext.emissionsPercent > 2 && input.snapshot.stakeConcentration > 75 && verdict === "RENTRE") {
+  // G5: Strong emissions but extreme concentration → don't upgrade (Bittensor: only >98%)
+  if (input.economicContext.emissionsPercent > 2 && normalizedInput.snapshot.stakeConcentration > 98 && verdict === "RENTRE") {
     verdict = "HOLD";
+  }
+
+  // G6: Override/Depeg from protection engine → force SORS
+  if (input.isOverridden && verdict !== "SORS") {
+    verdict = "SORS";
+  }
+  if (input.systemStatus === "DEPEG" && verdict !== "SORS") {
+    verdict = "SORS";
+  }
+
+  // G7: Old engine high risk cross-check → force SORS if old risk >= 70
+  if (input.oldEngineRisk != null && input.oldEngineRisk >= 70 && verdict !== "SORS") {
+    verdict = "SORS";
   }
 
   // Slice top 3 positive/negative reasons

@@ -111,7 +111,7 @@ describe("computeVerdict — HOLD", () => {
 describe("computeVerdict — SORS", () => {
   it("returns SORS for high exit risk", () => {
     const input = makeInput({
-      snapshot: makeSnapshot({ validatorsActive: 1, minersActive: 3, stakeConcentration: 85 }),
+      snapshot: makeSnapshot({ validatorsActive: 1, minersActive: 3, stakeConcentration: 99 }),
       deltas: makeDeltas({ stakeChange7d: -0.25, minersGrowth7d: -0.20 }),
       economicContext: makeEco({ sentiment: 0.25, sellVolume: 80, buyVolume: 20, sellersCount: 30, buyersCount: 5 }),
       priceContext: makePrice({ priceChange7d: -30, priceChange1d: -12, liquidity: 5, vol24h: 2 }),
@@ -119,7 +119,7 @@ describe("computeVerdict — SORS", () => {
     });
     const result = computeVerdict(input);
     expect(result.verdict).toBe("SORS");
-    expect(result.exitRisk).toBeGreaterThanOrEqual(50);
+    expect(result.exitRisk).toBeGreaterThanOrEqual(55);
   });
 });
 
@@ -150,7 +150,7 @@ describe("computeVerdict — Safety guards", () => {
 
   it("G5: blocks RENTRE on strong emissions but extreme concentration", () => {
     const input = makeInput({
-      snapshot: makeSnapshot({ stakeConcentration: 80 }),
+      snapshot: makeSnapshot({ stakeConcentration: 99 }),
       deltas: makeDeltas({ stakeChange7d: 0.25 }),
       economicContext: makeEco({ emissionsPercent: 3, sentiment: 0.7, emissionsPerDay: 600 }),
       priceContext: makePrice({ priceChange7d: 20, emissionShare: 3 }),
@@ -263,7 +263,7 @@ describe("computeExitRisk", () => {
   it("higher for concentrated + illiquid subnets", () => {
     const safe = computeExitRisk(makeInput());
     const risky = computeExitRisk(makeInput({
-      snapshot: makeSnapshot({ stakeConcentration: 90, validatorsActive: 1, minersActive: 2 }),
+      snapshot: makeSnapshot({ stakeConcentration: 99, validatorsActive: 1, minersActive: 2 }),
       priceContext: makePrice({ liquidity: 3 }),
       derivedMetrics: makeDerived({ poolBalance: 0.1 }),
     }));
