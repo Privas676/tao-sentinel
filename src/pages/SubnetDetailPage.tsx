@@ -57,7 +57,7 @@ function BarScore({ label, value, color }: { label: string; value: number; color
   const pct = Math.min(100, Math.max(0, value));
   return (
     <div className="flex items-center gap-2.5 py-[3px]">
-      <span className="text-muted-foreground/55 text-[10px] w-[90px] shrink-0">{label}</span>
+      <span className="text-muted-foreground text-[10px] w-[90px] shrink-0">{label}</span>
       <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/25">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: c }} />
       </div>
