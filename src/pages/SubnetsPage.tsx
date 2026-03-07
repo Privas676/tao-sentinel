@@ -201,7 +201,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
             </button>
           )}
           {row.owned && (
-            <div className="text-center font-mono text-[9px] text-muted-foreground/50 py-1">
+            <div className="text-center font-mono text-[9px] text-muted-foreground py-1">
               ★ {fr ? "Dans votre portefeuille" : "In your portfolio"}
             </div>
           )}
