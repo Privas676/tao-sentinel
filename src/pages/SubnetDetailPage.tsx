@@ -279,7 +279,7 @@ export default function SubnetDetailPage() {
                     </div>
                   ))
                 ) : (
-                  <div className="font-mono text-[10px] text-muted-foreground/25 italic">{fr ? "Aucune invalidation identifiée" : "No invalidation identified"}</div>
+                  <div className="font-mono text-[10px] text-muted-foreground italic">{fr ? "Aucune invalidation identifiée" : "No invalidation identified"}</div>
                 )}
               </div>
             </div>
