@@ -465,6 +465,7 @@ export default function SubnetsPage() {
                       </span>
                     )}
                   </td>
+                  {isVisible("verdict") && (
                   <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
                     {r.verdict ? (
                       <VerdictBadgeWithTooltip
@@ -481,6 +482,8 @@ export default function SubnetsPage() {
                       <span className="font-mono text-[9px] text-white/15">—</span>
                     )}
                   </td>
+                  )}
+                  {isVisible("dstate") && (
                   <td className="py-3 px-2 text-center relative group/ds">
                     {(() => {
                       const ds = decisionStates?.get(r.netuid);
@@ -499,7 +502,6 @@ export default function SubnetsPage() {
                             style={{ background: `${col}15`, color: col, border: `1px solid ${col}40` }}>
                             {sev >= 3 ? "🚨" : sev >= 2 ? "⚠" : "👁"} {stateLabel(st)}
                           </span>
-                          {/* Rich tooltip */}
                           <div className={`absolute left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover/ds:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                             style={{ width: 220 }}>
                             <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
@@ -544,15 +546,21 @@ export default function SubnetsPage() {
                       );
                     })()}
                   </td>
+                  )}
+                  {isVisible("status") && (
                   <td className="py-3 px-2 text-center">
                     <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
                       style={{ color: systemStatusColor(r.systemStatus), background: `${systemStatusColor(r.systemStatus)}15`, border: `1px solid ${systemStatusColor(r.systemStatus)}30` }}>
                       {systemStatusLabel(r.systemStatus)}
                     </span>
                   </td>
+                  )}
+                  {isVisible("price") && (
                   <td className="py-3 px-2 text-right font-mono text-[11px]" style={{ color: "rgba(255,255,255,0.65)" }}>
                     {r.alphaPrice > 0 ? r.alphaPrice.toFixed(5) : "—"}
                   </td>
+                  )}
+                  {isVisible("var30d") && (
                   <td className="py-3 px-2 text-right font-mono text-[11px] font-bold" style={{
                     color: r.priceVar30d == null ? "rgba(255,255,255,0.2)"
                       : r.priceVar30d > 0 ? "rgba(76,175,80,0.85)"
@@ -561,10 +569,13 @@ export default function SubnetsPage() {
                   }}>
                     {r.priceVar30d != null ? `${r.priceVar30d > 0 ? "+" : ""}${r.priceVar30d.toFixed(0)}%` : "—"}
                   </td>
+                  )}
+                  {isVisible("spark") && (
                   <td className="py-3 px-2 text-center"><Sparkline data={r.spark} /></td>
+                  )}
+                  {isVisible("opp") && (
                   <td className="py-3 px-2 text-right font-bold text-sm relative group/opp" style={{ color: oppC }}>
                     {r.opp}
-                    {/* Opportunity ScoreFactors tooltip */}
                     <div className={`absolute right-0 pointer-events-none opacity-0 group-hover/opp:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                       style={{ width: 230 }}>
                       <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
@@ -602,9 +613,10 @@ export default function SubnetsPage() {
                       </div>
                     </div>
                   </td>
+                  )}
+                  {isVisible("risk") && (
                   <td className="py-3 px-2 text-right font-bold text-sm relative group/rsk" style={{ color: rskC }}>
                     {r.risk}
-                    {/* Risk ScoreFactors tooltip */}
                     <div className={`absolute right-0 pointer-events-none opacity-0 group-hover/rsk:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                       style={{ width: 230 }}>
                       <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
@@ -651,7 +663,8 @@ export default function SubnetsPage() {
                       </div>
                     </div>
                   </td>
-                  {mode === "risks" && (() => {
+                  )}
+                  {isVisible("depeg") && mode === "risks" && (() => {
                     const dp = r.depegProbability;
                     const dpColor = dp >= 85 ? "rgba(229,57,53,0.95)" : dp >= 70 ? "rgba(255,152,0,0.9)" : dp >= 30 ? "rgba(255,193,7,0.7)" : "rgba(76,175,80,0.7)";
                     const dpLabel = r.depegState === "CONFIRMED" ? "🔴" : r.depegState === "WATCH" || r.depegState === "WAITLIST" ? "🟠" : "";
@@ -680,9 +693,12 @@ export default function SubnetsPage() {
                       </td>
                     );
                   })()}
+                  {isVisible("asymmetry") && (
                   <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: r.asymmetry > 20 ? "rgba(76,175,80,0.8)" : r.asymmetry > 0 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)" }}>
                     {r.asymmetry > 0 ? "+" : ""}{r.asymmetry}
                   </td>
+                  )}
+                  {isVisible("action") && (
                   <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] tracking-wider font-bold"
                       style={{
@@ -694,21 +710,29 @@ export default function SubnetsPage() {
                       {actionLabel}
                     </span>
                   </td>
+                  )}
+                  {isVisible("momentum") && (
                   <td className="py-3 px-2 text-center">
                     <span className="font-mono text-[11px] font-bold" style={{ color: momColor }}>
                       {r.momentumLabel}
                     </span>
                   </td>
+                  )}
+                  {isVisible("sc") && (
                   <td className="py-3 px-2 text-center">
                     <span className="font-mono text-[10px] font-bold" style={{ color: scColor(r.sc) }}>
                       {scLabelFn(r.sc)}
                     </span>
                   </td>
+                  )}
+                  {isVisible("confiance") && (
                   <td className="py-3 px-2 text-right">
                     <span className="font-mono text-xs font-bold" style={{ color: confianceColor(r.confianceScore) }}>
                       {r.confianceScore}%
                     </span>
                   </td>
+                  )}
+                  {isVisible("health") && (
                   <td className="py-3 px-2 text-center">
                     <button
                       onClick={(e) => { e.stopPropagation(); setHealthPanel({ netuid: r.netuid, name: r.name, recalc: r.recalc, scores: r.healthScores, displayedCap: r.displayedCap, displayedLiq: r.displayedLiq }); }}
@@ -717,6 +741,8 @@ export default function SubnetsPage() {
                       🔬
                     </button>
                   </td>
+                  )}
+                  {isVisible("tmc") && (
                   <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={(e) => { e.stopPropagation(); setTmcPanel({ netuid: r.netuid, name: r.name }); }}
@@ -725,6 +751,8 @@ export default function SubnetsPage() {
                       📊
                     </button>
                   </td>
+                  )}
+                  {isVisible("owned") && (
                   <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
                     {r.owned ? (
                       <span style={{ color: "rgba(76,175,80,0.8)", fontSize: 14 }}>✔</span>
@@ -736,6 +764,7 @@ export default function SubnetsPage() {
                       </button>
                     )}
                   </td>
+                  )}
                 </tr>
               );
             })}
