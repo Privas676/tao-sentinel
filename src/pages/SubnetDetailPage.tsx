@@ -197,10 +197,10 @@ export default function SubnetDetailPage() {
   if (!s) {
     return (
       <div className="h-full w-full bg-background text-foreground p-6 flex flex-col items-center justify-center gap-4">
-        <div className="animate-pulse font-mono text-muted-foreground/40 text-sm tracking-widest">
+        <div className="animate-pulse font-mono text-muted-foreground text-sm tracking-widest">
           {fr ? "Chargement..." : "Loading..."}
         </div>
-        <Link to="/subnets" className="font-mono text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors">← Subnets</Link>
+        <Link to="/subnets" className="font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors">← Subnets</Link>
       </div>
     );
   }
