@@ -314,7 +314,7 @@ export default function SubnetDetailPage() {
         <Section icon="⚠️" title={fr ? "Risques" : "Risks"}>
           <div className="space-y-1">
             <Metric label="Depeg" value={`${score.depegProbability}%`} color={score.depegProbability >= 50 ? "rgba(229,57,53,0.9)" : score.depegProbability >= 25 ? "rgba(255,152,0,0.8)" : "rgba(76,175,80,0.7)"} />
-            <Metric label={fr ? "Catégorie delist" : "Delist category"} value={score.delistCategory} color={score.delistCategory === "SAFE" ? "rgba(76,175,80,0.7)" : score.delistCategory === "CRITICAL" ? "rgba(229,57,53,0.9)" : "rgba(255,193,7,0.8)"} />
+            <Metric label={fr ? "Catégorie delist" : "Delist category"} value={score.delistCategory} color={score.delistCategory === "NORMAL" ? "rgba(76,175,80,0.7)" : score.delistCategory === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.9)" : "rgba(255,193,7,0.8)"} />
             <Metric label={fr ? "Score delist" : "Delist score"} value={score.delistScore} />
             {score.isOverridden && (
               <div className="mt-2 p-2 rounded-lg" style={{ background: "rgba(229,57,53,0.06)", border: "1px solid rgba(229,57,53,0.15)" }}>
