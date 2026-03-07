@@ -443,7 +443,7 @@ export default function CompassPage() {
                 >
                   <span className="font-mono text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</span>
                   <span className="font-mono text-[10px] text-muted-foreground/50 truncate pr-2">{s.name}</span>
-                  <span className="font-mono text-[9px] font-bold" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTRY" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</span>
+                  <span className="font-mono text-[9px] font-bold" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTER" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</span>
                   <span className="font-mono text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</span>
                   <span className="font-mono text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</span>
                   <span className="font-mono text-[10px]" style={{ color: s.momentumScore >= 55 ? "hsl(145,65%,48%)" : s.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>{s.momentumScore}</span>
