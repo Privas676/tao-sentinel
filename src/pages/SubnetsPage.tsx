@@ -224,7 +224,7 @@ function MetricMini({ label, value, color }: { label: string; value: string | nu
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground/40">{label}</span>
+      <span className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground">{label}</span>
       {children}
     </div>
   );
