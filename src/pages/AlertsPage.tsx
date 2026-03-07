@@ -299,7 +299,7 @@ function AlertCard({ group, fr, scores, onDismiss }: {
   const borderStyle = sev === "critical" ? { borderLeftColor: BREAK } : sev === "warning" ? { borderLeftColor: WARN } : {};
 
   return (
-    <div className={`rounded-lg border border-border bg-card overflow-hidden border-l-[3px] ${borderColor}`}>
+    <div className="rounded-lg border border-border bg-card overflow-hidden border-l-[3px]" style={borderStyle}>
       <div
         className={`px-4 py-3 ${group.count > 1 ? "cursor-pointer" : ""}`}
         onClick={() => group.count > 1 && setExpanded(!expanded)}
