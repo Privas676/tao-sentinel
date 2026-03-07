@@ -332,6 +332,7 @@ export function useStakeAnalytics() {
         const dm = computeDerivedMetrics(pc.economicContext, pc.priceContext, pc.snapshot);
         const scores = computeRadarScores(pc.snapshot, pc.deltas, pc.priceContext, crossSubnet, pc.economicContext, dm);
         const alerts = checkAlerts(pc.snapshot, pc.deltas, scores, pc.priceContext);
+        const ammMetrics = computeAMMMetrics(pc.economicContext);
 
         return {
           netuid: pc.netuid,
@@ -343,6 +344,7 @@ export function useStakeAnalytics() {
           priceContext: pc.priceContext,
           economicContext: pc.economicContext,
           derivedMetrics: dm,
+          ammMetrics,
           stakeChange24hPct: pc.deltas.stakeChange24h * 100,
           stakeChange7dPct: pc.deltas.stakeChange7d * 100,
           sparklineCapital: pc.sparklineCapital,
