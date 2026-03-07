@@ -189,8 +189,13 @@ describe("computeVerdict — Confidence", () => {
     expect(result.confidence).toBe("forte");
   });
 
-  it("faible when data confidence is low", () => {
-    const result = computeVerdict(makeInput({ dataConfidence: 30 }));
+  it("faible when data confidence is very low", () => {
+    const result = computeVerdict(makeInput({
+      dataConfidence: 10,
+      priceContext: makePrice({ currentPrice: 0, marketCap: 0, liquidity: 0, vol24h: 0 }),
+      snapshot: makeSnapshot({ validatorsActive: 0, minersActive: 0 }),
+      economicContext: makeEco({ taoInPool: 0, alphaInPool: 0, emissionsPerDay: 0, buyVolume: 0, sellVolume: 0, circulatingSupply: 0, buyersCount: 0, sellersCount: 0 }),
+    }));
     expect(result.confidence).toBe("faible");
   });
 });
