@@ -490,7 +490,7 @@ export default function PortfolioPage() {
                       P&L: {a.pnl_estimated >= 0 ? "+" : ""}{a.pnl_estimated.toFixed(4)} τ
                     </span>
                   )}
-                  <span className="text-muted-foreground/15 ml-auto">{new Date(a.closed_at).toLocaleDateString()}</span>
+                  <span className="text-muted-foreground ml-auto">{new Date(a.closed_at).toLocaleDateString()}</span>
                 </div>
               ))}
             </div>
