@@ -135,7 +135,7 @@ function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
 
           {/* Thesis */}
           {thesis.length > 0 && (
-            <div className="rounded-lg p-3" style={{ background: "hsla(145,65%,48%,0.03)", border: "1px solid hsla(145,65%,48%,0.08)" }}>
+            <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-go), 0.03)", border: "1px solid hsla(var(--signal-go), 0.08)" }}>
               <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
                 {fr ? "THÈSE" : "THESIS"}
               </div>
