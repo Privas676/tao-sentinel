@@ -319,7 +319,7 @@ export default function CompassPage() {
                 🛡 SAFE MODE
               </span>
             )}
-            <span className="ml-auto font-mono text-[8px] text-muted-foreground/65">{scoresList.length} subnets</span>
+            <span className="ml-auto font-mono text-[8px] text-muted-foreground">{scoresList.length} subnets</span>
           </div>
 
           <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.025) 0%, hsla(0,0%,100%,0.005) 100%)", border: "1px solid hsla(var(--gold), 0.08)" }}>
