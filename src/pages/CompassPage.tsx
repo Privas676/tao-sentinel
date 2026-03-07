@@ -400,7 +400,11 @@ export default function CompassPage() {
             }
           />
           {verdictLoading ? (
-            <div className="py-10 text-center font-mono text-[10px] text-muted-foreground/20">{fr ? "Chargement…" : "Loading…"}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="rounded-xl h-48 animate-pulse" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }} />
+              ))}
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {sections.map(s => (
