@@ -280,7 +280,7 @@ export default function CompassPage() {
   // ── Tactical summary ──
   const tacticalSummary = useMemo(() => {
     if (!enrichedSignals.length) return "";
-    const entryCount = enrichedSignals.filter(s => s.action === "ENTRY").length;
+    const entryCount = enrichedSignals.filter(s => s.action === "ENTER").length;
     const exitCount = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).length;
     if (fr) {
       if (sentinelIndex >= 65 && entryCount >= 5) return `Conditions favorables — ${entryCount} opportunités d'entrée identifiées, momentum haussier.`;
