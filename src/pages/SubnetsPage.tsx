@@ -541,7 +541,7 @@ export default function SubnetsPage() {
                       key={r.netuid}
                       className="transition-colors cursor-pointer hover:bg-accent/30"
                       style={{
-                        borderBottom: "1px solid hsla(0,0%,100%,0.03)",
+                        borderBottom: "1px solid hsl(var(--border))",
                         ...(r.isOverridden ? { background: "hsla(var(--signal-break), 0.03)", borderLeft: "2px solid hsla(var(--signal-break), 0.4)" } : {}),
                       }}
                       onClick={() => setDrawerRow(r)}
