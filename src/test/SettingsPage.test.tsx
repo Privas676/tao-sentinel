@@ -10,15 +10,7 @@ let currentDelistMode = "manual";
 
 vi.mock("@/lib/i18n", () => ({
   useI18n: () => ({
-    t: (k: string) => {
-      const map: Record<string, string> = {
-        "settings.title": "PARAMÈTRES",
-        "settings.language": "LANGUE",
-        "settings.refresh": "RAFRAÎCHISSEMENT",
-        "settings.thresholds": "SEUILS",
-      };
-      return map[k] ?? k;
-    },
+    t: (k: string) => k,
     lang: currentLang,
     setLang: mockSetLang,
   }),
@@ -35,6 +27,14 @@ vi.mock("@/hooks/use-delist-mode", () => ({
   useDelistMode: () => ({
     delistMode: currentDelistMode,
     setDelistMode: mockSetDelistMode,
+  }),
+}));
+
+vi.mock("@/hooks/use-push-notifications", () => ({
+  usePushNotifications: () => ({
+    state: "idle",
+    subscribe: vi.fn(),
+    unsubscribe: vi.fn(),
   }),
 }));
 
@@ -55,12 +55,11 @@ describe("SettingsPage", () => {
 
   it("renders page title", () => {
     renderSettings();
-    expect(screen.getByText("PARAMÈTRES")).toBeInTheDocument();
+    expect(screen.getByText("Réglages")).toBeInTheDocument();
   });
 
-  it("renders language section", () => {
+  it("renders language options", () => {
     renderSettings();
-    expect(screen.getByText("LANGUE")).toBeInTheDocument();
     expect(screen.getByText("Français")).toBeInTheDocument();
     expect(screen.getByText("English")).toBeInTheDocument();
   });
@@ -77,20 +76,15 @@ describe("SettingsPage", () => {
     expect(mockSetLang).toHaveBeenCalledWith("fr");
   });
 
-  it("renders delist detection section", () => {
-    renderSettings();
-    expect(screen.getByText("DÉTECTION DEPEG / DELIST")).toBeInTheDocument();
-  });
-
-  it("renders manual and auto delist options", () => {
+  it("renders delist detection options", () => {
     renderSettings();
     expect(screen.getByText("📋 Manuel")).toBeInTheDocument();
-    expect(screen.getByText("🤖 Auto (Taostats)")).toBeInTheDocument();
+    expect(screen.getByText("🤖 Auto")).toBeInTheDocument();
   });
 
   it("clicking auto delist calls setDelistMode", () => {
     renderSettings();
-    fireEvent.click(screen.getByText("🤖 Auto (Taostats)"));
+    fireEvent.click(screen.getByText("🤖 Auto"));
     expect(mockSetDelistMode).toHaveBeenCalledWith("auto_taostats");
   });
 
@@ -100,9 +94,8 @@ describe("SettingsPage", () => {
     expect(mockSetDelistMode).toHaveBeenCalledWith("manual");
   });
 
-  it("renders override mode section with strict and permissive", () => {
+  it("renders override mode options", () => {
     renderSettings();
-    expect(screen.getByText("MODE ALERTES OVERRIDE")).toBeInTheDocument();
     expect(screen.getByText("🛡 Strict")).toBeInTheDocument();
     expect(screen.getByText("⚡ Permissif")).toBeInTheDocument();
   });
@@ -130,20 +123,14 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/Toutes les alertes override/)).toBeInTheDocument();
   });
 
-  it("renders TMC context section", () => {
-    renderSettings();
-    expect(screen.getByText("CONTEXTE MARCHÉ (TMC)")).toBeInTheDocument();
-  });
-
   it("renders refresh interval display", () => {
     renderSettings();
-    expect(screen.getByText("RAFRAÎCHISSEMENT")).toBeInTheDocument();
-    expect(screen.getByText(/60s.*300s/)).toBeInTheDocument();
+    expect(screen.getByText("Signals: 60s")).toBeInTheDocument();
+    expect(screen.getByText("Sparklines: 300s")).toBeInTheDocument();
   });
 
   it("renders threshold table", () => {
     renderSettings();
-    expect(screen.getByText("SEUILS")).toBeInTheDocument();
     expect(screen.getByText("PSI 35–55")).toBeInTheDocument();
     expect(screen.getByText("PSI 55–70")).toBeInTheDocument();
     expect(screen.getByText("PSI 70–85")).toBeInTheDocument();
