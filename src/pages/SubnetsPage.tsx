@@ -270,8 +270,8 @@ export default function SubnetsPage() {
         if (search && !r.name.toLowerCase().includes(searchLower) && !String(r.netuid).includes(searchLower)) return false;
         if (scope === "PORTFOLIO" && !r.owned) return false;
         if (actionFilter === "ENTER" && r.action !== "ENTER") return false;
-        if (actionFilter === "HOLD" && r.action !== "HOLD" && r.action !== "STAKE" && r.action !== "NEUTRAL" && r.action !== "WATCH" && r.action !== "ACCUMULATE") return false;
-        if (actionFilter === "EXIT" && r.action !== "EXIT" && r.action !== "SELL") return false;
+        if (actionFilter === "HOLD" && r.action !== "HOLD" && r.action !== "STAKE" && r.action !== "NEUTRAL" && r.action !== "WATCH") return false;
+        if (actionFilter === "EXIT" && r.action !== "EXIT") return false;
         if (statusFilter === "OK" && r.statusLevel !== "OK") return false;
         if (statusFilter === "WATCH" && r.statusLevel !== "WATCH") return false;
         if (statusFilter === "DANGER" && r.statusLevel !== "DANGER") return false;
