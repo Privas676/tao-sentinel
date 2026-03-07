@@ -15,7 +15,7 @@ import { SectionCard, SectionTitle, KPIChip, Metric, BarScore, GOLD, GO, WARN, B
 /*   SUBNET COMMAND CENTER — Decision-First Architecture   */
 /* ═══════════════════════════════════════════════════════ */
 
-function Sparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number; h?: number }) {
+function DetailSparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number; h?: number }) {
   if (data.length < 2) return <span className="text-muted-foreground text-[9px] italic">no data</span>;
   const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
   const trend = data[data.length - 1] - data[0];
