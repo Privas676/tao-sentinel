@@ -17,6 +17,7 @@ import {
   actionColor, actionIcon, actionLabel,
 } from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
+import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
 
 /* ═══════════════════════════════════════════════ */
 /*   SUBNET INTELLIGENCE — Unified Master Table   */
@@ -33,44 +34,18 @@ type ViewMode = "compact" | "analytic";
 
 type SortCol = "netuid" | "name" | "action" | "conviction" | "confidence" | "risk" | "momentum" | "opp" | "liquidity" | "stability" | null;
 
-/* ─── Enriched row type ─── */
+/* ─── Enriched row type — uses SubnetDecision as the source of truth ─── */
 type TableRow = UnifiedSubnetScore & {
   owned: boolean;
   spark: number[];
   verdict?: SubnetVerdictData;
+  decision: SubnetDecision;
   convictionLevel: "HIGH" | "MEDIUM" | "LOW";
   liquidityLevel: "HIGH" | "MEDIUM" | "LOW";
   structureLevel: "HEALTHY" | "FRAGILE" | "CONCENTRATED";
   statusLevel: "OK" | "WATCH" | "DANGER";
   signalPrincipal: string;
 };
-
-/* ─── Helpers ─── */
-function convictionFromScore(score: number): "HIGH" | "MEDIUM" | "LOW" {
-  return score >= 70 ? "HIGH" : score >= 40 ? "MEDIUM" : "LOW";
-}
-function liquidityFromHealth(health: number): "HIGH" | "MEDIUM" | "LOW" {
-  return health >= 60 ? "HIGH" : health >= 30 ? "MEDIUM" : "LOW";
-}
-function structureFromStability(stability: number, isOverridden: boolean): "HEALTHY" | "FRAGILE" | "CONCENTRATED" {
-  if (isOverridden) return "CONCENTRATED";
-  return stability >= 60 ? "HEALTHY" : stability >= 35 ? "FRAGILE" : "CONCENTRATED";
-}
-function statusFromSystem(s: UnifiedSubnetScore): "OK" | "WATCH" | "DANGER" {
-  if (s.isOverridden || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEPEG" || s.systemStatus === "DEREGISTRATION") return "DANGER";
-  if (s.isWarning || s.systemStatus === "SURVEILLANCE") return "WATCH";
-  return "OK";
-}
-function mainSignal(s: UnifiedSubnetScore, fr: boolean): string {
-  if (s.isOverridden) return s.overrideReasons[0] || (fr ? "Zone critique" : "Critical zone");
-  if (s.depegProbability >= 50) return fr ? `Depeg ${s.depegProbability}%` : `Depeg ${s.depegProbability}%`;
-  if (s.delistCategory !== "NORMAL") return fr ? "Risque delist" : "Delist risk";
-  if (s.action === "ENTER" && s.opp > 60) return fr ? "Forte opportunité" : "Strong opportunity";
-  if (s.action === "EXIT") return fr ? "Signal de sortie" : "Exit signal";
-  if (s.momentumScore >= 70) return fr ? "Momentum haussier" : "Bullish momentum";
-  if (s.risk > 60) return fr ? "Risque élevé" : "High risk";
-  return fr ? "Stable" : "Stable";
-}
 
 
 /* ─── Saved views ─── */
@@ -92,15 +67,9 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
   if (!row) return null;
 
   const verdict = row.verdict;
-  const thesis = verdict?.positiveReasons?.slice(0, 3) || [];
-  const invalidation = verdict?.negativeReasons?.slice(0, 3) || [];
-
-  /* Map to ActionBadge type */
-  const badgeAction = row.action === "ENTER" ? "RENTRE" as const
-    : row.action === "EXIT" ? "SORS" as const
-    : row.action === "STAKE" ? "RENFORCER" as const
-    : row.action === "WATCH" ? "SURVEILLER" as const
-    : "HOLD" as const;
+  const decision = row.decision;
+  const thesis = decision.thesis;
+  const invalidation = decision.invalidation;
 
   /* Alerts */
   const alerts: { icon: string; text: string; color: string }[] = [];
@@ -108,6 +77,8 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
   if (row.depegProbability >= 50) alerts.push({ icon: "⚠", text: `Depeg ${row.depegProbability}%`, color: "hsl(var(--signal-go-spec))" });
   if (row.delistCategory !== "NORMAL") alerts.push({ icon: "🔴", text: fr ? `Risque delist (${row.delistCategory})` : `Delist risk (${row.delistCategory})`, color: "hsl(var(--destructive))" });
   if (row.dataUncertain) alerts.push({ icon: "❓", text: fr ? "Données incertaines" : "Uncertain data", color: "hsl(var(--muted-foreground))" });
+  // Conflict explanation as an info alert
+  if (decision.conflictExplanation) alerts.push({ icon: "⚖️", text: decision.conflictExplanation, color: "hsl(var(--signal-go-spec))" });
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -124,8 +95,8 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
             </div>
           </SheetHeader>
           <div className="flex items-center justify-between mt-3">
-            <ActionBadge action={badgeAction} />
-            <span className="font-mono text-[11px] font-bold text-foreground/80">{row.signalPrincipal}</span>
+            <ActionBadge action={decision.badgeAction} />
+            <span className="font-mono text-[11px] font-bold text-foreground/80">{decision.signalPrincipal}</span>
           </div>
         </div>
 
@@ -310,17 +281,18 @@ export default function SubnetsPage() {
     return scoresList
       .map(s => {
         const verdict = verdicts.get(s.netuid);
-        const convictionScore = verdict ? Math.max(verdict.entryScore, verdict.holdScore) : Math.abs(s.opp - s.risk) * (s.conf / 100);
+        const decision = buildSubnetDecision(s, verdict, fr);
         return {
           ...s,
           owned: ownedNetuids.has(s.netuid),
           spark: sparklines?.get(s.netuid) || [],
           verdict,
-          convictionLevel: convictionFromScore(convictionScore),
-          liquidityLevel: liquidityFromHealth(s.healthScores.liquidityHealth),
-          structureLevel: structureFromStability(s.stability, s.isOverridden),
-          statusLevel: statusFromSystem(s),
-          signalPrincipal: mainSignal(s, fr),
+          decision,
+          convictionLevel: decision.conviction,
+          liquidityLevel: decision.liquidityLevel,
+          structureLevel: decision.structureLevel,
+          statusLevel: decision.statusLevel,
+          signalPrincipal: decision.signalPrincipal,
         } as TableRow;
       })
       .filter(r => {

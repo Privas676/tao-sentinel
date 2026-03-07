@@ -4,6 +4,7 @@ import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
+import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
 import { confianceColor } from "@/lib/data-fusion";
 import SwipeHint from "@/components/SwipeHint";
 
@@ -84,26 +85,11 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
   );
 }
 
-/* ── Action helpers ── */
-function portfolioAction(s: UnifiedSubnetScore | undefined): "REINFORCE" | "HOLD" | "REDUCE" | "EXIT" {
-  if (!s) return "HOLD";
-  if (s.isOverridden || s.action === "EXIT") return "EXIT";
-  if (s.risk > 65 || s.depegProbability >= 40) return "REDUCE";
-  if (s.action === "ENTER" || s.action === "STAKE") return "REINFORCE";
-  return "HOLD";
-}
-
-function portfolioActionLabel(a: string, fr: boolean): string {
-  if (a === "REINFORCE") return fr ? "RENFORCER" : "REINFORCE";
-  if (a === "EXIT") return fr ? "SORTIR" : "EXIT";
-  if (a === "REDUCE") return fr ? "RÉDUIRE" : "REDUCE";
-  return fr ? "CONSERVER" : "HOLD";
-}
-
+/* ── Action helpers — use unified decision source ── */
 function portfolioActionColor(a: string): string {
-  if (a === "REINFORCE") return GO;
-  if (a === "EXIT") return BREAK;
-  if (a === "REDUCE") return WARN;
+  if (a === "RENFORCER") return GO;
+  if (a === "SORTIR") return BREAK;
+  if (a === "REDUIRE" || a === "RÉDUIRE") return WARN;
   return MUTED;
 }
 
@@ -162,9 +148,10 @@ export default function PortfolioPage() {
     const netuid = pos.subnet_id;
     const s = scores.get(netuid);
     const v = verdicts.get(netuid);
+    const decision = s ? buildSubnetDecision(s, v, fr) : null;
     const alphaPriceTao = s?.consensusPrice ?? 0;
     const alphaQty = alphaPriceTao > 0 ? pos.quantity_tao / alphaPriceTao : 0;
-    const pAction = portfolioAction(s);
+    const pAction = decision?.portfolioActionFr ?? "CONSERVER";
     return {
       netuid, name: s?.name || `SN-${netuid}`,
       taoInvest: pos.quantity_tao, entryPrice: pos.entry_price, alphaPriceTao, alphaQty,
@@ -176,9 +163,9 @@ export default function PortfolioPage() {
       depegProbability: s?.depegProbability ?? 0,
       delistCategory: s?.delistCategory ?? "NORMAL",
       healthScores: s?.healthScores ?? { liquidityHealth: 50, activityHealth: 50, emissionPressure: 50, dilutionRisk: 50, concentrationRisk: 50 },
-      verdict: v, score: s,
+      verdict: v, score: s, decision,
     };
-  }), [portfolio.positions, scores, verdicts]);
+  }), [portfolio.positions, scores, verdicts, fr]);
 
   /* ── Portfolio analytics ── */
   const analytics = useMemo(() => {
@@ -191,10 +178,10 @@ export default function PortfolioPage() {
     }, 0) / rows.length;
     const avgRisk = rows.reduce((a, r) => a + r.risk, 0) / rows.length;
     const maxWeight = Math.max(...weights.map(w => w.weight));
-    const reinforceCount = rows.filter(r => r.pAction === "REINFORCE").length;
-    const reduceCount = rows.filter(r => r.pAction === "REDUCE").length;
-    const exitCount = rows.filter(r => r.pAction === "EXIT").length;
-    const holdCount = rows.filter(r => r.pAction === "HOLD").length;
+    const reinforceCount = rows.filter(r => r.pAction === "RENFORCER").length;
+    const reduceCount = rows.filter(r => r.pAction === "RÉDUIRE").length;
+    const exitCount = rows.filter(r => r.pAction === "SORTIR").length;
+    const holdCount = rows.filter(r => r.pAction === "CONSERVER").length;
     const fragilePositions = rows.filter(r => r.isOverridden || r.depegProbability >= 30 || r.risk > 70);
 
     // Alignment score
@@ -220,10 +207,10 @@ export default function PortfolioPage() {
   /* ── Action categories for executive summary ── */
   const actionCategories = useMemo(() => {
     if (!analytics) return null;
-    const exitRows = rows.filter(r => r.pAction === "EXIT").sort((a, b) => b.risk - a.risk);
-    const reduceRows = rows.filter(r => r.pAction === "REDUCE").sort((a, b) => b.risk - a.risk);
-    const reinforceRows = rows.filter(r => r.pAction === "REINFORCE").sort((a, b) => b.opp - a.opp);
-    const holdRows = rows.filter(r => r.pAction === "HOLD");
+    const exitRows = rows.filter(r => r.pAction === "SORTIR").sort((a, b) => b.risk - a.risk);
+    const reduceRows = rows.filter(r => r.pAction === "RÉDUIRE").sort((a, b) => b.risk - a.risk);
+    const reinforceRows = rows.filter(r => r.pAction === "RENFORCER").sort((a, b) => b.opp - a.opp);
+    const holdRows = rows.filter(r => r.pAction === "CONSERVER");
     return [
       { key: "exit", label: fr ? "À VENDRE" : "SELL NOW", icon: "🔴", color: BREAK, rows: exitRows, priority: exitRows.length > 0 },
       { key: "reduce", label: fr ? "À SURVEILLER" : "MONITOR", icon: "⚠", color: WARN, rows: reduceRows, priority: reduceRows.length > 0 },
@@ -498,7 +485,7 @@ export default function PortfolioPage() {
                             background: `color-mix(in srgb, ${aColor} 8%, transparent)`,
                             border: `1px solid color-mix(in srgb, ${aColor} 15%, transparent)`,
                           }}>
-                            {portfolioActionLabel(r.pAction, fr)}
+                            {r.pAction}
                           </span>
                         </td>
                         <td className="py-3 px-3 font-mono text-[9px] text-muted-foreground" style={{ maxWidth: 130 }}>

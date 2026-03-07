@@ -10,6 +10,7 @@ import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
 import { ActionBadge } from "@/components/sentinel";
 import { SectionCard, SectionTitle, KPIChip, Metric, BarScore, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
+import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SUBNET COMMAND CENTER — Decision-First Architecture   */
@@ -28,28 +29,19 @@ function DetailSparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number
   );
 }
 
-/* ── Logic helpers ── */
+/* ── Logic helpers — use unified decision source ── */
 
-function convictionLevel(s: UnifiedSubnetScore, v?: SubnetVerdictData): { level: "HIGH" | "MEDIUM" | "LOW"; score: number } {
-  const raw = v ? Math.max(v.entryScore, v.holdScore) : Math.abs(s.opp - s.risk) * (s.conf / 100);
-  return { level: raw >= 70 ? "HIGH" : raw >= 40 ? "MEDIUM" : "LOW", score: Math.round(raw) };
-}
-
-function actionLabel(a: string): "RENTRE" | "SORS" | "RENFORCER" | "HOLD" {
-  return a === "ENTER" ? "RENTRE" : a === "EXIT" ? "SORS" : a === "STAKE" ? "RENFORCER" : "HOLD";
-}
-
-function urgency(s: UnifiedSubnetScore, fr: boolean): { text: string; color: string } {
-  if (s.isOverridden) return { text: fr ? "Immédiate — sortie forcée" : "Immediate — forced exit", color: BREAK };
-  if (s.depegProbability >= 50) return { text: fr ? "Haute — risque depeg" : "High — depeg risk", color: BREAK };
-  if (s.action === "EXIT") return { text: fr ? "Haute" : "High", color: BREAK };
-  if (s.action === "ENTER" && s.opp > 65) return { text: fr ? "Haute — fenêtre ouverte" : "High — window open", color: GO };
+function urgency(d: SubnetDecision, fr: boolean): { text: string; color: string } {
+  if (d.isOverridden) return { text: fr ? "Immédiate — sortie forcée" : "Immediate — forced exit", color: BREAK };
+  if (d.depegProbability >= 50) return { text: fr ? "Haute — risque depeg" : "High — depeg risk", color: BREAK };
+  if (d.engineAction === "EXIT") return { text: fr ? "Haute" : "High", color: BREAK };
+  if (d.engineAction === "ENTER" && d.opp > 65) return { text: fr ? "Haute — fenêtre ouverte" : "High — window open", color: GO };
   return { text: fr ? "Normale" : "Normal", color: MUTED };
 }
 
-function horizon(s: UnifiedSubnetScore, fr: boolean): string {
-  if (s.action === "ENTER") return fr ? "Court à moyen terme" : "Short to medium term";
-  if (s.action === "HOLD" || s.action === "STAKE") return fr ? "Moyen terme" : "Medium term";
+function horizon(d: SubnetDecision, fr: boolean): string {
+  if (d.engineAction === "ENTER") return fr ? "Court à moyen terme" : "Short to medium term";
+  if (d.engineAction === "HOLD" || d.engineAction === "STAKE") return fr ? "Moyen terme" : "Medium term";
   return fr ? "Court terme" : "Short term";
 }
 
@@ -145,8 +137,8 @@ export default function SubnetDetailPage() {
     );
   }
 
-  const conv = convictionLevel(s, verdict);
-  const urg = urgency(s, fr);
+  const decision = buildSubnetDecision(s, verdict, fr);
+  const urg = urgency(decision, fr);
   const eco = radar?.economicContext;
   const dm = radar?.derivedMetrics;
   const sn = radar?.snapshot;
@@ -184,12 +176,12 @@ export default function SubnetDetailPage() {
                   {isSpecial && <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">{SPECIAL_SUBNETS[netuid].label}</span>}
                 </div>
               </div>
-              <ActionBadge action={actionLabel(s.action)} />
+              <ActionBadge action={decision.badgeAction} />
             </div>
 
             {/* Primary decision strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <KPIChip label="CONVICTION" value={`${conv.level} (${conv.score})`} color={convColor(conv.level)} />
+              <KPIChip label="CONVICTION" value={`${decision.conviction} (${decision.convictionScore})`} color={convColor(decision.conviction)} />
               <KPIChip label="CONFIDENCE" value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
               <KPIChip label="RISK" value={s.risk} color={riskColor(s.risk)} />
               <KPIChip label="MOMENTUM" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK} />
@@ -197,7 +189,7 @@ export default function SubnetDetailPage() {
 
             {/* Secondary context row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 mt-4 pt-4 border-t border-border">
-              <Metric label={fr ? "Horizon" : "Horizon"} value={horizon(s, fr)} />
+              <Metric label={fr ? "Horizon" : "Horizon"} value={horizon(decision, fr)} />
               <Metric label={fr ? "Urgence" : "Urgency"} value={urg.text} color={urg.color} />
               <Metric label={fr ? "Régime" : "Regime"} value={s.systemStatus === "OK" ? (fr ? "Favorable" : "Favorable") : s.systemStatus === "SURVEILLANCE" ? (fr ? "Neutre" : "Neutral") : (fr ? "Défavorable" : "Unfavorable")} color={s.systemStatus === "OK" ? GO : s.systemStatus === "SURVEILLANCE" ? WARN : BREAK} />
               <Metric label={fr ? "Asymétrie" : "Asymmetry"} value={s.asymmetry > 0 ? `+${s.asymmetry}` : `${s.asymmetry}`} color={s.asymmetry > 0 ? GO : BREAK} />
@@ -232,15 +224,22 @@ export default function SubnetDetailPage() {
         {/* ══════════════════════════════════════════ */}
         <SectionCard>
           <SectionTitle icon="⚖️" title={fr ? "Analyse décisionnelle" : "Decision Analysis"} />
+          {/* Conflict explanation — when signal seems contradictory */}
+          {decision.conflictExplanation && (
+            <div className="mx-5 mt-3 rounded-lg px-4 py-2.5 border border-border bg-accent/10">
+              <div className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "ARBITRAGE MOTEUR" : "ENGINE ARBITRAGE"}</div>
+              <div className="font-mono text-[11px] text-foreground/75 leading-relaxed">{decision.conflictExplanation}</div>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
             <QuadrantBlock
               title={fr ? "Thèse (pourquoi entrer)" : "Thesis (why enter)"}
               tone="go"
               items={[
-                ...(verdict?.positiveReasons?.slice(0, 3) || []),
-                s.opp > 55 && !(verdict?.positiveReasons?.length) ? (fr ? `Opportunité ${s.opp}/100` : `Opportunity ${s.opp}/100`) : null,
-                s.momentumScore >= 55 && !(verdict?.positiveReasons?.length) ? (fr ? `Momentum haussier (${Math.round(s.momentumScore)})` : `Bullish momentum (${Math.round(s.momentumScore)})`) : null,
-                s.asymmetry > 20 && !(verdict?.positiveReasons?.length) ? (fr ? `Asymétrie +${s.asymmetry}` : `Asymmetry +${s.asymmetry}`) : null,
+                ...decision.thesis,
+                s.opp > 55 && !decision.thesis.length ? (fr ? `Opportunité ${s.opp}/100` : `Opportunity ${s.opp}/100`) : null,
+                s.momentumScore >= 55 && !decision.thesis.length ? (fr ? `Momentum haussier (${Math.round(s.momentumScore)})` : `Bullish momentum (${Math.round(s.momentumScore)})`) : null,
+                s.asymmetry > 20 && !decision.thesis.length ? (fr ? `Asymétrie +${s.asymmetry}` : `Asymmetry +${s.asymmetry}`) : null,
               ].filter(Boolean) as string[]}
               position="tl"
             />
@@ -270,11 +269,11 @@ export default function SubnetDetailPage() {
               title={fr ? "Invalidation" : "Invalidation"}
               tone="break"
               items={[
-                ...(verdict?.negativeReasons?.slice(0, 3) || []),
-                s.isOverridden && !(verdict?.negativeReasons?.length) ? "Override actif" : null,
-                s.depegProbability >= 40 && !(verdict?.negativeReasons?.length) ? `Depeg ${s.depegProbability}%` : null,
-                s.delistCategory !== "NORMAL" && !(verdict?.negativeReasons?.length) ? `Delist: ${s.delistCategory}` : null,
-                s.risk > 75 && !(verdict?.negativeReasons?.length) ? (fr ? "Zone danger" : "Danger zone") : null,
+                ...decision.invalidation,
+                s.isOverridden && !decision.invalidation.length ? "Override actif" : null,
+                s.depegProbability >= 40 && !decision.invalidation.length ? `Depeg ${s.depegProbability}%` : null,
+                s.delistCategory !== "NORMAL" && !decision.invalidation.length ? `Delist: ${s.delistCategory}` : null,
+                s.risk > 75 && !decision.invalidation.length ? (fr ? "Zone danger" : "Danger zone") : null,
               ].filter(Boolean) as string[]}
               position="br"
             />
@@ -493,7 +492,7 @@ export default function SubnetDetailPage() {
       {/* ══════════════════════════════════════════ */}
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-2.5">
-          <ActionBadge action={actionLabel(s.action)} size="sm" />
+          <ActionBadge action={decision.badgeAction} size="sm" />
           <span className="font-mono text-[9px] text-muted-foreground hidden sm:inline">
             {fr ? profile.labelFr : profile.label}
           </span>
