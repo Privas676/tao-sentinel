@@ -405,7 +405,7 @@ export default function SubnetsPage() {
               💾 {fr ? "Sauvegarder" : "Save view"}
             </button>
             {savedViews.length > 0 && savedViews.map((v, i) => (
-              <button key={i} onClick={() => loadView(v)} className="font-mono text-[8px] px-2 py-1 rounded text-muted-foreground/65 hover:text-foreground transition-colors" style={{ background: "hsla(var(--gold), 0.04)", border: "1px solid hsla(var(--gold), 0.08)" }}>
+              <button key={i} onClick={() => loadView(v)} className="font-mono text-[8px] px-2 py-1 rounded text-muted-foreground hover:text-foreground transition-colors" style={{ background: "hsla(var(--gold), 0.04)", border: "1px solid hsla(var(--gold), 0.08)" }}>
                 {v.name}
               </button>
             ))}
