@@ -34,44 +34,18 @@ type ViewMode = "compact" | "analytic";
 
 type SortCol = "netuid" | "name" | "action" | "conviction" | "confidence" | "risk" | "momentum" | "opp" | "liquidity" | "stability" | null;
 
-/* ─── Enriched row type ─── */
+/* ─── Enriched row type — uses SubnetDecision as the source of truth ─── */
 type TableRow = UnifiedSubnetScore & {
   owned: boolean;
   spark: number[];
   verdict?: SubnetVerdictData;
+  decision: SubnetDecision;
   convictionLevel: "HIGH" | "MEDIUM" | "LOW";
   liquidityLevel: "HIGH" | "MEDIUM" | "LOW";
   structureLevel: "HEALTHY" | "FRAGILE" | "CONCENTRATED";
   statusLevel: "OK" | "WATCH" | "DANGER";
   signalPrincipal: string;
 };
-
-/* ─── Helpers ─── */
-function convictionFromScore(score: number): "HIGH" | "MEDIUM" | "LOW" {
-  return score >= 70 ? "HIGH" : score >= 40 ? "MEDIUM" : "LOW";
-}
-function liquidityFromHealth(health: number): "HIGH" | "MEDIUM" | "LOW" {
-  return health >= 60 ? "HIGH" : health >= 30 ? "MEDIUM" : "LOW";
-}
-function structureFromStability(stability: number, isOverridden: boolean): "HEALTHY" | "FRAGILE" | "CONCENTRATED" {
-  if (isOverridden) return "CONCENTRATED";
-  return stability >= 60 ? "HEALTHY" : stability >= 35 ? "FRAGILE" : "CONCENTRATED";
-}
-function statusFromSystem(s: UnifiedSubnetScore): "OK" | "WATCH" | "DANGER" {
-  if (s.isOverridden || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEPEG" || s.systemStatus === "DEREGISTRATION") return "DANGER";
-  if (s.isWarning || s.systemStatus === "SURVEILLANCE") return "WATCH";
-  return "OK";
-}
-function mainSignal(s: UnifiedSubnetScore, fr: boolean): string {
-  if (s.isOverridden) return s.overrideReasons[0] || (fr ? "Zone critique" : "Critical zone");
-  if (s.depegProbability >= 50) return fr ? `Depeg ${s.depegProbability}%` : `Depeg ${s.depegProbability}%`;
-  if (s.delistCategory !== "NORMAL") return fr ? "Risque delist" : "Delist risk";
-  if (s.action === "ENTER" && s.opp > 60) return fr ? "Forte opportunité" : "Strong opportunity";
-  if (s.action === "EXIT") return fr ? "Signal de sortie" : "Exit signal";
-  if (s.momentumScore >= 70) return fr ? "Momentum haussier" : "Bullish momentum";
-  if (s.risk > 60) return fr ? "Risque élevé" : "High risk";
-  return fr ? "Stable" : "Stable";
-}
 
 
 /* ─── Saved views ─── */
