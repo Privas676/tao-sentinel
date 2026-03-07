@@ -14,8 +14,21 @@ import {
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/table";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import Sparkline from "@/components/radar/Sparkline";
 import TreemapHeatmap from "@/components/radar/TreemapHeatmap";
+
+/* ─── Burn Ratio formatter: always show value even if tiny ─── */
+function formatBurnRatio(ratio: number): string {
+  if (ratio <= 0) return "—";
+  const pct = ratio * 100;
+  if (pct < 0.01) return "<0.01%";
+  if (pct < 0.1) return `${pct.toFixed(2)}%`;
+  if (pct < 10) return `${pct.toFixed(1)}%`;
+  return `${pct.toFixed(0)}%`;
+}
+
+const BURN_RATIO_TOOLTIP = "Burn Ratio = recyclePerDay ÷ emissionsPerDay\nMesure la part des émissions quotidiennes recyclée (brûlée) par le protocole. Plus le ratio est élevé, plus le subnet est déflationniste.";
 
 /* ─── Score Badge ─── */
 function ScoreBadge({ value, colorFn, label, suffix }: { value: number; colorFn: (v: number) => string; label: string; suffix?: string }) {
