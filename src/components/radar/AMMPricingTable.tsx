@@ -47,12 +47,10 @@ export default function AMMPricingTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Pool Bal.</span></TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{POOL_BALANCE_TOOLTIP}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Pool Bal.</span></TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{POOL_BALANCE_TOOLTIP}</TooltipContent>
+              </Tooltip>
             </TableHead>
             <TableHead className="font-mono text-[10px] text-right">Depth τ</TableHead>
             <TableHead className="font-mono text-[10px] text-right">
