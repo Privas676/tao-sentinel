@@ -176,7 +176,7 @@ export default function SubnetDetailPage() {
                   {isSpecial && <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">{SPECIAL_SUBNETS[netuid].label}</span>}
                 </div>
               </div>
-              <ActionBadge action={actionLabel(s.action)} />
+              <ActionBadge action={decision.badgeAction} />
             </div>
 
             {/* Primary decision strip */}
