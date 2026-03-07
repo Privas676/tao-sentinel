@@ -399,74 +399,68 @@ export default function SubnetsPage() {
           {/* Filter chips */}
           <div className="flex items-center gap-3 flex-wrap">
             <FilterChipGroup
-              label="Scope"
-              options={[
-                { value: "ALL", label: fr ? "Tous" : "All" },
-                { value: "PORTFOLIO", label: "Portfolio" },
+              chips={[
+                { key: "ALL", label: fr ? "Tous" : "All" },
+                { key: "PORTFOLIO", label: "Portfolio" },
               ]}
-              value={scope}
+              active={scope}
               onChange={v => setScope(v as ScopeFilter)}
             />
             <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
             <FilterChipGroup
-              label="Action"
-              options={[
-                { value: "ALL", label: fr ? "Toutes" : "All" },
-                { value: "ENTER", label: fr ? "Entrer" : "Enter" },
-                { value: "HOLD", label: fr ? "Attendre" : "Hold" },
-                { value: "EXIT", label: fr ? "Sortir" : "Exit" },
+              chips={[
+                { key: "ALL", label: fr ? "Toutes" : "All" },
+                { key: "ENTER", label: fr ? "Entrer" : "Enter" },
+                { key: "HOLD", label: fr ? "Attendre" : "Hold" },
+                { key: "EXIT", label: fr ? "Sortir" : "Exit" },
               ]}
-              value={actionFilter}
+              active={actionFilter}
               onChange={v => setActionFilter(v as ActionFilter)}
             />
             <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
             <FilterChipGroup
-              label="Statut"
-              options={[
-                { value: "ALL", label: fr ? "Tous" : "All" },
-                { value: "OK", label: "OK" },
-                { value: "WATCH", label: "⚠" },
-                { value: "DANGER", label: "🔴" },
+              chips={[
+                { key: "ALL", label: fr ? "Tous" : "All" },
+                { key: "OK", label: "OK" },
+                { key: "WATCH", label: "⚠" },
+                { key: "DANGER", label: "🔴" },
               ]}
-              value={statusFilter}
+              active={statusFilter}
               onChange={v => setStatusFilter(v as StatusFilter)}
             />
             <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
             <FilterChipGroup
-              label="Conviction"
-              options={[
-                { value: "ALL", label: fr ? "Toutes" : "All" },
-                { value: "HIGH", label: fr ? "Haute" : "High" },
-                { value: "MEDIUM", label: fr ? "Moy." : "Med" },
-                { value: "LOW", label: fr ? "Faible" : "Low" },
+              chips={[
+                { key: "ALL", label: fr ? "Toutes" : "All" },
+                { key: "HIGH", label: fr ? "Haute" : "High" },
+                { key: "MEDIUM", label: fr ? "Moy." : "Med" },
+                { key: "LOW", label: fr ? "Faible" : "Low" },
               ]}
-              value={convictionFilter}
+              active={convictionFilter}
               onChange={v => setConvictionFilter(v as ConvictionFilter)}
             />
           </div>
           {/* Second row — advanced filters */}
           <div className="flex items-center gap-3 flex-wrap">
             <FilterChipGroup
-              label={fr ? "Liquidité" : "Liquidity"}
-              options={[
-                { value: "ALL", label: fr ? "Toutes" : "All" },
-                { value: "HIGH", label: fr ? "Haute" : "High" },
-                { value: "MEDIUM", label: fr ? "Moy." : "Med" },
-                { value: "LOW", label: fr ? "Faible" : "Low" },
+              chips={[
+                { key: "ALL", label: fr ? "Toutes" : "All" },
+                { key: "HIGH", label: fr ? "Haute" : "High" },
+                { key: "MEDIUM", label: fr ? "Moy." : "Med" },
+                { key: "LOW", label: fr ? "Faible" : "Low" },
               ]}
-              value={liquidityFilter}
+              active={liquidityFilter}
               onChange={v => setLiquidityFilter(v as LiquidityFilter)}
             />
             <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
             <FilterChipGroup
-              label="Structure"
-              options={[
-                { value: "ALL", label: fr ? "Toutes" : "All" },
-                { value: "HEALTHY", label: fr ? "Saine" : "Healthy" },
-                { value: "FRAGILE", label: fr ? "Fragile" : "Fragile" },
-                { value: "CONCENTRATED", label: fr ? "Concentrée" : "Conc." },
+              chips={[
+                { key: "ALL", label: fr ? "Toutes" : "All" },
+                { key: "HEALTHY", label: fr ? "Saine" : "Healthy" },
+                { key: "FRAGILE", label: fr ? "Fragile" : "Fragile" },
+                { key: "CONCENTRATED", label: fr ? "Concentrée" : "Conc." },
               ]}
-              value={structureFilter}
+              active={structureFilter}
               onChange={v => setStructureFilter(v as StructureFilter)}
             />
             <span className="ml-auto font-mono text-[9px] text-muted-foreground/65">
