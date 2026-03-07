@@ -364,7 +364,7 @@ export default function CompassPage() {
 
                   {/* Tactical summary */}
                   {tacticalSummary && (
-                    <p className="font-mono text-[10px] text-muted-foreground/45 leading-relaxed max-w-md" style={{ letterSpacing: "0.02em" }}>
+                    <p className="font-mono text-[10px] text-muted-foreground/70 leading-relaxed max-w-md" style={{ letterSpacing: "0.02em" }}>
                       {tacticalSummary}
                     </p>
                   )}
