@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
-import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { SectionCard, SectionTitle } from "@/components/settings/SettingsShared";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   RISK & ALERTS — Decision Vigilance Center             */
@@ -19,27 +19,13 @@ const WARN = "hsl(var(--signal-go-spec))";
 const BREAK = "hsl(var(--signal-break))";
 const MUTED = "hsl(var(--muted-foreground))";
 
-/* ── Reusable atoms ── */
-function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-border bg-card ${className}`}>{children}</div>;
-}
-
-function SectionTitle({ icon, title, badge }: { icon: string; title: string; badge?: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2.5 px-5 py-3 border-b border-border">
-      <span className="text-sm opacity-70">{icon}</span>
-      <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-gold">{title}</h2>
-      {badge && <div className="ml-auto">{badge}</div>}
-    </div>
-  );
-}
-
+/* ── KPI chip ── */
 function KPIChip({ label, value, color, sub }: { label: string; value: string | number; color?: string; sub?: string }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2.5 bg-muted/25 border border-border min-w-0">
-      <span className="font-mono text-[6.5px] text-muted-foreground/45 tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
+      <span className="font-mono text-[7px] text-muted-foreground tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
       <span className="font-mono text-[14px] font-bold leading-none" style={{ color }}>{value}</span>
-      {sub && <span className="font-mono text-[8px] text-muted-foreground/35 mt-0.5">{sub}</span>}
+      {sub && <span className="font-mono text-[8px] text-muted-foreground mt-0.5">{sub}</span>}
     </div>
   );
 }
@@ -160,36 +146,36 @@ function severityBadge(sev: "critical" | "warning" | "info"): { label: string; c
 }
 
 /* ── Display helpers ── */
-function typeDisplayInfo(type: string | null, fr: boolean): { label: string; icon: string; color: string; category: string } {
+function typeDisplayInfo(type: string | null, fr: boolean): { label: string; icon: string; color: string } {
   switch (type) {
     case "BREAK":
     case "EXIT_FAST":
-      return { label: fr ? "ZONE CRITIQUE" : "CRITICAL ZONE", icon: "⛔", color: BREAK, category: fr ? "Structure" : "Structure" };
+      return { label: fr ? "ZONE CRITIQUE" : "CRITICAL ZONE", icon: "⛔", color: BREAK };
     case "GO":
-      return { label: "GO", icon: "🟢", color: GO, category: "Signal" };
+      return { label: "GO", icon: "🟢", color: GO };
     case "GO_SPECULATIVE":
-      return { label: fr ? "SPÉCULATIF" : "SPECULATIVE", icon: "🔶", color: WARN, category: "Signal" };
+      return { label: fr ? "SPÉCULATIF" : "SPECULATIVE", icon: "🔶", color: WARN };
     case "EARLY":
-      return { label: "EARLY", icon: "🌱", color: GO, category: "Signal" };
+      return { label: "EARLY", icon: "🌱", color: GO };
     case "HOLD":
-      return { label: "HOLD", icon: "⏸", color: MUTED, category: "Signal" };
+      return { label: "HOLD", icon: "⏸", color: MUTED };
     case "DEPEG_WARNING":
-      return { label: fr ? "DÉPEG ⚠" : "DEPEG ⚠", icon: "⚠", color: WARN, category: "Depeg" };
+      return { label: fr ? "DÉPEG ⚠" : "DEPEG ⚠", icon: "⚠", color: WARN };
     case "DEPEG_CRITICAL":
-      return { label: fr ? "DÉPEG CRITIQUE" : "DEPEG CRITICAL", icon: "🔴", color: BREAK, category: "Depeg" };
+      return { label: fr ? "DÉPEG CRITIQUE" : "DEPEG CRITICAL", icon: "🔴", color: BREAK };
     case "WHALE_MOVE":
-      return { label: "WHALE", icon: "🐋", color: GOLD, category: "Flow" };
+      return { label: "WHALE", icon: "🐋", color: GOLD };
     case "RISK_OVERRIDE":
-      return { label: "OVERRIDE", icon: "🛡", color: BREAK, category: "Override" };
+      return { label: "OVERRIDE", icon: "🛡", color: BREAK };
     case "PRE_HYPE":
     case "PRÉ-HYPE":
-      return { label: "PRE-HYPE", icon: "🚀", color: "hsl(280, 65%, 55%)", category: "Smart" };
+      return { label: "PRE-HYPE", icon: "🚀", color: "hsl(280, 65%, 55%)" };
     case "SMART_ACCUMULATION":
-      return { label: "SMART ACCUM.", icon: "🧠", color: "hsl(187, 100%, 42%)", category: "Smart" };
+      return { label: "SMART ACCUM.", icon: "🧠", color: "hsl(187, 100%, 42%)" };
     case "CREATED":
-      return { label: fr ? "NOUVEAU" : "NEW", icon: "✨", color: "hsl(210, 80%, 55%)", category: "Signal" };
+      return { label: fr ? "NOUVEAU" : "NEW", icon: "✨", color: "hsl(210, 80%, 55%)" };
     default:
-      return { label: type || "—", icon: "•", color: MUTED, category: "—" };
+      return { label: type || "—", icon: "•", color: MUTED };
   }
 }
 
@@ -317,9 +303,9 @@ function AlertCard({ group, fr, scores, onDismiss }: {
             {info.icon} {info.label}
           </span>
           {ev.netuid != null && (
-            <Link to={`/subnets/${ev.netuid}`} onClick={e => e.stopPropagation()} className="font-mono text-[11px] text-foreground/60 hover:text-foreground transition-colors">
+            <Link to={`/subnets/${ev.netuid}`} onClick={e => e.stopPropagation()} className="font-mono text-[11px] text-foreground/70 hover:text-foreground transition-colors">
               SN-{ev.netuid}
-              {subnet?.name && <span className="text-muted-foreground/40 ml-1 text-[9px]">{subnet.name}</span>}
+              {subnet?.name && <span className="text-muted-foreground ml-1 text-[9px]">{subnet.name}</span>}
             </Link>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -328,10 +314,10 @@ function AlertCard({ group, fr, scores, onDismiss }: {
                 color: info.color, background: `color-mix(in srgb, ${info.color} 10%, transparent)`,
               }}>×{group.count}</span>
             )}
-            <span className="font-mono text-[9px] text-muted-foreground/25">{formatTimeAgo(group.lastTs, fr)}</span>
+            <span className="font-mono text-[9px] text-muted-foreground">{formatTimeAgo(group.lastTs, fr)}</span>
             {onDismiss && (
               <button onClick={e => { e.stopPropagation(); onDismiss(alertKey(group)); }}
-                className="font-mono text-[8px] px-1.5 py-0.5 rounded border border-border text-muted-foreground/20 hover:text-muted-foreground/50 transition-colors"
+                className="font-mono text-[8px] px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
                 title={fr ? "Masquer 24h" : "Dismiss 24h"}>✓</button>
             )}
           </div>
@@ -339,13 +325,13 @@ function AlertCard({ group, fr, scores, onDismiss }: {
 
         {/* Row 2: summary + confidence + impact + action */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="font-mono text-[11px] text-foreground/65 flex-1 min-w-[200px]">{alertSummary(ev, fr)}</span>
+          <span className="font-mono text-[11px] text-foreground/70 flex-1 min-w-[200px]">{alertSummary(ev, fr)}</span>
           {confidence != null && (
-            <span className="font-mono text-[9px] text-muted-foreground/40">
+            <span className="font-mono text-[9px] text-muted-foreground">
               {fr ? "Conf." : "Conf."} <span className="font-bold" style={{ color: confidence >= 70 ? GO : confidence >= 45 ? WARN : BREAK }}>{confidence}%</span>
             </span>
           )}
-          <span className="font-mono text-[9px] text-muted-foreground/30">{alertImpact(ev.type, fr)}</span>
+          <span className="font-mono text-[9px] text-muted-foreground">{alertImpact(ev.type, fr)}</span>
           <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{
             color: sev === "critical" ? BREAK : sev === "warning" ? WARN : GO,
             background: `color-mix(in srgb, ${sev === "critical" ? BREAK : sev === "warning" ? WARN : GO} 6%, transparent)`,
@@ -359,14 +345,14 @@ function AlertCard({ group, fr, scores, onDismiss }: {
       {/* Expanded occurrences */}
       {expanded && group.count > 1 && (
         <div className="border-t border-border px-4 py-2 bg-muted/10">
-          <div className="font-mono text-[8px] text-muted-foreground/25 tracking-widest mb-1.5">
+          <div className="font-mono text-[8px] text-muted-foreground tracking-widest mb-1.5">
             {fr ? "OCCURRENCES" : "OCCURRENCES"} ({group.count}) — 6h
           </div>
           {group.occurrences.map((occ, idx) => (
             <div key={occ.id} className="flex items-center gap-3 py-1 font-mono text-[10px] border-b border-border last:border-0">
-              <span className="text-muted-foreground/15 w-4">{idx + 1}</span>
-              <span className="text-muted-foreground/30 min-w-[120px]">{occ.ts ? new Date(occ.ts).toLocaleString() : "—"}</span>
-              <span className="text-muted-foreground/45 flex-1 truncate">{alertSummary(occ, fr)}</span>
+              <span className="text-muted-foreground w-4">{idx + 1}</span>
+              <span className="text-muted-foreground min-w-[120px]">{occ.ts ? new Date(occ.ts).toLocaleString() : "—"}</span>
+              <span className="text-muted-foreground flex-1 truncate">{alertSummary(occ, fr)}</span>
             </div>
           ))}
         </div>
@@ -391,7 +377,6 @@ function SubnetGroupedView({ groups, fr, scores, onDismiss }: {
       if (!map.has(nid)) map.set(nid, []);
       map.get(nid)!.push(g);
     }
-    // Sort subnets by most critical first
     const entries = Array.from(map.entries()).sort((a, b) => {
       const critA = a[1].filter(g => alertSeverityClass(g.latest.type) === "critical").length;
       const critB = b[1].filter(g => alertSeverityClass(g.latest.type) === "critical").length;
@@ -401,7 +386,7 @@ function SubnetGroupedView({ groups, fr, scores, onDismiss }: {
   }, [groups]);
 
   if (bySubnet.length === 0) {
-    return <div className="py-12 text-center font-mono text-[11px] text-muted-foreground/20">{fr ? "Aucune alerte" : "No alerts"}</div>;
+    return <div className="py-12 text-center font-mono text-[11px] text-muted-foreground">{fr ? "Aucune alerte" : "No alerts"}</div>;
   }
 
   return (
@@ -416,15 +401,15 @@ function SubnetGroupedView({ groups, fr, scores, onDismiss }: {
               {netuid >= 0 ? (
                 <Link to={`/subnets/${netuid}`} className="font-mono text-[12px] text-foreground/70 hover:text-foreground transition-colors font-bold">
                   SN-{netuid}
-                  {subnet?.name && <span className="text-muted-foreground/40 ml-1.5 font-normal text-[10px]">{subnet.name}</span>}
+                  {subnet?.name && <span className="text-muted-foreground ml-1.5 font-normal text-[10px]">{subnet.name}</span>}
                 </Link>
               ) : (
-                <span className="font-mono text-[12px] text-muted-foreground/40">{fr ? "Système" : "System"}</span>
+                <span className="font-mono text-[12px] text-muted-foreground">{fr ? "Système" : "System"}</span>
               )}
               <div className="flex gap-1.5 ml-auto">
                 {critCount > 0 && <span className="font-mono text-[8px] font-bold px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">{critCount} crit.</span>}
-                {warnCount > 0 && <span className="font-mono text-[8px] font-bold px-1.5 py-0.5 rounded bg-signal-hold/10 text-signal-hold border border-signal-hold/20">{warnCount} warn.</span>}
-                <span className="font-mono text-[9px] text-muted-foreground/25">{alerts.length} total</span>
+                {warnCount > 0 && <span className="font-mono text-[8px] font-bold px-1.5 py-0.5 rounded" style={{ background: `color-mix(in srgb, ${WARN} 10%, transparent)`, color: WARN, border: `1px solid color-mix(in srgb, ${WARN} 20%, transparent)` }}>{warnCount} warn.</span>}
+                <span className="font-mono text-[9px] text-muted-foreground">{alerts.length} total</span>
               </div>
             </div>
             <div className="px-3 py-2 space-y-1.5">
@@ -464,7 +449,7 @@ function WhyItMatters({ fr }: { fr: boolean }) {
             <span className="text-lg shrink-0 mt-0.5">{item.icon}</span>
             <div>
               <div className="font-mono text-[10px] font-bold text-foreground/70 tracking-wider mb-0.5">{item.title}</div>
-              <p className="text-[11px] text-muted-foreground/50 leading-relaxed">{item.desc}</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">{item.desc}</p>
             </div>
           </div>
         ))}
@@ -486,7 +471,6 @@ export default function AlertsPage() {
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
   const portfolio = useLocalPortfolio();
-  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, error: pushError } = usePushNotifications();
 
   const handleDismiss = useCallback((key: string) => {
     dismissAlert(key);
@@ -527,11 +511,9 @@ export default function AlertsPage() {
     const criticals = undismissed.filter(g => alertSeverityClass(g.latest.type) === "critical");
     const warnings = undismissed.filter(g => alertSeverityClass(g.latest.type) === "warning");
     const overrides = undismissed.filter(g => g.latest.type === "RISK_OVERRIDE");
-    // Invalidations = delist/depeg related
     const invalidations = undismissed.filter(g =>
       g.latest.type === "DEPEG_CRITICAL" || g.latest.type === "DEPEG_WARNING" || g.latest.type === "BREAK"
     );
-    // Recent = last 2h
     const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
     const recent = undismissed.filter(g => new Date(g.lastTs).getTime() > twoHoursAgo);
     return { criticals: criticals.length, warnings: warnings.length, overrides: overrides.length, invalidations: invalidations.length, recent: recent.length };
@@ -562,81 +544,70 @@ export default function AlertsPage() {
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
       <div className="px-4 sm:px-6 py-5 max-w-[1200px] mx-auto space-y-6">
 
-        {/* ══════════════════════════════════ */}
-        {/*   1. HEADER                         */}
-        {/* ══════════════════════════════════ */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="font-mono text-lg sm:text-xl tracking-wider text-gold">Risk & Alerts</h1>
-            <p className="font-mono text-[10px] text-muted-foreground/45 mt-1 max-w-md leading-relaxed">
-              {fr ? "Overrides, anomalies, invalidations et subnets sous surveillance." : "Overrides, anomalies, invalidations and subnets under watch."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Push toggle */}
-            {pushState === "subscribed" ? (
-              <button onClick={pushUnsubscribe}
-                className="font-mono text-[9px] px-2.5 py-1.5 rounded-lg border border-primary/25 text-primary/80 transition-all hover:bg-primary/10">
-                🔔 {fr ? "Push activé" : "Push on"} ✓
-              </button>
-            ) : pushState === "denied" ? (
-              <span className="font-mono text-[9px] text-destructive/60">🔇 {fr ? "Bloqué" : "Blocked"}</span>
-            ) : pushState !== "unsupported" && pushState !== "loading" && (
-              <button onClick={pushSubscribe}
-                className="font-mono text-[9px] px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground/40 hover:text-gold transition-all">
-                🔕 {fr ? "Activer push" : "Enable push"}
-              </button>
-            )}
-            {pushError && <span className="font-mono text-[8px] text-destructive/50">{pushError}</span>}
-          </div>
+        {/* ── 1. HEADER ── */}
+        <div>
+          <h1 className="font-mono text-lg sm:text-xl tracking-wider text-gold">Risk & Alerts</h1>
+          <p className="font-mono text-[10px] text-muted-foreground mt-1 max-w-md leading-relaxed">
+            {fr ? "Overrides, anomalies, invalidations et subnets sous surveillance." : "Overrides, anomalies, invalidations and subnets under watch."}
+          </p>
         </div>
 
-        {/* ══════════════════════════════════ */}
-        {/*   2. KPI BAR                        */}
-        {/* ══════════════════════════════════ */}
+        {/* ── 2. KPI BAR ── */}
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
           <KPIChip label={fr ? "CRITIQUES" : "CRITICAL"} value={stats.criticals} color={stats.criticals > 0 ? BREAK : MUTED} />
           <KPIChip label="WARNINGS" value={stats.warnings} color={stats.warnings > 0 ? WARN : MUTED} />
           <KPIChip label="OVERRIDES" value={stats.overrides} color={stats.overrides > 0 ? BREAK : MUTED} />
-          <KPIChip label={fr ? "INVALIDATIONS" : "INVALIDATIONS"} value={stats.invalidations} color={stats.invalidations > 0 ? WARN : MUTED} />
+          <KPIChip label="INVALIDATIONS" value={stats.invalidations} color={stats.invalidations > 0 ? WARN : MUTED} />
           <KPIChip label={fr ? "RÉCENTS" : "RECENT"} value={stats.recent} color={stats.recent > 0 ? GO : MUTED} sub="< 2h" />
         </div>
 
-        {/* ══════════════════════════════════ */}
-        {/*   3. TABS + VIEW TOGGLE             */}
-        {/* ══════════════════════════════════ */}
+        {/* ── 3. TABS + VIEW TOGGLE ── */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex rounded-lg overflow-hidden border border-border">
             {tabs.map(t => (
               <button key={t.value} onClick={() => setTab(t.value)}
-                className={`font-mono text-[10px] tracking-wider px-3 py-2 transition-all ${tab === t.value ? "bg-muted/40 text-gold font-bold" : "text-muted-foreground/30 hover:text-muted-foreground/50"}`}>
+                className="font-mono text-[10px] tracking-wider px-3 py-2 transition-all"
+                style={{
+                  background: tab === t.value ? "hsl(var(--muted) / 0.4)" : "transparent",
+                  color: tab === t.value ? GOLD : MUTED,
+                  fontWeight: tab === t.value ? 700 : 400,
+                  opacity: tab === t.value ? 1 : 0.65,
+                }}>
                 {t.label}
-                <span className="ml-1 text-[8px] opacity-50">({t.count})</span>
+                <span className="ml-1 text-[8px] opacity-60">({t.count})</span>
               </button>
             ))}
           </div>
           <div className="flex rounded-lg overflow-hidden border border-border ml-auto">
             <button onClick={() => setViewMode("feed")}
-              className={`font-mono text-[9px] px-2.5 py-1.5 transition-all ${viewMode === "feed" ? "bg-muted/40 text-foreground/70" : "text-muted-foreground/25"}`}>
+              className="font-mono text-[9px] px-2.5 py-1.5 transition-all"
+              style={{
+                background: viewMode === "feed" ? "hsl(var(--muted) / 0.4)" : "transparent",
+                color: viewMode === "feed" ? "hsl(var(--foreground) / 0.7)" : MUTED,
+                opacity: viewMode === "feed" ? 1 : 0.65,
+              }}>
               {fr ? "Flux" : "Feed"}
             </button>
             <button onClick={() => setViewMode("grouped")}
-              className={`font-mono text-[9px] px-2.5 py-1.5 transition-all ${viewMode === "grouped" ? "bg-muted/40 text-foreground/70" : "text-muted-foreground/25"}`}>
+              className="font-mono text-[9px] px-2.5 py-1.5 transition-all"
+              style={{
+                background: viewMode === "grouped" ? "hsl(var(--muted) / 0.4)" : "transparent",
+                color: viewMode === "grouped" ? "hsl(var(--foreground) / 0.7)" : MUTED,
+                opacity: viewMode === "grouped" ? 1 : 0.65,
+              }}>
               {fr ? "Par subnet" : "By subnet"}
             </button>
           </div>
         </div>
 
-        {/* ══════════════════════════════════ */}
-        {/*   4. FEED / GROUPED VIEW            */}
-        {/* ══════════════════════════════════ */}
+        {/* ── 4. FEED / GROUPED VIEW ── */}
         {viewMode === "grouped" ? (
           <SubnetGroupedView groups={filteredByTab} fr={fr} scores={scores} onDismiss={handleDismiss} />
         ) : (
           filteredByTab.length === 0 ? (
             <div className="py-16 text-center space-y-3">
-              <span className="text-3xl opacity-20">🔕</span>
-              <p className="font-mono text-[11px] text-muted-foreground/25">{fr ? "Aucune alerte dans cette catégorie" : "No alerts in this category"}</p>
+              <span className="text-3xl opacity-30">🔕</span>
+              <p className="font-mono text-[11px] text-muted-foreground">{fr ? "Aucune alerte dans cette catégorie" : "No alerts in this category"}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -647,20 +618,16 @@ export default function AlertsPage() {
           )
         )}
 
-        {/* ══════════════════════════════════ */}
-        {/*   5. DISMISSED COUNT                */}
-        {/* ══════════════════════════════════ */}
+        {/* ── 5. DISMISSED COUNT ── */}
         {dismissed.size > 0 && (
           <div className="text-center">
-            <span className="font-mono text-[9px] text-muted-foreground/20">
+            <span className="font-mono text-[9px] text-muted-foreground">
               {dismissed.size} {fr ? "alertes traitées (masquées 24h)" : "alerts dismissed (hidden 24h)"}
             </span>
           </div>
         )}
 
-        {/* ══════════════════════════════════ */}
-        {/*   6. WHY IT MATTERS                 */}
-        {/* ══════════════════════════════════ */}
+        {/* ── 6. WHY IT MATTERS ── */}
         <WhyItMatters fr={fr} />
       </div>
     </div>
