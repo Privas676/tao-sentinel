@@ -3,68 +3,16 @@ import { useI18n, Lang } from "@/lib/i18n";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useDelistMode } from "@/hooks/use-delist-mode";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { SectionCard, SectionTitle, SettingRow, ToggleButtons } from "@/components/settings/SettingsShared";
 import type { DelistMode } from "@/lib/delist-risk";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SETTINGS — Clean User Preferences                     */
 /* ═══════════════════════════════════════════════════════ */
 
-const GOLD = "hsl(var(--gold))";
 const GO = "hsl(var(--signal-go))";
 const WARN = "hsl(var(--signal-go-spec))";
 const BREAK = "hsl(var(--signal-break))";
-
-function SectionCard({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-xl border border-border bg-card">{children}</div>;
-}
-
-function SectionTitle({ icon, title }: { icon: string; title: string }) {
-  return (
-    <div className="flex items-center gap-2.5 px-5 py-3 border-b border-border">
-      <span className="text-sm opacity-70">{icon}</span>
-      <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-gold">{title}</h2>
-    </div>
-  );
-}
-
-function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-4 px-5 border-b border-border last:border-0">
-      <div className="min-w-0">
-        <div className="font-mono text-[11px] text-foreground/70 font-medium">{label}</div>
-        {description && <div className="font-mono text-[9px] text-muted-foreground/35 mt-0.5 max-w-sm">{description}</div>}
-      </div>
-      <div className="flex-shrink-0">{children}</div>
-    </div>
-  );
-}
-
-function ToggleButtons<T extends string>({ options, value, onChange }: {
-  options: { value: T; label: string; color?: string }[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex rounded-lg overflow-hidden border border-border">
-      {options.map(opt => {
-        const active = value === opt.value;
-        const color = opt.color || GOLD;
-        return (
-          <button key={opt.value} onClick={() => onChange(opt.value)}
-            className="font-mono text-[10px] tracking-wider px-3 py-1.5 transition-all"
-            style={{
-              background: active ? `color-mix(in srgb, ${color} 10%, transparent)` : "transparent",
-              color: active ? color : "hsl(var(--muted-foreground))",
-              fontWeight: active ? 700 : 400,
-              opacity: active ? 1 : 0.4,
-            }}>
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function SettingsPage() {
   const { lang, setLang } = useI18n();
@@ -90,7 +38,7 @@ export default function SettingsPage() {
           <h1 className="font-mono text-lg sm:text-xl tracking-wider text-gold">
             {fr ? "Réglages" : "Settings"}
           </h1>
-          <p className="font-mono text-[10px] text-muted-foreground/45 mt-1 leading-relaxed">
+          <p className="font-mono text-[10px] text-muted-foreground mt-1 leading-relaxed">
             {fr ? "Préférences d'affichage, notifications et comportement du moteur." : "Display preferences, notifications and engine behavior."}
           </p>
         </div>
@@ -122,7 +70,7 @@ export default function SettingsPage() {
           </SettingRow>
 
           <SettingRow label={fr ? "Fréquence de rafraîchissement" : "Refresh frequency"} description={fr ? "Intervalles de mise à jour des données" : "Data update intervals"}>
-            <div className="font-mono text-[10px] text-muted-foreground/50 text-right">
+            <div className="font-mono text-[10px] text-muted-foreground text-right">
               <div>Signals: 60s</div>
               <div>Sparklines: 300s</div>
             </div>
@@ -144,14 +92,14 @@ export default function SettingsPage() {
                 🔔 {fr ? "Activé" : "Enabled"} ✓
               </button>
             ) : pushState === "denied" ? (
-              <span className="font-mono text-[10px] text-destructive/60">🔇 {fr ? "Bloqué par le navigateur" : "Blocked by browser"}</span>
+              <span className="font-mono text-[10px] text-destructive">🔇 {fr ? "Bloqué par le navigateur" : "Blocked by browser"}</span>
             ) : pushState === "unsupported" ? (
-              <span className="font-mono text-[10px] text-muted-foreground/30">{fr ? "Non supporté" : "Not supported"}</span>
+              <span className="font-mono text-[10px] text-muted-foreground">{fr ? "Non supporté" : "Not supported"}</span>
             ) : pushState === "loading" ? (
-              <span className="font-mono text-[10px] text-muted-foreground/30 animate-pulse">…</span>
+              <span className="font-mono text-[10px] text-muted-foreground animate-pulse">…</span>
             ) : (
               <button onClick={pushSubscribe}
-                className="font-mono text-[10px] px-3 py-1.5 rounded-lg border border-border text-muted-foreground/40 hover:text-gold transition-all">
+                className="font-mono text-[10px] px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-gold transition-all">
                 🔕 {fr ? "Activer" : "Enable"}
               </button>
             )}
@@ -205,7 +153,7 @@ export default function SettingsPage() {
               { label: "EXIT", range: "Risk > 70", color: BREAK },
             ].map(t => (
               <div key={t.label} className="flex justify-between items-center py-2 border-b border-border last:border-0">
-                <span className="font-mono text-[10px] text-muted-foreground/50">{t.label}</span>
+                <span className="font-mono text-[10px] text-muted-foreground">{t.label}</span>
                 <span className="font-mono text-[10px] font-medium" style={{ color: t.color }}>{t.range}</span>
               </div>
             ))}
@@ -213,7 +161,7 @@ export default function SettingsPage() {
         </SectionCard>
 
         {/* ── TMC context note ── */}
-        <div className="font-mono text-[9px] text-muted-foreground/25 text-center px-4 leading-relaxed">
+        <div className="font-mono text-[9px] text-muted-foreground text-center px-4 leading-relaxed">
           {fr
             ? "TMC est affiché en lecture seule. Il n'influence ni le scoring, ni les alertes, ni les overrides."
             : "TMC is displayed read-only. It does not affect scoring, alerts, or overrides."}
