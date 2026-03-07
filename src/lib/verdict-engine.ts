@@ -696,7 +696,7 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
   }
 
   // G3: High sell pressure + low liquidity → force SORS
-  if (input.economicContext.sentiment < 0.35 && input.priceContext.liquidity < 20 && verdict !== "SORS") {
+  if (input.economicContext.sentiment < 0.35 && input.priceContext.liquidity < 30 && verdict !== "SORS") {
     verdict = "SORS";
   }
 
