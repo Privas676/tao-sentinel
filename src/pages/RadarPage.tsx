@@ -585,6 +585,56 @@ function EconomicsTable({ data }: { data: SubnetRadarData[] }) {
 }
 
 /* ═══════════════════════════════════════ */
+/*        VALIDATOR TABLE                  */
+/* ═══════════════════════════════════════ */
+function ValidatorTable({ data }: { data: SubnetRadarData[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="font-mono text-[10px]">SN</TableHead>
+            <TableHead className="font-mono text-[10px]">Nom</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Conc. %</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Manip. Score</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.slice(0, 30).map((d) => (
+            <TableRow key={d.netuid}>
+              <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
+              <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
+              <TableCell className="font-mono text-xs text-right">{d.snapshot.validatorsActive || "—"}</TableCell>
+              <TableCell className="font-mono text-xs text-right">{d.snapshot.minersActive}</TableCell>
+              <TableCell className="text-right">
+                <span className="font-mono text-xs" style={{ color: d.snapshot.stakeConcentration > 60 ? "rgba(229,57,53,0.8)" : "rgba(255,255,255,0.5)" }}>
+                  {d.snapshot.stakeConcentration > 0 ? `${d.snapshot.stakeConcentration.toFixed(0)}%` : "—"}
+                </span>
+              </TableCell>
+              <TableCell className="font-mono text-xs text-right text-muted-foreground">
+                {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
+              </TableCell>
+              <TableCell className="text-right">
+                <span className="font-mono text-xs font-bold" style={{ color: manipulationScoreColor(d.scores.manipulationScore) }}>{d.scores.manipulationScore}</span>
+              </TableCell>
+              <TableCell className="text-right">
+                {d.alerts.manipRisk ? <SignalChip label="MANIP. RISK" color="red" /> :
+                 d.alerts.manipSuspicious ? <SignalChip label="SUSPICIOUS" color="orange" /> :
+                 <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════ */
 /*        SMART MONEY PANEL                */
 /* ═══════════════════════════════════════ */
 function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
