@@ -199,7 +199,7 @@ export default function PortfolioPage() {
   /* ═══════════════════════════════════════ */
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
-      <div className="px-4 sm:px-6 py-5 max-w-[1200px] mx-auto space-y-6">
+      <div className="px-4 sm:px-6 py-6 max-w-[1200px] mx-auto space-y-7">
 
         {/* ══════════════════════════════════ */}
         {/*   1. HEADER                         */}
@@ -228,7 +228,7 @@ export default function PortfolioPage() {
         {/*   2. HERO KPIs (5 chips, no duplication) */}
         {/* ══════════════════════════════════ */}
         {analytics && (
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
             <KPIChip label={fr ? "VALEUR" : "VALUE"} value={fmtVal(analytics.totalTao)} color={GOLD} sub={`${rows.length} pos.`} />
             <KPIChip label="CONVICTION" value={Math.round(analytics.avgConviction)} color={analytics.avgConviction > 20 ? GO : analytics.avgConviction > 0 ? WARN : BREAK} />
             <KPIChip label={fr ? "RISQUE" : "RISK"} value={Math.round(analytics.avgRisk)} color={analytics.avgRisk > 60 ? BREAK : analytics.avgRisk > 40 ? WARN : GO} />

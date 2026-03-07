@@ -364,7 +364,7 @@ export default function SubnetsPage() {
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
-      <div className="px-4 sm:px-6 py-4 max-w-[1400px] mx-auto space-y-4">
+      <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto space-y-5">
 
         {/* ═══ HEADER ═══ */}
         <PageHeader
@@ -384,7 +384,7 @@ export default function SubnetsPage() {
         {/* Verdict counts integrated into filter bar below — no separate distribution bar */}
 
         {/* ═══ FILTER BAR ═══ */}
-        <div className="rounded-xl p-3 space-y-2.5 bg-muted/15 border border-border">
+        <div className="rounded-xl p-3.5 space-y-3 bg-muted/10 border border-border" style={{ boxShadow: "var(--shadow-card)" }}>
           {/* Search + controls row */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1" style={{ minWidth: 180, maxWidth: 300 }}>
@@ -499,7 +499,7 @@ export default function SubnetsPage() {
         {/* ═══ MASTER TABLE ═══ */}
         <SwipeHint storageKey="swipe-subnets-v4" />
 
-        <div className="rounded-xl overflow-hidden border border-border">
+        <div className="rounded-xl overflow-hidden border border-border" style={{ boxShadow: "var(--shadow-card)" }}>
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
             <table className="w-full font-mono" style={{ minWidth: 1100 }}>
               <thead>

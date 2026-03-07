@@ -524,7 +524,7 @@ export default function AlertsPage() {
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
-      <div className="px-4 sm:px-6 py-5 max-w-[1200px] mx-auto space-y-6">
+      <div className="px-4 sm:px-6 py-6 max-w-[1200px] mx-auto space-y-7">
 
         {/* ── 1. HEADER ── */}
         <div>
@@ -535,7 +535,7 @@ export default function AlertsPage() {
         </div>
 
         {/* ── 2. KPI BAR ── */}
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
           <KPIChip label={fr ? "CRITIQUES" : "CRITICAL"} value={stats.criticals} color={stats.criticals > 0 ? BREAK : MUTED} />
           <KPIChip label="WARNINGS" value={stats.warnings} color={stats.warnings > 0 ? WARN : MUTED} />
           <KPIChip label="OVERRIDES" value={stats.overrides} color={stats.overrides > 0 ? BREAK : MUTED} />

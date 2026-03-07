@@ -307,7 +307,7 @@ export default function CompassPage() {
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
-      <div className="px-4 sm:px-6 py-4 max-w-[1000px] mx-auto space-y-6 sm:space-y-8">
+      <div className="px-4 sm:px-6 py-5 max-w-[1000px] mx-auto space-y-7 sm:space-y-9">
 
         {/* ═══ 1. HERO DÉCISIONNEL ═══ */}
         <section>
@@ -322,9 +322,9 @@ export default function CompassPage() {
             <span className="ml-auto font-mono text-[8px] text-muted-foreground">{scoresList.length} subnets</span>
           </div>
 
-          <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.025) 0%, hsla(0,0%,100%,0.005) 100%)", border: "1px solid hsla(var(--gold), 0.08)" }}>
+          <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.02) 0%, transparent 100%)", border: "1px solid hsla(var(--gold), 0.06)", boxShadow: "0 4px 24px -4px hsla(var(--gold), 0.04)" }}>
             {/* Main hero content */}
-            <div className="p-5 sm:p-8">
+            <div className="p-6 sm:p-8">
               <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-10">
                 {/* Score central */}
                 <div className="flex flex-col items-center flex-shrink-0">
@@ -377,7 +377,7 @@ export default function CompassPage() {
         {/* ═══ 2. DRIVERS DU MOMENT ═══ */}
         <section>
           <SectionHeader title={fr ? "DRIVERS DU MOMENT" : "MARKET DRIVERS"} icon="📊" />
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
             {drivers.map(d => (
               <MetricCard key={d.label} label={d.label} value={d.value} icon={d.icon} color={d.color} progress={d.num} />
             ))}
@@ -406,7 +406,7 @@ export default function CompassPage() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
               {sections.map(s => (
                 <div key={s.key} className="rounded-xl overflow-hidden" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
                   <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${s.border}` }}>
@@ -496,7 +496,7 @@ export default function CompassPage() {
         {/* ═══ 6. CARTE DE ROTATION ═══ */}
         <section>
           <SectionHeader title={fr ? "CARTE DE ROTATION" : "ROTATION MAP"} icon="🗺" />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {rotationGroups.map(g => (
               <div key={g.key} className="rounded-xl overflow-hidden" style={{ border: `1px solid color-mix(in srgb, ${g.color} 15%, transparent)`, background: `color-mix(in srgb, ${g.color} 3%, transparent)` }}>
                 <div className="px-3 py-2 flex items-center gap-1.5" style={{ borderBottom: `1px solid color-mix(in srgb, ${g.color} 10%, transparent)` }}>

@@ -158,7 +158,7 @@ export default function SubnetDetailPage() {
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-24">
-      <div className="px-4 sm:px-6 py-5 max-w-[1100px] mx-auto space-y-6">
+      <div className="px-4 sm:px-6 py-6 max-w-[1100px] mx-auto space-y-7">
 
         {/* ── Breadcrumb ── */}
         <nav className="flex items-center gap-2">
@@ -171,7 +171,7 @@ export default function SubnetDetailPage() {
         {/*   HERO — Identity + Primary Decision       */}
         {/* ══════════════════════════════════════════ */}
         <SectionCard>
-          <div className="px-5 sm:px-6 py-5 sm:py-6">
+          <div className="px-5 sm:px-7 py-6 sm:py-7">
             {/* Identity row */}
             <div className="flex items-start gap-4 mb-5">
               <div className="w-14 h-14 rounded-xl flex items-center justify-center font-mono text-xl font-bold border border-border bg-muted/15 text-[hsl(var(--gold))] shrink-0">
@@ -188,7 +188,7 @@ export default function SubnetDetailPage() {
             </div>
 
             {/* Primary decision strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <KPIChip label="CONVICTION" value={`${conv.level} (${conv.score})`} color={convColor(conv.level)} />
               <KPIChip label="CONFIDENCE" value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
               <KPIChip label="RISK" value={s.risk} color={riskColor(s.risk)} />
@@ -196,7 +196,7 @@ export default function SubnetDetailPage() {
             </div>
 
             {/* Thesis + Invalidation — prominent, side by side */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6">
               <div className="rounded-lg p-4 border border-primary/10 bg-primary/[0.02]">
                 <div className="font-mono text-[7px] tracking-[0.2em] uppercase mb-2.5" style={{ color: GO }}>{fr ? "THÈSE" : "THESIS"}</div>
                 {verdict?.positiveReasons && verdict.positiveReasons.length > 0 ? (
@@ -327,7 +327,7 @@ export default function SubnetDetailPage() {
         {/* ══════════════════════════════════════════ */}
         {/*   DEEP DIVE — 2-column metrics grid         */}
         {/* ══════════════════════════════════════════ */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           {/* Flow & Momentum */}
           <SectionCard>
