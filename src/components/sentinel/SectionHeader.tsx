@@ -10,15 +10,15 @@ interface SectionHeaderProps {
 
 export function SectionHeader({ title, icon, accentVar = "--gold", badge, compact }: SectionHeaderProps) {
   return (
-    <div className={`flex items-center gap-2.5 ${compact ? "mb-2" : "mb-4"}`}>
-      {icon && <span style={{ fontSize: compact ? 11 : 14 }}>{icon}</span>}
+    <div className={`flex items-center gap-2.5 ${compact ? "mb-3" : "mb-5"}`}>
+      {icon && <span style={{ fontSize: compact ? 11 : 13, opacity: 0.6 }}>{icon}</span>}
       <span
         className="font-mono tracking-[0.2em] uppercase font-bold"
-        style={{ fontSize: compact ? 9 : 11, color: `hsla(var(${accentVar}), 0.7)` }}
+        style={{ fontSize: compact ? 9 : 10, color: `hsla(var(${accentVar}), 0.65)` }}
       >
         {title}
       </span>
-      <div className="flex-1 h-px" style={{ background: `hsla(var(${accentVar}), 0.08)` }} />
+      <div className="flex-1 h-px" style={{ background: `hsla(var(${accentVar}), 0.06)` }} />
       {badge}
     </div>
   );
