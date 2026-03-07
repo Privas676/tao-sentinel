@@ -8,6 +8,8 @@ import { stabilityColor } from "@/lib/gauge-engine";
 import { systemStatusLabel, systemStatusColor } from "@/lib/risk-override";
 import type { SmartCapitalState } from "@/lib/gauge-engine";
 import { toast } from "sonner";
+import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
+import { VerdictBadgeWithTooltip, verdictColor, verdictIcon } from "@/components/VerdictBadge";
 
 /* ═══════════════════════════════════════ */
 /*        SPARKLINE COMPONENT              */
