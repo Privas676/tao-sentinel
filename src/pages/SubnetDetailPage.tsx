@@ -263,7 +263,7 @@ export default function SubnetDetailPage() {
               <Metric label={fr ? "Validateurs actifs" : "Active validators"} value={radar.snapshot.validatorsActive} />
               <Metric label="UID" value={`${radar.snapshot.uidUsed} / ${radar.snapshot.uidMax}`} sub={`${(radar.snapshot.uidUsage * 100).toFixed(0)}%`} />
               <Metric label={fr ? "Holders" : "Holders"} value={radar.snapshot.holdersCount} />
-              <Metric label={fr ? "Concentration stake" : "Stake concentration"} value={`${(radar.snapshot.stakeConcentration * 100).toFixed(1)}%`} />
+              <Metric label={fr ? "Concentration stake" : "Stake concentration"} value={`${(radar.snapshot.stakeConcentration <= 1 ? radar.snapshot.stakeConcentration * 100 : radar.snapshot.stakeConcentration).toFixed(1)}%`} />
               <Metric label={fr ? "Coût registration" : "Registration cost"} value={`${radar.snapshot.registrationCost.toFixed(2)} τ`} />
             </div>
           ) : (
