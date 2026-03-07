@@ -342,10 +342,10 @@ function computeValidatorQuality(s: StakeSnapshot): number {
   else if (ratio > 2) score += 18;
   else if (ratio > 1) score += 10;
   else score += 3;
-  // Concentration inverse
-  if (s.stakeConcentration < 40) score += 20;
-  else if (s.stakeConcentration < 60) score += 12;
-  else score += 3;
+  // Concentration inverse (Bittensor-calibrated)
+  if (s.stakeConcentration < 85) score += 20;
+  else if (s.stakeConcentration < 95) score += 14;
+  else score += 5;
   // Miners count (real usage)
   if (s.minersActive >= 50) score += 15;
   else if (s.minersActive >= 20) score += 10;
