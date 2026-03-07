@@ -327,7 +327,7 @@ export default function PortfolioPage() {
                 )}
               </div>
               {analytics.alignment === "aligned" && analytics.exitCount === 0 && analytics.reduceCount === 0 && analytics.fragilePositions.length === 0 && (
-                <p className="font-mono text-[10px] text-muted-foreground/35 italic">{fr ? "Aucune alerte — portefeuille cohérent." : "No alerts — portfolio is coherent."}</p>
+                <p className="font-mono text-[10px] text-muted-foreground italic">{fr ? "Aucune alerte — portefeuille cohérent." : "No alerts — portfolio is coherent."}</p>
               )}
             </div>
           </SectionCard>
