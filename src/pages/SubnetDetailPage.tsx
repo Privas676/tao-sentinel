@@ -470,7 +470,6 @@ export default function SubnetDetailPage() {
                 </>
               )}
               {eco && <Metric label="Sentiment" value={`${(eco.sentiment * 100).toFixed(0)}%`} color={eco.sentiment > 0.55 ? GO : eco.sentiment < 0.45 ? BREAK : WARN} sub={eco.sentiment > 0.55 ? "Buy" : eco.sentiment < 0.45 ? "Sell" : "—"} />}
-              {sn && <Metric label="Holders" value={sn.holdersCount} />}
               <BarScore label={fr ? "Activité" : "Activity"} value={s.healthScores.activityHealth} />
             </div>
           </SectionCard>
