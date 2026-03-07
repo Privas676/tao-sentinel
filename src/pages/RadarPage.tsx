@@ -425,7 +425,7 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
                   {d.snapshot.uidMax > 0 && <span className="text-muted-foreground/40 text-[9px] ml-0.5">{d.snapshot.uidUsed}/{d.snapshot.uidMax}</span>}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-right text-muted-foreground">
-                  {dm.burnRatio > 0 ? `${(dm.burnRatio * 100).toFixed(1)}%` : "—"}
+                  {formatBurnRatio(dm.burnRatio)}
                 </TableCell>
                 <TableCell className="text-right hidden sm:table-cell">
                   <Sparkline data={(d.sparklineAdoption?.length ?? 0) >= 2 ? d.sparklineAdoption : generateAdoptionSparkline(d)} />
