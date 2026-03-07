@@ -224,15 +224,22 @@ export default function SubnetDetailPage() {
         {/* ══════════════════════════════════════════ */}
         <SectionCard>
           <SectionTitle icon="⚖️" title={fr ? "Analyse décisionnelle" : "Decision Analysis"} />
+          {/* Conflict explanation — when signal seems contradictory */}
+          {decision.conflictExplanation && (
+            <div className="mx-5 mt-3 rounded-lg px-4 py-2.5 border border-border bg-accent/10">
+              <div className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "ARBITRAGE MOTEUR" : "ENGINE ARBITRAGE"}</div>
+              <div className="font-mono text-[11px] text-foreground/75 leading-relaxed">{decision.conflictExplanation}</div>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
             <QuadrantBlock
               title={fr ? "Thèse (pourquoi entrer)" : "Thesis (why enter)"}
               tone="go"
               items={[
-                ...(verdict?.positiveReasons?.slice(0, 3) || []),
-                s.opp > 55 && !(verdict?.positiveReasons?.length) ? (fr ? `Opportunité ${s.opp}/100` : `Opportunity ${s.opp}/100`) : null,
-                s.momentumScore >= 55 && !(verdict?.positiveReasons?.length) ? (fr ? `Momentum haussier (${Math.round(s.momentumScore)})` : `Bullish momentum (${Math.round(s.momentumScore)})`) : null,
-                s.asymmetry > 20 && !(verdict?.positiveReasons?.length) ? (fr ? `Asymétrie +${s.asymmetry}` : `Asymmetry +${s.asymmetry}`) : null,
+                ...decision.thesis,
+                s.opp > 55 && !decision.thesis.length ? (fr ? `Opportunité ${s.opp}/100` : `Opportunity ${s.opp}/100`) : null,
+                s.momentumScore >= 55 && !decision.thesis.length ? (fr ? `Momentum haussier (${Math.round(s.momentumScore)})` : `Bullish momentum (${Math.round(s.momentumScore)})`) : null,
+                s.asymmetry > 20 && !decision.thesis.length ? (fr ? `Asymétrie +${s.asymmetry}` : `Asymmetry +${s.asymmetry}`) : null,
               ].filter(Boolean) as string[]}
               position="tl"
             />
@@ -262,11 +269,11 @@ export default function SubnetDetailPage() {
               title={fr ? "Invalidation" : "Invalidation"}
               tone="break"
               items={[
-                ...(verdict?.negativeReasons?.slice(0, 3) || []),
-                s.isOverridden && !(verdict?.negativeReasons?.length) ? "Override actif" : null,
-                s.depegProbability >= 40 && !(verdict?.negativeReasons?.length) ? `Depeg ${s.depegProbability}%` : null,
-                s.delistCategory !== "NORMAL" && !(verdict?.negativeReasons?.length) ? `Delist: ${s.delistCategory}` : null,
-                s.risk > 75 && !(verdict?.negativeReasons?.length) ? (fr ? "Zone danger" : "Danger zone") : null,
+                ...decision.invalidation,
+                s.isOverridden && !decision.invalidation.length ? "Override actif" : null,
+                s.depegProbability >= 40 && !decision.invalidation.length ? `Depeg ${s.depegProbability}%` : null,
+                s.delistCategory !== "NORMAL" && !decision.invalidation.length ? `Delist: ${s.delistCategory}` : null,
+                s.risk > 75 && !decision.invalidation.length ? (fr ? "Zone danger" : "Danger zone") : null,
               ].filter(Boolean) as string[]}
               position="br"
             />
