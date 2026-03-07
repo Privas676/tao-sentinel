@@ -615,8 +615,8 @@ function collectReasons(input: VerdictInput, entryScore: number, holdScore: numb
   else if (d.minersGrowth7d < -0.10) reasons.push({ label: "Baisse des mineurs", positive: false });
 
   // Concentration
-  if (s.stakeConcentration > 70) reasons.push({ label: "Concentration stake excessive", positive: false });
-  else if (s.stakeConcentration < 30) reasons.push({ label: "Stake bien distribué", positive: true });
+  if (s.stakeConcentration > 98) reasons.push({ label: "Concentration stake extrême", positive: false });
+  else if (s.stakeConcentration < 85) reasons.push({ label: "Stake relativement distribué", positive: true });
 
   // Liquidity
   if (p.liquidity > 500) reasons.push({ label: "Liquidité correcte", positive: true });
