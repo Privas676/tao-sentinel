@@ -387,6 +387,63 @@ function SubnetPanel({ signal, open, onClose }: { signal: DashSignal | null; ope
 }
 
 /* ═══════════════════════════════════════ */
+/*   VERDICT SUMMARY PANEL                   */
+/* ═══════════════════════════════════════ */
+function VerdictSummaryPanel() {
+  const { topRentre, topHold, topSors, countRentre, countHold, countSors, isLoading } = useSubnetVerdicts();
+
+  if (isLoading) return null;
+
+  const sections = [
+    { title: "🟢 RENTRE", items: topRentre, count: countRentre, color: "rgba(76,175,80,0.4)" },
+    { title: "🟡 HOLD", items: topHold, count: countHold, color: "rgba(255,193,7,0.35)" },
+    { title: "🔴 SORS", items: topSors, count: countSors, color: "rgba(229,57,53,0.4)" },
+  ];
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
+          DECISION ENGINE
+        </span>
+        <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
+        <div className="flex gap-2">
+          {sections.map(s => (
+            <span key={s.title} className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: `${s.color}15`, color: s.color, border: `1px solid ${s.color}40` }}>
+              {s.count}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {sections.map(s => (
+          <div key={s.title} className="rounded-xl" style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)" }}>
+            <div className="px-3 py-2 border-b" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
+              <span className="font-mono text-[10px] font-bold tracking-wider" style={{ color: s.color }}>{s.title}</span>
+              <span className="font-mono text-[8px] text-white/20 ml-2">({s.count})</span>
+            </div>
+            {s.items.length > 0 ? s.items.slice(0, 3).map(v => (
+              <VerdictRow
+                key={v.netuid}
+                netuid={v.netuid}
+                name={v.name}
+                verdict={v.verdict}
+                confidence={v.confidence}
+                mainScore={v.verdict === "SORS" ? v.exitRisk : v.verdict === "RENTRE" ? v.entryScore : v.holdScore}
+                positiveReasons={v.positiveReasons}
+                negativeReasons={v.negativeReasons}
+              />
+            )) : (
+              <div className="py-4 text-center font-mono text-[10px] text-white/15">—</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════ */
 /*    ALIEN GAUGE — MAIN PAGE              */
 /* ═══════════════════════════════════════ */
 export default function AlienGauge() {
