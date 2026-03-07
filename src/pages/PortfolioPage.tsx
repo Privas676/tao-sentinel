@@ -380,7 +380,7 @@ export default function PortfolioPage() {
             <div className="flex items-center gap-2.5">
               <span className="text-sm opacity-70">📋</span>
               <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-gold">Positions</h2>
-              <span className="font-mono text-[9px] text-muted-foreground/30">{rows.length}</span>
+              <span className="font-mono text-[9px] text-muted-foreground">{rows.length}</span>
             </div>
             <button onClick={() => setShowAdd(true)}
               className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg border border-primary/20 text-primary/80 hover:text-primary hover:border-primary/40 transition-all">
