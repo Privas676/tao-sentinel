@@ -552,7 +552,7 @@ export default function SubnetDetailPage() {
         {/* External ref */}
         <div className="flex justify-end pb-2">
           <a href={`https://taostats.io/subnets/${netuid}`} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[9px] tracking-wider text-muted-foreground/25 hover:text-muted-foreground/55 transition-colors">
+            className="font-mono text-[9px] tracking-wider text-muted-foreground hover:text-foreground transition-colors">
             Taostats →
           </a>
         </div>
