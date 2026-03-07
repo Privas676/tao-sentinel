@@ -234,13 +234,13 @@ export default function SubnetDetailPage() {
           <SectionTitle icon="⚖️" title={fr ? "Analyse décisionnelle" : "Decision Analysis"} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
             <QuadrantBlock
-              title={fr ? "Pourquoi entrer" : "Why enter"}
+              title={fr ? "Thèse (pourquoi entrer)" : "Thesis (why enter)"}
               tone="go"
               items={[
-                s.opp > 55 ? (fr ? `Opportunité ${s.opp}/100` : `Opportunity ${s.opp}/100`) : null,
-                s.momentumScore >= 55 ? (fr ? `Momentum haussier (${Math.round(s.momentumScore)})` : `Bullish momentum (${Math.round(s.momentumScore)})`) : null,
-                s.asymmetry > 20 ? (fr ? `Asymétrie +${s.asymmetry}` : `Asymmetry +${s.asymmetry}`) : null,
-                eco?.sentiment != null && eco.sentiment > 0.55 ? (fr ? "Pression acheteuse" : "Buy pressure") : null,
+                ...(verdict?.positiveReasons?.slice(0, 3) || []),
+                s.opp > 55 && !(verdict?.positiveReasons?.length) ? (fr ? `Opportunité ${s.opp}/100` : `Opportunity ${s.opp}/100`) : null,
+                s.momentumScore >= 55 && !(verdict?.positiveReasons?.length) ? (fr ? `Momentum haussier (${Math.round(s.momentumScore)})` : `Bullish momentum (${Math.round(s.momentumScore)})`) : null,
+                s.asymmetry > 20 && !(verdict?.positiveReasons?.length) ? (fr ? `Asymétrie +${s.asymmetry}` : `Asymmetry +${s.asymmetry}`) : null,
               ].filter(Boolean) as string[]}
               position="tl"
             />
