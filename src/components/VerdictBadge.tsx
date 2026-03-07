@@ -142,7 +142,6 @@ export function VerdictBadgeWithTooltip({ verdict, confidence, positiveReasons, 
 
 /* ── Compact verdict row for Dashboard lists ── */
 
-import React from "react";
 
 export const VerdictRow = React.forwardRef<HTMLDivElement, {
   netuid: number;
