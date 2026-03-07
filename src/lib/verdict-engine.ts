@@ -727,8 +727,21 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
   }
 
   // G5: Strong emissions but extreme concentration → don't upgrade (Bittensor: only >98%)
-  if (input.economicContext.emissionsPercent > 2 && input.snapshot.stakeConcentration > 98 && verdict === "RENTRE") {
+  if (input.economicContext.emissionsPercent > 2 && normalizedInput.snapshot.stakeConcentration > 98 && verdict === "RENTRE") {
     verdict = "HOLD";
+  }
+
+  // G6: Override/Depeg from protection engine → force SORS
+  if (input.isOverridden && verdict !== "SORS") {
+    verdict = "SORS";
+  }
+  if (input.systemStatus === "DEPEG" && verdict !== "SORS") {
+    verdict = "SORS";
+  }
+
+  // G7: Old engine high risk cross-check → force SORS if old risk >= 70
+  if (input.oldEngineRisk != null && input.oldEngineRisk >= 70 && verdict !== "SORS") {
+    verdict = "SORS";
   }
 
   // Slice top 3 positive/negative reasons
