@@ -387,8 +387,49 @@ function SubnetPanel({ signal, open, onClose }: { signal: DashSignal | null; ope
 /* ═══════════════════════════════════════ */
 /*   VERDICT SUMMARY PANEL                   */
 /* ═══════════════════════════════════════ */
-function VerdictSummaryPanel() {
+function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex, globalStability, confianceScore }: {
+  enrichedSignals: DashSignal[];
+  smartCapitalState: string;
+  sentinelIndex: number;
+  globalStability: number;
+  confianceScore: number;
+}) {
   const { topRentre, topHold, topSors, countRentre, countHold, countSors, isLoading } = useSubnetVerdicts();
+
+  /* ── Critical risks: overridden, delist, depeg ── */
+  const criticalRisks = useMemo(() => {
+    return enrichedSignals
+      .filter(s => s.isOverridden || s.delistCategory !== "NORMAL" || s.depegProbability >= 50)
+      .sort((a, b) => {
+        const sev = (s: DashSignal) => (s.isOverridden ? 100 : 0) + s.depegProbability + (s.delistCategory !== "NORMAL" ? s.delistScore : 0);
+        return sev(b) - sev(a);
+      })
+      .slice(0, 5);
+  }, [enrichedSignals]);
+
+  /* ── Macro drivers ── */
+  const drivers = useMemo(() => {
+    const list: { icon: string; label: string; value: string; color: string }[] = [];
+
+    const regime = sentinelIndex >= 70 ? "Favorable" : sentinelIndex >= 45 ? "Neutre" : "Défavorable";
+    const regimeColor = sentinelIndex >= 70 ? "rgba(76,175,80,0.85)" : sentinelIndex >= 45 ? "rgba(255,193,7,0.85)" : "rgba(229,57,53,0.85)";
+    list.push({ icon: "📊", label: "Régime", value: `${regime} (${sentinelIndex})`, color: regimeColor });
+
+    const scColor = smartCapitalState === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapitalState === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "rgba(255,248,220,0.5)";
+    list.push({ icon: "🧠", label: "Smart Capital", value: smartCapitalState, color: scColor });
+
+    const stabColor = globalStability >= 65 ? "rgba(76,175,80,0.85)" : globalStability >= 40 ? "rgba(255,193,7,0.85)" : "rgba(229,57,53,0.85)";
+    list.push({ icon: "⚖", label: "Stabilité", value: `${globalStability}%`, color: stabColor });
+
+    const confColor = confianceScore >= 70 ? "rgba(76,175,80,0.85)" : confianceScore >= 45 ? "rgba(255,193,7,0.85)" : "rgba(229,57,53,0.85)";
+    list.push({ icon: "📡", label: "Data", value: `${confianceScore}%`, color: confColor });
+
+    const avgMom = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + s.momentumScore, 0) / enrichedSignals.length) : 0;
+    const momColor = avgMom >= 60 ? "rgba(76,175,80,0.85)" : avgMom >= 35 ? "rgba(255,193,7,0.85)" : "rgba(229,57,53,0.85)";
+    list.push({ icon: "📈", label: "Momentum", value: `${avgMom}`, color: momColor });
+
+    return list;
+  }, [sentinelIndex, smartCapitalState, globalStability, confianceScore, enrichedSignals]);
 
   if (isLoading) return null;
 
@@ -397,46 +438,108 @@ function VerdictSummaryPanel() {
     { title: "🟡 HOLD", items: topHold, count: countHold, color: "rgba(255,193,7,0.35)" },
     { title: "🔴 SORS", items: topSors, count: countSors, color: "rgba(229,57,53,0.4)" },
   ];
-
   return (
-    <div className="mt-6">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
-          DECISION ENGINE
-        </span>
-        <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
-        <div className="flex gap-2">
-          {sections.map(s => (
-            <span key={s.title} className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: `${s.color}15`, color: s.color, border: `1px solid ${s.color}40` }}>
-              {s.count}
-            </span>
+    <div className="mt-6 space-y-5">
+      {/* ═══ MACRO DRIVERS ═══ */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
+            DRIVERS DU MOMENT
+          </span>
+          <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {drivers.map(d => (
+            <div key={d.label} className="flex items-center gap-2 px-3 py-2 rounded-lg"
+              style={{ background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.05)" }}>
+              <span style={{ fontSize: 12 }}>{d.icon}</span>
+              <span className="font-mono text-[9px] tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>{d.label}</span>
+              <span className="font-mono text-[11px] font-bold" style={{ color: d.color }}>{d.value}</span>
+            </div>
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {sections.map(s => (
-          <div key={s.title} className="rounded-xl" style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)" }}>
-            <div className="px-3 py-2 border-b" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
-              <span className="font-mono text-[10px] font-bold tracking-wider" style={{ color: s.color }}>{s.title}</span>
-              <span className="font-mono text-[8px] text-white/20 ml-2">({s.count})</span>
-            </div>
-            {s.items.length > 0 ? s.items.slice(0, 3).map(v => (
-              <VerdictRow
-                key={v.netuid}
-                netuid={v.netuid}
-                name={v.name}
-                verdict={v.verdict}
-                confidence={v.confidence}
-                mainScore={v.verdict === "SORS" ? v.exitRisk : v.verdict === "RENTRE" ? v.entryScore : v.holdScore}
-                positiveReasons={v.positiveReasons}
-                negativeReasons={v.negativeReasons}
-              />
-            )) : (
-              <div className="py-4 text-center font-mono text-[10px] text-white/15">—</div>
-            )}
+
+      {/* ═══ DECISION ENGINE — TOP 5 ═══ */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
+            DECISION ENGINE
+          </span>
+          <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
+          <div className="flex gap-2">
+            {sections.map(s => (
+              <span key={s.title} className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: `${s.color}15`, color: s.color, border: `1px solid ${s.color}40` }}>
+                {s.count}
+              </span>
+            ))}
           </div>
-        ))}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {sections.map(s => (
+            <div key={s.title} className="rounded-xl" style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)" }}>
+              <div className="px-3 py-2 border-b" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
+                <span className="font-mono text-[10px] font-bold tracking-wider" style={{ color: s.color }}>{s.title}</span>
+                <span className="font-mono text-[8px] text-white/20 ml-2">({s.count})</span>
+              </div>
+              {s.items.length > 0 ? s.items.slice(0, 5).map(v => (
+                <VerdictRow
+                  key={v.netuid}
+                  netuid={v.netuid}
+                  name={v.name}
+                  verdict={v.verdict}
+                  confidence={v.confidence}
+                  mainScore={v.verdict === "SORS" ? v.exitRisk : v.verdict === "RENTRE" ? v.entryScore : v.holdScore}
+                  positiveReasons={v.positiveReasons}
+                  negativeReasons={v.negativeReasons}
+                />
+              )) : (
+                <div className="py-4 text-center font-mono text-[10px] text-white/15">—</div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
+
+      {/* ═══ RISQUES CRITIQUES ═══ */}
+      {criticalRisks.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(229,57,53,0.5)" }}>
+              🚨 RISQUES CRITIQUES
+            </span>
+            <div className="flex-1 h-px" style={{ background: "rgba(229,57,53,0.08)" }} />
+            <span className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: "rgba(229,57,53,0.08)", color: "rgba(229,57,53,0.7)", border: "1px solid rgba(229,57,53,0.2)" }}>
+              {criticalRisks.length}
+            </span>
+          </div>
+          <div className="rounded-xl overflow-hidden" style={{ background: "rgba(229,57,53,0.02)", border: "1px solid rgba(229,57,53,0.08)" }}>
+            {criticalRisks.map(s => {
+              const tags: { label: string; color: string }[] = [];
+              if (s.isOverridden) tags.push({ label: "⛔ OVERRIDE", color: "rgba(229,57,53,0.9)" });
+              if (s.delistCategory === "DEPEG_PRIORITY") tags.push({ label: "🔴 DEREG", color: "rgba(229,57,53,0.9)" });
+              else if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") tags.push({ label: "🟠 DELIST", color: "rgba(255,152,0,0.9)" });
+              if (s.depegProbability >= 50) tags.push({ label: `DEPEG ${s.depegProbability}%`, color: "rgba(255,152,0,0.9)" });
+              return (
+                <div key={s.netuid} className="flex items-center gap-2 py-2.5 px-3 hover:bg-white/[0.02] transition-all"
+                  style={{ borderBottom: "1px solid rgba(229,57,53,0.06)" }}>
+                  <span className="font-mono font-bold text-[11px]" style={{ color: "rgba(255,248,220,0.75)", width: 55 }}>SN-{s.netuid}</span>
+                  <span className="font-mono text-[10px] truncate flex-1" style={{ color: "rgba(255,255,255,0.35)" }}>{s.name}</span>
+                  <div className="flex gap-1">
+                    {tags.map((t, i) => (
+                      <span key={i} className="font-mono text-[8px] px-1.5 py-0.5 rounded font-bold"
+                        style={{ background: `${t.color}12`, color: t.color, border: `1px solid ${t.color}30` }}>
+                        {t.label}
+                      </span>
+                    ))}
+                  </div>
+                  <span className="font-mono text-[11px] font-bold w-7 text-right" style={{ color: riskColor(s.risk) }}>{s.risk}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -888,8 +991,14 @@ export default function AlienGauge() {
           </div>
         )}
 
-        {/* ═══ VERDICT ENGINE — TOP 3 RENTRE / HOLD / SORS ═══ */}
-        <VerdictSummaryPanel />
+        {/* ═══ VERDICT ENGINE — TOP 5 + DRIVERS + CRITICAL RISKS ═══ */}
+        <VerdictSummaryPanel
+          enrichedSignals={enrichedSignals}
+          smartCapitalState={smartCapital.state}
+          sentinelIndex={sentinelIndex}
+          globalStability={globalStability}
+          confianceScore={confianceData.score}
+        />
 
         {/* ═══ TOP 3 OPPORTUNITIES + TOP 3 RISKS ═══ */}
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
