@@ -222,9 +222,9 @@ export default function SubnetDetailPage() {
 
         {/* ── Breadcrumb ── */}
         <nav className="flex items-center gap-2">
-          <Link to="/subnets" className="font-mono text-[10px] tracking-wider text-muted-foreground/35 hover:text-muted-foreground/65 transition-colors">← Subnets</Link>
-          <span className="text-muted-foreground/15 text-[10px]">/</span>
-          <span className="font-mono text-[10px] text-muted-foreground/55">SN-{netuid}</span>
+          <Link to="/subnets" className="font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors">← Subnets</Link>
+          <span className="text-muted-foreground text-[10px]">/</span>
+          <span className="font-mono text-[10px] text-muted-foreground">SN-{netuid}</span>
         </nav>
 
         {/* ══════════════════════════════════════════ */}
