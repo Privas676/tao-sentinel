@@ -38,7 +38,7 @@ function median(arr: number[]): number {
 }
 
 const RAO = 1e9;
-const BLOCKS_PER_DAY = 20_180; // Bittensor block time ≈ 4.28s → 86400/4.28
+const BLOCKS_PER_DAY = 19_393; // Calibrated to match Taostats emissions (86400/4.456s block time)
 const OWNER_TAKE = 0.18; // Bittensor default delegate/owner take (18%)
 
 function raoToTao(v: any): number {
@@ -78,9 +78,12 @@ function extractEconomicContext(rp: any, rpEntry: any, totalNetworkEmission: num
   const sellVolume = raoToTao(rp.tao_sell_volume_24_hr ?? 0);
   const totalVol = buyVolume + sellVolume;
 
-  const circulatingSupply = totalAlpha > 0 ? totalAlpha - alphaStaked : 0;
+  // Circulating Supply = staked + in pool (all tokens that exist and are accounted for)
+  // Total Burned = total_alpha - alpha_staked - alpha_in_pool (tokens removed from circulation)
+  const totalBurnedCalc = Math.max(0, totalAlpha - alphaStaked - alphaInPool);
+  const circulatingSupply = alphaStaked + alphaInPool;
 
-  // Emission: _chain.emission is rao per block, ~20,000 blocks/day (~4.3s/block)
+  // Emission: _chain.emission is rao per step (~4.456s), ~19,393 steps/day
   const emissionPerBlock = Number(chain.emission ?? 0);
   const emissionsPerDay = raoToTao(emissionPerBlock * BLOCKS_PER_DAY);
 
@@ -101,8 +104,8 @@ function extractEconomicContext(rp: any, rpEntry: any, totalNetworkEmission: num
   // Max supply: Bittensor subnets have 21M max supply
   const maxSupply = 21_000_000;
 
-  // Total burned: use recycled_lifetime from chain data (actual on-chain burns)
-  const totalBurned = raoToTao(chain.recycled_lifetime ?? rp.recycled_lifetime ?? 0);
+  // Total burned = total_alpha - alpha_staked - alpha_in_pool (matches Taostats definition)
+  const totalBurned = totalBurnedCalc;
 
   return {
     emissionsPercent,
@@ -236,8 +239,9 @@ export function useStakeAnalytics() {
         const validatorsActive = Math.max(row.validators_active || 0, Number(chain.active_validators ?? 0));
         const liquidity = raoToTao(rp.liquidity_raw || rp.liquidity);
 
-        // UID data: active_keys = registered UIDs, max_neurons = max UIDs
-        const uidUsed = Number(chain.active_keys ?? chain.active_uids ?? rp.active_uids ?? 0);
+        // UID data: active_keys = total registered UIDs (matches Taostats "Number of Active UIDs")
+        // total_neurons as fallback, then active_keys, then active_uids
+        const uidUsed = Number(chain.total_neurons ?? chain.active_keys ?? chain.active_uids ?? rp.active_uids ?? 0);
         const uidMax = Number(chain.max_neurons ?? chain.max_n ?? rp.max_n ?? 0);
 
         const inflow = Number(row.large_wallet_inflow || 0);
