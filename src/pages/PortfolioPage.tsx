@@ -263,7 +263,7 @@ export default function PortfolioPage() {
             <div className="inline-flex items-center rounded-lg overflow-hidden border border-border">
               {(["TAO", "USD"] as Currency[]).map(c => (
                 <button key={c} onClick={() => toggleCurrency(c)}
-                  className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-all ${currency === c ? "bg-muted/40 text-gold" : "text-muted-foreground/30 hover:text-muted-foreground/50"}`}>
+                  className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-all ${currency === c ? "bg-muted/40 text-gold" : "text-muted-foreground hover:text-foreground"}`}>
                   {c === "TAO" ? "τ" : "$"}
                 </button>
               ))}
