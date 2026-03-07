@@ -15,7 +15,7 @@ export const FROZEN_UI_PAGES = [
 ] as const;
 
 export const FROZEN_ROUTES = [
-  "/",
+  "/compass",
   "/subnets",
   "/portfolio",
   "/alerts",
@@ -24,4 +24,4 @@ export const FROZEN_ROUTES = [
   "/install",
 ] as const;
 
-export const FROZEN_NAV_COUNT = 8;
+export const FROZEN_NAV_COUNT = 6;

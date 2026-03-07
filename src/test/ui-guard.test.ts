@@ -12,7 +12,7 @@ import {
 } from "@/lib/safe-refactor";
 
 const APP_SOURCE = readFileSync(resolve(__dirname, "../App.tsx"), "utf-8");
-const SIDEBAR_SOURCE = readFileSync(resolve(__dirname, "../components/AppSidebar.tsx"), "utf-8");
+const SHELL_SOURCE = readFileSync(resolve(__dirname, "../components/AppShell.tsx"), "utf-8");
 
 describe("UI Guard — CI blocker", () => {
   it("SAFE_REFACTOR_MODE is enabled", () => {
@@ -31,7 +31,7 @@ describe("UI Guard — CI blocker", () => {
 
   it("all frozen routes are declared in App.tsx", () => {
     for (const route of FROZEN_ROUTES) {
-      const routePattern = new RegExp(`path=["']${route.replace("/", "\\/")}["']`);
+      const routePattern = new RegExp(`path=["']${route.replace(/\//g, "\\/")}["']`);
       expect(
         routePattern.test(APP_SOURCE),
         `Missing route declaration: ${route}`
@@ -40,8 +40,7 @@ describe("UI Guard — CI blocker", () => {
   });
 
   it("nav items count matches frozen count", () => {
-    // Nav items are now in AppSidebar.tsx
-    const matches = SIDEBAR_SOURCE.match(/\{ path: "/g);
+    const matches = SHELL_SOURCE.match(/\{ path: "/g);
     expect(
       matches?.length,
       `Nav items count changed! Expected ${FROZEN_NAV_COUNT}, found ${matches?.length}`
