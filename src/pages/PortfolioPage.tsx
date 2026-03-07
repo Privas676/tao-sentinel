@@ -41,7 +41,7 @@ function InlineEditQty({ value, onSave }: { value: number; onSave: (v: number) =
         onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") { setDraft(String(value)); setEditing(false); } }}
         className="w-20 bg-muted/30 border border-border rounded px-1.5 py-0.5 font-mono text-sm text-foreground/80 outline-none focus:border-primary/40" />
       <button onClick={save} className="text-primary/80 hover:text-primary text-xs">✓</button>
-      <button onClick={() => { setDraft(String(value)); setEditing(false); }} className="text-muted-foreground/30 hover:text-muted-foreground/60 text-xs">✕</button>
+      <button onClick={() => { setDraft(String(value)); setEditing(false); }} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
     </span>
   );
 }
