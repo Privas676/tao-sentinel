@@ -518,7 +518,7 @@ export default function SubnetsPage() {
                   <SortHeader col="opp" label="Opp." align="right" />
                   <SortHeader col="liquidity" label={fr ? "Liq." : "Liq."} align="center" />
                   <SortHeader col="stability" label="Structure" align="center" />
-                   <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Fit</th>
+                   <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">PF</th>
                    <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Signal</th>
                    <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground">7d</th>
                 </tr>
