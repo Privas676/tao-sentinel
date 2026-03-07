@@ -384,7 +384,7 @@ export default function SubnetsPage() {
         {/* Verdict counts integrated into filter bar below — no separate distribution bar */}
 
         {/* ═══ FILTER BAR ═══ */}
-        <div className="rounded-xl p-3 space-y-2.5" style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+        <div className="rounded-xl p-3 space-y-2.5 bg-muted/15 border border-border">
           {/* Search + controls row */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1" style={{ minWidth: 180, maxWidth: 300 }}>
