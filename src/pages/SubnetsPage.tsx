@@ -151,6 +151,7 @@ function scColor(state: SmartCapitalState): string {
 }
 
 export default function SubnetsPage() {
+  const navigate = useNavigate();
   const { t, lang } = useI18n();
   const [mode, setMode] = useState<ViewMode>("all");
   const [healthPanel, setHealthPanel] = useState<null | any>(null);
