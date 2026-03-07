@@ -78,9 +78,12 @@ function extractEconomicContext(rp: any, rpEntry: any, totalNetworkEmission: num
   const sellVolume = raoToTao(rp.tao_sell_volume_24_hr ?? 0);
   const totalVol = buyVolume + sellVolume;
 
-  const circulatingSupply = totalAlpha > 0 ? totalAlpha - alphaStaked : 0;
+  // Circulating Supply = staked + in pool (all tokens that exist and are accounted for)
+  // Total Burned = total_alpha - alpha_staked - alpha_in_pool (tokens removed from circulation)
+  const totalBurnedCalc = Math.max(0, totalAlpha - alphaStaked - alphaInPool);
+  const circulatingSupply = alphaStaked + alphaInPool;
 
-  // Emission: _chain.emission is rao per block, ~20,000 blocks/day (~4.3s/block)
+  // Emission: _chain.emission is rao per step (~4.456s), ~19,393 steps/day
   const emissionPerBlock = Number(chain.emission ?? 0);
   const emissionsPerDay = raoToTao(emissionPerBlock * BLOCKS_PER_DAY);
 
