@@ -179,11 +179,15 @@ export default function SubnetsPage() {
         ...r,
         owned: ownedNetuids.has(r.netuid),
         spark: sparklines?.get(r.netuid) || [],
+        verdict: verdicts.get(r.netuid),
       }))
       .filter(r => {
         if (mode === "opportunities") return r.assetType !== "CORE_NETWORK" && !r.isOverridden && r.opp > r.risk;
         if (mode === "risks") return r.assetType !== "CORE_NETWORK" && r.risk >= r.opp;
         if (mode === "mine") return r.owned;
+        if (mode === "rentre") return r.verdict?.verdict === "RENTRE";
+        if (mode === "hold") return r.verdict?.verdict === "HOLD";
+        if (mode === "sors") return r.verdict?.verdict === "SORS";
         return true;
       })
       .sort((a, b) => {
