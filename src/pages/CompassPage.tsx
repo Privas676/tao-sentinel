@@ -549,8 +549,8 @@ export default function CompassPage() {
             </div>
           ) : (
             <div className="rounded-xl p-6 flex flex-col items-center gap-2" style={{ background: "hsla(0,0%,100%,0.01)", border: "1px dashed hsla(0,0%,100%,0.06)" }}>
-              <span style={{ fontSize: 20, opacity: 0.25 }}>📂</span>
-              <span className="font-mono text-[10px] text-muted-foreground/25">{fr ? "Aucune position dans le portefeuille" : "No positions in portfolio"}</span>
+              <span style={{ fontSize: 20, opacity: 0.5 }}>📂</span>
+              <span className="font-mono text-[10px] text-muted-foreground/65">{fr ? "Aucune position dans le portefeuille" : "No positions in portfolio"}</span>
               <Link to="/subnets" className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg mt-1" style={{ background: "hsla(var(--gold), 0.05)", color: "hsl(var(--gold))", border: "1px solid hsla(var(--gold), 0.1)" }}>
                 {fr ? "Explorer les subnets →" : "Explore subnets →"}
               </Link>
