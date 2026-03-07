@@ -104,8 +104,8 @@ function extractEconomicContext(rp: any, rpEntry: any, totalNetworkEmission: num
   // Max supply: Bittensor subnets have 21M max supply
   const maxSupply = 21_000_000;
 
-  // Total burned: use recycled_lifetime from chain data (actual on-chain burns)
-  const totalBurned = raoToTao(chain.recycled_lifetime ?? rp.recycled_lifetime ?? 0);
+  // Total burned = total_alpha - alpha_staked - alpha_in_pool (matches Taostats definition)
+  const totalBurned = totalBurnedCalc;
 
   return {
     emissionsPercent,
