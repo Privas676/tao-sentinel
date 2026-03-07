@@ -324,7 +324,7 @@ export default function CompassPage() {
 
           <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.02) 0%, transparent 100%)", border: "1px solid hsla(var(--gold), 0.06)", boxShadow: "0 4px 24px -4px hsla(var(--gold), 0.04)" }}>
             {/* Main hero content */}
-            <div className="p-5 sm:p-8">
+            <div className="p-6 sm:p-8">
               <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-10">
                 {/* Score central */}
                 <div className="flex flex-col items-center flex-shrink-0">
