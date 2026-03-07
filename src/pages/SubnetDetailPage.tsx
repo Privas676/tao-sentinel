@@ -46,7 +46,7 @@ function Metric({ label, value, color, sub, mono = true }: { label: string; valu
       <span className="text-muted-foreground text-[11px] leading-tight">{label}</span>
       <div className="flex items-center gap-1.5">
         <span className={`text-[12px] font-medium ${mono ? "font-mono" : ""}`} style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
-        {sub && <span className="text-[9px] text-muted-foreground/35">{sub}</span>}
+        {sub && <span className="text-[9px] text-muted-foreground">{sub}</span>}
       </div>
     </div>
   );
