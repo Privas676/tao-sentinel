@@ -7,6 +7,8 @@ import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import MarketContextPanel from "@/components/MarketContextPanel";
 import { type ScoreFactor, topFactors } from "@/lib/score-factors";
+import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
+import { VerdictBadgeWithTooltip, verdictColor } from "@/components/VerdictBadge";
 import {
   deriveMomentumLabel, momentumColor, computeMomentumScore,
   opportunityColor, riskColor, clamp,
