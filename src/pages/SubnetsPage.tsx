@@ -375,7 +375,7 @@ export default function SubnetsPage() {
           icon="📋"
           badge={<DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" />}
           actions={
-            <span className="font-mono text-[8px] text-muted-foreground/65">
+            <span className="font-mono text-[8px] text-muted-foreground">
               {scoresList.length} subnets · {new Date(scoreTimestamp).toLocaleTimeString()}
             </span>
           }
