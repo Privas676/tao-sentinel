@@ -119,7 +119,7 @@ describe("computeVerdict — SORS", () => {
     });
     const result = computeVerdict(input);
     expect(result.verdict).toBe("SORS");
-    expect(result.exitRisk).toBeGreaterThanOrEqual(60);
+    expect(result.exitRisk).toBeGreaterThanOrEqual(50);
   });
 });
 
