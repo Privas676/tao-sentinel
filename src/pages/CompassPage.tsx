@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
+import { useState, useMemo, useRef, type ReactNode } from "react";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { VerdictRow } from "@/components/VerdictBadge";
 import { Link } from "react-router-dom";
@@ -79,23 +79,9 @@ function TaoPriceTicker({ taoUsd, scoreTimestamp }: { taoUsd: number | null; sco
 }
 
 /* ─── Section Header ─── */
-function SectionHeader({ title, icon, accentVar = "--gold", badge }: {
-  title: string; icon: string; accentVar?: string; badge?: ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 mb-4">
-      <span style={{ fontSize: 14 }}>{icon}</span>
-      <span
-        className="font-mono tracking-[0.2em] uppercase font-bold"
-        style={{ fontSize: 11, color: `hsla(var(${accentVar}), 0.7)` }}
-      >
-        {title}
-      </span>
-      <div className="flex-1 h-px" style={{ background: `hsla(var(${accentVar}), 0.08)` }} />
-      {badge}
-    </div>
-  );
-}
+import { SectionHeader } from "@/components/sentinel/SectionHeader";
+import { ScorePill } from "@/components/sentinel/ScorePill";
+import { MetricCard } from "@/components/sentinel/MetricCard";
 
 /* ─── Subnet Side Panel ─── */
 function SubnetQuickPanel({ signal, open, onClose }: { signal: DashSignal | null; open: boolean; onClose: () => void }) {
@@ -346,11 +332,11 @@ export default function CompassPage() {
               <div className="flex-1 flex flex-col items-center sm:items-start gap-4 w-full">
                 {/* Metrics row */}
                 <div className="flex items-center justify-center sm:justify-start gap-5 sm:gap-6 w-full">
-                  <MetricPill label="OPP" value={globalOpp} color={oppGlobal} />
-                  <MetricPill label="RISK" value={globalRisk} color={rskGlobal} />
-                  <MetricPill label="SC" value={scLabel} color={smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "hsl(var(--muted-foreground))"} small />
-                  <MetricPill label={fr ? "Stabilité" : "Stability"} value={`${globalStability}%`} color={stabilityColor(globalStability)} />
-                  <MetricPill label="Data" value={`${confianceScore}%`} color={confianceColor(confianceScore)} />
+                  <ScorePill label="OPP" value={globalOpp} color={oppGlobal} />
+                  <ScorePill label="RISK" value={globalRisk} color={rskGlobal} />
+                  <ScorePill label="SC" value={scLabel} color={smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "hsl(var(--muted-foreground))"} size="sm" />
+                  <ScorePill label={fr ? "Stabilité" : "Stability"} value={`${globalStability}%`} color={stabilityColor(globalStability)} />
+                  <ScorePill label="Data" value={`${confianceScore}%`} color={confianceColor(confianceScore)} />
                 </div>
 
                 {/* Macro recommendation badge */}
@@ -385,24 +371,14 @@ export default function CompassPage() {
           />
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {drivers.map(d => (
-              <div
+              <MetricCard
                 key={d.label}
-                className="rounded-lg px-3 py-3 flex flex-col items-center gap-1"
-                style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.05)" }}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span style={{ fontSize: 11 }}>{d.icon}</span>
-                  <span className="font-mono text-[8px] tracking-wider text-muted-foreground/40 uppercase">{d.label}</span>
-                </div>
-                <span className="font-mono text-sm font-bold" style={{ color: d.color }}>{d.value}</span>
-                {/* Mini bar */}
-                <div className="w-full h-[3px] rounded-full overflow-hidden" style={{ background: "hsla(0,0%,100%,0.04)" }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${Math.min(d.num, 100)}%`, background: d.color }}
-                  />
-                </div>
-              </div>
+                label={d.label}
+                value={d.value}
+                icon={d.icon}
+                color={d.color}
+                progress={d.num}
+              />
             ))}
           </div>
         </section>
@@ -573,16 +549,6 @@ export default function CompassPage() {
       </div>
 
       <SubnetQuickPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} />
-    </div>
-  );
-}
-
-/* ─── Metric Pill (compact reusable) ─── */
-function MetricPill({ label, value, color, small }: { label: string; value: string | number; color: string; small?: boolean }) {
-  return (
-    <div className="flex flex-col items-center gap-0.5">
-      <span className="font-mono text-muted-foreground/30 uppercase" style={{ fontSize: 7, letterSpacing: "0.12em" }}>{label}</span>
-      <span className="font-mono font-bold" style={{ color, fontSize: small ? 9 : 14 }}>{value}</span>
     </div>
   );
 }
