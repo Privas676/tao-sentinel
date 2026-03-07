@@ -355,10 +355,11 @@ export default function SubnetDetailPage() {
             <div className="space-y-1">
               {amm && (
                 <>
-                  <MetricRow label="Spread bid/ask" value={`${amm.spreadPct.toFixed(3)}%`} color={amm.spreadPct < 0.5 ? "hsl(var(--signal-go))" : amm.spreadPct < 2 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
-                  <MetricRow label="Slippage 1τ" value={`${amm.slippage1t.toFixed(2)}%`} />
-                  <MetricRow label="Slippage 10τ" value={`${amm.slippage10t.toFixed(2)}%`} color={amm.slippage10t > 5 ? "hsl(var(--signal-break))" : undefined} />
-                  <MetricRow label={fr ? "Profondeur" : "Depth"} value={`${amm.depthScore}`} color={healthColor(amm.depthScore)} />
+                  <MetricRow label="Spread bid/ask" value={`${(amm.spreadBps / 100).toFixed(3)}%`} color={amm.spreadBps < 50 ? "hsl(var(--signal-go))" : amm.spreadBps < 200 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
+                  <MetricRow label="Slippage 1τ" value={`${(amm.slippageBps1Tao / 100).toFixed(2)}%`} />
+                  <MetricRow label="Slippage 10τ" value={`${(amm.slippageBps10Tao / 100).toFixed(2)}%`} color={amm.slippageBps10Tao > 500 ? "hsl(var(--signal-break))" : undefined} />
+                  <MetricRow label={fr ? "Profondeur" : "Depth"} value={`${amm.poolDepth.toFixed(1)}τ`} color={healthColor(Math.min(100, amm.poolDepth))} />
+                  <MetricRow label="AMM Score" value={amm.ammEfficiency} color={healthColor(amm.ammEfficiency)} />
                 </>
               )}
               {eco && (
