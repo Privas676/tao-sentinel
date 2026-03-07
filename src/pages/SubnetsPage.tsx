@@ -352,6 +352,7 @@ export default function SubnetsPage() {
             </div>
           );
         })()}
+        <ColumnConfigPanel preset={preset} visibleColumns={visibleColumns} setPreset={setPreset} toggleColumn={toggleColumn} />
       </div>
 
       <SwipeHint storageKey="swipe-hint-seen" />
