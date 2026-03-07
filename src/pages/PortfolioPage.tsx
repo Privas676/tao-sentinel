@@ -60,7 +60,7 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
     <div ref={ref} className="relative mt-1">
       <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between bg-muted/20 border border-border rounded-lg px-3 py-2.5 font-mono text-xs text-foreground/80 hover:border-muted-foreground/30 transition-colors">
         <span>{selected ? `SN-${selected.netuid} — ${selected.name}` : "..."}</span>
-        <svg className={`w-3.5 h-3.5 text-muted-foreground/30 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        <svg className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
       </button>
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-lg overflow-hidden shadow-2xl bg-popover border border-border">
