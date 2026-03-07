@@ -304,11 +304,11 @@ export default function SubnetsPage() {
               style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "6px 12px" }}>
               <span className="text-white/40 tracking-widest text-[8px]">VERDICTS</span>
               <div className="flex items-center gap-1.5">
-                <span style={{ color: "rgba(76,175,80,0.9)" }}>🟢 {countRentre}</span>
+                <button onClick={() => setMode(mode === "rentre" ? "all" : "rentre")} className={`cursor-pointer hover:underline transition-opacity ${mode === "rentre" ? "opacity-100 font-bold" : "opacity-80 hover:opacity-100"}`} style={{ color: "rgba(76,175,80,0.9)" }}>🟢 {countRentre}</button>
                 <span className="text-white/15">|</span>
-                <span style={{ color: "rgba(255,193,7,0.85)" }}>🟡 {countHold}</span>
+                <button onClick={() => setMode(mode === "hold" ? "all" : "hold")} className={`cursor-pointer hover:underline transition-opacity ${mode === "hold" ? "opacity-100 font-bold" : "opacity-80 hover:opacity-100"}`} style={{ color: "rgba(255,193,7,0.85)" }}>🟡 {countHold}</button>
                 <span className="text-white/15">|</span>
-                <span style={{ color: "rgba(229,57,53,0.9)" }}>🔴 {countSors}</span>
+                <button onClick={() => setMode(mode === "sors" ? "all" : "sors")} className={`cursor-pointer hover:underline transition-opacity ${mode === "sors" ? "opacity-100 font-bold" : "opacity-80 hover:opacity-100"}`} style={{ color: "rgba(229,57,53,0.9)" }}>🔴 {countSors}</button>
               </div>
               <div className="flex h-2 rounded-full overflow-hidden" style={{ width: 80, background: "rgba(255,255,255,0.05)" }}>
                 {pctR > 0 && <div className="h-full transition-all" style={{ width: `${pctR}%`, background: "rgba(76,175,80,0.7)" }} />}
