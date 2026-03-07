@@ -243,6 +243,7 @@ export default function PortfolioPage() {
     return portfolio.positions.map(pos => {
       const netuid = pos.subnet_id;
       const s = scores.get(netuid);
+      const v = verdicts.get(netuid);
 
       const opp = s?.opp ?? 0;
       const risk = s?.risk ?? 0;
@@ -280,9 +281,10 @@ export default function PortfolioPage() {
         stability, sc, action,
         isOverridden, systemStatus,
         confianceData, alerts,
+        verdict: v,
       };
     });
-  }, [portfolio.positions, scores]);
+  }, [portfolio.positions, scores, verdicts]);
 
   // Portfolio totals
   const totals = useMemo(() => {
