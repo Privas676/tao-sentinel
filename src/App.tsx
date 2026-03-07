@@ -1,18 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { I18nProvider } from "@/lib/i18n";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
-import AlienGauge from "./pages/AlienGauge";
+import AppShell from "@/components/AppShell";
+import CompassPage from "./pages/CompassPage";
 import SubnetsPage from "./pages/SubnetsPage";
+import SubnetDetailPage from "./pages/SubnetDetailPage";
 import AlertsPage from "./pages/AlertsPage";
 import SettingsPage from "./pages/SettingsPage";
 import AuthPage from "./pages/AuthPage";
 import PortfolioPage from "./pages/PortfolioPage";
+import LabPage from "./pages/LabPage";
 import InstallPage from "./pages/InstallPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
+import AlienGauge from "./pages/AlienGauge";
 import MethodologyPage from "./pages/MethodologyPage";
 import QuantDiagnosticsPage from "./pages/QuantDiagnosticsPage";
 import RadarPage from "./pages/RadarPage";
@@ -21,38 +23,34 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 const queryClient = new QueryClient();
 
-function AppLayout() {
+function AppRoutes() {
   const { user } = useAuth();
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
+    <AppShell>
+      <Routes>
+        {/* ── Core routes ── */}
+        <Route path="/compass" element={<CompassPage />} />
+        <Route path="/subnets" element={<SubnetsPage />} />
+        <Route path="/subnets/:id" element={<SubnetDetailPage />} />
+        <Route path="/portfolio" element={<PortfolioPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/lab" element={<LabPage />} />
 
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-12 flex items-center border-b border-border/40 px-2 flex-shrink-0">
-            <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
-          </header>
+        {/* ── Auth ── */}
+        <Route path="/auth" element={user ? <Navigate to="/compass" replace /> : <AuthPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/install" element={<InstallPage />} />
 
-          <main className="flex-1 overflow-auto">
-            <Routes>
-              <Route path="/" element={<AlienGauge />} />
-              <Route path="/subnets" element={<SubnetsPage />} />
-              <Route path="/portfolio" element={<PortfolioPage />} />
-              <Route path="/alerts" element={<AlertsPage />} />
-              <Route path="/radar" element={<RadarPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/methodology" element={<MethodologyPage />} />
-              <Route path="/install" element={<InstallPage />} />
-              <Route path="/auth" element={user ? <AlienGauge /> : <AuthPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/quant-diagnostics" element={<QuantDiagnosticsPage />} />
-            </Routes>
-          </main>
-        </div>
-      </div>
-    </SidebarProvider>
+        {/* ── Legacy redirects ── */}
+        <Route path="/" element={<Navigate to="/compass" replace />} />
+        <Route path="/methodology" element={<Navigate to="/lab" replace />} />
+        <Route path="/quant-diagnostics" element={<Navigate to="/lab" replace />} />
+        <Route path="/radar" element={<Navigate to="/lab" replace />} />
+      </Routes>
+    </AppShell>
   );
 }
 
@@ -62,7 +60,7 @@ const App = () => (
       <I18nProvider>
         <TooltipProvider delayDuration={200}>
           <BrowserRouter>
-            <AppLayout />
+            <AppRoutes />
           </BrowserRouter>
           <Toaster />
         </TooltipProvider>
