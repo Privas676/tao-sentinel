@@ -526,7 +526,7 @@ function computeSaturationRisk(s: StakeSnapshot, d: StakeDeltas, dm: DerivedMetr
   else score += 0;
   // High concentration + saturation (Bittensor-calibrated)
   if (s.stakeConcentration > 98 && sat > 0.8) score += 20;
-  else if (s.stakeConcentration > 40 && sat > 0.9) score += 10;
+  else if (s.stakeConcentration > 95 && sat > 0.9) score += 10;
   // Low miners despite saturation
   if (sat > 0.8 && s.minersActive < 10) score += 10;
   return clamp(Math.round(score), 0, 100);
