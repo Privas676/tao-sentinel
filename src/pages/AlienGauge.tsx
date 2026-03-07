@@ -469,13 +469,7 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
   return (
     <div className="mt-6 space-y-5">
       {/* ═══ MACRO DRIVERS ═══ */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
-            DRIVERS DU MOMENT
-          </span>
-          <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
-        </div>
+      <CollapsibleSection title="DRIVERS DU MOMENT" icon="📊" color="rgba(255,215,0,0.5)" lineColor="rgba(255,215,0,0.08)">
         <div className="flex flex-wrap gap-2">
           {drivers.map(d => (
             <div key={d.label} className="flex items-center gap-2 px-3 py-2 rounded-lg"
@@ -486,7 +480,7 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
             </div>
           ))}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ═══ DECISION ENGINE — TOP 5 ═══ */}
       <div>
