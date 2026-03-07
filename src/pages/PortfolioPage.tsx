@@ -425,7 +425,7 @@ export default function PortfolioPage() {
                         {/* Subnet */}
                         <td className="py-3 px-3">
                           <Link to={`/subnets/${r.netuid}`} className="hover:text-foreground transition-colors">
-                            <span className="font-mono text-[11px] text-muted-foreground/50">SN-{r.netuid}</span>
+                           <span className="font-mono text-[11px] text-muted-foreground">SN-{r.netuid}</span>
                             <span className="font-mono text-[11px] text-foreground/80 ml-1.5 hidden sm:inline">{r.name}</span>
                           </Link>
                           {/* Status badges inline on mobile */}
