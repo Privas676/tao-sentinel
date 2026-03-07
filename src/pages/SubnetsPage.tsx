@@ -110,7 +110,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
           <SheetHeader>
             <div className="flex items-center justify-between">
               <SheetTitle className="font-mono tracking-wider text-sm text-foreground/90">
-                <span className="text-muted-foreground/50 mr-1.5">SN-{row.netuid}</span>
+                <span className="text-muted-foreground mr-1.5">SN-{row.netuid}</span>
                 {row.name}
               </SheetTitle>
               <StatusBadge type={row.statusLevel === "DANGER" ? "danger" : row.statusLevel === "WATCH" ? "warning" : "success"} label={row.statusLevel} />
