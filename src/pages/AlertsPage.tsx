@@ -2,19 +2,56 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { useMemo, useState, useCallback } from "react";
-import SwipeHint from "@/components/SwipeHint";
+import { Link } from "react-router-dom";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useDelistMode } from "@/hooks/use-delist-mode";
+import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import {
   evaluateAllDelistRisks,
   delistCategoryColor,
-  delistCategoryLabel,
   type DelistRiskResult,
   type SubnetMetricsForDelist,
 } from "@/lib/delist-risk";
 
+/* ═══════════════════════════════════════════════════════ */
+/*   RISK & ALERTS — Decision Vigilance Center             */
+/* ═══════════════════════════════════════════════════════ */
+
+/* ── Design tokens ── */
+const GOLD = "hsl(var(--gold))";
+const GO = "hsl(var(--signal-go))";
+const WARN = "hsl(var(--signal-go-spec))";
+const BREAK = "hsl(var(--signal-break))";
+const MUTED = "hsl(var(--muted-foreground))";
+
+/* ── Reusable atoms ── */
+function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`rounded-xl border border-border bg-card ${className}`}>{children}</div>;
+}
+
+function SectionTitle({ icon, title, badge }: { icon: string; title: string; badge?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 px-5 py-3 border-b border-border">
+      <span className="text-sm opacity-70">{icon}</span>
+      <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-gold">{title}</h2>
+      {badge && <div className="ml-auto">{badge}</div>}
+    </div>
+  );
+}
+
+function KPIChip({ label, value, color, sub }: { label: string; value: string | number; color?: string; sub?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2.5 bg-muted/25 border border-border min-w-0">
+      <span className="font-mono text-[6.5px] text-muted-foreground/45 tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
+      <span className="font-mono text-[14px] font-bold leading-none" style={{ color }}>{value}</span>
+      {sub && <span className="font-mono text-[8px] text-muted-foreground/35 mt-0.5">{sub}</span>}
+    </div>
+  );
+}
+
+/* ── Types ── */
 type EventRow = {
   id: number;
   netuid: number | null;
@@ -24,14 +61,22 @@ type EventRow = {
   evidence: any;
 };
 
-type FilterType = "ALL" | "UNIQUE" | "OVERRIDE" | "WHALE" | "STATE" | "SMART" | "STRATEGIC";
+type GroupedEvent = {
+  key: string;
+  latest: EventRow;
+  occurrences: EventRow[];
+  count: number;
+  firstTs: string;
+  lastTs: string;
+};
+
+type TabType = "ALL" | "CRITICAL" | "WARNING" | "OVERRIDE" | "PORTFOLIO";
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-const OVERRIDE_QUOTA = 10;
 const DISMISSED_KEY = "alerts-dismissed";
 
-/* ─── Dismissed alerts helpers (localStorage, 24h TTL) ─── */
+/* ── Dismissed helpers ── */
 function getDismissedAlerts(): Map<string, number> {
   try {
     const raw = localStorage.getItem(DISMISSED_KEY);
@@ -54,128 +99,11 @@ function dismissAlert(key: string) {
   try { localStorage.setItem(DISMISSED_KEY, JSON.stringify(obj)); } catch {}
 }
 
-function isDismissed(key: string, dismissed: Map<string, number>): boolean {
-  return dismissed.has(key);
-}
-
 function alertKey(g: GroupedEvent): string {
   return `${g.latest.type}::${g.latest.netuid}::${g.lastTs?.slice(0, 13) ?? ""}`;
 }
 
-/* ─── Essential mode: classify events ─── */
-function isEssentialEvent(g: GroupedEvent, scores: Map<number, any> | undefined): boolean {
-  const ev = g.latest;
-  // State transitions: BREAK, EXIT_FAST, DEPEG_CRITICAL always essential
-  if (ev.type === "BREAK" || ev.type === "EXIT_FAST" || ev.type === "DEPEG_CRITICAL") return true;
-  // DEPEG_WARNING is essential
-  if (ev.type === "DEPEG_WARNING") return true;
-  // Overrides: only if passes strict gating
-  if (ev.type === "RISK_OVERRIDE") return passesStrictGating(ev, scores);
-  // DATA_DIVERGENCE: no longer essential — TMC decoupled
-  if (ev.type === "DATA_DIVERGENCE") return false;
-  // Whale moves with large amounts
-  if (ev.type === "WHALE_MOVE") {
-    const e = ev.evidence as any;
-    const amount = e?.amount_tao as number | undefined;
-    return amount != null && amount >= 1000;
-  }
-  // Smart signals always essential
-  if (ev.type === "PRE_HYPE" || ev.type === "SMART_ACCUMULATION") return true;
-  // Other state events: GO, EARLY are not essential noise
-  return false;
-}
-
-/** Grouped event: one line per (type, netuid) within a 6h window */
-type GroupedEvent = {
-  key: string;
-  latest: EventRow;
-  occurrences: EventRow[];
-  count: number;
-  firstTs: string;
-  lastTs: string;
-};
-
-/* ─── STRUCTURED OVERRIDE REASON CHIPS ─── */
-const OVERRIDE_CHIP_MAP: Record<string, { label: string; labelFr: string; color: string }> = {
-  "EMISSION_ZERO":          { label: "Emission drop",     labelFr: "Émission nulle",     color: "rgba(229,57,53,0.7)" },
-  "TAO_POOL_CRITICAL":      { label: "Pool thin",         labelFr: "Pool faible",         color: "rgba(255,152,0,0.8)" },
-  "LIQUIDITY_USD_CRITICAL":  { label: "Low liquidity",     labelFr: "Liquidité basse",     color: "rgba(255,152,0,0.8)" },
-  "VOL_MC_LOW":             { label: "Volume/MC abnormal", labelFr: "Volume/MC anormal",   color: "rgba(255,193,7,0.8)" },
-  "SLIPPAGE_HIGH":          { label: "Slippage high",      labelFr: "Slippage élevé",      color: "rgba(229,57,53,0.7)" },
-  "DEPEG":                  { label: "Depeg",              labelFr: "Dépeg",               color: "rgba(229,57,53,0.9)" },
-  "DEREGISTRATION":         { label: "Deregistration",     labelFr: "Désenregistrement",   color: "rgba(229,57,53,0.9)" },
-  "BREAK_STATE":            { label: "Critical zone",      labelFr: "Zone critique",       color: "rgba(229,57,53,0.8)" },
-  "DATA_MISMATCH":          { label: "Data mismatch",      labelFr: "Divergence data",     color: "rgba(255,152,0,0.7)" },
-  "UID_LOW":                { label: "UID low",            labelFr: "UID faible",           color: "rgba(255,193,7,0.7)" },
-  "SPREAD_HIGH":            { label: "Spread high",        labelFr: "Spread élevé",         color: "rgba(255,152,0,0.7)" },
-};
-
-/** Map raw event type to display label */
-function typeDisplayLabel(type: string | null, lang: string): { label: string; icon: string; color: string } {
-  const fr = lang === "fr";
-  switch (type) {
-    case "BREAK":
-    case "EXIT_FAST":
-      return { label: fr ? "ZONE CRITIQUE" : "CRITICAL ZONE", icon: "⛔", color: "rgba(229,57,53,0.9)" };
-    case "GO":
-      return { label: "GO", icon: "🟢", color: "rgba(76,175,80,0.9)" };
-    case "GO_SPECULATIVE":
-      return { label: fr ? "SPÉCULATIF" : "SPECULATIVE", icon: "🔶", color: "rgba(255,152,0,0.85)" };
-    case "EARLY":
-      return { label: "EARLY", icon: "🌱", color: "rgba(139,195,74,0.85)" };
-    case "HOLD":
-      return { label: "HOLD", icon: "⏸", color: "rgba(255,193,7,0.7)" };
-    case "WATCH":
-      return { label: "WATCH", icon: "👁", color: "rgba(158,158,158,0.7)" };
-    case "CREATED":
-      return { label: fr ? "NOUVEAU" : "NEW", icon: "✨", color: "rgba(100,181,246,0.8)" };
-    case "DEPEG_WARNING":
-      return { label: fr ? "DÉPEG ⚠" : "DEPEG ⚠", icon: "⚠", color: "rgba(255,152,0,0.85)" };
-    case "DEPEG_CRITICAL":
-      return { label: fr ? "DÉPEG CRITIQUE" : "DEPEG CRITICAL", icon: "🔴", color: "rgba(229,57,53,0.9)" };
-    case "WHALE_MOVE":
-      return { label: "WHALE", icon: "🐋", color: "rgba(255,215,0,0.8)" };
-    case "DATA_DIVERGENCE":
-      return { label: fr ? "DIVERGENCE DATA" : "DATA DIVERGENCE", icon: "⚠", color: "rgba(255,152,0,0.8)" };
-    case "RISK_OVERRIDE":
-      return { label: fr ? "⛔ OVERRIDE RISQUE" : "⛔ RISK OVERRIDE", icon: "🛡", color: "rgba(229,57,53,0.9)" };
-    case "PRE_HYPE":
-      return { label: fr ? "PRÉ-HYPE" : "PRE-HYPE", icon: "🚀", color: "rgba(156,39,176,0.9)" };
-    case "SMART_ACCUMULATION":
-      return { label: fr ? "SMART ACCUM." : "SMART ACCUM.", icon: "🧠", color: "rgba(0,188,212,0.85)" };
-    default:
-      return { label: type || "—", icon: "•", color: "rgba(255,255,255,0.4)" };
-  }
-}
-
-function eventCategory(type: string | null): FilterType {
-  if (type === "WHALE_MOVE") return "WHALE";
-  if (type === "DATA_DIVERGENCE") return "ALL"; // No longer a dedicated filter category
-  if (type === "PRE_HYPE" || type === "SMART_ACCUMULATION") return "SMART";
-  if (type === "RISK_OVERRIDE") return "OVERRIDE";
-  return "STATE";
-}
-
-function subnetLinks(netuid: number | null) {
-  if (netuid == null) return null;
-  return (
-    <span className="inline-flex gap-1.5 ml-1">
-      <a href={`https://taostats.io/subnets/${netuid}`} target="_blank" rel="noopener noreferrer"
-        onClick={e => e.stopPropagation()}
-        className="font-mono text-[9px] px-1.5 py-0.5 rounded transition-all hover:scale-105"
-        style={{ background: "rgba(255,215,0,0.06)", color: "rgba(255,215,0,0.6)", border: "1px solid rgba(255,215,0,0.12)" }}>
-        TaoStats
-      </a>
-      <a href={`https://taomarketcap.com/subnets/${netuid}`} target="_blank" rel="noopener noreferrer"
-        onClick={e => e.stopPropagation()}
-        className="font-mono text-[9px] px-1.5 py-0.5 rounded transition-all hover:scale-105"
-        style={{ background: "rgba(100,181,246,0.06)", color: "rgba(100,181,246,0.6)", border: "1px solid rgba(100,181,246,0.12)" }}>
-        TMC
-      </a>
-    </span>
-  );
-}
-
+/* ── Grouping logic ── */
 function groupEvents(events: EventRow[]): GroupedEvent[] {
   const groups = new Map<string, GroupedEvent[]>();
   for (const ev of events) {
@@ -209,12 +137,68 @@ function groupEvents(events: EventRow[]): GroupedEvent[] {
   return all;
 }
 
-const severityColor = (sev: number | null) => {
-  if (!sev || sev <= 1) return "rgba(84,110,122,0.7)";
-  if (sev === 2) return "rgba(251,192,45,0.7)";
-  if (sev === 3) return "rgba(255,109,0,0.8)";
-  return "rgba(229,57,53,0.8)";
-};
+/* ── Override gating ── */
+function passesStrictGating(ev: EventRow, scores: Map<number, any> | undefined): boolean {
+  if (ev.type !== "RISK_OVERRIDE") return true;
+  if (!scores || ev.netuid == null) return false;
+  const subnet = scores.get(ev.netuid);
+  if (!subnet) return false;
+  const risk = subnet.risk ?? 0;
+  const confidence = subnet.confianceScore ?? 0;
+  if (risk < 70 || confidence < 70) return false;
+  const hardConditions = (ev.evidence?.hardConditions as string[]) || (ev.evidence?.reasons as string[]) || [];
+  return hardConditions.length >= 2;
+}
+
+/* ── Classification ── */
+const CRITICAL_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE"]);
+const WARNING_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE"]);
+
+function alertSeverityClass(type: string | null): "critical" | "warning" | "info" {
+  if (CRITICAL_TYPES.has(type || "")) return "critical";
+  if (WARNING_TYPES.has(type || "")) return "warning";
+  return "info";
+}
+
+function severityBadge(sev: "critical" | "warning" | "info"): { label: string; color: string } {
+  if (sev === "critical") return { label: "CRITICAL", color: BREAK };
+  if (sev === "warning") return { label: "WARNING", color: WARN };
+  return { label: "INFO", color: MUTED };
+}
+
+/* ── Display helpers ── */
+function typeDisplayInfo(type: string | null, fr: boolean): { label: string; icon: string; color: string; category: string } {
+  switch (type) {
+    case "BREAK":
+    case "EXIT_FAST":
+      return { label: fr ? "ZONE CRITIQUE" : "CRITICAL ZONE", icon: "⛔", color: BREAK, category: fr ? "Structure" : "Structure" };
+    case "GO":
+      return { label: "GO", icon: "🟢", color: GO, category: "Signal" };
+    case "GO_SPECULATIVE":
+      return { label: fr ? "SPÉCULATIF" : "SPECULATIVE", icon: "🔶", color: WARN, category: "Signal" };
+    case "EARLY":
+      return { label: "EARLY", icon: "🌱", color: GO, category: "Signal" };
+    case "HOLD":
+      return { label: "HOLD", icon: "⏸", color: MUTED, category: "Signal" };
+    case "DEPEG_WARNING":
+      return { label: fr ? "DÉPEG ⚠" : "DEPEG ⚠", icon: "⚠", color: WARN, category: "Depeg" };
+    case "DEPEG_CRITICAL":
+      return { label: fr ? "DÉPEG CRITIQUE" : "DEPEG CRITICAL", icon: "🔴", color: BREAK, category: "Depeg" };
+    case "WHALE_MOVE":
+      return { label: "WHALE", icon: "🐋", color: GOLD, category: "Flow" };
+    case "RISK_OVERRIDE":
+      return { label: "OVERRIDE", icon: "🛡", color: BREAK, category: "Override" };
+    case "PRE_HYPE":
+    case "PRÉ-HYPE":
+      return { label: "PRE-HYPE", icon: "🚀", color: "hsl(280, 65%, 55%)", category: "Smart" };
+    case "SMART_ACCUMULATION":
+      return { label: "SMART ACCUM.", icon: "🧠", color: "hsl(187, 100%, 42%)", category: "Smart" };
+    case "CREATED":
+      return { label: fr ? "NOUVEAU" : "NEW", icon: "✨", color: "hsl(210, 80%, 55%)", category: "Signal" };
+    default:
+      return { label: type || "—", icon: "•", color: MUTED, category: "—" };
+  }
+}
 
 function formatTimeAgo(ts: string, fr: boolean): string {
   const diff = Date.now() - new Date(ts).getTime();
@@ -227,118 +211,170 @@ function formatTimeAgo(ts: string, fr: boolean): string {
   return `${days}${fr ? "j" : "d"}`;
 }
 
-function passesStrictGating(ev: EventRow, scores: Map<number, any> | undefined): boolean {
-  if (ev.type !== "RISK_OVERRIDE") return true;
-  if (!scores || ev.netuid == null) return false;
-  const subnet = scores.get(ev.netuid);
-  if (!subnet) return false;
-  const evidence = ev.evidence as any;
-  const risk = subnet.risk ?? 0;
-  const confidence = subnet.confianceScore ?? 0;
-  if (risk < 70) return false;
-  if (confidence < 70) return false;
-  const hardConditions = (evidence?.hardConditions as string[]) || (evidence?.reasons as string[]) || [];
-  if (hardConditions.length < 2) return false;
-  return true;
+function suggestedAction(type: string | null, evidence: any, fr: boolean): string {
+  if (type === "BREAK" || type === "EXIT_FAST") return fr ? "Sortir immédiatement" : "Exit immediately";
+  if (type === "DEPEG_CRITICAL") return fr ? "Sortir ou réduire" : "Exit or reduce";
+  if (type === "DEPEG_WARNING") return fr ? "Surveiller / Réduire" : "Monitor / Reduce";
+  if (type === "RISK_OVERRIDE") return fr ? "Ne pas entrer" : "Do not enter";
+  if (type === "WHALE_MOVE") {
+    const dir = evidence?.direction;
+    if (dir === "OUT") return fr ? "Prudence — sortie whale" : "Caution — whale exit";
+    return fr ? "Observer — entrée whale" : "Watch — whale entry";
+  }
+  if (type === "GO" || type === "EARLY") return fr ? "Opportunité" : "Opportunity";
+  if (type === "GO_SPECULATIVE") return fr ? "Évaluer le risque" : "Evaluate risk";
+  if (type === "PRE_HYPE" || type === "PRÉ-HYPE" || type === "SMART_ACCUMULATION") return fr ? "Surveiller de près" : "Watch closely";
+  return fr ? "Aucune action" : "No action";
 }
 
-function OverrideChips({ evidence, fr }: { evidence: any; fr: boolean }) {
+function alertImpact(type: string | null, fr: boolean): string {
+  if (type === "BREAK" || type === "EXIT_FAST") return fr ? "Perte potentielle majeure" : "Major potential loss";
+  if (type === "DEPEG_CRITICAL") return fr ? "Risque de perte totale" : "Total loss risk";
+  if (type === "DEPEG_WARNING") return fr ? "Dégradation structure" : "Structure degradation";
+  if (type === "RISK_OVERRIDE") return fr ? "Blocage engine" : "Engine block";
+  if (type === "WHALE_MOVE") return fr ? "Pression prix" : "Price pressure";
+  if (type === "GO" || type === "EARLY") return fr ? "Signal d'entrée" : "Entry signal";
+  return "—";
+}
+
+/* ── Override chips ── */
+const OVERRIDE_CHIP_MAP: Record<string, { label: string; labelFr: string }> = {
+  "EMISSION_ZERO": { label: "Emission drop", labelFr: "Émission nulle" },
+  "TAO_POOL_CRITICAL": { label: "Pool thin", labelFr: "Pool faible" },
+  "LIQUIDITY_USD_CRITICAL": { label: "Low liquidity", labelFr: "Liquidité basse" },
+  "VOL_MC_LOW": { label: "Volume/MC abnormal", labelFr: "Volume/MC anormal" },
+  "SLIPPAGE_HIGH": { label: "Slippage high", labelFr: "Slippage élevé" },
+  "DEPEG": { label: "Depeg", labelFr: "Dépeg" },
+  "DEREGISTRATION": { label: "Deregistration", labelFr: "Désenregistrement" },
+  "BREAK_STATE": { label: "Critical zone", labelFr: "Zone critique" },
+  "DATA_MISMATCH": { label: "Data mismatch", labelFr: "Divergence data" },
+  "UID_LOW": { label: "UID low", labelFr: "UID faible" },
+  "SPREAD_HIGH": { label: "Spread high", labelFr: "Spread élevé" },
+};
+
+function getReasonChips(evidence: any, fr: boolean): string[] {
   const hardConditions = (evidence?.hardConditions as string[]) || [];
   const reasons = (evidence?.reasons as string[]) || [];
-  const chips: { label: string; color: string }[] = [];
+  const chips: string[] = [];
   for (const hc of hardConditions) {
     const chip = OVERRIDE_CHIP_MAP[hc];
-    if (chip) chips.push({ label: fr ? chip.labelFr : chip.label, color: chip.color });
+    if (chip) chips.push(fr ? chip.labelFr : chip.label);
   }
   if (chips.length === 0) {
-    for (const r of reasons.slice(0, 4)) {
-      const lower = r.toLowerCase();
-      if (lower.includes("émission") || lower.includes("emission")) {
-        chips.push({ label: fr ? "Émission nulle" : "Emission drop", color: "rgba(229,57,53,0.7)" });
-      } else if (lower.includes("pool") || lower.includes("tao")) {
-        chips.push({ label: fr ? "Pool faible" : "Pool thin", color: "rgba(255,152,0,0.8)" });
-      } else if (lower.includes("liquidité") || lower.includes("liquidity")) {
-        chips.push({ label: fr ? "Liquidité basse" : "Low liquidity", color: "rgba(255,152,0,0.8)" });
-      } else if (lower.includes("vol") || lower.includes("mc")) {
-        chips.push({ label: fr ? "Volume/MC anormal" : "Volume/MC abnormal", color: "rgba(255,193,7,0.8)" });
-      } else if (lower.includes("slippage")) {
-        chips.push({ label: fr ? "Slippage élevé" : "Slippage high", color: "rgba(229,57,53,0.7)" });
-      } else if (lower.includes("depeg")) {
-        chips.push({ label: "Depeg", color: "rgba(229,57,53,0.9)" });
-      } else {
-        chips.push({ label: r.length > 25 ? r.slice(0, 22) + "…" : r, color: "rgba(255,255,255,0.4)" });
-      }
+    for (const r of reasons.slice(0, 3)) {
+      chips.push(r.length > 30 ? r.slice(0, 27) + "…" : r);
     }
   }
-  if (chips.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1">
-      {chips.map((c, i) => (
-        <span key={i} className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
-          style={{ color: c.color, background: `${c.color.replace(/[\d.]+\)$/, '0.08)')}`, border: `1px solid ${c.color.replace(/[\d.]+\)$/, '0.2)')}` }}>
-          {c.label}
-        </span>
-      ))}
-    </div>
-  );
+  return chips;
 }
 
-function ExpandableEventRow({ group, lang, onDismiss }: { group: GroupedEvent; lang: string; onDismiss?: (key: string) => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const fr = lang === "fr";
-  const ev = group.latest;
-  const { label, icon, color } = typeDisplayLabel(ev.type, lang);
-  const isMultiple = group.count > 1;
+function alertSummary(ev: EventRow, fr: boolean): string {
+  const e = ev.evidence as any;
+  if (ev.type === "WHALE_MOVE") {
+    const dir = e?.direction === "OUT" ? "↗" : "↙";
+    const amount = e?.amount_tao ? `${Number(e.amount_tao).toLocaleString()} τ` : "";
+    return `${dir} ${amount} ${e?.label || ""}`.trim();
+  }
+  if (ev.type === "RISK_OVERRIDE") {
+    const chips = getReasonChips(e, fr);
+    return chips.join(" · ") || `MPI ${e?.mpi ?? "—"} Q ${e?.quality ?? "—"}`;
+  }
+  const reasons = (e?.reasons as string[]) || [];
+  if (reasons.length) return reasons.slice(0, 3).join(" · ");
+  const psi = e?.mpi ?? e?.psi;
+  if (psi != null) return `PSI ${psi}`;
+  return "—";
+}
 
-  const renderMainContent = () => {
-    if (ev.type === "WHALE_MOVE") return renderWhaleContent(ev, fr);
-    if (ev.type === "DATA_DIVERGENCE") return renderDivergenceContent(ev, fr);
-    if (ev.type === "RISK_OVERRIDE") return renderOverrideContentV2(ev, fr);
-    if (ev.type === "PRE_HYPE" || ev.type === "SMART_ACCUMULATION") return renderSmartContent(ev, fr);
-    return renderStandardContent(ev, fr);
-  };
+/* ═══════════════════════════════════════════ */
+/*   ALERT CARD COMPONENT                      */
+/* ═══════════════════════════════════════════ */
+function AlertCard({ group, fr, scores, onDismiss }: {
+  group: GroupedEvent;
+  fr: boolean;
+  scores: Map<number, any>;
+  onDismiss?: (key: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const ev = group.latest;
+  const info = typeDisplayInfo(ev.type, fr);
+  const sev = alertSeverityClass(ev.type);
+  const sevBadge = severityBadge(sev);
+  const subnet = ev.netuid != null ? scores.get(ev.netuid) : null;
+  const confidence = subnet?.confianceScore ?? null;
+
+  const borderColor = sev === "critical" ? "border-l-destructive/50" : sev === "warning" ? "border-l-signal-hold/50" : "border-l-border";
 
   return (
-    <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${color}15` }}>
+    <div className={`rounded-lg border border-border bg-card overflow-hidden border-l-[3px] ${borderColor}`}>
       <div
-        className={`flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 transition-colors ${isMultiple ? "cursor-pointer" : ""}`}
-        style={{ background: expanded ? `${color}08` : "transparent" }}
-        onClick={() => isMultiple && setExpanded(!expanded)}
+        className={`px-4 py-3 ${group.count > 1 ? "cursor-pointer" : ""}`}
+        onClick={() => group.count > 1 && setExpanded(!expanded)}
       >
-        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1 sm:mt-0" style={{ background: severityColor(ev.severity) }} />
-        <div className="font-mono text-xs tracking-wider font-bold min-w-[120px]" style={{ color }}>{icon} {label}</div>
-        <div className="font-mono text-xs text-white/50 min-w-[60px]">SN-{ev.netuid} {subnetLinks(ev.netuid)}</div>
-        {renderMainContent()}
-        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
-          {onDismiss && (
-            <button
-              onClick={e => { e.stopPropagation(); onDismiss(alertKey(group)); }}
-              className="font-mono text-[8px] px-1.5 py-0.5 rounded transition-all hover:bg-white/10"
-              style={{ color: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.06)" }}
-              title={fr ? "Masquer 24h" : "Dismiss 24h"}>
-              ✓ {fr ? "Traité" : "Done"}
-            </button>
+        {/* Row 1: severity + type + subnet + time */}
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <span className="font-mono text-[8px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{
+            color: sevBadge.color,
+            background: `color-mix(in srgb, ${sevBadge.color} 8%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${sevBadge.color} 15%, transparent)`,
+          }}>
+            {sevBadge.label}
+          </span>
+          <span className="font-mono text-[10px] font-bold" style={{ color: info.color }}>
+            {info.icon} {info.label}
+          </span>
+          <span className="font-mono text-[9px] text-muted-foreground/30 tracking-wider">{info.category}</span>
+          {ev.netuid != null && (
+            <Link to={`/subnets/${ev.netuid}`} onClick={e => e.stopPropagation()} className="font-mono text-[11px] text-foreground/60 hover:text-foreground transition-colors">
+              SN-{ev.netuid}
+              {subnet?.name && <span className="text-muted-foreground/40 ml-1 text-[9px]">{subnet.name}</span>}
+            </Link>
           )}
-          {isMultiple && (
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full font-bold"
-              style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>×{group.count}</span>
+          <div className="ml-auto flex items-center gap-2">
+            {group.count > 1 && (
+              <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{
+                color: info.color, background: `color-mix(in srgb, ${info.color} 10%, transparent)`,
+              }}>×{group.count}</span>
+            )}
+            <span className="font-mono text-[9px] text-muted-foreground/25">{formatTimeAgo(group.lastTs, fr)}</span>
+            {onDismiss && (
+              <button onClick={e => { e.stopPropagation(); onDismiss(alertKey(group)); }}
+                className="font-mono text-[8px] px-1.5 py-0.5 rounded border border-border text-muted-foreground/20 hover:text-muted-foreground/50 transition-colors"
+                title={fr ? "Masquer 24h" : "Dismiss 24h"}>✓</button>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: summary + confidence + impact + action */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="font-mono text-[11px] text-foreground/65 flex-1 min-w-[200px]">{alertSummary(ev, fr)}</span>
+          {confidence != null && (
+            <span className="font-mono text-[9px] text-muted-foreground/40">
+              {fr ? "Conf." : "Conf."} <span className="font-bold" style={{ color: confidence >= 70 ? GO : confidence >= 45 ? WARN : BREAK }}>{confidence}%</span>
+            </span>
           )}
-          <span className="font-mono text-[10px] text-white/25">{formatTimeAgo(group.lastTs, fr)}</span>
-          {isMultiple && (
-            <span className="font-mono text-[9px] text-white/20 transition-transform" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
-          )}
+          <span className="font-mono text-[9px] text-muted-foreground/30">{alertImpact(ev.type, fr)}</span>
+          <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{
+            color: sev === "critical" ? BREAK : sev === "warning" ? WARN : GO,
+            background: `color-mix(in srgb, ${sev === "critical" ? BREAK : sev === "warning" ? WARN : GO} 6%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${sev === "critical" ? BREAK : sev === "warning" ? WARN : GO} 12%, transparent)`,
+          }}>
+            {suggestedAction(ev.type, ev.evidence, fr)}
+          </span>
         </div>
       </div>
-      {expanded && isMultiple && (
-        <div className="border-t px-4 py-2 space-y-1" style={{ borderColor: `${color}15`, background: `${color}05` }}>
-          <div className="font-mono text-[9px] text-white/30 tracking-widest mb-1.5">OCCURRENCES ({group.count}) — {fr ? "fenêtre" : "window"} 6h</div>
+
+      {/* Expanded occurrences */}
+      {expanded && group.count > 1 && (
+        <div className="border-t border-border px-4 py-2 bg-muted/10">
+          <div className="font-mono text-[8px] text-muted-foreground/25 tracking-widest mb-1.5">
+            {fr ? "OCCURRENCES" : "OCCURRENCES"} ({group.count}) — 6h
+          </div>
           {group.occurrences.map((occ, idx) => (
-            <div key={occ.id} className="flex items-center gap-3 py-1 font-mono text-[10px]"
-              style={{ borderBottom: idx < group.occurrences.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-              <span className="text-white/15 w-5">{idx + 1}</span>
-              <span className="text-white/25 min-w-[130px]">{occ.ts ? new Date(occ.ts).toLocaleString() : "—"}</span>
-              <span className="text-white/40 flex-1 truncate">{renderOccurrenceDetail(occ)}</span>
-              <span className="text-white/15">{occ.severity ? `sev:${occ.severity}` : ""}</span>
+            <div key={occ.id} className="flex items-center gap-3 py-1 font-mono text-[10px] border-b border-border last:border-0">
+              <span className="text-muted-foreground/15 w-4">{idx + 1}</span>
+              <span className="text-muted-foreground/30 min-w-[120px]">{occ.ts ? new Date(occ.ts).toLocaleString() : "—"}</span>
+              <span className="text-muted-foreground/45 flex-1 truncate">{alertSummary(occ, fr)}</span>
             </div>
           ))}
         </div>
@@ -347,438 +383,117 @@ function ExpandableEventRow({ group, lang, onDismiss }: { group: GroupedEvent; l
   );
 }
 
-function renderOccurrenceDetail(ev: EventRow): string {
-  const e = ev.evidence as any;
-  if (ev.type === "WHALE_MOVE") {
-    const dir = e?.direction === "OUT" ? "↗" : "↙";
-    const amount = e?.amount_tao ? `${Number(e.amount_tao).toLocaleString()} τ` : "";
-    return `${dir} ${amount} ${e?.label || ""}`.trim();
-  }
-  if (ev.type === "DATA_DIVERGENCE") {
-    const divs = e?.divergences as any[] || [];
-    return divs.map((d: any) => `${d.field}: ${d.pct_diff}%`).join(", ");
-  }
-  if (ev.type === "RISK_OVERRIDE") {
-    const reasons = (e?.reasons as string[]) || [];
-    return reasons.join(" · ") || `MPI ${e?.mpi ?? "—"} Q ${e?.quality ?? "—"}`;
-  }
-  const reasons = (e?.reasons as string[]) || [];
-  if (reasons.length) return reasons.join(" · ");
-  const psi = e?.mpi ?? e?.psi;
-  if (psi != null) return `PSI ${psi}`;
-  return "—";
-}
-
-function renderWhaleContent(ev: EventRow, fr: boolean) {
-  const e = ev.evidence as any;
-  const dirLabel = e?.direction === "OUT" ? (fr ? "SORTIE" : "OUT") : (fr ? "ENTRÉE" : "IN");
-  const dirColor = e?.direction === "OUT" ? "rgba(229,57,53,0.8)" : "rgba(76,175,80,0.8)";
-  const amount = e?.amount_tao ? `${Number(e.amount_tao).toLocaleString()} τ` : "—";
-  return (
-    <div className="font-mono text-xs font-bold flex-1 truncate" style={{ color: dirColor }}>
-      {dirLabel} {amount} {e?.label ? `— ${e.label}` : ""}
-    </div>
-  );
-}
-
-function renderDivergenceContent(ev: EventRow, fr: boolean) {
-  const e = ev.evidence as any;
-  const chips = e?.chips as { metric: string; diff_pct: number; severity: string }[] | undefined;
-  const gravity = e?.gravity as number | undefined;
-  const confidenceData = e?.confidence_data as number | undefined;
-
-  if (chips && chips.length > 0) {
-    const metricColors: Record<string, string> = {
-      price: "rgba(229,57,53,0.8)", mc: "rgba(255,152,0,0.8)", fdv: "rgba(255,152,0,0.7)",
-      liq: "rgba(255,193,7,0.8)", vol: "rgba(158,158,158,0.7)", supply: "rgba(100,181,246,0.7)",
-    };
-    return (
-      <div className="font-mono text-[10px] flex-1 flex flex-wrap items-center gap-1">
-        {chips.map((c, i) => {
-          const col = metricColors[c.metric] || "rgba(255,255,255,0.4)";
-          return (
-            <span key={i} className="px-1.5 py-0.5 rounded font-bold"
-              style={{ color: col, background: col.replace(/[\d.]+\)$/, "0.08)"), border: `1px solid ${col.replace(/[\d.]+\)$/, "0.2)")}` }}>
-              {c.metric} {c.diff_pct}%
-            </span>
-          );
-        })}
-        {gravity != null && <span className="text-white/25 ml-1" title={fr ? "Score de gravité" : "Gravity score"}>G:{gravity}</span>}
-        {confidenceData != null && <span className="text-white/20 ml-0.5" title={fr ? "Confiance données" : "Data confidence"}>C:{confidenceData}%</span>}
-      </div>
-    );
-  }
-
-  const divs = e?.divergences as { field: string; pct_diff: number }[] || [];
-  return (
-    <div className="font-mono text-[10px] text-white/40 flex-1 flex flex-wrap gap-1">
-      {divs.slice(0, 3).map((d, i) => (
-        <span key={i} className="px-1.5 py-0.5 rounded" style={{ background: "rgba(255,152,0,0.08)", border: "1px solid rgba(255,152,0,0.15)" }}>
-          {d.field}: {d.pct_diff}%
-        </span>
-      ))}
-      {divs.length > 3 && <span className="text-white/20">+{divs.length - 3}</span>}
-    </div>
-  );
-}
-
-function renderOverrideContentV2(ev: EventRow, fr: boolean) {
-  const e = ev.evidence as any;
-  const mpi = e?.mpi ?? "—";
-  const quality = e?.quality ?? "—";
-  return (
-    <>
-      <div className="font-mono text-[10px] text-white/40">MPI {mpi} · Q {quality}</div>
-      <div className="flex-1"><OverrideChips evidence={e} fr={fr} /></div>
-    </>
-  );
-}
-
-function renderSmartContent(ev: EventRow, fr: boolean) {
-  const e = ev.evidence as any;
-  const intensity = e?.intensity ?? e?.score ?? null;
-  return (
-    <>
-      {intensity != null && (
-        <div className="font-mono text-[10px] font-bold" style={{ color: typeDisplayLabel(ev.type, fr ? "fr" : "en").color }}>
-          {fr ? "Intensité" : "Intensity"}: {intensity}%
-        </div>
-      )}
-      <div className="font-mono text-[10px] text-white/30 flex-1 truncate">{e?.reasons?.join(" · ") || e?.detail || "—"}</div>
-    </>
-  );
-}
-
-function renderStandardContent(ev: EventRow, fr: boolean) {
-  const e = ev.evidence as any;
-  const reasons = e?.reasons as string[] | undefined;
-  const psi = e?.mpi ?? e?.psi ?? null;
-  return (
-    <>
-      {psi != null && <div className="font-mono text-xs text-white/40">PSI {psi}</div>}
-      <div className="font-mono text-[10px] text-white/30 flex-1 truncate">{reasons?.join(" · ") || "—"}</div>
-    </>
-  );
-}
-
-/* ═══════════════════════════════════════ */
-/*   DELIST WATCHLIST VIEW                   */
-/* ═══════════════════════════════════════ */
-
-function DelistWatchlistView({ fr }: { fr: boolean }) {
-  const { scores, scoresList, sparklines, taoUsd } = useSubnetScores();
-  const { delistMode } = useDelistMode();
-  const [compareMode, setCompareMode] = useState(false);
-
-  const metricsForDelist: SubnetMetricsForDelist[] = useMemo(() => {
-    if (!scoresList.length) return [];
-    return scoresList.map(s => ({
-      netuid: s.netuid,
-      minersActive: 10,
-      liqTao: s.displayedLiq > 0 && taoUsd > 0 ? s.displayedLiq / taoUsd : 0,
-      liqUsd: s.displayedLiq,
-      capTao: s.displayedCap > 0 && taoUsd > 0 ? s.displayedCap / taoUsd : 0,
-      alphaPrice: s.alphaPrice ?? 0,
-      volMcRatio: s.healthScores?.volumeHealth != null ? s.healthScores.volumeHealth / 1000 : 0.01,
-      psi: s.psi,
-      quality: s.quality,
-      state: s.state,
-      priceChange7d: (() => {
-        const sp = sparklines?.get(s.netuid);
-        if (!sp || sp.length < 2) return null;
-        return ((sp[sp.length - 1] - sp[0]) / sp[0]) * 100;
-      })(),
-      confianceData: s.confianceScore,
-      liqHaircut: s.recalc?.liqHaircut ?? 0,
-    }));
-  }, [scoresList, sparklines, taoUsd]);
-
-  const delistResults = useMemo(() => {
-    if (!metricsForDelist.length) return [];
-    return evaluateAllDelistRisks(delistMode, metricsForDelist);
-  }, [metricsForDelist, delistMode]);
-
-  // Comparison data: Manual vs Auto side by side
-  const comparisonData = useMemo(() => {
-    if (!compareMode || !metricsForDelist.length) return [];
-    const manualResults = evaluateAllDelistRisks("manual", metricsForDelist);
-    const autoResults = evaluateAllDelistRisks("auto_taostats", metricsForDelist);
-
-    const manualMap = new Map(manualResults.map(r => [r.netuid, r]));
-    const autoMap = new Map(autoResults.map(r => [r.netuid, r]));
-
-    // Union of all netuids flagged by either mode
-    const allNetuids = new Set([...manualMap.keys(), ...autoMap.keys()]);
-    const rows = Array.from(allNetuids).map(netuid => ({
-      netuid,
-      manual: manualMap.get(netuid) ?? null,
-      auto: autoMap.get(netuid) ?? null,
-    }));
-    // Sort by max score descending
-    rows.sort((a, b) => {
-      const maxA = Math.max(a.manual?.score ?? 0, a.auto?.score ?? 0);
-      const maxB = Math.max(b.manual?.score ?? 0, b.auto?.score ?? 0);
-      return maxB - maxA;
-    });
-    return rows;
-  }, [compareMode, metricsForDelist]);
-
-  const depegPriority = delistResults.filter(r => r.category === "DEPEG_PRIORITY");
-  const nearDelist = delistResults.filter(r => r.category === "HIGH_RISK_NEAR_DELIST");
-
-  const modeLabel = delistMode === "manual"
-    ? "Manual (Taoflute)"
-    : delistMode === "auto_taostats" ? "Auto (Taostats)" : "Auto (TMC)";
-
-  if (!compareMode && depegPriority.length === 0 && nearDelist.length === 0) {
-    return (
-      <div>
-        <CompareToggle compareMode={compareMode} setCompareMode={setCompareMode} fr={fr} />
-        <div className="text-center text-white/20 font-mono mt-10">
-          {fr ? "Aucun subnet en risque de delist détecté." : "No delist risk detected."}
-        </div>
-      </div>
-    );
-  }
-
-  if (compareMode) {
-    return (
-      <div className="space-y-4">
-        <CompareToggle compareMode={compareMode} setCompareMode={setCompareMode} fr={fr} />
-        <ComparisonTable data={comparisonData} fr={fr} scores={scores} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Source badge + Compare toggle */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-mono text-[9px] px-2 py-0.5 rounded"
-          style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          {fr ? "Source" : "Source"}: {modeLabel}
-        </span>
-        <span className="font-mono text-[9px] text-white/20">
-          {depegPriority.length + nearDelist.length} subnets
-        </span>
-        <CompareToggle compareMode={compareMode} setCompareMode={setCompareMode} fr={fr} />
-      </div>
-
-      {/* DEPEG PRIORITAIRE */}
-      {depegPriority.length > 0 && (
-        <div>
-          <h3 className="font-mono text-xs tracking-widest mb-3 font-bold" style={{ color: "rgba(229,57,53,0.9)" }}>
-            🔴 {fr ? "RISQUE DEREG" : "DEREG RISK"} ({depegPriority.length})
-          </h3>
-          <div className="space-y-1.5">
-            {depegPriority.map(r => (
-              <DelistRow key={r.netuid} result={r} fr={fr} scores={scores} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* PROCHE DELIST */}
-      {nearDelist.length > 0 && (
-        <div>
-          <h3 className="font-mono text-xs tracking-widest mb-3 font-bold" style={{ color: "rgba(255,152,0,0.85)" }}>
-            🟠 {fr ? "PROCHE DELIST" : "NEAR DELIST"} ({nearDelist.length})
-          </h3>
-          <div className="space-y-1.5">
-            {nearDelist.map(r => (
-              <DelistRow key={r.netuid} result={r} fr={fr} scores={scores} />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─── Compare Toggle Button ─── */
-function CompareToggle({ compareMode, setCompareMode, fr }: { compareMode: boolean; setCompareMode: (v: boolean) => void; fr: boolean }) {
-  return (
-    <button
-      onClick={() => setCompareMode(!compareMode)}
-      className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider"
-      style={{
-        background: compareMode ? "rgba(156,39,176,0.12)" : "rgba(255,255,255,0.04)",
-        color: compareMode ? "rgba(156,39,176,0.9)" : "rgba(255,255,255,0.35)",
-        border: `1px solid ${compareMode ? "rgba(156,39,176,0.3)" : "rgba(255,255,255,0.08)"}`,
-      }}>
-      {compareMode ? "✕" : "⚖"} {fr ? "Comparaison" : "Compare"}
-    </button>
-  );
-}
-
-/* ─── Comparison Table ─── */
-function ComparisonTable({ data, fr, scores }: {
-  data: { netuid: number; manual: DelistRiskResult | null; auto: DelistRiskResult | null }[];
+/* ═══════════════════════════════════════════ */
+/*   GROUPED BY SUBNET VIEW                    */
+/* ═══════════════════════════════════════════ */
+function SubnetGroupedView({ groups, fr, scores, onDismiss }: {
+  groups: GroupedEvent[];
   fr: boolean;
   scores: Map<number, any>;
+  onDismiss: (key: string) => void;
 }) {
-  const catBadge = (r: DelistRiskResult | null) => {
-    if (!r) return <span className="font-mono text-[9px] text-white/15">—</span>;
-    const col = delistCategoryColor(r.category);
-    return (
-      <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
-        style={{ color: col, background: col.replace(/[\d.]+\)$/, "0.1)"), border: `1px solid ${col.replace(/[\d.]+\)$/, "0.2)")}` }}>
-        {r.category === "DEPEG_PRIORITY" ? "DEREG" : r.category === "HIGH_RISK_NEAR_DELIST" ? (fr ? "PROCHE" : "NEAR") : "OK"}
-      </span>
-    );
-  };
+  const bySubnet = useMemo(() => {
+    const map = new Map<number, GroupedEvent[]>();
+    for (const g of groups) {
+      const nid = g.latest.netuid ?? -1;
+      if (!map.has(nid)) map.set(nid, []);
+      map.get(nid)!.push(g);
+    }
+    // Sort subnets by most critical first
+    const entries = Array.from(map.entries()).sort((a, b) => {
+      const critA = a[1].filter(g => alertSeverityClass(g.latest.type) === "critical").length;
+      const critB = b[1].filter(g => alertSeverityClass(g.latest.type) === "critical").length;
+      return critB - critA;
+    });
+    return entries;
+  }, [groups]);
 
-  const scoreBadge = (r: DelistRiskResult | null) => {
-    if (!r) return <span className="font-mono text-sm text-white/10">—</span>;
-    const col = delistCategoryColor(r.category);
-    return <span className="font-mono text-sm font-bold" style={{ color: col }}>{r.score}</span>;
-  };
-
-  const matchIcon = (m: DelistRiskResult | null, a: DelistRiskResult | null) => {
-    if (!m && !a) return null;
-    if (m && a && m.category === a.category) return <span className="text-[10px]" title="Match">✅</span>;
-    if (m && !a) return <span className="text-[10px]" title={fr ? "Manuel uniquement" : "Manual only"}>📋</span>;
-    if (!m && a) return <span className="text-[10px]" title={fr ? "Auto uniquement" : "Auto only"}>🤖</span>;
-    return <span className="text-[10px]" title={fr ? "Différent" : "Mismatch"}>⚠️</span>;
-  };
-
-  // Stats
-  const matchCount = data.filter(d => d.manual && d.auto && d.manual.category === d.auto.category).length;
-  const manualOnly = data.filter(d => d.manual && !d.auto).length;
-  const autoOnly = data.filter(d => !d.manual && d.auto).length;
-  const mismatch = data.filter(d => d.manual && d.auto && d.manual.category !== d.auto.category).length;
+  if (bySubnet.length === 0) {
+    return <div className="py-12 text-center font-mono text-[11px] text-muted-foreground/20">{fr ? "Aucune alerte" : "No alerts"}</div>;
+  }
 
   return (
     <div className="space-y-4">
-      {/* Stats bar */}
-      <div className="flex flex-wrap gap-2 font-mono text-[9px]">
-        <span className="px-2 py-0.5 rounded" style={{ background: "rgba(76,175,80,0.08)", color: "rgba(76,175,80,0.7)", border: "1px solid rgba(76,175,80,0.15)" }}>
-          ✅ {fr ? "Accord" : "Match"}: {matchCount}
-        </span>
-        <span className="px-2 py-0.5 rounded" style={{ background: "rgba(255,152,0,0.08)", color: "rgba(255,152,0,0.7)", border: "1px solid rgba(255,152,0,0.15)" }}>
-          ⚠️ {fr ? "Différent" : "Mismatch"}: {mismatch}
-        </span>
-        <span className="px-2 py-0.5 rounded" style={{ background: "rgba(156,39,176,0.08)", color: "rgba(156,39,176,0.7)", border: "1px solid rgba(156,39,176,0.15)" }}>
-          📋 {fr ? "Manuel seul" : "Manual only"}: {manualOnly}
-        </span>
-        <span className="px-2 py-0.5 rounded" style={{ background: "rgba(100,181,246,0.08)", color: "rgba(100,181,246,0.7)", border: "1px solid rgba(100,181,246,0.15)" }}>
-          🤖 {fr ? "Auto seul" : "Auto only"}: {autoOnly}
-        </span>
-      </div>
-
-      {/* Table header */}
-      <div className="grid grid-cols-[30px_80px_1fr_60px_70px_60px_70px] gap-1 font-mono text-[8px] tracking-widest text-white/25 px-2 pb-1"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <span></span>
-        <span>SUBNET</span>
-        <span>NAME</span>
-        <span className="text-center" style={{ color: "rgba(156,39,176,0.6)" }}>📋 SCORE</span>
-        <span className="text-center" style={{ color: "rgba(156,39,176,0.6)" }}>{fr ? "CATÉG." : "CATEG."}</span>
-        <span className="text-center" style={{ color: "rgba(100,181,246,0.6)" }}>🤖 SCORE</span>
-        <span className="text-center" style={{ color: "rgba(100,181,246,0.6)" }}>{fr ? "CATÉG." : "CATEG."}</span>
-      </div>
-
-      {/* Rows */}
-      <div className="space-y-0.5 max-h-[60vh] overflow-auto">
-        {data.map(({ netuid, manual, auto }) => {
-          const subnet = scores.get(netuid);
-          const name = subnet?.name || "";
-          return (
-            <div key={netuid}
-              className="grid grid-cols-[30px_80px_1fr_60px_70px_60px_70px] gap-1 items-center px-2 py-1.5 rounded-md transition-colors hover:bg-white/[0.02]"
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
-              {matchIcon(manual, auto)}
-              <span className="font-mono text-[11px] text-white/60 font-bold">SN-{netuid}</span>
-              <span className="font-mono text-[9px] text-white/25 truncate">{name}</span>
-              <div className="text-center">{scoreBadge(manual)}</div>
-              <div className="text-center">{catBadge(manual)}</div>
-              <div className="text-center">{scoreBadge(auto)}</div>
-              <div className="text-center">{catBadge(auto)}</div>
+      {bySubnet.map(([netuid, alerts]) => {
+        const subnet = scores.get(netuid);
+        const critCount = alerts.filter(g => alertSeverityClass(g.latest.type) === "critical").length;
+        const warnCount = alerts.filter(g => alertSeverityClass(g.latest.type) === "warning").length;
+        return (
+          <SectionCard key={netuid}>
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
+              {netuid >= 0 ? (
+                <Link to={`/subnets/${netuid}`} className="font-mono text-[12px] text-foreground/70 hover:text-foreground transition-colors font-bold">
+                  SN-{netuid}
+                  {subnet?.name && <span className="text-muted-foreground/40 ml-1.5 font-normal text-[10px]">{subnet.name}</span>}
+                </Link>
+              ) : (
+                <span className="font-mono text-[12px] text-muted-foreground/40">{fr ? "Système" : "System"}</span>
+              )}
+              <div className="flex gap-1.5 ml-auto">
+                {critCount > 0 && <span className="font-mono text-[8px] font-bold px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">{critCount} crit.</span>}
+                {warnCount > 0 && <span className="font-mono text-[8px] font-bold px-1.5 py-0.5 rounded bg-signal-hold/10 text-signal-hold border border-signal-hold/20">{warnCount} warn.</span>}
+                <span className="font-mono text-[9px] text-muted-foreground/25">{alerts.length} total</span>
+              </div>
             </div>
-          );
-        })}
-      </div>
+            <div className="px-3 py-2 space-y-1.5">
+              {alerts.map(g => (
+                <AlertCard key={g.key} group={g} fr={fr} scores={scores} onDismiss={onDismiss} />
+              ))}
+            </div>
+          </SectionCard>
+        );
+      })}
     </div>
   );
 }
 
-function DelistRow({ result, fr, scores }: { result: DelistRiskResult; fr: boolean; scores: Map<number, any> }) {
-  const subnet = scores.get(result.netuid);
-  const name = subnet?.name || `SN-${result.netuid}`;
-  const catColor = delistCategoryColor(result.category);
+/* ═══════════════════════════════════════════ */
+/*   WHY IT MATTERS BLOCK                      */
+/* ═══════════════════════════════════════════ */
+function WhyItMatters({ fr }: { fr: boolean }) {
+  const items = fr ? [
+    { icon: "⛔", title: "Critiques", desc: "Les alertes critiques signalent un risque immédiat de perte. Structure cassée, depeg confirmé ou override engine — chaque minute compte." },
+    { icon: "⚠", title: "Warnings", desc: "Les warnings signalent une dégradation en cours. Depeg en approche, flux suspects ou pression anormale — surveiller et préparer." },
+    { icon: "🛡", title: "Overrides", desc: "Quand l'engine bloque un subnet, c'est que plusieurs conditions structurelles sont réunies. Ne pas forcer l'entrée." },
+    { icon: "🐋", title: "Whales", desc: "Les mouvements de plus de 100τ par des entités identifiées (exchanges, fonds) créent une pression directionnelle mesurable." },
+  ] : [
+    { icon: "⛔", title: "Critical", desc: "Critical alerts signal immediate loss risk. Broken structure, confirmed depeg or engine override — every minute counts." },
+    { icon: "⚠", title: "Warnings", desc: "Warnings signal ongoing degradation. Approaching depeg, suspicious flows or abnormal pressure — monitor and prepare." },
+    { icon: "🛡", title: "Overrides", desc: "When the engine blocks a subnet, multiple structural conditions are met. Do not force entry." },
+    { icon: "🐋", title: "Whales", desc: "Movements over 100τ by identified entities (exchanges, funds) create measurable directional pressure." },
+  ];
 
   return (
-    <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-lg"
-      style={{ border: `1px solid ${catColor}20`, background: `${catColor}05` }}>
-
-      {/* Score indicator */}
-      <div className="font-mono text-lg font-bold min-w-[40px] text-center" style={{ color: catColor }}>
-        {result.score}
-      </div>
-
-      {/* Subnet name */}
-      <div className="font-mono text-xs min-w-[100px]">
-        <span className="text-white/70 font-bold">SN-{result.netuid}</span>
-        <span className="text-white/30 ml-1.5 text-[10px]">{name !== `SN-${result.netuid}` ? name : ""}</span>
-        {subnetLinks(result.netuid)}
-      </div>
-
-      {/* Source badge */}
-      <span className="font-mono text-[8px] px-1.5 py-0.5 rounded shrink-0"
-        style={{
-          background: result.source.includes("Manual") ? "rgba(156,39,176,0.08)" : "rgba(100,181,246,0.08)",
-          color: result.source.includes("Manual") ? "rgba(156,39,176,0.7)" : "rgba(100,181,246,0.7)",
-          border: `1px solid ${result.source.includes("Manual") ? "rgba(156,39,176,0.15)" : "rgba(100,181,246,0.15)"}`,
-        }}>
-        {result.source}
-      </span>
-
-      {/* Reason chips */}
-      <div className="flex flex-wrap gap-1 flex-1">
-        {result.reasons.slice(0, 5).map((reason, i) => (
-          <span key={i} className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
-            style={{
-              color: reason.color,
-              background: reason.color.replace(/[\d.]+\)$/, "0.08)"),
-              border: `1px solid ${reason.color.replace(/[\d.]+\)$/, "0.2)")}`,
-            }}>
-            {fr ? reason.labelFr : reason.label}
-            {reason.value != null && <span className="ml-0.5 opacity-60">({typeof reason.value === "number" ? (reason.value < 1 ? reason.value.toFixed(2) : Math.round(reason.value)) : reason.value})</span>}
-          </span>
+    <SectionCard>
+      <SectionTitle icon="💡" title={fr ? "Pourquoi c'est important" : "Why it matters"} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-5 py-4">
+        {items.map((item, i) => (
+          <div key={i} className="flex gap-3">
+            <span className="text-lg shrink-0 mt-0.5">{item.icon}</span>
+            <div>
+              <div className="font-mono text-[10px] font-bold text-foreground/70 tracking-wider mb-0.5">{item.title}</div>
+              <p className="text-[11px] text-muted-foreground/50 leading-relaxed">{item.desc}</p>
+            </div>
+          </div>
         ))}
       </div>
-
-      {/* Action */}
-      <div className="font-mono text-[10px] font-bold px-2 py-1 rounded shrink-0"
-        style={{
-          background: result.category === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.1)" : "rgba(255,152,0,0.08)",
-          color: result.category === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.9)" : "rgba(255,152,0,0.8)",
-          border: `1px solid ${result.category === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.25)" : "rgba(255,152,0,0.2)"}`,
-        }}>
-        {result.category === "DEPEG_PRIORITY"
-          ? (fr ? "🔴 SORTIR" : "🔴 EXIT")
-          : (fr ? "🟡 ATTENDRE" : "🟡 WAIT")}
-      </div>
-    </div>
+    </SectionCard>
   );
 }
 
-/* ═══════════════════════════════════════ */
-/*   MAIN PAGE                              */
-/* ═══════════════════════════════════════ */
+/* ═══════════════════════════════════════════ */
+/*   MAIN PAGE                                  */
+/* ═══════════════════════════════════════════ */
 export default function AlertsPage() {
-  const { t, lang } = useI18n();
-  const [filter, setFilter] = useState<FilterType>("UNIQUE");
-  const [showOverrideNoise, setShowOverrideNoise] = useState(false);
-  const [showNoise, setShowNoise] = useState(false);
-  const [confidenceFilter, setConfidenceFilter] = useState(false);
-  const [dismissed, setDismissed] = useState<Map<string, number>>(() => getDismissedAlerts());
+  const { lang } = useI18n();
   const fr = lang === "fr";
-
-
+  const [tab, setTab] = useState<TabType>("ALL");
+  const [viewMode, setViewMode] = useState<"feed" | "grouped">("feed");
+  const [dismissed, setDismissed] = useState<Map<string, number>>(() => getDismissedAlerts());
 
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
+  const portfolio = useLocalPortfolio();
   const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, error: pushError } = usePushNotifications();
 
   const handleDismiss = useCallback((key: string) => {
@@ -786,6 +501,7 @@ export default function AlertsPage() {
     setDismissed(getDismissedAlerts());
   }, []);
 
+  /* ── Data fetch ── */
   const { data: events } = useQuery({
     queryKey: ["events-log"],
     queryFn: async () => {
@@ -796,288 +512,165 @@ export default function AlertsPage() {
     refetchInterval: 60_000,
   });
 
-  const grouped = useMemo(() => {
-    if (!events) return [];
-    return groupEvents(events);
-  }, [events]);
+  const grouped = useMemo(() => events ? groupEvents(events) : [], [events]);
 
-  const { gatedOverrides, noiseOverrides, otherGrouped } = useMemo(() => {
-    // DATA_DIVERGENCE events are no longer filtered/displayed as alerts
-    const filterOutDivergence = (g: GroupedEvent): boolean => {
-      return g.latest.type !== "DATA_DIVERGENCE";
-    };
-
-    if (overrideMode === "permissive") {
-      return {
-        gatedOverrides: grouped.filter(g => g.latest.type === "RISK_OVERRIDE"),
-        noiseOverrides: [] as GroupedEvent[],
-        otherGrouped: grouped.filter(g => g.latest.type !== "RISK_OVERRIDE").filter(filterOutDivergence),
-      };
-    }
-
-    const overrides: GroupedEvent[] = [];
-    const others: GroupedEvent[] = [];
-    for (const g of grouped) {
-      if (g.latest.type === "RISK_OVERRIDE") overrides.push(g);
-      else others.push(g);
-    }
-
-    const gated: GroupedEvent[] = [];
-    const noise: GroupedEvent[] = [];
-    for (const g of overrides) {
-      if (passesStrictGating(g.latest, scores)) gated.push(g);
-      else noise.push(g);
-    }
-
-    return { gatedOverrides: gated, noiseOverrides: noise, otherGrouped: others.filter(filterOutDivergence) };
+  /* ── Apply gating for overrides ── */
+  const processedGroups = useMemo(() => {
+    return grouped.filter(g => {
+      if (g.latest.type === "DATA_DIVERGENCE") return false;
+      if (g.latest.type === "RISK_OVERRIDE" && overrideMode === "strict") {
+        return passesStrictGating(g.latest, scores);
+      }
+      return true;
+    });
   }, [grouped, overrideMode, scores]);
 
-  const STRATEGIC_TYPES = useMemo(() => new Set(["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST"]), []);
+  /* ── Filter dismissed ── */
+  const undismissed = useMemo(() =>
+    processedGroups.filter(g => !dismissed.has(alertKey(g))),
+  [processedGroups, dismissed]);
 
-  // Apply confidence filter
-  const applyConfidenceFilter = useCallback((g: GroupedEvent): boolean => {
-    if (!confidenceFilter) return true;
-    if (g.latest.netuid == null || !scores) return true;
-    const subnet = scores.get(g.latest.netuid);
-    if (!subnet) return true;
-    return (subnet.confianceScore ?? 0) >= 70;
-  }, [confidenceFilter, scores]);
-
-  // Apply dismissed filter
-  const applyDismissedFilter = useCallback((g: GroupedEvent): boolean => {
-    return !isDismissed(alertKey(g), dismissed);
-  }, [dismissed]);
-
-  const filtered = useMemo(() => {
-    let result: GroupedEvent[];
-
-    if (filter === "ALL") {
-      result = (events || []).map(ev => ({
-        key: `single-${ev.id}`, latest: ev, occurrences: [ev], count: 1,
-        firstTs: ev.ts || "", lastTs: ev.ts || "",
-      } as GroupedEvent));
-    } else if (filter === "OVERRIDE") {
-      const visible = overrideMode === "strict"
-        ? gatedOverrides.slice(0, showOverrideNoise ? Infinity : OVERRIDE_QUOTA)
-        : gatedOverrides;
-      result = showOverrideNoise && overrideMode === "strict" ? [...visible, ...noiseOverrides] : visible;
-    } else if (filter === "UNIQUE") {
-      const visibleOverrides = overrideMode === "strict" ? gatedOverrides.slice(0, OVERRIDE_QUOTA) : gatedOverrides;
-      const merged = [...visibleOverrides, ...otherGrouped];
-      merged.sort((a, b) => new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime());
-      result = merged;
-    } else if (filter === "STRATEGIC") {
-      result = grouped.filter(g => STRATEGIC_TYPES.has(g.latest.type || ""));
-    } else if (filter === "STATE") {
-      result = grouped.filter(g => eventCategory(g.latest.type) === "STATE");
-    } else {
-      result = grouped.filter(g => eventCategory(g.latest.type) === filter);
-    }
-
-    // Apply confidence + dismissed filters
-    return result.filter(applyConfidenceFilter).filter(applyDismissedFilter);
-  }, [grouped, events, filter, gatedOverrides, noiseOverrides, otherGrouped, overrideMode, showOverrideNoise, applyConfidenceFilter, applyDismissedFilter]);
-
-  // Essential vs noise split
-  const { essential, noise: noiseEvents } = useMemo(() => {
-    const ess: GroupedEvent[] = [];
-    const noi: GroupedEvent[] = [];
-    for (const g of filtered) {
-      if (isEssentialEvent(g, scores)) ess.push(g);
-      else noi.push(g);
-    }
-    return { essential: ess, noise: noi };
-  }, [filtered, scores]);
-
-  const displayedEvents = showNoise ? filtered : essential;
-
+  /* ── Stats ── */
   const stats = useMemo(() => {
-    const total = events?.length || 0;
-    const uniqueGroups = grouped.length;
-    const overrides = gatedOverrides.length;
-    const noiseCount = noiseOverrides.length;
-    const compressionPct = total > 0 ? Math.round((1 - uniqueGroups / total) * 100) : 0;
-    const dismissedCount = dismissed.size;
-    const strategicCount = grouped.filter(g => STRATEGIC_TYPES.has(g.latest.type || "")).length;
-    return { total, uniqueGroups, overrides, noiseCount, compressionPct, essentialCount: essential.length, noiseEventsCount: noiseEvents.length, dismissedCount, strategicCount };
-  }, [events, grouped, gatedOverrides, noiseOverrides, essential, noiseEvents, dismissed, STRATEGIC_TYPES]);
+    const criticals = undismissed.filter(g => alertSeverityClass(g.latest.type) === "critical");
+    const warnings = undismissed.filter(g => alertSeverityClass(g.latest.type) === "warning");
+    const overrides = undismissed.filter(g => g.latest.type === "RISK_OVERRIDE");
+    // Invalidations = delist/depeg related
+    const invalidations = undismissed.filter(g =>
+      g.latest.type === "DEPEG_CRITICAL" || g.latest.type === "DEPEG_WARNING" || g.latest.type === "BREAK"
+    );
+    // Recent = last 2h
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+    const recent = undismissed.filter(g => new Date(g.lastTs).getTime() > twoHoursAgo);
+    return { criticals: criticals.length, warnings: warnings.length, overrides: overrides.length, invalidations: invalidations.length, recent: recent.length };
+  }, [undismissed]);
 
+  /* ── Tab filter ── */
+  const filteredByTab = useMemo(() => {
+    if (tab === "CRITICAL") return undismissed.filter(g => alertSeverityClass(g.latest.type) === "critical");
+    if (tab === "WARNING") return undismissed.filter(g => alertSeverityClass(g.latest.type) === "warning");
+    if (tab === "OVERRIDE") return undismissed.filter(g => g.latest.type === "RISK_OVERRIDE");
+    if (tab === "PORTFOLIO") {
+      const ownedNetuids = portfolio.ownedNetuids;
+      return undismissed.filter(g => g.latest.netuid != null && ownedNetuids.has(g.latest.netuid));
+    }
+    return undismissed;
+  }, [tab, undismissed, portfolio.ownedNetuids]);
 
-  const filterOptions: { value: FilterType; label: string; count?: number }[] = [
-    { value: "UNIQUE", label: fr ? "Groupés" : "Grouped", count: stats.uniqueGroups },
-    { value: "ALL", label: fr ? "Tout" : "All", count: stats.total },
-    { value: "STRATEGIC", label: fr ? "🎯 Stratégiques" : "🎯 Strategic", count: stats.strategicCount },
-    { value: "OVERRIDE", label: "⛔ Overrides", count: stats.overrides },
-    { value: "WHALE", label: "🐋 Whales" },
-    { value: "STATE", label: fr ? "🔴 États" : "🔴 States" },
-    { value: "SMART", label: "🧠 Smart" },
+  /* ── Tabs config ── */
+  const tabs: { value: TabType; label: string; count: number }[] = [
+    { value: "ALL", label: fr ? "Toutes" : "All", count: undismissed.length },
+    { value: "CRITICAL", label: fr ? "Critiques" : "Critical", count: stats.criticals },
+    { value: "WARNING", label: "Warnings", count: stats.warnings },
+    { value: "OVERRIDE", label: "Overrides", count: stats.overrides },
+    { value: "PORTFOLIO", label: "Portfolio", count: undismissed.filter(g => g.latest.netuid != null && portfolio.ownedNetuids.has(g.latest.netuid)).length },
   ];
 
   return (
-    <div className="h-full w-full bg-background text-foreground p-4 sm:p-6 overflow-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-4 sm:mb-6 flex-wrap">
-        <h1 className="font-mono text-base sm:text-lg tracking-widest text-white/80">{t("alerts.title")}</h1>
-        {stats.compressionPct > 0 && (
-          <span className="font-mono text-[9px] px-2 py-0.5 rounded"
-            style={{ background: "rgba(76,175,80,0.08)", color: "rgba(76,175,80,0.7)", border: "1px solid rgba(76,175,80,0.15)" }}>
-            −{stats.compressionPct}% {fr ? "bruit" : "noise"}
-          </span>
-        )}
-        {overrideMode === "strict" && stats.noiseCount > 0 && (
-          <span className="font-mono text-[9px] px-2 py-0.5 rounded"
-            style={{ background: "rgba(255,152,0,0.08)", color: "rgba(255,152,0,0.6)", border: "1px solid rgba(255,152,0,0.15)" }}>
-            🛡 Strict · {stats.noiseCount} {fr ? "filtrés" : "filtered"}
-          </span>
-        )}
+    <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
+      <div className="px-4 sm:px-6 py-5 max-w-[1200px] mx-auto space-y-6">
 
-        {/* Push notification toggle */}
-        <div className="ml-auto">
-          {pushState === "unsupported" ? (
-            <span className="font-mono text-[9px] text-white/20">
-              {fr ? "Push non supporté" : "Push not supported"}
-            </span>
-          ) : pushState === "denied" ? (
-            <span className="font-mono text-[9px] px-2 py-1 rounded"
-              style={{ color: "rgba(229,57,53,0.7)", background: "rgba(229,57,53,0.08)", border: "1px solid rgba(229,57,53,0.15)" }}>
-              🔇 {fr ? "Notifications bloquées" : "Notifications blocked"}
-            </span>
-          ) : pushState === "subscribed" ? (
-            <button onClick={pushUnsubscribe}
-              className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider"
-              style={{ background: "rgba(76,175,80,0.1)", color: "rgba(76,175,80,0.9)", border: "1px solid rgba(76,175,80,0.25)" }}>
-              🔔 {fr ? "Push activé" : "Push enabled"} ✓
-            </button>
-          ) : pushState === "loading" ? (
-            <span className="font-mono text-[9px] text-white/30 animate-pulse">
-              {fr ? "Chargement…" : "Loading…"}
-            </span>
-          ) : (
-            <button onClick={pushSubscribe}
-              className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider hover:bg-white/5"
-              style={{ color: "rgba(255,215,0,0.7)", border: "1px solid rgba(255,215,0,0.15)" }}>
-              🔕 {fr ? "Activer les push" : "Enable push"}
-            </button>
-          )}
-          {pushError && (
-            <span className="font-mono text-[8px] text-red-400/60 ml-2">{pushError}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-          {filterOptions.map(opt => (
-            <button key={opt.value}
-              onClick={() => { setFilter(opt.value); setShowOverrideNoise(false); }}
-              className="font-mono text-[10px] sm:text-[11px] tracking-wider px-2.5 sm:px-3 py-2 transition-all"
-              style={{
-                background: filter === opt.value ? "rgba(255,215,0,0.1)" : "transparent",
-                color: filter === opt.value ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.35)",
-                fontWeight: filter === opt.value ? 700 : 400,
-              }}>
-              {opt.label}
-              {opt.count != null && <span className="ml-1 text-[8px]" style={{ opacity: 0.5 }}>({opt.count})</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Essential controls bar */}
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
-        {/* Essential / Total counters */}
-        <span className="font-mono text-[9px] px-2 py-0.5 rounded font-bold"
-          style={{ background: "rgba(76,175,80,0.08)", color: "rgba(76,175,80,0.8)", border: "1px solid rgba(76,175,80,0.15)" }}>
-          {fr ? "Essentiel" : "Essential"} ({stats.essentialCount})
-        </span>
-        <span className="font-mono text-[9px] px-2 py-0.5 rounded"
-          style={{ background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
-          Total ({filtered.length})
-        </span>
-
-        {/* Show noise toggle */}
-        <button
-          onClick={() => setShowNoise(!showNoise)}
-          className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider"
-          style={{
-            background: showNoise ? "rgba(255,152,0,0.1)" : "rgba(255,255,255,0.03)",
-            color: showNoise ? "rgba(255,152,0,0.8)" : "rgba(255,255,255,0.25)",
-            border: `1px solid ${showNoise ? "rgba(255,152,0,0.25)" : "rgba(255,255,255,0.06)"}`,
-          }}>
-          {showNoise
-            ? (fr ? `✕ Masquer bruit (${stats.noiseEventsCount})` : `✕ Hide noise (${stats.noiseEventsCount})`)
-            : (fr ? `👁 Afficher le bruit (${stats.noiseEventsCount})` : `👁 Show noise (${stats.noiseEventsCount})`)}
-        </button>
-
-        {/* Confidence filter */}
-        <button
-          onClick={() => setConfidenceFilter(!confidenceFilter)}
-          className="font-mono text-[9px] px-2.5 py-1 rounded-md transition-all tracking-wider"
-          style={{
-            background: confidenceFilter ? "rgba(100,181,246,0.1)" : "rgba(255,255,255,0.03)",
-            color: confidenceFilter ? "rgba(100,181,246,0.8)" : "rgba(255,255,255,0.25)",
-            border: `1px solid ${confidenceFilter ? "rgba(100,181,246,0.25)" : "rgba(255,255,255,0.06)"}`,
-          }}>
-          {fr ? "Confiance ≥ 70%" : "Confidence ≥ 70%"} {confidenceFilter ? "✓" : ""}
-        </button>
-
-        {/* Dismissed count */}
-        {stats.dismissedCount > 0 && (
-          <span className="font-mono text-[9px] text-white/20">
-            {stats.dismissedCount} {fr ? "traités" : "dismissed"}
-          </span>
-        )}
-      </div>
-
-      <SwipeHint storageKey="swipe-hint-alerts-seen" />
-
-
-      {/* STATE filter: show DEPEG/DELIST WATCHLIST + state events */}
-      {filter === "STATE" ? (
-        <div className="space-y-8">
-          <DelistWatchlistView fr={fr} />
-
-          {/* Also show state-change events below */}
+        {/* ══════════════════════════════════ */}
+        {/*   1. HEADER                         */}
+        {/* ══════════════════════════════════ */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h3 className="font-mono text-xs tracking-widest text-white/40 mb-3">
-              {fr ? "CHANGEMENTS D'ÉTAT RÉCENTS" : "RECENT STATE CHANGES"}
-            </h3>
-            {displayedEvents.length === 0 ? (
-              <div className="text-center text-white/20 font-mono mt-4">{t("alerts.empty")}</div>
-            ) : (
-              <div className="space-y-1.5">
-                {displayedEvents.map(group => (
-                  <ExpandableEventRow key={group.key} group={group} lang={lang} onDismiss={handleDismiss} />
-                ))}
-              </div>
+            <h1 className="font-mono text-lg sm:text-xl tracking-wider text-gold">Risk & Alerts</h1>
+            <p className="font-mono text-[10px] text-muted-foreground/45 mt-1 max-w-md leading-relaxed">
+              {fr ? "Overrides, anomalies, invalidations et subnets sous surveillance." : "Overrides, anomalies, invalidations and subnets under watch."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Push toggle */}
+            {pushState === "subscribed" ? (
+              <button onClick={pushUnsubscribe}
+                className="font-mono text-[9px] px-2.5 py-1.5 rounded-lg border border-primary/25 text-primary/80 transition-all hover:bg-primary/10">
+                🔔 {fr ? "Push activé" : "Push on"} ✓
+              </button>
+            ) : pushState === "denied" ? (
+              <span className="font-mono text-[9px] text-destructive/60">🔇 {fr ? "Bloqué" : "Blocked"}</span>
+            ) : pushState !== "unsupported" && pushState !== "loading" && (
+              <button onClick={pushSubscribe}
+                className="font-mono text-[9px] px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground/40 hover:text-gold transition-all">
+                🔕 {fr ? "Activer push" : "Enable push"}
+              </button>
             )}
+            {pushError && <span className="font-mono text-[8px] text-destructive/50">{pushError}</span>}
           </div>
         </div>
-      ) : (
-        <>
-          {(!displayedEvents || displayedEvents.length === 0) ? (
-            <div className="text-center text-white/20 font-mono mt-20">{t("alerts.empty")}</div>
+
+        {/* ══════════════════════════════════ */}
+        {/*   2. KPI BAR                        */}
+        {/* ══════════════════════════════════ */}
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+          <KPIChip label={fr ? "CRITIQUES" : "CRITICAL"} value={stats.criticals} color={stats.criticals > 0 ? BREAK : MUTED} />
+          <KPIChip label="WARNINGS" value={stats.warnings} color={stats.warnings > 0 ? WARN : MUTED} />
+          <KPIChip label="OVERRIDES" value={stats.overrides} color={stats.overrides > 0 ? BREAK : MUTED} />
+          <KPIChip label={fr ? "INVALIDATIONS" : "INVALIDATIONS"} value={stats.invalidations} color={stats.invalidations > 0 ? WARN : MUTED} />
+          <KPIChip label={fr ? "RÉCENTS" : "RECENT"} value={stats.recent} color={stats.recent > 0 ? GO : MUTED} sub="< 2h" />
+        </div>
+
+        {/* ══════════════════════════════════ */}
+        {/*   3. TABS + VIEW TOGGLE             */}
+        {/* ══════════════════════════════════ */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex rounded-lg overflow-hidden border border-border">
+            {tabs.map(t => (
+              <button key={t.value} onClick={() => setTab(t.value)}
+                className={`font-mono text-[10px] tracking-wider px-3 py-2 transition-all ${tab === t.value ? "bg-muted/40 text-gold font-bold" : "text-muted-foreground/30 hover:text-muted-foreground/50"}`}>
+                {t.label}
+                <span className="ml-1 text-[8px] opacity-50">({t.count})</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex rounded-lg overflow-hidden border border-border ml-auto">
+            <button onClick={() => setViewMode("feed")}
+              className={`font-mono text-[9px] px-2.5 py-1.5 transition-all ${viewMode === "feed" ? "bg-muted/40 text-foreground/70" : "text-muted-foreground/25"}`}>
+              {fr ? "Flux" : "Feed"}
+            </button>
+            <button onClick={() => setViewMode("grouped")}
+              className={`font-mono text-[9px] px-2.5 py-1.5 transition-all ${viewMode === "grouped" ? "bg-muted/40 text-foreground/70" : "text-muted-foreground/25"}`}>
+              {fr ? "Par subnet" : "By subnet"}
+            </button>
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════ */}
+        {/*   4. FEED / GROUPED VIEW            */}
+        {/* ══════════════════════════════════ */}
+        {viewMode === "grouped" ? (
+          <SubnetGroupedView groups={filteredByTab} fr={fr} scores={scores} onDismiss={handleDismiss} />
+        ) : (
+          filteredByTab.length === 0 ? (
+            <div className="py-16 text-center space-y-3">
+              <span className="text-3xl opacity-20">🔕</span>
+              <p className="font-mono text-[11px] text-muted-foreground/25">{fr ? "Aucune alerte dans cette catégorie" : "No alerts in this category"}</p>
+            </div>
           ) : (
-            <div className="space-y-1.5">
-              {displayedEvents.map(group => (
-                <ExpandableEventRow key={group.key} group={group} lang={lang} onDismiss={handleDismiss} />
+            <div className="space-y-2">
+              {filteredByTab.map(group => (
+                <AlertCard key={group.key} group={group} fr={fr} scores={scores} onDismiss={handleDismiss} />
               ))}
             </div>
-          )}
-        </>
-      )}
+          )
+        )}
 
-      {filter === "OVERRIDE" && overrideMode === "strict" && !showOverrideNoise && noiseOverrides.length > 0 && (
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => setShowOverrideNoise(true)}
-            className="font-mono text-[10px] px-4 py-2 rounded-lg transition-all hover:bg-white/5"
-            style={{ color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.08)" }}>
-            {fr ? `Voir tout (bruit) — ${noiseOverrides.length} alertes filtrées` : `Show all (noise) — ${noiseOverrides.length} filtered alerts`}
-          </button>
-        </div>
-      )}
+        {/* ══════════════════════════════════ */}
+        {/*   5. DISMISSED COUNT                */}
+        {/* ══════════════════════════════════ */}
+        {dismissed.size > 0 && (
+          <div className="text-center">
+            <span className="font-mono text-[9px] text-muted-foreground/20">
+              {dismissed.size} {fr ? "alertes traitées (masquées 24h)" : "alerts dismissed (hidden 24h)"}
+            </span>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════ */}
+        {/*   6. WHY IT MATTERS                 */}
+        {/* ══════════════════════════════════ */}
+        <WhyItMatters fr={fr} />
+      </div>
     </div>
   );
 }
