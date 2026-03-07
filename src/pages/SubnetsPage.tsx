@@ -184,7 +184,7 @@ function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
 
 function MetricMini({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
-    <div className="rounded-lg px-3 py-2 text-center" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+    <div className="rounded-lg px-3 py-2 text-center bg-muted/30 border border-border">
       <div className="font-mono text-[7px] text-muted-foreground/65 tracking-wider uppercase">{label}</div>
       <div className="font-mono text-lg font-bold mt-0.5" style={{ color }}>{value}</div>
     </div>
