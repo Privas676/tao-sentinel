@@ -393,7 +393,7 @@ export default function SubnetsPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder={fr ? "Rechercher un subnet…" : "Search subnet…"}
-                className="w-full font-mono text-[11px] px-3 py-1.5 rounded-lg bg-background text-foreground placeholder:text-muted-foreground/40 border border-border"
+                className="w-full font-mono text-[11px] px-3 py-1.5 rounded-lg bg-background text-foreground placeholder:text-muted-foreground border border-border"
               />
             </div>
             {hasActiveFilters && (
