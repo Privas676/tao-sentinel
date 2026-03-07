@@ -524,8 +524,8 @@ function computeSaturationRisk(s: StakeSnapshot, d: StakeDeltas, dm: DerivedMetr
   if (s.uidMax > 0 && s.uidUsed >= s.uidMax && d.minersGrowth7d < 0) score += 30;
   else if (s.uidMax > 0 && s.uidMax - s.uidUsed < 10) score += 15;
   else score += 0;
-  // High concentration + saturation
-  if (s.stakeConcentration > 60 && sat > 0.8) score += 20;
+  // High concentration + saturation (Bittensor-calibrated)
+  if (s.stakeConcentration > 98 && sat > 0.8) score += 20;
   else if (s.stakeConcentration > 40 && sat > 0.9) score += 10;
   // Low miners despite saturation
   if (sat > 0.8 && s.minersActive < 10) score += 10;
