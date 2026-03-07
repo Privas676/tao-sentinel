@@ -436,6 +436,21 @@ export default function SubnetsPage() {
                       </span>
                     )}
                   </td>
+                  <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                    {r.verdict ? (
+                      <VerdictBadgeWithTooltip
+                        verdict={r.verdict.verdict}
+                        confidence={r.verdict.confidence}
+                        positiveReasons={r.verdict.positiveReasons}
+                        negativeReasons={r.verdict.negativeReasons}
+                        entryScore={r.verdict.entryScore}
+                        holdScore={r.verdict.holdScore}
+                        exitRisk={r.verdict.exitRisk}
+                      />
+                    ) : (
+                      <span className="font-mono text-[9px] text-white/15">—</span>
+                    )}
+                  </td>
                   <td className="py-3 px-2 text-center relative group/ds">
                     {(() => {
                       const ds = decisionStates?.get(r.netuid);
