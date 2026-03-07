@@ -526,7 +526,7 @@ export default function SubnetsPage() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="py-12 text-center text-muted-foreground/65 text-[11px]">
+                    <td colSpan={13} className="py-12 text-center text-muted-foreground text-[11px]">
                       {fr ? "Aucun subnet ne correspond aux filtres actifs." : "No subnets match active filters."}
                     </td>
                   </tr>
