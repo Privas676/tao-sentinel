@@ -485,7 +485,7 @@ export default function PortfolioPage() {
                             background: `color-mix(in srgb, ${aColor} 8%, transparent)`,
                             border: `1px solid color-mix(in srgb, ${aColor} 15%, transparent)`,
                           }}>
-                            {portfolioActionLabel(r.pAction, fr)}
+                            {r.pAction}
                           </span>
                         </td>
                         <td className="py-3 px-3 font-mono text-[9px] text-muted-foreground" style={{ maxWidth: 130 }}>
