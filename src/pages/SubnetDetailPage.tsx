@@ -266,7 +266,7 @@ export default function SubnetDetailPage() {
                     </div>
                   ))
                 ) : (
-                  <div className="font-mono text-[10px] text-muted-foreground/25 italic">{fr ? "Aucune thèse positive identifiée" : "No positive thesis identified"}</div>
+                  <div className="font-mono text-[10px] text-muted-foreground italic">{fr ? "Aucune thèse positive identifiée" : "No positive thesis identified"}</div>
                 )}
               </div>
 
