@@ -507,7 +507,7 @@ export default function CompassPage() {
                 {g.items.length > 0 ? g.items.map(s => (
                   <div key={s.netuid} className="flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-white/[0.015] transition-colors" onClick={() => setPanelSignal(s)}>
                     <span className="font-mono text-[9px] font-bold" style={{ color: "hsl(var(--gold))", opacity: 0.7 }}>{s.netuid}</span>
-                    <span className="font-mono text-[9px] text-muted-foreground/70 truncate flex-1">{s.name}</span>
+                    <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{s.name}</span>
                     <span className="font-mono text-[9px] font-bold" style={{ color: g.color }}>{s.opp}</span>
                   </div>
                 )) : (
