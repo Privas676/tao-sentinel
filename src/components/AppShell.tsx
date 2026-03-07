@@ -185,7 +185,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   className="flex items-center gap-2 px-1 group"
                 >
                   <span className="text-sm opacity-50 group-hover:opacity-80 transition-opacity">👤</span>
-                  <span className="font-mono text-[9px] text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors truncate">
+                  <span className="font-mono text-[9px] text-muted-foreground group-hover:text-foreground/80 transition-colors truncate">
                     {user.email}
                   </span>
                 </Link>
