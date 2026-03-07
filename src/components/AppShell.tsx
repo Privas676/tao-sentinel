@@ -100,33 +100,33 @@ export default function AppShell({ children }: { children: ReactNode }) {
           className="h-full flex flex-col border-r"
           style={{
             width: SIDEBAR_W,
-            background: "linear-gradient(180deg, hsl(0 0% 4%) 0%, hsl(0 0% 3%) 100%)",
-            borderColor: "hsl(var(--sidebar-border))",
+            background: "linear-gradient(180deg, hsl(0 0% 4.5%) 0%, hsl(0 0% 3%) 100%)",
+            borderColor: "hsla(0,0%,100%,0.05)",
           }}
         >
           {/* ─ Brand ─ */}
-          <div className="pt-5 pb-4 px-5 flex items-center gap-3">
+          <div className="pt-6 pb-5 px-5 flex items-center gap-3">
             <span
-              className="text-xl"
-              style={{ color: "hsl(var(--gold))", filter: "drop-shadow(0 0 6px hsla(40,70%,69%,0.3))" }}
+              className="text-lg"
+              style={{ color: "hsl(var(--gold))", filter: "drop-shadow(0 0 8px hsla(40,70%,69%,0.25))" }}
             >
               ◎
             </span>
             <div className="flex flex-col">
               <span
-                className="font-mono text-[11px] font-bold tracking-[0.2em] uppercase"
+                className="font-mono text-[10px] font-bold tracking-[0.22em] uppercase"
                 style={{ color: "hsl(var(--gold))" }}
               >
                 TAO Sentinel
               </span>
-              <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground">
+              <span className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground mt-0.5" style={{ opacity: 0.5 }}>
                 Intelligence Terminal
               </span>
             </div>
           </div>
 
           {/* ─ Separator ─ */}
-          <div className="mx-4 mb-2" style={{ height: 1, background: "hsl(var(--sidebar-border))" }} />
+          <div className="mx-5 mb-3" style={{ height: 1, background: "hsla(0,0%,100%,0.04)" }} />
 
           {/* ─ Nav items ─ */}
           <div className="flex-1 px-3 space-y-0.5 overflow-y-auto">
@@ -137,33 +137,34 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   key={item.path}
                   to={item.path}
                   onClick={() => isMobile && setSidebarOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group"
                   style={{
                     background: active
-                      ? "linear-gradient(135deg, hsla(40,70%,69%,0.08) 0%, hsla(40,70%,69%,0.03) 100%)"
+                      ? "hsla(40,70%,69%,0.06)"
                       : "transparent",
                     borderLeft: active ? "2px solid hsl(var(--gold))" : "2px solid transparent",
                   }}
                 >
-                  <span className="text-sm w-5 text-center" style={{ opacity: active ? 1 : 0.5 }}>
+                  <span className="text-sm w-5 text-center" style={{ opacity: active ? 0.85 : 0.4 }}>
                     {item.icon}
                   </span>
                   <span
-                    className="font-mono text-[11px] tracking-wider"
+                    className="font-mono text-[10.5px] tracking-[0.08em]"
                     style={{
                       color: active ? "hsl(var(--gold))" : "hsl(var(--sidebar-foreground))",
-                      opacity: active ? 1 : 0.6,
+                      opacity: active ? 1 : 0.55,
+                      fontWeight: active ? 600 : 400,
                     }}
                   >
                     {item.label}
                   </span>
                   {item.badge != null && item.badge > 0 && (
                     <span
-                      className="ml-auto font-mono text-[9px] px-1.5 py-0.5 rounded-full"
+                      className="ml-auto font-mono text-[8px] font-bold px-1.5 py-0.5 rounded-full"
                       style={{
-                        background: "hsla(var(--destructive), 0.15)",
+                        background: "hsla(var(--destructive), 0.12)",
                         color: "hsl(var(--destructive))",
-                        border: "1px solid hsla(var(--destructive), 0.25)",
+                        border: "1px solid hsla(var(--destructive), 0.2)",
                       }}
                     >
                       {item.badge}
