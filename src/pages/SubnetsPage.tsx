@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useColumnConfig, ColumnConfigPanel, type ColumnKey } from "@/components/ColumnConfig";
 import SwipeHint from "@/components/SwipeHint";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
 import DistributionBadge from "@/components/DistributionBadge";
