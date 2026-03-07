@@ -170,7 +170,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
           {/* Active alerts */}
           {alerts.length > 0 && (
             <div className="rounded-lg p-3 border border-destructive/15 bg-destructive/[0.03]">
-              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
+              <div className="font-mono text-[7px] text-muted-foreground tracking-widest uppercase mb-2">
                 {fr ? "ALERTES ACTIVES" : "ACTIVE ALERTS"}
               </div>
               {alerts.map((a, i) => (
