@@ -357,7 +357,7 @@ export default function CompassPage() {
                   <div className="flex items-center gap-2.5 px-4 py-2 rounded-xl" style={{ background: macroBg(macroRec), border: `1.5px solid ${macroBorder(macroRec)}`, boxShadow: `0 0 20px ${macroBg(macroRec)}` }}>
                     <span style={{ fontSize: isMobile ? 14 : 18 }}>{macroIcon(macroRec)}</span>
                     <div>
-                      <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground/65">{t("macro.label")}</div>
+                      <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground">{t("macro.label")}</div>
                       <div className="font-mono font-bold tracking-[0.12em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 11 : 13 }}>{macroRecLabel}</div>
                     </div>
                   </div>
