@@ -395,6 +395,7 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
 /* ═══════════════════════════════════════ */
 function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
