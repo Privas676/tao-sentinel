@@ -268,7 +268,7 @@ export default function PortfolioPage() {
                 </button>
               ))}
             </div>
-            {taoUsd && <span className="font-mono text-[9px] text-muted-foreground/30">TAO ${taoUsd.toFixed(2)}</span>}
+            {taoUsd && <span className="font-mono text-[9px] text-muted-foreground">TAO ${taoUsd.toFixed(2)}</span>}
           </div>
         </div>
 
