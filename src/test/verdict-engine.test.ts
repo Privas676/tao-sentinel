@@ -263,7 +263,7 @@ describe("computeExitRisk", () => {
   it("higher for concentrated + illiquid subnets", () => {
     const safe = computeExitRisk(makeInput());
     const risky = computeExitRisk(makeInput({
-      snapshot: makeSnapshot({ stakeConcentration: 90, validatorsActive: 1, minersActive: 2 }),
+      snapshot: makeSnapshot({ stakeConcentration: 99, validatorsActive: 1, minersActive: 2 }),
       priceContext: makePrice({ liquidity: 3 }),
       derivedMetrics: makeDerived({ poolBalance: 0.1 }),
     }));
