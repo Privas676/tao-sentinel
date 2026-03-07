@@ -123,6 +123,38 @@ export default function PortfolioPage() {
   const { scores, sparklines, subnetList, taoUsd } = useSubnetScores();
   const { verdicts } = useSubnetVerdicts();
 
+  // ── Seed portfolio positions (one-time import) ──
+  useEffect(() => {
+    const SEED_KEY = "portfolio_seed_v1";
+    if (localStorage.getItem(SEED_KEY)) return;
+    const seed = [
+      { sn: 0, tao: 37.504389 },
+      { sn: 59, tao: 10.107697 },
+      { sn: 95, tao: 10.070618 },
+      { sn: 106, tao: 5.049999 },
+      { sn: 54, tao: 5.049999 },
+      { sn: 103, tao: 5.065044 },
+      { sn: 73, tao: 5.061782 },
+      { sn: 36, tao: 5.039932 },
+      { sn: 120, tao: 5.021266 },
+      { sn: 62, tao: 5.049999 },
+      { sn: 44, tao: 5.049999 },
+      { sn: 101, tao: 2.05 },
+      { sn: 13, tao: 2.05 },
+      { sn: 50, tao: 2.068322 },
+      { sn: 71, tao: 2.04707 },
+      { sn: 35, tao: 2.030613 },
+    ];
+    for (const p of seed) {
+      if (portfolio.isOwned(p.sn)) {
+        portfolio.updateQuantity(p.sn, p.tao);
+      } else {
+        portfolio.addPosition(p.sn, p.tao);
+      }
+    }
+    localStorage.setItem(SEED_KEY, Date.now().toString());
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fmtVal = (tao: number) => currency === "USD" ? `$${(tao * (taoUsd || 0)).toFixed(2)}` : `${tao.toFixed(2)} τ`;
 
   /* ── Build enriched rows ── */
