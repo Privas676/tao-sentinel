@@ -340,6 +340,9 @@ export default function SubnetsPage() {
               <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors sticky left-[40px] z-10 bg-background" style={{ boxShadow: "4px 0 8px -2px rgba(0,0,0,0.3)" }} onClick={() => toggleSort("name")}>
                 {t("sub.name")} {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
+              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("verdict")}>
+                VERDICT {sortCol === "verdict" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
               <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("dstate")}>
                 ÉTAT {sortCol === "dstate" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
