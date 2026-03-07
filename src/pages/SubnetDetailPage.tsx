@@ -189,7 +189,7 @@ export default function SubnetDetailPage() {
 
             {/* Secondary context row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 mt-4 pt-4 border-t border-border">
-              <Metric label={fr ? "Horizon" : "Horizon"} value={horizon(s, fr)} />
+              <Metric label={fr ? "Horizon" : "Horizon"} value={horizon(decision, fr)} />
               <Metric label={fr ? "Urgence" : "Urgency"} value={urg.text} color={urg.color} />
               <Metric label={fr ? "Régime" : "Regime"} value={s.systemStatus === "OK" ? (fr ? "Favorable" : "Favorable") : s.systemStatus === "SURVEILLANCE" ? (fr ? "Neutre" : "Neutral") : (fr ? "Défavorable" : "Unfavorable")} color={s.systemStatus === "OK" ? GO : s.systemStatus === "SURVEILLANCE" ? WARN : BREAK} />
               <Metric label={fr ? "Asymétrie" : "Asymmetry"} value={s.asymmetry > 0 ? `+${s.asymmetry}` : `${s.asymmetry}`} color={s.asymmetry > 0 ? GO : BREAK} />
