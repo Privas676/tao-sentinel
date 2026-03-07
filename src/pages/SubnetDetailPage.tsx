@@ -197,6 +197,26 @@ export default function SubnetDetailPage() {
         )}
       </div>
 
+      {/* ── Portfolio quick action ── */}
+      <div className="mb-6">
+        <button
+          onClick={handlePortfolioToggle}
+          className="font-mono text-[11px] tracking-wider px-4 py-2 rounded-lg transition-all duration-200"
+          style={{
+            background: inPortfolio ? "hsla(var(--gold), 0.12)" : "hsla(0,0%,100%,0.03)",
+            color: inPortfolio ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))",
+            border: `1px solid ${inPortfolio ? "hsla(var(--gold), 0.25)" : "hsla(0,0%,100%,0.08)"}`,
+          }}
+        >
+          {justToggled
+            ? (inPortfolio ? "✓ Ajouté" : "✓ Retiré")
+            : inPortfolio
+              ? `★ ${fr ? "Dans le portefeuille" : "In portfolio"}`
+              : `+ ${fr ? "Ajouter au portefeuille" : "Add to portfolio"}`
+          }
+        </button>
+      </div>
+
       {/* ── Top-level KPIs ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 mb-6">
         {[
