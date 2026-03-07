@@ -441,7 +441,7 @@ export default function CompassPage() {
                 <div
                   key={s.netuid}
                   className="grid items-center px-3 py-2 cursor-pointer hover:bg-white/[0.015] transition-colors"
-                  style={{ gridTemplateColumns: "50px 1fr 60px 50px 50px 50px 60px", borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }}
+                  style={{ gridTemplateColumns: "52px 120px 70px 50px 44px 44px 56px", borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }}
                   onClick={() => setPanelSignal(s)}
                 >
                   <span className="font-mono text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</span>
