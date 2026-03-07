@@ -55,6 +55,13 @@ export type VerdictInput = {
   systemStatus?: string;     // "DEPEG" | "SURVEILLANCE" | etc.
 };
 
+/* ── Helpers ── */
+
+/** Treat stakeConcentration=0 as "unknown" with a moderate default */
+function effectiveConcentration(s: StakeSnapshot): number {
+  return s.stakeConcentration <= 0 ? 80 : s.stakeConcentration;
+}
+
 /* ═══════════════════════════════════════ */
 /*  COMPONENT SCORES                        */
 /* ═══════════════════════════════════════ */
