@@ -475,7 +475,7 @@ export default function CompassPage() {
                     style={{ borderBottom: idx < criticalRisks.length - 1 ? "1px solid hsla(var(--destructive), 0.06)" : "none" }}
                     onClick={() => setPanelSignal(s)}>
                     <span className="font-mono font-bold text-[11px]" style={{ color: "hsl(var(--gold))", minWidth: 48 }}>SN-{s.netuid}</span>
-                    <span className="font-mono text-[10px] truncate flex-1 text-muted-foreground/35">{s.name}</span>
+                    <span className="font-mono text-[10px] truncate flex-1 text-muted-foreground/65">{s.name}</span>
                     <div className="flex gap-1 flex-shrink-0">
                       {tags.map((tag, i) => (
                         <span key={i} className="font-mono text-[7px] px-1.5 py-0.5 rounded font-bold" style={{ background: `color-mix(in srgb, ${tag.color} 10%, transparent)`, color: tag.color, border: `1px solid color-mix(in srgb, ${tag.color} 25%, transparent)` }}>{tag.label}</span>
