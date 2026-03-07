@@ -507,7 +507,7 @@ export default function SubnetsPage() {
                       className="transition-colors cursor-pointer hover:bg-accent/30"
                       style={{
                         borderBottom: "1px solid hsla(0,0%,100%,0.03)",
-                        ...(r.isOverridden ? { background: "hsla(4,80%,50%,0.03)", borderLeft: "2px solid hsla(4,80%,50%,0.4)" } : {}),
+                        ...(r.isOverridden ? { background: "hsla(var(--signal-break), 0.03)", borderLeft: "2px solid hsla(var(--signal-break), 0.4)" } : {}),
                       }}
                       onClick={() => setDrawerRow(r)}
                     >
