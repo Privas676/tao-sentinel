@@ -194,7 +194,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                     signOut();
                     isMobile && setSidebarOpen(false);
                   }}
-                  className="font-mono text-[9px] tracking-wider text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors px-1"
+                  className="font-mono text-[9px] tracking-wider text-muted-foreground hover:text-foreground/80 transition-colors px-1"
                 >
                   {t("auth.logout")}
                 </button>
