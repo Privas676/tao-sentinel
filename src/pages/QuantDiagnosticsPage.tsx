@@ -282,7 +282,7 @@ export default function QuantDiagnosticsPage() {
   }
 
   return (
-    <div className="h-full w-full bg-black text-white/70 overflow-auto pt-14 px-4 sm:px-8 pb-16">
+    <div className="h-full w-full bg-black text-white/70 overflow-auto px-4 sm:px-8 pb-16">
       <div className="max-w-2xl mx-auto">
         <Link
           to="/settings"
