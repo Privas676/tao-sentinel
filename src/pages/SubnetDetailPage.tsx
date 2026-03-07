@@ -43,7 +43,7 @@ function SectionTitle({ icon, title }: { icon: string; title: string }) {
 function Metric({ label, value, color, sub, mono = true }: { label: string; value: string | number; color?: string; sub?: string; mono?: boolean }) {
   return (
     <div className="flex justify-between items-center py-[5px]">
-      <span className="text-muted-foreground/60 text-[11px] leading-tight">{label}</span>
+      <span className="text-muted-foreground text-[11px] leading-tight">{label}</span>
       <div className="flex items-center gap-1.5">
         <span className={`text-[12px] font-medium ${mono ? "font-mono" : ""}`} style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
         {sub && <span className="text-[9px] text-muted-foreground/35">{sub}</span>}
