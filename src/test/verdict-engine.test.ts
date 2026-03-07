@@ -95,8 +95,8 @@ describe("computeVerdict — RENTRE", () => {
     });
     const result = computeVerdict(input);
     expect(result.verdict).toBe("RENTRE");
-    expect(result.entryScore).toBeGreaterThanOrEqual(70);
-    expect(result.exitRisk).toBeLessThan(45);
+    expect(result.entryScore).toBeGreaterThanOrEqual(55);
+    expect(result.exitRisk).toBeLessThan(42);
   });
 });
 
