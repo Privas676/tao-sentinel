@@ -248,9 +248,8 @@ export default function SubnetDetailPage() {
             </div>
 
             {/* Primary decision strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-              <KPIChip label="CONVICTION" value={`${conv.level}`} color={convColor(conv.level)} />
-              <KPIChip label="SCORE" value={conv.score} color={convColor(conv.level)} />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <KPIChip label="CONVICTION" value={`${conv.level} (${conv.score})`} color={convColor(conv.level)} />
               <KPIChip label="CONFIDENCE" value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
               <KPIChip label="RISK" value={s.risk} color={riskColor(s.risk)} />
               <KPIChip label="MOMENTUM" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK} />
@@ -395,9 +394,8 @@ export default function SubnetDetailPage() {
             <SectionTitle icon="📈" title="Flow & Momentum" />
             <div className="px-5 py-4 space-y-0.5">
               <Metric label={fr ? "Prix 7j" : "Price 7d"} value={pctChange != null ? `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}%` : "—"} color={pctChange != null ? (pctChange > 0 ? GO : BREAK) : undefined} />
-              <Metric label="Momentum" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK} />
               <Metric label="Capital Flow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
-              {eco && <Metric label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} color={eco.sentiment > 0.55 ? GO : eco.sentiment < 0.45 ? BREAK : WARN} sub={`${(eco.sentiment * 100).toFixed(0)}%`} />}
+              {eco && <Metric label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} />}
               <Metric label="Trend" value={s.momentumLabel} color={momentumColor(s.momentumLabel)} />
               <div className="pt-3 flex justify-center"><Sparkline data={spark} /></div>
             </div>
@@ -429,6 +427,7 @@ export default function SubnetDetailPage() {
                 <>
                   <Metric label={fr ? "Validateurs" : "Validators"} value={sn.validatorsActive} />
                   <Metric label={fr ? "Mineurs" : "Miners"} value={sn.minersActive} sub={`/ ${sn.minersTotal}`} />
+                  <Metric label="Holders" value={sn.holdersCount} />
                   <Metric label="Concentration" value={`${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(1)}%`} color={sn.stakeConcentration > 50 ? BREAK : sn.stakeConcentration > 30 ? WARN : GO} />
                 </>
               )}
@@ -471,7 +470,6 @@ export default function SubnetDetailPage() {
                 </>
               )}
               {eco && <Metric label="Sentiment" value={`${(eco.sentiment * 100).toFixed(0)}%`} color={eco.sentiment > 0.55 ? GO : eco.sentiment < 0.45 ? BREAK : WARN} sub={eco.sentiment > 0.55 ? "Buy" : eco.sentiment < 0.45 ? "Sell" : "—"} />}
-              {sn && <Metric label="Holders" value={sn.holdersCount} />}
               <BarScore label={fr ? "Activité" : "Activity"} value={s.healthScores.activityHealth} />
             </div>
           </SectionCard>
