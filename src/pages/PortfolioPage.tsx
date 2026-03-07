@@ -5,6 +5,7 @@ import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { confianceColor } from "@/lib/data-fusion";
+import SwipeHint from "@/components/SwipeHint";
 
 import { toast } from "sonner";
 import { SectionCard, SectionTitle, KPIChip, Metric, Sparkline, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
@@ -116,6 +117,7 @@ export default function PortfolioPage() {
   const fr = lang === "fr";
   const portfolio = useLocalPortfolio();
   const [showAdd, setShowAdd] = useState(false);
+  const [showAlloc, setShowAlloc] = useState(false);
   const [addNetuid, setAddNetuid] = useState<number>(1);
   const [addQty, setAddQty] = useState<number>(10);
   const { currency, toggle: toggleCurrency } = useCurrencyToggle();
@@ -185,7 +187,10 @@ export default function PortfolioPage() {
     if (rows.length === 0) return null;
     const totalTao = rows.reduce((a, r) => a + r.taoInvest, 0);
     const weights = rows.map(r => ({ ...r, weight: totalTao > 0 ? (r.taoInvest / totalTao) * 100 : 0 }));
-    const avgConviction = rows.reduce((a, r) => a + Math.max(r.opp - r.risk, 0), 0) / rows.length;
+    const avgConviction = rows.reduce((a, r) => {
+      const c = r.verdict ? Math.max(r.verdict.entryScore, r.verdict.holdScore) : Math.round(Math.abs(r.opp - r.risk) * (r.confianceScore / 100));
+      return a + c;
+    }, 0) / rows.length;
     const avgRisk = rows.reduce((a, r) => a + r.risk, 0) / rows.length;
     const maxWeight = Math.max(...weights.map(w => w.weight));
     const reinforceCount = rows.filter(r => r.pAction === "REINFORCE").length;
@@ -322,43 +327,50 @@ export default function PortfolioPage() {
         {/* ══════════════════════════════════ */}
         {analytics && analytics.weights.length > 0 && (
           <SectionCard>
-            <SectionTitle icon="⚖️" title={fr ? "Allocation & Cible" : "Allocation & Target"} />
-            <div className="px-5 py-4">
-              <div className="space-y-2">
-                {analytics.weights.sort((a, b) => b.weight - a.weight).map(w => {
-                  const targetWeight = w.pAction === "EXIT" ? 0
-                    : w.pAction === "REDUCE" ? Math.max(0, w.weight * 0.5)
-                    : w.pAction === "REINFORCE" ? Math.min(15, w.weight * 1.5)
-                    : w.weight;
-                  const delta = targetWeight - w.weight;
-                  return (
-                    <div key={w.netuid} className="flex items-center gap-3">
-                      <Link to={`/subnets/${w.netuid}`} className="font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors w-[110px] shrink-0 truncate">
-                        SN-{w.netuid} {w.name}
-                      </Link>
-                      <div className="flex-1 flex items-center gap-1.5">
-                        <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/20 relative">
-                          <div className="h-full rounded-full bg-muted-foreground/25" style={{ width: `${Math.min(100, w.weight)}%` }} />
+            <SectionTitle icon="⚖️" title={fr ? "Allocation & Cible" : "Allocation & Target"} badge={
+              <button onClick={() => setShowAlloc(!showAlloc)} className="font-mono text-[8px] text-muted-foreground hover:text-foreground transition-colors">
+                {showAlloc ? "▲" : "▼"} {analytics.weights.length} pos.
+              </button>
+            } />
+            {showAlloc && (
+              <div className="px-5 py-4">
+                <div className="space-y-2">
+                  {analytics.weights.sort((a, b) => b.weight - a.weight).map(w => {
+                    const targetWeight = w.pAction === "EXIT" ? 0
+                      : w.pAction === "REDUCE" ? Math.max(0, w.weight * 0.5)
+                      : w.pAction === "REINFORCE" ? Math.min(15, w.weight * 1.5)
+                      : w.weight;
+                    const delta = targetWeight - w.weight;
+                    return (
+                      <div key={w.netuid} className="flex items-center gap-3">
+                        <Link to={`/subnets/${w.netuid}`} className="font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors w-[110px] shrink-0 truncate">
+                          SN-{w.netuid} {w.name}
+                        </Link>
+                        <div className="flex-1 flex items-center gap-1.5">
+                          <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/20 relative">
+                            <div className="h-full rounded-full bg-muted-foreground/25" style={{ width: `${Math.min(100, w.weight)}%` }} />
+                          </div>
+                          <span className="font-mono text-[9px] text-muted-foreground w-10 text-right">{w.weight.toFixed(1)}%</span>
                         </div>
-                        <span className="font-mono text-[9px] text-muted-foreground w-10 text-right">{w.weight.toFixed(1)}%</span>
+                        <span className="font-mono text-[9px] w-6 text-center" style={{ color: delta > 2 ? GO : delta < -2 ? BREAK : MUTED }}>
+                          {delta > 0 ? "↑" : delta < -1 ? "↓" : "="}
+                        </span>
+                        <span className="font-mono text-[9px] w-10 text-right" style={{ color: portfolioActionColor(w.pAction) }}>
+                          {targetWeight.toFixed(1)}%
+                        </span>
                       </div>
-                      <span className="font-mono text-[9px] w-6 text-center" style={{ color: delta > 2 ? GO : delta < -2 ? BREAK : MUTED }}>
-                        {delta > 0 ? "↑" : delta < -1 ? "↓" : "="}
-                      </span>
-                      <span className="font-mono text-[9px] w-10 text-right" style={{ color: portfolioActionColor(w.pAction) }}>
-                        {targetWeight.toFixed(1)}%
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </SectionCard>
         )}
 
         {/* ══════════════════════════════════ */}
         {/*   5. POSITIONS TABLE                */}
         {/* ══════════════════════════════════ */}
+        <SwipeHint storageKey="swipe-portfolio-v1" />
         <SectionCard>
           <div className="flex items-center justify-between px-5 py-3 border-b border-border">
             <div className="flex items-center gap-2.5">
@@ -381,15 +393,16 @@ export default function PortfolioPage() {
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left" style={{ minWidth: 720 }}>
+            <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+              <table className="w-full text-left font-mono" style={{ minWidth: 820 }}>
                 <thead>
-                  <tr className="border-b border-border">
+                  <tr className="border-b border-border bg-muted/20">
+                    <th className="py-2.5 px-3 text-[8px] tracking-[0.15em] uppercase text-muted-foreground font-normal whitespace-nowrap sticky left-0 z-10 bg-background">Subnet</th>
                     {[
-                      "Subnet", fr ? "Position" : "Position", fr ? "Poids" : "Weight",
+                      fr ? "Position" : "Position", fr ? "Poids" : "Weight",
                       "Conv.", "Risk", "Action", fr ? "Raison" : "Signal", "Mom.", ""
                     ].map((h, i) => (
-                      <th key={i} className="py-2.5 px-3 font-mono text-[8px] tracking-[0.15em] uppercase text-muted-foreground font-normal whitespace-nowrap">{h}</th>
+                      <th key={i} className="py-2.5 px-3 text-[8px] tracking-[0.15em] uppercase text-muted-foreground font-normal whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -418,12 +431,12 @@ export default function PortfolioPage() {
                     return (
                       <tr key={r.netuid} className={`border-b border-border hover:bg-muted/10 transition-colors ${rowBorder}`}>
                         {/* Subnet */}
-                        <td className="py-3 px-3">
+                        <td className="py-3 px-3 sticky left-0 z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
                           <Link to={`/subnets/${r.netuid}`} className="hover:text-foreground transition-colors">
-                           <span className="font-mono text-[11px] text-muted-foreground">SN-{r.netuid}</span>
-                            <span className="font-mono text-[11px] text-foreground/80 ml-1.5 hidden sm:inline">{r.name}</span>
+                           <span className="text-[11px] text-muted-foreground">SN-{r.netuid}</span>
+                            <span className="text-[11px] text-foreground/80 ml-1.5 hidden sm:inline">{r.name}</span>
                           </Link>
-                          {r.isOverridden && <span className="sm:hidden ml-1.5 font-mono text-[7px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">OVR</span>}
+                          {r.isOverridden && <span className="sm:hidden ml-1.5 text-[7px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">OVR</span>}
                         </td>
                         {/* Position */}
                         <td className="py-3 px-3 font-mono text-[11px] text-foreground/70">
