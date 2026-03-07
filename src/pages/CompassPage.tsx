@@ -418,7 +418,7 @@ export default function CompassPage() {
                       mainScore={v.verdict === "SORS" ? v.exitRisk : v.verdict === "RENTRE" ? v.entryScore : v.holdScore}
                       positiveReasons={v.positiveReasons} negativeReasons={v.negativeReasons} />
                   )) : (
-                    <div className="py-4 text-center font-mono text-[10px] text-muted-foreground/65">{fr ? "Aucun" : "None"}</div>
+                    <div className="py-4 text-center font-mono text-[10px] text-muted-foreground">{fr ? "Aucun" : "None"}</div>
                   )}
                 </div>
               ))}
