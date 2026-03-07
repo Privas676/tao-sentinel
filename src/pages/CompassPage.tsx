@@ -434,7 +434,7 @@ export default function CompassPage() {
             } />
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid hsla(0,0%,100%,0.05)" }}>
               {/* Header */}
-              <div className="grid font-mono text-[8px] tracking-wider text-muted-foreground/25 uppercase px-3 py-2" style={{ gridTemplateColumns: "50px 1fr 60px 50px 50px 50px 60px", background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.04)" }}>
+              <div className="grid font-mono text-[8px] tracking-wider text-muted-foreground/65 uppercase px-3 py-2" style={{ gridTemplateColumns: "52px 120px 70px 50px 44px 44px 56px", background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.04)" }}>
                 <span>SN</span><span>Nom</span><span>Action</span><span>Conv.</span><span>Risk</span><span>Mom.</span><span>7d</span>
               </div>
               {watchlist.map((s, idx) => (
