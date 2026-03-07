@@ -568,7 +568,7 @@ export default function CompassPage() {
             <Link to="/subnets" className="flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]" style={{ background: "hsla(var(--gold), 0.04)", border: "1px solid hsla(var(--gold), 0.1)" }}>
               <span style={{ fontSize: 16 }}>📋</span>
               <span className="text-[10px] tracking-wider font-bold" style={{ color: "hsl(var(--gold))" }}>{fr ? "Subnet Intelligence" : "Subnet Intelligence"}</span>
-              <span className="text-[8px] text-muted-foreground/65">{fr ? "Table de décision" : "Decision table"}</span>
+              <span className="text-[8px] text-muted-foreground">{fr ? "Table de décision" : "Decision table"}</span>
             </Link>
             <Link to="/lab" className="flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.06)" }}>
               <span style={{ fontSize: 16 }}>🔬</span>
