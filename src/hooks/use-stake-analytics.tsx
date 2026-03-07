@@ -4,6 +4,7 @@ import {
   computeRadarScores,
   computeFundamentalsScore,
   computeDerivedMetrics,
+  computeAMMMetrics,
   checkAlerts,
   type StakeSnapshot,
   type StakeDeltas,
@@ -12,6 +13,7 @@ import {
   type PriceContext,
   type EconomicContext,
   type DerivedMetrics,
+  type AMMMetrics,
 } from "@/lib/stake-analytics";
 
 export type SubnetRadarData = {
