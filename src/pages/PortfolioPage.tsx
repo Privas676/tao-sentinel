@@ -504,7 +504,7 @@ export default function PortfolioPage() {
           <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 bg-popover border border-border" onClick={e => e.stopPropagation()}>
             <h2 className="font-mono text-sm tracking-widest text-foreground/80">{fr ? "AJOUTER AU PORTEFEUILLE" : "ADD TO PORTFOLIO"}</h2>
             <div>
-              <label className="font-mono text-[9px] text-muted-foreground/30 tracking-wider">SUBNET</label>
+              <label className="font-mono text-[9px] text-muted-foreground tracking-wider">SUBNET</label>
               <SubnetDropdown subnets={subnetList || []} value={addNetuid} onChange={setAddNetuid} isOwned={portfolio.isOwned} />
             </div>
             <div>
