@@ -283,13 +283,6 @@ export default function QuantDiagnosticsPage() {
   return (
     <div className="h-full w-full bg-black text-white/70 overflow-auto px-4 sm:px-8 pb-16">
       <div className="max-w-2xl mx-auto">
-        <Link
-          to="/settings"
-          className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-white/25 hover:text-white/50 transition-colors mb-6"
-        >
-          ← {fr ? "Retour aux paramètres" : "Back to settings"}
-        </Link>
-
         <h1 className="font-mono text-base tracking-widest text-white/80 mb-1">
           🔬 QUANT DIAGNOSTICS
         </h1>

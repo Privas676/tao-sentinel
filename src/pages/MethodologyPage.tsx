@@ -210,12 +210,6 @@ export default function MethodologyPage() {
     <div className="h-full w-full bg-background text-muted-foreground overflow-auto px-4 sm:px-8 pb-16">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <Link
-          to="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-white/25 hover:text-white/50 transition-colors mb-6"
-        >
-          ← {lang === "fr" ? "Retour à la jauge" : "Back to gauge"}
-        </Link>
         <h1 className="font-mono text-lg sm:text-xl tracking-widest text-white/90 mb-2">{c.title}</h1>
         <p className="font-mono text-xs text-white/35 mb-10 leading-relaxed">{c.subtitle}</p>
 
