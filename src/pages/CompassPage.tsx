@@ -203,8 +203,16 @@ export default function CompassPage() {
 
   useAuditLogger(enrichedSignals, scoreTimestamp, dataAlignment ?? "UNKNOWN", dataConfidence, killSwitch, fleetDistribution);
 
-  // ── Verdict engine ──
-  const { topRentre, topHold, topSors, countRentre, countHold, countSors, isLoading: verdictLoading } = useSubnetVerdicts();
+  // ── Engine-action-based priority groups (single source of truth) ──
+  const priorityGroups = useMemo(() => {
+    const enterGroup = enrichedSignals.filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const holdGroup = enrichedSignals.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const exitGroup = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const enterCount = enrichedSignals.filter(s => s.action === "ENTER" && !s.isOverridden).length;
+    const holdCount = enrichedSignals.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).length;
+    const exitCount = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    return { enterGroup, holdGroup, exitGroup, enterCount, holdCount, exitCount };
+  }, [enrichedSignals]);
 
   // ── Best opportunity & worst risk ──
   const bestOpp = useMemo(() => {
