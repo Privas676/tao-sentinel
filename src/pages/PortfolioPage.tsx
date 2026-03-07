@@ -5,7 +5,7 @@ import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { confianceColor } from "@/lib/data-fusion";
-import { healthColor } from "@/lib/subnet-health";
+
 import { toast } from "sonner";
 import { SectionCard, SectionTitle, KPIChip, Metric, Sparkline, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 
