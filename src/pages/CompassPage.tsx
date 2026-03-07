@@ -351,7 +351,6 @@ export default function CompassPage() {
                     <MiniMetric label="OPP" value={globalOpp} color={oppGlobal} />
                     <MiniMetric label="RISK" value={globalRisk} color={rskGlobal} />
                     <MiniMetric label={fr ? "Stabilité" : "Stability"} value={`${globalStability}%`} color={stabilityColor(globalStability)} />
-                    <MiniMetric label="SC" value={scLabel} color={smartCapital.state === "ACCUMULATION" ? "hsl(145,65%,48%)" : smartCapital.state === "DISTRIBUTION" ? "hsl(4,80%,50%)" : "hsl(var(--muted-foreground))"} />
                   </div>
 
                   {/* Macro badge */}
