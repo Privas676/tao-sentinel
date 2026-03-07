@@ -5,13 +5,15 @@
 export const SAFE_REFACTOR_MODE = true;
 
 export const FROZEN_UI_PAGES = [
-  "AlienGauge",
+  "CompassPage",
   "SubnetsPage",
+  "SubnetDetailPage",
+  "PortfolioPage",
   "AlertsPage",
   "SettingsPage",
-  "PortfolioPage",
-  "InstallPage",
+  "LabPage",
   "AuthPage",
+  "InstallPage",
 ] as const;
 
 export const FROZEN_ROUTES = [
@@ -20,6 +22,7 @@ export const FROZEN_ROUTES = [
   "/portfolio",
   "/alerts",
   "/settings",
+  "/lab",
   "/auth",
   "/install",
 ] as const;

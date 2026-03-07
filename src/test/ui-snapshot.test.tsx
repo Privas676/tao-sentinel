@@ -1,12 +1,6 @@
 /**
  * UI Snapshot Tests — ensures pages remain structurally identical
  * during internal refactors (SAFE_REFACTOR_MODE).
- *
- * These tests verify:
- * 1. All frozen pages exist and render without crashing
- * 2. Route structure matches frozen list
- * 3. Nav item count is stable
- * 4. Page component export names are unchanged
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -23,26 +17,27 @@ describe("SAFE_REFACTOR_MODE guards", () => {
 
   it("all frozen pages exist as importable modules", async () => {
     const pageModules: Record<string, () => Promise<any>> = {
-      AlienGauge: () => import("@/pages/AlienGauge"),
+      CompassPage: () => import("@/pages/CompassPage"),
       SubnetsPage: () => import("@/pages/SubnetsPage"),
+      SubnetDetailPage: () => import("@/pages/SubnetDetailPage"),
+      PortfolioPage: () => import("@/pages/PortfolioPage"),
       AlertsPage: () => import("@/pages/AlertsPage"),
       SettingsPage: () => import("@/pages/SettingsPage"),
-      PortfolioPage: () => import("@/pages/PortfolioPage"),
-      InstallPage: () => import("@/pages/InstallPage"),
+      LabPage: () => import("@/pages/LabPage"),
       AuthPage: () => import("@/pages/AuthPage"),
+      InstallPage: () => import("@/pages/InstallPage"),
     };
 
     for (const name of FROZEN_UI_PAGES) {
       const mod = await pageModules[name]();
       expect(mod).toBeDefined();
-      // Each page must have a default export (the component)
       expect(mod.default).toBeDefined();
       expect(typeof mod.default).toBe("function");
     }
   });
 
   it("frozen routes list matches expected count", () => {
-    expect(FROZEN_ROUTES).toHaveLength(7);
+    expect(FROZEN_ROUTES).toHaveLength(8);
   });
 
   it("frozen nav count is stable", () => {
@@ -52,22 +47,25 @@ describe("SAFE_REFACTOR_MODE guards", () => {
 
 describe("App route structure snapshot", () => {
   it("App.tsx contains all frozen routes", async () => {
-    // We import the raw module to verify routes are wired
     const appMod = await import("@/App");
     expect(appMod.default).toBeDefined();
   });
 
   it("routes match frozen list exactly", () => {
-    const expected = ["/", "/subnets", "/portfolio", "/alerts", "/settings", "/auth", "/install"];
+    const expected = ["/compass", "/subnets", "/portfolio", "/alerts", "/settings", "/lab", "/auth", "/install"];
     expect([...FROZEN_ROUTES]).toEqual(expected);
   });
 });
 
 describe("Page structural snapshots", () => {
-  it("SettingsPage has expected sections", async () => {
-    // Verify the component exports and structure hasn't changed
+  it("SettingsPage has expected export", async () => {
     const mod = await import("@/pages/SettingsPage");
     expect(mod.default.name).toBe("SettingsPage");
+  });
+
+  it("LabPage has expected export", async () => {
+    const mod = await import("@/pages/LabPage");
+    expect(mod.default.name).toBe("LabPage");
   });
 
   it("InstallPage has expected export", async () => {

@@ -119,7 +119,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               >
                 TAO Sentinel
               </span>
-              <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground/50">
+              <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground">
                 Intelligence Terminal
               </span>
             </div>
@@ -185,7 +185,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   className="flex items-center gap-2 px-1 group"
                 >
                   <span className="text-sm opacity-50 group-hover:opacity-80 transition-opacity">👤</span>
-                  <span className="font-mono text-[9px] text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors truncate">
+                  <span className="font-mono text-[9px] text-muted-foreground group-hover:text-foreground/80 transition-colors truncate">
                     {user.email}
                   </span>
                 </Link>
@@ -194,7 +194,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                     signOut();
                     isMobile && setSidebarOpen(false);
                   }}
-                  className="font-mono text-[9px] tracking-wider text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors px-1"
+                  className="font-mono text-[9px] tracking-wider text-muted-foreground hover:text-foreground/80 transition-colors px-1"
                 >
                   {t("auth.logout")}
                 </button>
@@ -203,7 +203,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               <Link
                 to="/auth"
                 onClick={() => isMobile && setSidebarOpen(false)}
-                className="flex items-center gap-2 px-1 font-mono text-[10px] tracking-wider text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
+                className="flex items-center gap-2 px-1 font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground/80 transition-colors"
               >
                 <span>🔒</span>
                 <span>Connexion</span>
@@ -247,7 +247,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           {/* Right side — contextual slot */}
           <div className="ml-auto flex items-center gap-2">
             <span
-              className="font-mono text-[8px] tracking-wider text-muted-foreground/30 hidden sm:inline"
+              className="font-mono text-[8px] tracking-wider text-muted-foreground hidden sm:inline"
             >
               v4.0
             </span>

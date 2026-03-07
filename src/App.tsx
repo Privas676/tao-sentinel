@@ -14,10 +14,6 @@ import LabPage from "./pages/LabPage";
 import InstallPage from "./pages/InstallPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
-import AlienGauge from "./pages/AlienGauge";
-import MethodologyPage from "./pages/MethodologyPage";
-import QuantDiagnosticsPage from "./pages/QuantDiagnosticsPage";
-import RadarPage from "./pages/RadarPage";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -29,12 +25,14 @@ function AppRoutes() {
   return (
     <AppShell>
       <Routes>
-        {/* ── Core routes ── */}
+        {/* ── Core decision pages ── */}
         <Route path="/compass" element={<CompassPage />} />
         <Route path="/subnets" element={<SubnetsPage />} />
         <Route path="/subnets/:id" element={<SubnetDetailPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
+
+        {/* ── Utility ── */}
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/lab" element={<LabPage />} />
 
