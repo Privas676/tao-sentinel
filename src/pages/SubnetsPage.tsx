@@ -325,7 +325,7 @@ export default function SubnetsPage() {
     </th>
   );
 
-  const total = countRentre + countHold + countSors;
+  
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
