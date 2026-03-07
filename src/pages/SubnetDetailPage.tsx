@@ -423,7 +423,7 @@ export default function SubnetDetailPage() {
                 <span className="font-mono text-[13px] font-bold" style={{ color: profile.color }}>{fr ? profile.labelFr : profile.label}</span>
                 <span className="font-mono text-[10px] text-muted-foreground">— Fit {fitScore(s)}/100</span>
               </div>
-              <p className="font-mono text-[11px] text-foreground/65 leading-relaxed mb-4">
+              <p className="font-mono text-[11px] text-muted-foreground leading-relaxed mb-4">
                 {fr ? profile.descFr : profile.desc}
               </p>
 
