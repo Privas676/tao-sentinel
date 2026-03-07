@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
           active_miners: chain.active_miners,
           active_validators: chain.active_validators,
           max_neurons: chain.max_neurons ?? chain.max_n ?? chain.max_uids,
-          total_neurons: chain.total_neurons,
+          total_neurons: chain.total_neurons ?? chain.n,
           total_stake: chain.total_stake,
           alpha_staked: chain.alpha_staked,
           validator_weight: chain.validator_weight,
@@ -112,6 +112,18 @@ Deno.serve(async (req) => {
           net_flow_1_day: chain.net_flow_1_day,
           net_flow_7_days: chain.net_flow_7_days,
           net_flow_30_days: chain.net_flow_30_days,
+          // Additional Taostats fields for accuracy
+          max_validators: chain.max_validators,
+          adjustment_interval: chain.adjustment_interval,
+          serving_rate_limit: chain.serving_rate_limit,
+          burn_next_interval: chain.burn_next_interval,
+          recycled_for_reg: chain.recycled_for_reg,
+          pow_reg_allowed: chain.pow_reg_allowed,
+          reg_allowed: chain.reg_allowed,
+          kappa: chain.kappa,
+          bonds_moving_average: chain.bonds_moving_average,
+          activity_cutoff: chain.activity_cutoff,
+          weight_set_rate_limit: chain.weight_set_rate_limit,
         } : null,
       };
 

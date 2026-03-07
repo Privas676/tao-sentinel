@@ -239,8 +239,9 @@ export function useStakeAnalytics() {
         const validatorsActive = Math.max(row.validators_active || 0, Number(chain.active_validators ?? 0));
         const liquidity = raoToTao(rp.liquidity_raw || rp.liquidity);
 
-        // UID data: active_keys = registered UIDs, max_neurons = max UIDs
-        const uidUsed = Number(chain.active_keys ?? chain.active_uids ?? rp.active_uids ?? 0);
+        // UID data: active_keys = total registered UIDs (matches Taostats "Number of Active UIDs")
+        // total_neurons as fallback, then active_keys, then active_uids
+        const uidUsed = Number(chain.total_neurons ?? chain.active_keys ?? chain.active_uids ?? rp.active_uids ?? 0);
         const uidMax = Number(chain.max_neurons ?? chain.max_n ?? rp.max_n ?? 0);
 
         const inflow = Number(row.large_wallet_inflow || 0);
