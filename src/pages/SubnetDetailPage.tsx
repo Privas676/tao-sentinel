@@ -617,7 +617,7 @@ function QuadrantBlock({ title, items, tone, position }: { title: string; items:
         {title}
       </div>
       {items.length === 0 ? (
-        <div className="font-mono text-[10px] text-muted-foreground/20 italic">—</div>
+        <div className="font-mono text-[10px] text-muted-foreground italic">—</div>
       ) : (
         <div className="space-y-1.5">
           {items.map((item, i) => (
