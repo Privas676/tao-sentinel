@@ -464,7 +464,7 @@ export default function PortfolioPage() {
                             <button onClick={() => handleSell(r.netuid)} className="font-mono text-[8px] px-2 py-1 rounded border border-destructive/15 text-destructive/60 hover:text-destructive transition-colors">
                               {fr ? "Vendre" : "Sell"}
                             </button>
-                            <button onClick={() => portfolio.removePosition(r.netuid)} className="font-mono text-[8px] px-1.5 py-1 rounded border border-border text-muted-foreground/25 hover:text-muted-foreground/60 transition-colors">✕</button>
+                            <button onClick={() => portfolio.removePosition(r.netuid)} className="font-mono text-[8px] px-1.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground transition-colors">✕</button>
                           </div>
                         </td>
                       </tr>
