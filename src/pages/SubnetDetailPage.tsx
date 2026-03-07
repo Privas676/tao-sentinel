@@ -196,7 +196,7 @@ export default function SubnetDetailPage() {
             </div>
 
             {/* Thesis + Invalidation — prominent, side by side */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6">
               <div className="rounded-lg p-4 border border-primary/10 bg-primary/[0.02]">
                 <div className="font-mono text-[7px] tracking-[0.2em] uppercase mb-2.5" style={{ color: GO }}>{fr ? "THÈSE" : "THESIS"}</div>
                 {verdict?.positiveReasons && verdict.positiveReasons.length > 0 ? (
