@@ -1,7 +1,6 @@
-import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from "react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
-import { VerdictRow, verdictColor } from "@/components/VerdictBadge";
+import { VerdictRow } from "@/components/VerdictBadge";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -79,28 +78,22 @@ function TaoPriceTicker({ taoUsd, scoreTimestamp }: { taoUsd: number | null; sco
   );
 }
 
-/* ─── Collapsible Section ─── */
-function CollapsibleSection({ title, icon, color, lineColor, badge, children, defaultOpen = true }: {
-  title: string; icon: string; color: string; lineColor: string;
-  badge?: ReactNode; children: ReactNode; defaultOpen?: boolean;
+/* ─── Section Header ─── */
+function SectionHeader({ title, icon, accentVar = "--gold", badge }: {
+  title: string; icon: string; accentVar?: string; badge?: ReactNode;
 }) {
-  const isMobile = useIsMobile();
-  const [open, setOpen] = useState(!isMobile);
-  useEffect(() => { setOpen(!isMobile || defaultOpen === false ? defaultOpen : !isMobile); }, [isMobile]);
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <div className="flex items-center gap-2 mb-3 cursor-pointer group select-none">
-          <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color }}>
-            {icon} {title}
-          </span>
-          <div className="flex-1 h-px" style={{ background: lineColor }} />
-          {badge}
-          <span className="font-mono text-[10px] transition-transform" style={{ color: "hsl(var(--muted-foreground))", transform: open ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
-        </div>
-      </CollapsibleTrigger>
-      <CollapsibleContent>{children}</CollapsibleContent>
-    </Collapsible>
+    <div className="flex items-center gap-2.5 mb-4">
+      <span style={{ fontSize: 14 }}>{icon}</span>
+      <span
+        className="font-mono tracking-[0.2em] uppercase font-bold"
+        style={{ fontSize: 11, color: `hsla(var(${accentVar}), 0.7)` }}
+      >
+        {title}
+      </span>
+      <div className="flex-1 h-px" style={{ background: `hsla(var(${accentVar}), 0.08)` }} />
+      {badge}
+    </div>
   );
 }
 
@@ -282,190 +275,184 @@ export default function CompassPage() {
   const scLabel = t(`sc.${smartCapital.state.toLowerCase()}` as any);
   const macroRecLabel = t(`macro.${macroRec.toLowerCase()}` as any);
 
-  // ── Gauge geometry ──
-  const SIZE = isMobile ? 260 : 360;
-  const CX = SIZE / 2, CY = SIZE / 2;
-  const R_OUTER = isMobile ? 100 : 150;
-  const R_INNER = isMobile ? 78 : 120;
   const oppGlobal = opportunityColor(globalOpp);
   const rskGlobal = riskColor(globalRisk);
-  const oppAngle = (globalOpp / 100) * 270;
-  const riskAngle = (globalRisk / 100) * 270;
-
-  function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
-    const rad = (a: number) => ((a - 90) * Math.PI) / 180;
-    const x1 = cx + r * Math.cos(rad(startAngle));
-    const y1 = cy + r * Math.sin(rad(startAngle));
-    const x2 = cx + r * Math.cos(rad(endAngle));
-    const y2 = cy + r * Math.sin(rad(endAngle));
-    const large = endAngle - startAngle > 180 ? 1 : 0;
-    return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
-  }
 
   const sections = [
-    { title: "🟢 RENTRE", items: topRentre, count: countRentre, color: "rgba(76,175,80,0.5)" },
-    { title: "🟡 HOLD", items: topHold, count: countHold, color: "rgba(255,193,7,0.45)" },
-    { title: "🔴 SORS", items: topSors, count: countSors, color: "rgba(229,57,53,0.5)" },
+    { title: "RENTRE", emoji: "🟢", items: topRentre, count: countRentre, color: "rgba(76,175,80,0.75)", bg: "rgba(76,175,80,0.04)", border: "rgba(76,175,80,0.12)" },
+    { title: "HOLD", emoji: "🟡", items: topHold, count: countHold, color: "rgba(255,193,7,0.75)", bg: "rgba(255,193,7,0.04)", border: "rgba(255,193,7,0.12)" },
+    { title: "SORS", emoji: "🔴", items: topSors, count: countSors, color: "rgba(229,57,53,0.75)", bg: "rgba(229,57,53,0.04)", border: "rgba(229,57,53,0.12)" },
   ];
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
-      <style>{`@keyframes opp-sweep { 0% { opacity: 0.3; } 50% { opacity: 0.6; } 100% { opacity: 0.3; } }`}</style>
+      <div className="px-4 sm:px-6 py-4 max-w-[960px] mx-auto space-y-6">
 
-      <div className="px-4 sm:px-6 py-4 max-w-[960px] mx-auto">
-
-        {/* ═══ HEADER ROW ═══ */}
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <TaoPriceTicker taoUsd={taoUsd} scoreTimestamp={scoreTimestamp} />
-          <DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" />
-          {killSwitch.active && (
-            <span className="font-mono text-[9px] px-2 py-0.5 rounded animate-pulse" style={{ background: "hsla(var(--destructive), 0.1)", color: "hsl(var(--destructive))", border: "1px solid hsla(var(--destructive), 0.2)" }}>
-              🛡 SAFE MODE
+        {/* ═══════════════════════════════ */}
+        {/* ═══ 1. HERO DÉCISIONNEL ═══════ */}
+        {/* ═══════════════════════════════ */}
+        <section>
+          {/* Status bar */}
+          <div className="flex items-center gap-2 mb-5 flex-wrap">
+            <TaoPriceTicker taoUsd={taoUsd} scoreTimestamp={scoreTimestamp} />
+            <DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" />
+            {killSwitch.active && (
+              <span className="font-mono text-[9px] px-2 py-0.5 rounded animate-pulse" style={{ background: "hsla(var(--destructive), 0.1)", color: "hsl(var(--destructive))", border: "1px solid hsla(var(--destructive), 0.2)" }}>
+                🛡 SAFE MODE
+              </span>
+            )}
+            <span className="ml-auto font-mono text-[8px] text-muted-foreground/30">
+              {scoresList.length} subnets
             </span>
-          )}
-          <span className="ml-auto font-mono text-[8px] text-muted-foreground/30">
-            {scoresList.length} subnets
-          </span>
-        </div>
+          </div>
 
-        {/* ═══ SENTINEL INDEX + GAUGE ═══ */}
-        <div className="rounded-2xl p-4 sm:p-6 mb-4" style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.06)" }}>
-          <div className="flex flex-col items-center">
-            {/* Circular gauge */}
-            <div className="relative" style={{ width: SIZE, height: SIZE }}>
-              <div className="absolute inset-0 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, hsla(var(--gold), 0.06) 0%, transparent 60%)", transform: "scale(1.2)" }} />
-              <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-                {/* Tick marks */}
-                {Array.from({ length: 54 }, (_, i) => {
-                  const angleDeg = (i * 5) - 135;
-                  if (angleDeg > 135) return null;
-                  const rad = ((angleDeg - 90) * Math.PI) / 180;
-                  const isMajor = i % 9 === 0;
-                  const r1 = R_OUTER + 4; const r2 = R_OUTER + (isMajor ? 10 : 6);
-                  return <line key={`ot-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)} x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)} stroke={isMajor ? "hsla(var(--gold), 0.25)" : "hsla(var(--gold), 0.08)"} strokeWidth={isMajor ? 1.5 : 0.7} strokeLinecap="round" />;
-                })}
-                {Array.from({ length: 54 }, (_, i) => {
-                  const angleDeg = (i * 5) - 135;
-                  if (angleDeg > 135) return null;
-                  const rad = ((angleDeg - 90) * Math.PI) / 180;
-                  const isMajor = i % 9 === 0;
-                  const r1 = R_INNER - 4; const r2 = R_INNER - (isMajor ? 8 : 5);
-                  return <line key={`it-${i}`} x1={CX + r1 * Math.cos(rad)} y1={CY + r1 * Math.sin(rad)} x2={CX + r2 * Math.cos(rad)} y2={CY + r2 * Math.sin(rad)} stroke={isMajor ? "hsla(var(--destructive), 0.2)" : "hsla(var(--destructive), 0.06)"} strokeWidth={isMajor ? 1.2 : 0.5} strokeLinecap="round" />;
-                })}
-                {/* Arcs */}
-                <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke="hsla(var(--gold), 0.05)" strokeWidth={isMobile ? 5 : 7} />
-                {oppAngle > 0 && <path d={describeArc(CX, CY, R_OUTER, -135, -135 + oppAngle)} fill="none" stroke={oppGlobal} strokeWidth={isMobile ? 5 : 7} strokeLinecap="round" style={{ opacity: 0.55, animation: "opp-sweep 4s ease-in-out infinite" }} />}
-                <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="hsla(var(--destructive), 0.05)" strokeWidth={isMobile ? 7 : 9} />
-                {riskAngle > 0 && <path d={describeArc(CX, CY, R_INNER, -135, -135 + riskAngle)} fill="none" stroke={rskGlobal} strokeWidth={isMobile ? 7 : 9} strokeLinecap="round" style={{ opacity: 0.55 }} />}
-              </svg>
+          {/* Hero card */}
+          <div
+            className="rounded-2xl p-5 sm:p-8"
+            style={{
+              background: "linear-gradient(180deg, hsla(var(--gold), 0.03) 0%, hsla(0,0%,100%,0.008) 100%)",
+              border: "1px solid hsla(var(--gold), 0.08)",
+            }}
+          >
+            <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-10">
+              {/* Left: Sentinel Index score */}
+              <div className="flex flex-col items-center flex-shrink-0">
+                <span className="font-mono tracking-[0.25em] uppercase text-muted-foreground/35" style={{ fontSize: 8 }}>
+                  Sentinel Index
+                </span>
+                <span
+                  className="font-mono font-bold leading-none mt-1"
+                  style={{
+                    fontSize: isMobile ? 56 : 72,
+                    color: sentinelIndexColor(sentinelIndex),
+                    textShadow: `0 0 40px hsla(var(--gold), 0.12)`,
+                  }}
+                >
+                  {sentinelIndex}
+                </span>
+                <span
+                  className="font-mono font-bold tracking-[0.2em] mt-1"
+                  style={{ fontSize: isMobile ? 10 : 12, color: sentinelIndexColor(sentinelIndex), opacity: 0.65 }}
+                >
+                  {sentinelLabel}
+                </span>
+              </div>
 
-              {/* Center HUD */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="flex flex-col items-center text-center" style={{ maxWidth: isMobile ? 140 : 200 }}>
-                  <span className="font-mono tracking-[0.2em] uppercase text-muted-foreground/40" style={{ fontSize: isMobile ? 7 : 8 }}>
-                    Sentinel Index
-                  </span>
-                  <span className="font-mono font-bold leading-none mt-1" style={{
-                    fontSize: isMobile ? 36 : 52, color: sentinelIndexColor(sentinelIndex),
-                    textShadow: "0 0 30px hsla(var(--gold), 0.15)",
-                  }}>
-                    {sentinelIndex}
-                  </span>
-                  <span className="font-mono font-bold tracking-wider mt-0.5" style={{ fontSize: isMobile ? 9 : 11, color: sentinelIndexColor(sentinelIndex), opacity: 0.7 }}>
-                    {sentinelLabel}
-                  </span>
-                  <div className="flex items-center mt-2" style={{ gap: isMobile ? 6 : 10 }}>
-                    <div className="flex flex-col items-center">
-                      <span className="font-mono" style={{ color: "hsla(var(--gold), 0.35)", fontSize: isMobile ? 6 : 7, letterSpacing: "0.15em" }}>OPP</span>
-                      <span className="font-mono font-bold" style={{ color: oppGlobal, fontSize: isMobile ? 13 : 16 }}>{globalOpp}</span>
-                    </div>
-                    <div className="w-px bg-border" style={{ height: isMobile ? 12 : 16 }} />
-                    <div className="flex flex-col items-center">
-                      <span className="font-mono" style={{ color: "hsla(var(--destructive), 0.35)", fontSize: isMobile ? 6 : 7, letterSpacing: "0.15em" }}>RISK</span>
-                      <span className="font-mono font-bold" style={{ color: rskGlobal, fontSize: isMobile ? 13 : 16 }}>{globalRisk}</span>
-                    </div>
-                    <div className="w-px bg-border" style={{ height: isMobile ? 12 : 16 }} />
-                    <div className="flex flex-col items-center">
-                      <span className="font-mono text-muted-foreground/25" style={{ fontSize: isMobile ? 6 : 7, letterSpacing: "0.15em" }}>SC</span>
-                      <span className="font-mono font-bold" style={{
-                        color: smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "hsl(var(--muted-foreground))",
-                        fontSize: isMobile ? 7 : 9,
-                      }}>
-                        {scLabel}
-                      </span>
+              {/* Center divider */}
+              <div className="hidden sm:block w-px self-stretch" style={{ background: "hsla(var(--gold), 0.08)" }} />
+              <div className="sm:hidden w-full h-px" style={{ background: "hsla(var(--gold), 0.08)" }} />
+
+              {/* Right: Key metrics + Macro */}
+              <div className="flex-1 flex flex-col items-center sm:items-start gap-4 w-full">
+                {/* Metrics row */}
+                <div className="flex items-center justify-center sm:justify-start gap-5 sm:gap-6 w-full">
+                  <MetricPill label="OPP" value={globalOpp} color={oppGlobal} />
+                  <MetricPill label="RISK" value={globalRisk} color={rskGlobal} />
+                  <MetricPill label="SC" value={scLabel} color={smartCapital.state === "ACCUMULATION" ? "rgba(76,175,80,0.85)" : smartCapital.state === "DISTRIBUTION" ? "rgba(229,57,53,0.85)" : "hsl(var(--muted-foreground))"} small />
+                  <MetricPill label={fr ? "Stabilité" : "Stability"} value={`${globalStability}%`} color={stabilityColor(globalStability)} />
+                  <MetricPill label="Data" value={`${confianceScore}%`} color={confianceColor(confianceScore)} />
+                </div>
+
+                {/* Macro recommendation badge */}
+                <div
+                  className="flex items-center gap-2.5 px-4 py-2 rounded-xl self-center sm:self-start"
+                  style={{
+                    background: macroBg(macroRec),
+                    border: `1.5px solid ${macroBorder(macroRec)}`,
+                    boxShadow: `0 0 24px ${macroBg(macroRec)}`,
+                  }}
+                >
+                  <span style={{ fontSize: isMobile ? 14 : 18 }}>{macroIcon(macroRec)}</span>
+                  <div>
+                    <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground/30">{t("macro.label")}</div>
+                    <div className="font-mono font-bold tracking-[0.15em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 11 : 14 }}>
+                      {macroRecLabel}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* Macro recommendation */}
-            <div className="flex flex-col items-center mt-2">
-              <span className="font-mono tracking-[0.15em] uppercase mb-2 text-muted-foreground/25" style={{ fontSize: 8 }}>
-                {t("macro.label")}
-              </span>
-              <div className="flex items-center gap-3 px-5 py-2.5 rounded-xl" style={{
-                background: macroBg(macroRec),
-                border: `2px solid ${macroBorder(macroRec)}`,
-                boxShadow: `0 0 20px ${macroBg(macroRec)}`,
-              }}>
-                <span style={{ fontSize: isMobile ? 16 : 20 }}>{macroIcon(macroRec)}</span>
-                <span className="font-mono font-bold tracking-[0.2em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 12 : 16 }}>
-                  {macroRecLabel}
-                </span>
-              </div>
-            </div>
-
-            {/* Sub-metrics */}
-            <div className="flex items-center justify-center gap-6 mt-4">
-              <div className="flex flex-col items-center">
-                <span className="font-mono text-muted-foreground/30" style={{ fontSize: 8, letterSpacing: "0.12em" }}>{fr ? "Stabilité" : "Stability"}</span>
-                <span className="font-mono font-bold" style={{ color: stabilityColor(globalStability), fontSize: isMobile ? 14 : 18 }}>{globalStability}%</span>
-              </div>
-              <div className="w-px h-5 bg-border" />
-              <div className="flex flex-col items-center">
-                <span className="font-mono text-muted-foreground/30" style={{ fontSize: 8, letterSpacing: "0.12em" }}>{t("data.confiance")}</span>
-                <span className="font-mono font-bold" style={{ color: confianceColor(confianceScore), fontSize: isMobile ? 14 : 18 }}>{confianceScore}%</span>
-              </div>
-            </div>
           </div>
-        </div>
+        </section>
 
-        {/* ═══ DRIVERS DU MOMENT ═══ */}
-        <CollapsibleSection title={fr ? "DRIVERS DU MOMENT" : "CURRENT DRIVERS"} icon="📊" color="hsla(var(--gold), 0.6)" lineColor="hsla(var(--gold), 0.1)">
-          <div className="flex flex-wrap gap-2 mb-4">
+        {/* ═══════════════════════════════ */}
+        {/* ═══ 2. DRIVERS DU MOMENT ══════ */}
+        {/* ═══════════════════════════════ */}
+        <section>
+          <SectionHeader
+            title={fr ? "DRIVERS DU MOMENT" : "CURRENT DRIVERS"}
+            icon="📊"
+          />
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {drivers.map(d => (
-              <div key={d.label} className="flex items-center gap-2 px-3 py-2 rounded-lg"
-                style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
-                <span style={{ fontSize: 12 }}>{d.icon}</span>
-                <span className="font-mono text-[9px] tracking-wider text-muted-foreground/40">{d.label}</span>
-                <span className="font-mono text-[11px] font-bold" style={{ color: d.color }}>{d.value}</span>
+              <div
+                key={d.label}
+                className="rounded-lg px-3 py-3 flex flex-col items-center gap-1"
+                style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.05)" }}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span style={{ fontSize: 11 }}>{d.icon}</span>
+                  <span className="font-mono text-[8px] tracking-wider text-muted-foreground/40 uppercase">{d.label}</span>
+                </div>
+                <span className="font-mono text-sm font-bold" style={{ color: d.color }}>{d.value}</span>
+                {/* Mini bar */}
+                <div className="w-full h-[3px] rounded-full overflow-hidden" style={{ background: "hsla(0,0%,100%,0.04)" }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min(d.num, 100)}%`, background: d.color }}
+                  />
+                </div>
               </div>
             ))}
           </div>
-        </CollapsibleSection>
+        </section>
 
-        {/* ═══ DECISION ENGINE ═══ */}
-        <CollapsibleSection title="DECISION ENGINE" icon="⚙" color="hsla(var(--gold), 0.6)" lineColor="hsla(var(--gold), 0.1)"
-          badge={
-            <div className="flex gap-2">
-              {sections.map(s => (
-                <span key={s.title} className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: `${s.color}15`, color: s.color, border: `1px solid ${s.color}40` }}>
-                  {s.count}
-                </span>
-              ))}
-            </div>
-          }>
+        {/* ═══════════════════════════════ */}
+        {/* ═══ 3. ACTIONS PRIORITAIRES ═══ */}
+        {/* ═══════════════════════════════ */}
+        <section>
+          <SectionHeader
+            title={fr ? "ACTIONS PRIORITAIRES" : "PRIORITY ACTIONS"}
+            icon="⚙"
+            badge={
+              <div className="flex gap-1.5">
+                {sections.map(s => (
+                  <span
+                    key={s.title}
+                    className="font-mono text-[9px] px-2 py-0.5 rounded font-bold"
+                    style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}
+                  >
+                    {s.emoji} {s.count}
+                  </span>
+                ))}
+              </div>
+            }
+          />
           {verdictLoading ? (
-            <div className="py-8 text-center font-mono text-[10px] text-muted-foreground/20">Chargement...</div>
+            <div className="py-10 text-center font-mono text-[10px] text-muted-foreground/20">
+              {fr ? "Chargement…" : "Loading…"}
+            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {sections.map(s => (
-                <div key={s.title} className="rounded-xl" style={{ background: "hsla(0,0%,100%,0.01)", border: "1px solid hsla(0,0%,100%,0.04)" }}>
-                  <div className="px-3 py-2 border-b" style={{ borderColor: "hsla(0,0%,100%,0.04)" }}>
-                    <span className="font-mono text-[10px] font-bold tracking-wider" style={{ color: s.color }}>{s.title}</span>
-                    <span className="font-mono text-[8px] text-muted-foreground/25 ml-2">({s.count})</span>
+                <div
+                  key={s.title}
+                  className="rounded-xl overflow-hidden"
+                  style={{ background: s.bg, border: `1px solid ${s.border}` }}
+                >
+                  {/* Column header */}
+                  <div
+                    className="flex items-center justify-between px-3 py-2.5"
+                    style={{ borderBottom: `1px solid ${s.border}` }}
+                  >
+                    <span className="font-mono text-[11px] font-bold tracking-wider" style={{ color: s.color }}>
+                      {s.emoji} {s.title}
+                    </span>
+                    <span className="font-mono text-[9px] text-muted-foreground/30">
+                      {s.count} subnet{s.count !== 1 ? "s" : ""}
+                    </span>
                   </div>
+                  {/* Verdict rows */}
                   {s.items.length > 0 ? s.items.slice(0, 5).map(v => (
                     <VerdictRow
                       key={v.netuid}
@@ -478,65 +465,124 @@ export default function CompassPage() {
                       negativeReasons={v.negativeReasons}
                     />
                   )) : (
-                    <div className="py-4 text-center font-mono text-[10px] text-muted-foreground/15">—</div>
+                    <div className="py-5 text-center font-mono text-[10px] text-muted-foreground/15">
+                      {fr ? "Aucun subnet" : "No subnets"}
+                    </div>
                   )}
                 </div>
               ))}
             </div>
           )}
-        </CollapsibleSection>
+        </section>
 
-        {/* ═══ RISQUES CRITIQUES ═══ */}
+        {/* ═══════════════════════════════ */}
+        {/* ═══ 4. RISQUES CRITIQUES ══════ */}
+        {/* ═══════════════════════════════ */}
         {criticalRisks.length > 0 && (
-          <CollapsibleSection title={fr ? "RISQUES CRITIQUES" : "CRITICAL RISKS"} icon="🚨" color="hsla(var(--destructive), 0.6)" lineColor="hsla(var(--destructive), 0.1)"
-            badge={
-              <span className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: "hsla(var(--destructive), 0.08)", color: "hsl(var(--destructive))", border: "1px solid hsla(var(--destructive), 0.2)" }}>
-                {criticalRisks.length}
-              </span>
-            }>
-            <div className="rounded-xl overflow-hidden mb-4" style={{ background: "hsla(var(--destructive), 0.02)", border: "1px solid hsla(var(--destructive), 0.08)" }}>
-              {criticalRisks.map(s => {
+          <section>
+            <SectionHeader
+              title={fr ? "RISQUES CRITIQUES" : "CRITICAL RISKS"}
+              icon="🚨"
+              accentVar="--destructive"
+              badge={
+                <span className="font-mono text-[9px] px-2 py-0.5 rounded font-bold" style={{ background: "hsla(var(--destructive), 0.08)", color: "hsl(var(--destructive))", border: "1px solid hsla(var(--destructive), 0.2)" }}>
+                  {criticalRisks.length}
+                </span>
+              }
+            />
+            <div
+              className="rounded-xl overflow-hidden"
+              style={{ background: "hsla(var(--destructive), 0.02)", border: "1px solid hsla(var(--destructive), 0.08)" }}
+            >
+              {criticalRisks.map((s, idx) => {
                 const tags: { label: string; color: string }[] = [];
                 if (s.isOverridden) tags.push({ label: "⛔ OVERRIDE", color: "rgba(229,57,53,0.9)" });
                 if (s.delistCategory === "DEPEG_PRIORITY") tags.push({ label: "🔴 DEREG", color: "rgba(229,57,53,0.9)" });
                 else if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") tags.push({ label: "🟠 DELIST", color: "rgba(255,152,0,0.9)" });
                 if (s.depegProbability >= 50) tags.push({ label: `DEPEG ${s.depegProbability}%`, color: "rgba(255,152,0,0.9)" });
                 return (
-                  <div key={s.netuid} className="flex items-center gap-2 py-2.5 px-3 cursor-pointer hover:bg-white/[0.02] transition-all"
-                    style={{ borderBottom: "1px solid hsla(var(--destructive), 0.06)" }}
-                    onClick={() => setPanelSignal(s)}>
-                    <span className="font-mono font-bold text-[11px]" style={{ color: "hsl(var(--gold))", width: 55 }}>SN-{s.netuid}</span>
+                  <div
+                    key={s.netuid}
+                    className="flex items-center gap-2 py-2.5 px-3 cursor-pointer hover:bg-white/[0.02] transition-all"
+                    style={{ borderBottom: idx < criticalRisks.length - 1 ? "1px solid hsla(var(--destructive), 0.06)" : "none" }}
+                    onClick={() => setPanelSignal(s)}
+                  >
+                    <span className="font-mono font-bold text-[11px]" style={{ color: "hsl(var(--gold))", minWidth: 50 }}>SN-{s.netuid}</span>
                     <span className="font-mono text-[10px] truncate flex-1 text-muted-foreground/40">{s.name}</span>
-                    <div className="flex gap-1">
-                      {tags.map((t, i) => (
-                        <span key={i} className="font-mono text-[8px] px-1.5 py-0.5 rounded font-bold"
-                          style={{ background: `${t.color}12`, color: t.color, border: `1px solid ${t.color}30` }}>
-                          {t.label}
+                    <div className="flex gap-1 flex-shrink-0">
+                      {tags.map((tag, i) => (
+                        <span
+                          key={i}
+                          className="font-mono text-[8px] px-1.5 py-0.5 rounded font-bold"
+                          style={{ background: `${tag.color}12`, color: tag.color, border: `1px solid ${tag.color}30` }}
+                        >
+                          {tag.label}
                         </span>
                       ))}
                     </div>
-                    <span className="font-mono text-[11px] font-bold w-7 text-right" style={{ color: riskColor(s.risk) }}>{s.risk}</span>
+                    <span className="font-mono text-[11px] font-bold w-7 text-right flex-shrink-0" style={{ color: riskColor(s.risk) }}>
+                      {s.risk}
+                    </span>
                   </div>
                 );
               })}
             </div>
-          </CollapsibleSection>
+          </section>
         )}
 
-        {/* ═══ QUICK LINKS ═══ */}
-        <div className="flex gap-3 mt-2 mb-8">
-          <Link to="/subnets" className="flex-1 text-center font-mono text-[10px] tracking-wider py-3 rounded-lg transition-all hover:scale-[1.01]"
-            style={{ background: "hsla(var(--gold), 0.04)", color: "hsl(var(--gold))", border: "1px solid hsla(var(--gold), 0.08)" }}>
-            {fr ? "Explorer les subnets →" : "Explore subnets →"}
-          </Link>
-          <Link to="/lab" className="flex-1 text-center font-mono text-[10px] tracking-wider py-3 rounded-lg transition-all hover:scale-[1.01]"
-            style={{ background: "hsla(0,0%,100%,0.02)", color: "hsl(var(--muted-foreground))", border: "1px solid hsla(0,0%,100%,0.06)" }}>
-            {fr ? "Ouvrir le Lab →" : "Open Lab →"}
-          </Link>
-        </div>
+        {/* ═══════════════════════════════ */}
+        {/* ═══ 5. CTA NAVIGATION ═════════ */}
+        {/* ═══════════════════════════════ */}
+        <section className="pb-8">
+          <div className="grid grid-cols-2 gap-3">
+            <Link
+              to="/subnets"
+              className="group flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]"
+              style={{
+                background: "hsla(var(--gold), 0.04)",
+                border: "1px solid hsla(var(--gold), 0.1)",
+              }}
+            >
+              <span style={{ fontSize: 18 }}>📋</span>
+              <span className="text-[10px] tracking-wider font-bold" style={{ color: "hsl(var(--gold))" }}>
+                {fr ? "Subnet Intelligence" : "Subnet Intelligence"}
+              </span>
+              <span className="text-[8px] text-muted-foreground/30">
+                {fr ? "Table de décision complète" : "Full decision table"}
+              </span>
+            </Link>
+            <Link
+              to="/lab"
+              className="group flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]"
+              style={{
+                background: "hsla(0,0%,100%,0.02)",
+                border: "1px solid hsla(0,0%,100%,0.06)",
+              }}
+            >
+              <span style={{ fontSize: 18 }}>🔬</span>
+              <span className="text-[10px] tracking-wider font-bold text-muted-foreground/60">
+                {fr ? "Laboratoire" : "Lab"}
+              </span>
+              <span className="text-[8px] text-muted-foreground/30">
+                {fr ? "Radar & diagnostics avancés" : "Radar & advanced diagnostics"}
+              </span>
+            </Link>
+          </div>
+        </section>
+
       </div>
 
       <SubnetQuickPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} />
+    </div>
+  );
+}
+
+/* ─── Metric Pill (compact reusable) ─── */
+function MetricPill({ label, value, color, small }: { label: string; value: string | number; color: string; small?: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <span className="font-mono text-muted-foreground/30 uppercase" style={{ fontSize: 7, letterSpacing: "0.12em" }}>{label}</span>
+      <span className="font-mono font-bold" style={{ color, fontSize: small ? 9 : 14 }}>{value}</span>
     </div>
   );
 }
