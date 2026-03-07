@@ -223,8 +223,8 @@ export default function PortfolioPage() {
 
 
 
-  // ── UNIFIED SCORES (single source of truth) ──
   const { scores, scoreTimestamp, sparklines, subnetList, dataAlignment, dataAgeDebug, taoUsd } = useSubnetScores();
+  const { verdicts } = useSubnetVerdicts();
 
   // Format helpers — prices and values follow different rules
   const fmtTaoValue = (taoAmount: number) => {
