@@ -94,21 +94,6 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
   const thesis = verdict?.positiveReasons?.slice(0, 3) || [];
   const invalidation = verdict?.negativeReasons?.slice(0, 3) || [];
 
-  /* Build "3 reasons" dynamically */
-  const reasons: { icon: string; text: string; tone: "go" | "warn" | "break" }[] = [];
-  if (row.opp > 55) reasons.push({ icon: "◆", text: fr ? `Opportunité ${row.opp}/100` : `Opportunity ${row.opp}/100`, tone: "go" });
-  if (row.momentumScore >= 55) reasons.push({ icon: "▲", text: fr ? `Momentum haussier (${Math.round(row.momentumScore)})` : `Bullish momentum (${Math.round(row.momentumScore)})`, tone: "go" });
-  if (row.convictionLevel === "HIGH") reasons.push({ icon: "★", text: fr ? "Conviction haute" : "High conviction", tone: "go" });
-  if (row.liquidityLevel === "HIGH") reasons.push({ icon: "●", text: fr ? "Liquidité solide" : "Strong liquidity", tone: "go" });
-  if (row.structureLevel === "HEALTHY") reasons.push({ icon: "✓", text: fr ? "Structure saine" : "Healthy structure", tone: "go" });
-  if (row.risk > 60) reasons.push({ icon: "⚠", text: fr ? `Risque élevé (${row.risk})` : `High risk (${row.risk})`, tone: "warn" });
-  if (row.risk > 75) reasons.push({ icon: "🔴", text: fr ? "Zone dangereuse" : "Danger zone", tone: "break" });
-  if (row.liquidityLevel === "LOW") reasons.push({ icon: "○", text: fr ? "Liquidité faible" : "Low liquidity", tone: "break" });
-  if (row.structureLevel === "CONCENTRATED") reasons.push({ icon: "✕", text: fr ? "Structure concentrée" : "Concentrated structure", tone: "warn" });
-  const top3 = reasons.slice(0, 3);
-
-  const toneColor = (t: "go" | "warn" | "break") =>
-    t === "go" ? "hsl(var(--signal-go))" : t === "warn" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
 
   /* Alerts */
   const alerts: { icon: string; text: string; color: string }[] = [];
