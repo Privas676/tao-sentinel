@@ -507,7 +507,7 @@ export default function CompassPage() {
                     <span className="font-mono text-[9px] font-bold" style={{ color: g.color }}>{s.opp}</span>
                   </div>
                 )) : (
-                  <div className="py-3 text-center font-mono text-[9px] text-muted-foreground/15">—</div>
+                  <div className="py-3 text-center font-mono text-[9px] text-muted-foreground/65">—</div>
                 )}
               </div>
             ))}
