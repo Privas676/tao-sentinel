@@ -675,11 +675,20 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
     };
   }
 
-  const entryScore = computeEntryScore(input);
-  const holdScore = computeHoldScore(input);
-  const exitRisk = computeExitRisk(input);
-  const confidence = computeConfidence(input, entryScore, holdScore, exitRisk);
-  const allReasons = collectReasons(input, entryScore, holdScore, exitRisk);
+  // Normalize: treat stakeConcentration=0 as "unknown" → moderate default
+  const normalizedInput: VerdictInput = {
+    ...input,
+    snapshot: {
+      ...input.snapshot,
+      stakeConcentration: effectiveConcentration(input.snapshot),
+    },
+  };
+
+  const entryScore = computeEntryScore(normalizedInput);
+  const holdScore = computeHoldScore(normalizedInput);
+  const exitRisk = computeExitRisk(normalizedInput);
+  const confidence = computeConfidence(normalizedInput, entryScore, holdScore, exitRisk);
+  const allReasons = collectReasons(normalizedInput, entryScore, holdScore, exitRisk);
 
   // ── Decision logic ──
   let verdict: Verdict;
