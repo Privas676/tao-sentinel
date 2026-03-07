@@ -481,7 +481,7 @@ export default function SubnetDetailPage() {
               {/* Profile badge */}
               <div className="flex items-center gap-3 mb-4">
                 <span className="font-mono text-[13px] font-bold" style={{ color: profile.color }}>{fr ? profile.labelFr : profile.label}</span>
-                <span className="font-mono text-[10px] text-muted-foreground/50">— Fit {fitScore(s)}/100</span>
+                <span className="font-mono text-[10px] text-muted-foreground">— Fit {fitScore(s)}/100</span>
               </div>
               <p className="font-mono text-[11px] text-foreground/65 leading-relaxed mb-4">
                 {fr ? profile.descFr : profile.desc}
