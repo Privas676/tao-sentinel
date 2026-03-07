@@ -375,7 +375,7 @@ export default function SubnetsPage() {
           icon="📋"
           badge={<DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" />}
           actions={
-            <span className="font-mono text-[8px] text-muted-foreground/65">
+            <span className="font-mono text-[8px] text-muted-foreground">
               {scoresList.length} subnets · {new Date(scoreTimestamp).toLocaleTimeString()}
             </span>
           }
@@ -490,7 +490,7 @@ export default function SubnetsPage() {
                 onChange={v => setStructureFilter(v as StructureFilter)}
               />
             </FilterGroup>
-            <span className="ml-auto font-mono text-[9px] text-muted-foreground/65 self-end pb-0.5">
+             <span className="ml-auto font-mono text-[9px] text-muted-foreground self-end pb-0.5">
               {rows.length} / {scoresList.length} {fr ? "résultats" : "results"}
             </span>
           </div>
@@ -504,10 +504,10 @@ export default function SubnetsPage() {
             <table className="w-full font-mono" style={{ minWidth: 1100 }}>
               <thead>
                 <tr className="bg-muted/20 border-b border-border">
-                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 sticky left-0 z-10 bg-background cursor-pointer" onClick={() => toggleSort("netuid")}>
+                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground sticky left-0 z-10 bg-background cursor-pointer" onClick={() => toggleSort("netuid")}>
                     SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
                   </th>
-                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 sticky left-[44px] z-10 bg-background cursor-pointer" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }} onClick={() => toggleSort("name")}>
+                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground sticky left-[44px] z-10 bg-background cursor-pointer" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }} onClick={() => toggleSort("name")}>
                     Subnet {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
                   </th>
                   <SortHeader col="action" label="Action" align="center" />
@@ -518,15 +518,15 @@ export default function SubnetsPage() {
                   <SortHeader col="opp" label="Opp." align="right" />
                   <SortHeader col="liquidity" label={fr ? "Liq." : "Liq."} align="center" />
                   <SortHeader col="stability" label="Structure" align="center" />
-                  <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 whitespace-nowrap">Fit</th>
-                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 whitespace-nowrap">Signal</th>
-                  <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65">7d</th>
+                   <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Fit</th>
+                   <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Signal</th>
+                   <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground">7d</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="py-12 text-center text-muted-foreground/65 text-[11px]">
+                    <td colSpan={13} className="py-12 text-center text-muted-foreground text-[11px]">
                       {fr ? "Aucun subnet ne correspond aux filtres actifs." : "No subnets match active filters."}
                     </td>
                   </tr>
@@ -576,7 +576,7 @@ export default function SubnetsPage() {
                         <span className="font-mono text-[9px]" style={{ color: structColor }}>{r.structureLevel === "HEALTHY" ? "✓" : r.structureLevel === "FRAGILE" ? "~" : "✕"}</span>
                       </td>
                       <td className="py-2 px-2.5 text-center">
-                        {r.owned ? <span className="text-[9px]" style={{ color: "hsl(var(--gold))" }}>★</span> : <span className="text-muted-foreground/30">—</span>}
+                        {r.owned ? <span className="text-[9px]" style={{ color: "hsl(var(--gold))" }}>★</span> : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground/70 truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
                       <td className="py-2 px-2.5 text-center">

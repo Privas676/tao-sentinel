@@ -38,9 +38,9 @@ function SectionTitle({ icon, title, badge }: { icon: string; title: string; bad
 function KPIChip({ label, value, color, sub }: { label: string; value: string | number; color?: string; sub?: string }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2.5 bg-muted/25 border border-border min-w-0">
-      <span className="font-mono text-[6.5px] text-muted-foreground/45 tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
+      <span className="font-mono text-[7px] text-muted-foreground tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
       <span className="font-mono text-[14px] font-bold leading-none" style={{ color }}>{value}</span>
-      {sub && <span className="font-mono text-[8px] text-muted-foreground/35 mt-0.5">{sub}</span>}
+      {sub && <span className="font-mono text-[8px] text-muted-foreground mt-0.5">{sub}</span>}
     </div>
   );
 }
@@ -48,14 +48,14 @@ function KPIChip({ label, value, color, sub }: { label: string; value: string | 
 function Metric({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
     <div className="flex justify-between items-center py-[5px]">
-      <span className="text-muted-foreground/55 text-[11px]">{label}</span>
+      <span className="text-muted-foreground text-[11px]">{label}</span>
       <span className="font-mono text-[12px] font-medium" style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
     </div>
   );
 }
 
 function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: number; height?: number }) {
-  if (data.length < 2) return <span className="text-muted-foreground/15 text-[9px]">—</span>;
+  if (data.length < 2) return <span className="text-muted-foreground text-[9px]">—</span>;
   const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
   const trend = data[data.length - 1] - data[0];
   const c = trend > 0 ? GO : trend < 0 ? BREAK : MUTED;
@@ -255,7 +255,7 @@ export default function PortfolioPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="font-mono text-lg sm:text-xl tracking-wider text-gold">Portfolio Commander</h1>
-            <p className="font-mono text-[10px] text-muted-foreground/45 mt-1 max-w-md leading-relaxed">
+            <p className="font-mono text-[10px] text-muted-foreground mt-1 max-w-md leading-relaxed">
               {fr ? "Pilote l'exposition, la concentration et les décisions de renfort ou de réduction." : "Control exposure, concentration, and reinforce/reduce decisions."}
             </p>
           </div>
@@ -263,12 +263,12 @@ export default function PortfolioPage() {
             <div className="inline-flex items-center rounded-lg overflow-hidden border border-border">
               {(["TAO", "USD"] as Currency[]).map(c => (
                 <button key={c} onClick={() => toggleCurrency(c)}
-                  className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-all ${currency === c ? "bg-muted/40 text-gold" : "text-muted-foreground/30 hover:text-muted-foreground/50"}`}>
+                  className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-all ${currency === c ? "bg-muted/40 text-gold" : "text-muted-foreground hover:text-foreground"}`}>
                   {c === "TAO" ? "τ" : "$"}
                 </button>
               ))}
             </div>
-            {taoUsd && <span className="font-mono text-[9px] text-muted-foreground/30">TAO ${taoUsd.toFixed(2)}</span>}
+            {taoUsd && <span className="font-mono text-[9px] text-muted-foreground">TAO ${taoUsd.toFixed(2)}</span>}
           </div>
         </div>
 
@@ -327,7 +327,7 @@ export default function PortfolioPage() {
                 )}
               </div>
               {analytics.alignment === "aligned" && analytics.exitCount === 0 && analytics.reduceCount === 0 && analytics.fragilePositions.length === 0 && (
-                <p className="font-mono text-[10px] text-muted-foreground/35 italic">{fr ? "Aucune alerte — portefeuille cohérent." : "No alerts — portfolio is coherent."}</p>
+                <p className="font-mono text-[10px] text-muted-foreground italic">{fr ? "Aucune alerte — portefeuille cohérent." : "No alerts — portfolio is coherent."}</p>
               )}
             </div>
           </SectionCard>
@@ -349,14 +349,14 @@ export default function PortfolioPage() {
                   const delta = targetWeight - w.weight;
                   return (
                     <div key={w.netuid} className="flex items-center gap-3">
-                      <Link to={`/subnets/${w.netuid}`} className="font-mono text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors w-[110px] shrink-0 truncate">
+                      <Link to={`/subnets/${w.netuid}`} className="font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors w-[110px] shrink-0 truncate">
                         SN-{w.netuid} {w.name}
                       </Link>
                       <div className="flex-1 flex items-center gap-1.5">
                         <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/20 relative">
                           <div className="h-full rounded-full bg-muted-foreground/25" style={{ width: `${Math.min(100, w.weight)}%` }} />
                         </div>
-                        <span className="font-mono text-[9px] text-muted-foreground/45 w-10 text-right">{w.weight.toFixed(1)}%</span>
+                        <span className="font-mono text-[9px] text-muted-foreground w-10 text-right">{w.weight.toFixed(1)}%</span>
                       </div>
                       <span className="font-mono text-[9px] w-6 text-center" style={{ color: delta > 2 ? GO : delta < -2 ? BREAK : MUTED }}>
                         {delta > 0 ? "↑" : delta < -1 ? "↓" : "="}
@@ -380,7 +380,7 @@ export default function PortfolioPage() {
             <div className="flex items-center gap-2.5">
               <span className="text-sm opacity-70">📋</span>
               <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-gold">Positions</h2>
-              <span className="font-mono text-[9px] text-muted-foreground/30">{rows.length}</span>
+              <span className="font-mono text-[9px] text-muted-foreground">{rows.length}</span>
             </div>
             <button onClick={() => setShowAdd(true)}
               className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg border border-primary/20 text-primary/80 hover:text-primary hover:border-primary/40 transition-all">
@@ -391,7 +391,7 @@ export default function PortfolioPage() {
           {rows.length === 0 ? (
             <div className="py-16 text-center space-y-3">
               <span className="text-3xl opacity-30">📊</span>
-              <p className="font-mono text-[11px] text-muted-foreground/35">{fr ? "Aucune position" : "No positions"}</p>
+              <p className="font-mono text-[11px] text-muted-foreground">{fr ? "Aucune position" : "No positions"}</p>
               <button onClick={() => setShowAdd(true)} className="font-mono text-[10px] text-primary/60 hover:text-primary transition-colors">
                 + {fr ? "Ajouter un subnet" : "Add a subnet"}
               </button>
@@ -405,7 +405,7 @@ export default function PortfolioPage() {
                       "Subnet", fr ? "Position" : "Position", fr ? "Poids" : "Weight",
                       "Conv.", "Risk", "Fit", "Action", "Mom.", ""
                     ].map((h, i) => (
-                      <th key={i} className="py-2.5 px-3 font-mono text-[8px] tracking-[0.15em] uppercase text-muted-foreground/30 font-normal whitespace-nowrap">{h}</th>
+                      <th key={i} className="py-2.5 px-3 font-mono text-[8px] tracking-[0.15em] uppercase text-muted-foreground font-normal whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -425,7 +425,7 @@ export default function PortfolioPage() {
                         {/* Subnet */}
                         <td className="py-3 px-3">
                           <Link to={`/subnets/${r.netuid}`} className="hover:text-foreground transition-colors">
-                            <span className="font-mono text-[11px] text-muted-foreground/50">SN-{r.netuid}</span>
+                           <span className="font-mono text-[11px] text-muted-foreground">SN-{r.netuid}</span>
                             <span className="font-mono text-[11px] text-foreground/80 ml-1.5 hidden sm:inline">{r.name}</span>
                           </Link>
                           {/* Status badges inline on mobile */}
@@ -434,10 +434,10 @@ export default function PortfolioPage() {
                         {/* Position */}
                         <td className="py-3 px-3 font-mono text-[11px] text-foreground/70">
                           <InlineEditQty value={r.taoInvest} onSave={v => { portfolio.updateQuantity(r.netuid, v); toast.success("✓"); }} />
-                          <span className="text-muted-foreground/25 ml-1">τ</span>
+                          <span className="text-muted-foreground ml-1">τ</span>
                         </td>
                         {/* Weight */}
-                        <td className="py-3 px-3 font-mono text-[10px] text-muted-foreground/55">{weight.toFixed(1)}%</td>
+                        <td className="py-3 px-3 font-mono text-[10px] text-muted-foreground">{weight.toFixed(1)}%</td>
                         {/* Conviction */}
                         <td className="py-3 px-3 font-mono text-[11px] font-bold" style={{ color: conv > 20 ? GO : conv > 0 ? WARN : BREAK }}>{conv}</td>
                         {/* Risk */}
@@ -464,7 +464,7 @@ export default function PortfolioPage() {
                             <button onClick={() => handleSell(r.netuid)} className="font-mono text-[8px] px-2 py-1 rounded border border-destructive/15 text-destructive/60 hover:text-destructive transition-colors">
                               {fr ? "Vendre" : "Sell"}
                             </button>
-                            <button onClick={() => portfolio.removePosition(r.netuid)} className="font-mono text-[8px] px-1.5 py-1 rounded border border-border text-muted-foreground/25 hover:text-muted-foreground/60 transition-colors">✕</button>
+                            <button onClick={() => portfolio.removePosition(r.netuid)} className="font-mono text-[8px] px-1.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground transition-colors">✕</button>
                           </div>
                         </td>
                       </tr>
@@ -482,7 +482,7 @@ export default function PortfolioPage() {
             <SectionTitle icon="📜" title={fr ? "Historique" : "History"} />
             <div className="px-5 py-3 space-y-1">
               {portfolio.archive.slice(-8).reverse().map((a, i) => (
-                <div key={i} className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground/30 py-1 border-b border-border last:border-0">
+                <div key={i} className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground py-1 border-b border-border last:border-0">
                   <span>SN-{a.subnet_id}</span>
                   <span>{a.quantity_tao.toFixed(2)} τ</span>
                   {a.pnl_estimated !== undefined && (
@@ -490,7 +490,7 @@ export default function PortfolioPage() {
                       P&L: {a.pnl_estimated >= 0 ? "+" : ""}{a.pnl_estimated.toFixed(4)} τ
                     </span>
                   )}
-                  <span className="text-muted-foreground/15 ml-auto">{new Date(a.closed_at).toLocaleDateString()}</span>
+                  <span className="text-muted-foreground ml-auto">{new Date(a.closed_at).toLocaleDateString()}</span>
                 </div>
               ))}
             </div>
@@ -504,25 +504,25 @@ export default function PortfolioPage() {
           <div className="w-full max-w-sm rounded-2xl p-6 space-y-4 bg-popover border border-border" onClick={e => e.stopPropagation()}>
             <h2 className="font-mono text-sm tracking-widest text-foreground/80">{fr ? "AJOUTER AU PORTEFEUILLE" : "ADD TO PORTFOLIO"}</h2>
             <div>
-              <label className="font-mono text-[9px] text-muted-foreground/30 tracking-wider">SUBNET</label>
+              <label className="font-mono text-[9px] text-muted-foreground tracking-wider">SUBNET</label>
               <SubnetDropdown subnets={subnetList || []} value={addNetuid} onChange={setAddNetuid} isOwned={portfolio.isOwned} />
             </div>
             <div>
-              <label className="font-mono text-[9px] text-muted-foreground/30 tracking-wider">{fr ? "QUANTITÉ TAO" : "QUANTITY TAO"}</label>
+              <label className="font-mono text-[9px] text-muted-foreground tracking-wider">{fr ? "QUANTITÉ TAO" : "QUANTITY TAO"}</label>
               <input type="number" value={addQty} onChange={e => setAddQty(Number(e.target.value))} min={0.01} step={1}
                 className="w-full mt-1 bg-muted/20 border border-border rounded-lg px-3 py-2 font-mono text-xs text-foreground/80" />
             </div>
             <div className="rounded-lg p-3 space-y-1 bg-muted/10 border border-border">
               <div className="flex justify-between font-mono text-[10px]">
-                <span className="text-muted-foreground/30">{fr ? "Prix consensus" : "Consensus price"}</span>
-                <span className="text-muted-foreground/60">{addPrice.toFixed(6)} τ</span>
+                 <span className="text-muted-foreground">{fr ? "Prix consensus" : "Consensus price"}</span>
+                 <span className="text-muted-foreground">{addPrice.toFixed(6)} τ</span>
               </div>
               {portfolio.isOwned(addNetuid) && (
                 <div className="font-mono text-[10px] text-signal-hold">{fr ? "⚠ Déjà possédé — quantité ajoutée" : "⚠ Already owned — qty added"}</div>
               )}
             </div>
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowAdd(false)} className="flex-1 font-mono text-[11px] py-2.5 rounded-lg border border-border text-muted-foreground/40">{fr ? "ANNULER" : "CANCEL"}</button>
+              <button onClick={() => setShowAdd(false)} className="flex-1 font-mono text-[11px] py-2.5 rounded-lg border border-border text-muted-foreground">{fr ? "ANNULER" : "CANCEL"}</button>
               <button onClick={handleAdd} disabled={addQty <= 0}
                 className="flex-1 font-mono text-[11px] py-2.5 rounded-lg border border-primary/30 text-primary/90 hover:bg-primary/10 transition-all disabled:opacity-30">
                 {fr ? "AJOUTER" : "ADD"}

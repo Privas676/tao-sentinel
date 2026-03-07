@@ -43,10 +43,10 @@ function SectionTitle({ icon, title }: { icon: string; title: string }) {
 function Metric({ label, value, color, sub, mono = true }: { label: string; value: string | number; color?: string; sub?: string; mono?: boolean }) {
   return (
     <div className="flex justify-between items-center py-[5px]">
-      <span className="text-muted-foreground/60 text-[11px] leading-tight">{label}</span>
+      <span className="text-muted-foreground text-[11px] leading-tight">{label}</span>
       <div className="flex items-center gap-1.5">
         <span className={`text-[12px] font-medium ${mono ? "font-mono" : ""}`} style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
-        {sub && <span className="text-[9px] text-muted-foreground/35">{sub}</span>}
+        {sub && <span className="text-[9px] text-muted-foreground">{sub}</span>}
       </div>
     </div>
   );
@@ -57,7 +57,7 @@ function BarScore({ label, value, color }: { label: string; value: number; color
   const pct = Math.min(100, Math.max(0, value));
   return (
     <div className="flex items-center gap-2.5 py-[3px]">
-      <span className="text-muted-foreground/55 text-[10px] w-[90px] shrink-0">{label}</span>
+      <span className="text-muted-foreground text-[10px] w-[90px] shrink-0">{label}</span>
       <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/25">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: c }} />
       </div>
@@ -69,7 +69,7 @@ function BarScore({ label, value, color }: { label: string; value: number; color
 function KPIChip({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2 bg-muted/25 border border-border min-w-0">
-      <span className="font-mono text-[6.5px] text-muted-foreground/45 tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
+      <span className="font-mono text-[7px] text-muted-foreground tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
       <span className="font-mono text-[13px] font-bold leading-none" style={{ color }}>{value}</span>
     </div>
   );
@@ -197,10 +197,10 @@ export default function SubnetDetailPage() {
   if (!s) {
     return (
       <div className="h-full w-full bg-background text-foreground p-6 flex flex-col items-center justify-center gap-4">
-        <div className="animate-pulse font-mono text-muted-foreground/40 text-sm tracking-widest">
+        <div className="animate-pulse font-mono text-muted-foreground text-sm tracking-widest">
           {fr ? "Chargement..." : "Loading..."}
         </div>
-        <Link to="/subnets" className="font-mono text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors">← Subnets</Link>
+        <Link to="/subnets" className="font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors">← Subnets</Link>
       </div>
     );
   }
@@ -222,9 +222,9 @@ export default function SubnetDetailPage() {
 
         {/* ── Breadcrumb ── */}
         <nav className="flex items-center gap-2">
-          <Link to="/subnets" className="font-mono text-[10px] tracking-wider text-muted-foreground/35 hover:text-muted-foreground/65 transition-colors">← Subnets</Link>
-          <span className="text-muted-foreground/15 text-[10px]">/</span>
-          <span className="font-mono text-[10px] text-muted-foreground/55">SN-{netuid}</span>
+          <Link to="/subnets" className="font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors">← Subnets</Link>
+          <span className="text-muted-foreground text-[10px]">/</span>
+          <span className="font-mono text-[10px] text-muted-foreground">SN-{netuid}</span>
         </nav>
 
         {/* ══════════════════════════════════════════ */}
@@ -240,7 +240,7 @@ export default function SubnetDetailPage() {
               <div className="flex-1 min-w-0">
                 <h1 className="font-mono text-lg sm:text-xl tracking-wide text-[hsl(var(--gold))] leading-tight">{s.name}</h1>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className="font-mono text-[9px] text-muted-foreground/45">SN-{netuid} · {s.assetType}</span>
+                  <span className="font-mono text-[9px] text-muted-foreground">SN-{netuid} · {s.assetType}</span>
                   {isSpecial && <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">{SPECIAL_SUBNETS[netuid].label}</span>}
                 </div>
               </div>
@@ -266,7 +266,7 @@ export default function SubnetDetailPage() {
                     </div>
                   ))
                 ) : (
-                  <div className="font-mono text-[10px] text-muted-foreground/25 italic">{fr ? "Aucune thèse positive identifiée" : "No positive thesis identified"}</div>
+                  <div className="font-mono text-[10px] text-muted-foreground italic">{fr ? "Aucune thèse positive identifiée" : "No positive thesis identified"}</div>
                 )}
               </div>
 
@@ -279,7 +279,7 @@ export default function SubnetDetailPage() {
                     </div>
                   ))
                 ) : (
-                  <div className="font-mono text-[10px] text-muted-foreground/25 italic">{fr ? "Aucune invalidation identifiée" : "No invalidation identified"}</div>
+                  <div className="font-mono text-[10px] text-muted-foreground italic">{fr ? "Aucune invalidation identifiée" : "No invalidation identified"}</div>
                 )}
               </div>
             </div>
@@ -481,7 +481,7 @@ export default function SubnetDetailPage() {
               {/* Profile badge */}
               <div className="flex items-center gap-3 mb-4">
                 <span className="font-mono text-[13px] font-bold" style={{ color: profile.color }}>{fr ? profile.labelFr : profile.label}</span>
-                <span className="font-mono text-[10px] text-muted-foreground/50">— Fit {fitScore(s)}/100</span>
+                <span className="font-mono text-[10px] text-muted-foreground">— Fit {fitScore(s)}/100</span>
               </div>
               <p className="font-mono text-[11px] text-foreground/65 leading-relaxed mb-4">
                 {fr ? profile.descFr : profile.desc}
@@ -501,10 +501,10 @@ export default function SubnetDetailPage() {
                   return (
                     <div key={p} className={`flex items-center gap-2.5 py-1 px-2.5 rounded-md transition-colors ${active ? "bg-muted/40" : ""}`}>
                       <span className={`w-2 h-2 rounded-full shrink-0 ${active ? "" : "opacity-20"}`} style={{ background: active ? profile.color : MUTED }} />
-                      <span className={`font-mono text-[10px] ${active ? "text-foreground font-medium" : "text-muted-foreground/40"}`}>
+                      <span className={`font-mono text-[10px] ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                         {fr ? labels[p].fr : labels[p].en}
                       </span>
-                      {active && <span className="font-mono text-[8px] text-muted-foreground/40 ml-auto">◄</span>}
+                      {active && <span className="font-mono text-[8px] text-muted-foreground ml-auto">◄</span>}
                     </div>
                   );
                 })}
@@ -552,7 +552,7 @@ export default function SubnetDetailPage() {
         {/* External ref */}
         <div className="flex justify-end pb-2">
           <a href={`https://taostats.io/subnets/${netuid}`} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[9px] tracking-wider text-muted-foreground/25 hover:text-muted-foreground/55 transition-colors">
+            className="font-mono text-[9px] tracking-wider text-muted-foreground hover:text-foreground transition-colors">
             Taostats →
           </a>
         </div>
@@ -564,7 +564,7 @@ export default function SubnetDetailPage() {
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-2.5">
           <ActionBadge action={actionLabel(s.action)} size="sm" />
-          <span className="font-mono text-[9px] text-muted-foreground/55 hidden sm:inline">
+          <span className="font-mono text-[9px] text-muted-foreground hidden sm:inline">
             {fr ? profile.labelFr : profile.label}
           </span>
           <div className="flex-1" />
@@ -583,7 +583,7 @@ export default function SubnetDetailPage() {
           >
             {inPortfolio ? "★" : "+"} Portfolio
           </button>
-          <Link to="/alerts" className="font-mono text-[9px] px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground/60 hover:text-foreground transition-colors">
+          <Link to="/alerts" className="font-mono text-[9px] px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
             🔔
           </Link>
         </div>
@@ -617,7 +617,7 @@ function QuadrantBlock({ title, items, tone, position }: { title: string; items:
         {title}
       </div>
       {items.length === 0 ? (
-        <div className="font-mono text-[10px] text-muted-foreground/20 italic">—</div>
+        <div className="font-mono text-[10px] text-muted-foreground italic">—</div>
       ) : (
         <div className="space-y-1.5">
           {items.map((item, i) => (
