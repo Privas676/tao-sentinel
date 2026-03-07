@@ -141,7 +141,9 @@ export function VerdictBadgeWithTooltip({ verdict, confidence, positiveReasons, 
 
 /* ── Compact verdict row for Dashboard lists ── */
 
-export function VerdictRow({ netuid, name, verdict, confidence, mainScore, positiveReasons, negativeReasons, onClick }: {
+import React from "react";
+
+export const VerdictRow = React.forwardRef<HTMLDivElement, {
   netuid: number;
   name: string;
   verdict: Verdict;
@@ -150,11 +152,12 @@ export function VerdictRow({ netuid, name, verdict, confidence, mainScore, posit
   positiveReasons: string[];
   negativeReasons: string[];
   onClick?: () => void;
-}) {
+}>(({ netuid, name, verdict, confidence, mainScore, positiveReasons, negativeReasons, onClick }, ref) => {
   const reasons = verdict === "SORS" ? negativeReasons : positiveReasons;
   const mainReason = reasons[0] || "";
   return (
     <div
+      ref={ref}
       onClick={onClick}
       className="flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all hover:bg-white/[0.03]"
       style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}
@@ -168,4 +171,6 @@ export function VerdictRow({ netuid, name, verdict, confidence, mainScore, posit
       <span className="font-mono text-[11px] font-bold w-7 text-right" style={{ color: verdictColor(verdict) }}>{mainScore}</span>
     </div>
   );
-}
+});
+
+VerdictRow.displayName = "VerdictRow";
