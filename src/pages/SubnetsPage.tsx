@@ -242,6 +242,9 @@ export default function SubnetsPage() {
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
+    { value: "rentre", label: "🟢 RENTRE" },
+    { value: "hold", label: "🟡 HOLD" },
+    { value: "sors", label: "🔴 SORS" },
     { value: "opportunities", label: t("sub.mode_opp") },
     { value: "risks", label: t("sub.mode_risk") },
     ...(ownedNetuids.size > 0 ? [{ value: "mine" as ViewMode, label: lang === "fr" ? "Mes subnets" : "My subnets" }] : []),
