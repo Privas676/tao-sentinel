@@ -76,7 +76,7 @@ function KPIChip({ label, value, color }: { label: string; value: string | numbe
 }
 
 function Sparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number; h?: number }) {
-  if (data.length < 2) return <span className="text-muted-foreground/15 text-[9px] italic">no data</span>;
+  if (data.length < 2) return <span className="text-muted-foreground text-[9px] italic">no data</span>;
   const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
   const trend = data[data.length - 1] - data[0];
   const c = trend > 0 ? GO : trend < 0 ? BREAK : MUTED;
