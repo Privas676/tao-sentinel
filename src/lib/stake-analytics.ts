@@ -452,3 +452,102 @@ export function inefficiencyColor(pct: number): string {
   if (pct > 15) return "rgba(255,109,0,0.7)";
   return "rgba(255,255,255,0.4)";
 }
+
+/* ═══════════════════════════════════════ */
+/*   AMM / PRICING EFFICIENCY              */
+/* ═══════════════════════════════════════ */
+
+export type AMMMetrics = {
+  poolBalance: number;         // taoInPool / alphaInPool ratio
+  slippageBps1Tao: number;     // estimated slippage in bps for 1 TAO trade
+  slippageBps10Tao: number;    // estimated slippage in bps for 10 TAO trade
+  spreadBps: number;           // estimated bid/ask spread in bps
+  ammEfficiency: number;       // 0-100 composite score
+  poolDepth: number;           // total pool value in TAO (taoInPool * 2 proxy)
+};
+
+/**
+ * Estimate slippage for a constant-product AMM (x*y=k).
+ * For buying alpha with `tradeTao` TAO:
+ *   alphaOut = alphaInPool - k / (taoInPool + tradeTao)
+ *   effectivePrice = tradeTao / alphaOut
+ *   slippage = (effectivePrice - spotPrice) / spotPrice
+ */
+export function estimateSlippageBps(taoInPool: number, alphaInPool: number, tradeTao: number): number {
+  if (taoInPool <= 0 || alphaInPool <= 0 || tradeTao <= 0) return 0;
+  const k = taoInPool * alphaInPool;
+  const alphaOut = alphaInPool - k / (taoInPool + tradeTao);
+  if (alphaOut <= 0) return 10000; // 100% slippage
+  const spotPrice = taoInPool / alphaInPool;
+  const effectivePrice = tradeTao / alphaOut;
+  return Math.round(((effectivePrice - spotPrice) / spotPrice) * 10000);
+}
+
+/**
+ * Estimate bid/ask spread from pool depth.
+ * Smaller pools → wider spread. Based on constant-product math for a minimal trade.
+ */
+export function estimateSpreadBps(taoInPool: number, alphaInPool: number): number {
+  if (taoInPool <= 0 || alphaInPool <= 0) return 0;
+  // Spread ≈ slippage of buying + slippage of selling a small amount
+  const minTrade = Math.min(taoInPool * 0.001, 0.1); // 0.1% of pool or 0.1 TAO
+  const buySlippage = estimateSlippageBps(taoInPool, alphaInPool, minTrade);
+  const sellSlippage = estimateSlippageBps(alphaInPool, taoInPool, minTrade * (alphaInPool / taoInPool));
+  return buySlippage + sellSlippage;
+}
+
+export function computeAMMMetrics(eco: EconomicContext): AMMMetrics {
+  const { taoInPool, alphaInPool } = eco;
+  const poolBalance = alphaInPool > 0 ? taoInPool / alphaInPool : 0;
+  const slippageBps1Tao = estimateSlippageBps(taoInPool, alphaInPool, 1);
+  const slippageBps10Tao = estimateSlippageBps(taoInPool, alphaInPool, 10);
+  const spreadBps = estimateSpreadBps(taoInPool, alphaInPool);
+  const poolDepth = taoInPool * 2; // proxy: total pool value ≈ 2x TAO side
+
+  // AMM Efficiency score (0-100): higher = more efficient/liquid
+  let efficiency = 50;
+  // Pool depth bonus
+  if (poolDepth > 10000) efficiency += 25;
+  else if (poolDepth > 1000) efficiency += 20;
+  else if (poolDepth > 100) efficiency += 10;
+  else if (poolDepth > 10) efficiency += 5;
+  else efficiency -= 10;
+  // Slippage penalty
+  if (slippageBps1Tao > 500) efficiency -= 25;
+  else if (slippageBps1Tao > 200) efficiency -= 15;
+  else if (slippageBps1Tao > 50) efficiency -= 5;
+  else efficiency += 10;
+  // Spread penalty
+  if (spreadBps > 200) efficiency -= 15;
+  else if (spreadBps > 50) efficiency -= 5;
+  else efficiency += 10;
+  // Balance bonus (closer to 1:1 = better)
+  if (poolBalance > 0) {
+    const imbalance = Math.abs(Math.log(poolBalance));
+    if (imbalance < 0.1) efficiency += 5;
+    else if (imbalance > 2) efficiency -= 10;
+  }
+
+  return {
+    poolBalance,
+    slippageBps1Tao,
+    slippageBps10Tao,
+    spreadBps,
+    ammEfficiency: clamp(Math.round(efficiency), 0, 100),
+    poolDepth,
+  };
+}
+
+export function ammEfficiencyColor(score: number): string {
+  if (score >= 75) return "rgba(76,175,80,0.8)";
+  if (score >= 50) return "rgba(255,193,7,0.8)";
+  if (score >= 30) return "rgba(255,109,0,0.8)";
+  return "rgba(229,57,53,0.7)";
+}
+
+export function slippageColor(bps: number): string {
+  if (bps <= 10) return "rgba(76,175,80,0.8)";
+  if (bps <= 50) return "rgba(255,193,7,0.8)";
+  if (bps <= 200) return "rgba(255,109,0,0.8)";
+  return "rgba(229,57,53,0.8)";
+}
