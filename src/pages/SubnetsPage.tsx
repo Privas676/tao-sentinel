@@ -81,95 +81,166 @@ function loadSavedViews(): SavedView[] {
 }
 
 /* ═══════════════════════════════════════ */
-/*   QUICK VIEW DRAWER                      */
+/*   QUICK VIEW DRAWER — Premium                */
 /* ═══════════════════════════════════════ */
-function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
-  row: TableRow | null; verdict?: SubnetVerdictData; open: boolean; onClose: () => void; fr: boolean;
+function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
+  row: TableRow | null; open: boolean; onClose: () => void; fr: boolean;
+  onAddWatchlist?: (netuid: number) => void;
 }) {
   const navigate = useNavigate();
   if (!row) return null;
 
+  const verdict = row.verdict;
   const thesis = verdict?.positiveReasons?.slice(0, 3) || [];
   const invalidation = verdict?.negativeReasons?.slice(0, 3) || [];
 
+  /* Build "3 reasons" dynamically */
+  const reasons: { icon: string; text: string; tone: "go" | "warn" | "break" }[] = [];
+  if (row.opp > 55) reasons.push({ icon: "◆", text: fr ? `Opportunité ${row.opp}/100` : `Opportunity ${row.opp}/100`, tone: "go" });
+  if (row.momentumScore >= 55) reasons.push({ icon: "▲", text: fr ? `Momentum haussier (${Math.round(row.momentumScore)})` : `Bullish momentum (${Math.round(row.momentumScore)})`, tone: "go" });
+  if (row.convictionLevel === "HIGH") reasons.push({ icon: "★", text: fr ? "Conviction haute" : "High conviction", tone: "go" });
+  if (row.liquidityLevel === "HIGH") reasons.push({ icon: "●", text: fr ? "Liquidité solide" : "Strong liquidity", tone: "go" });
+  if (row.structureLevel === "HEALTHY") reasons.push({ icon: "✓", text: fr ? "Structure saine" : "Healthy structure", tone: "go" });
+  if (row.risk > 60) reasons.push({ icon: "⚠", text: fr ? `Risque élevé (${row.risk})` : `High risk (${row.risk})`, tone: "warn" });
+  if (row.risk > 75) reasons.push({ icon: "🔴", text: fr ? "Zone dangereuse" : "Danger zone", tone: "break" });
+  if (row.liquidityLevel === "LOW") reasons.push({ icon: "○", text: fr ? "Liquidité faible" : "Low liquidity", tone: "break" });
+  if (row.structureLevel === "CONCENTRATED") reasons.push({ icon: "✕", text: fr ? "Structure concentrée" : "Concentrated structure", tone: "warn" });
+  const top3 = reasons.slice(0, 3);
+
+  const toneColor = (t: "go" | "warn" | "break") =>
+    t === "go" ? "hsl(var(--signal-go))" : t === "warn" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
+
+  /* Alerts */
+  const alerts: { icon: string; text: string; color: string }[] = [];
+  if (row.isOverridden) alerts.push({ icon: "⛔", text: fr ? "Override actif — sortie forcée" : "Active override — forced exit", color: "hsl(var(--destructive))" });
+  if (row.depegProbability >= 50) alerts.push({ icon: "⚠", text: `Depeg ${row.depegProbability}%`, color: "hsl(var(--signal-go-spec))" });
+  if (row.delistCategory !== "NORMAL") alerts.push({ icon: "🔴", text: fr ? `Risque delist (${row.delistCategory})` : `Delist risk (${row.delistCategory})`, color: "hsl(var(--destructive))" });
+  if (row.dataUncertain) alerts.push({ icon: "❓", text: fr ? "Données incertaines" : "Uncertain data", color: "hsl(var(--muted-foreground))" });
+
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-full sm:w-[400px] border-l border-border bg-background text-foreground overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="font-mono tracking-wider text-base">SN-{row.netuid} · {row.name}</SheetTitle>
-        </SheetHeader>
-        <div className="mt-5 space-y-5">
-          {/* Action */}
-          <div className="flex items-center justify-center">
-            <ActionBadge action={row.action === "ENTER" ? "RENTRE" : row.action === "EXIT" ? "SORS" : "HOLD"} />
+      <SheetContent side="right" className="w-full sm:w-[420px] border-l border-border bg-background text-foreground overflow-y-auto p-0">
+        {/* ── Header band ── */}
+        <div className="px-5 pt-5 pb-4 border-b border-border">
+          <SheetHeader>
+            <div className="flex items-center justify-between">
+              <SheetTitle className="font-mono tracking-wider text-sm text-foreground/90">
+                <span className="text-muted-foreground/50 mr-1.5">SN-{row.netuid}</span>
+                {row.name}
+              </SheetTitle>
+              <StatusBadge type={row.statusLevel === "DANGER" ? "danger" : row.statusLevel === "WATCH" ? "warning" : "success"} label={row.statusLevel} />
+            </div>
+          </SheetHeader>
+
+          {/* Action badge centered */}
+          <div className="flex items-center justify-center mt-4">
+            <ActionBadge action={row.action === "ENTER" ? "RENTRE" : row.action === "EXIT" ? "SORS" : row.action === "STAKE" ? "RENFORCER" : "HOLD"} />
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div className="px-5 py-4 space-y-4">
+
+          {/* Signal principal */}
+          <div className="rounded-lg px-3 py-2.5 bg-muted/40 border border-border">
+            <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-1">SIGNAL PRINCIPAL</div>
+            <div className="font-mono text-[12px] font-bold text-foreground/90">{row.signalPrincipal}</div>
           </div>
 
-          {/* Key metrics */}
-          <div className="grid grid-cols-3 gap-3">
-            <MetricMini label="OPP" value={row.opp} color={opportunityColor(row.opp)} />
+          {/* Metrics grid — 2x3 */}
+          <div className="grid grid-cols-3 gap-2">
+            <MetricMini label="CONVICTION" value={row.convictionLevel} color={row.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : row.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))"} />
+            <MetricMini label="CONFIDENCE" value={`${row.confianceScore}%`} color={confianceColor(row.confianceScore)} />
             <MetricMini label="RISK" value={row.risk} color={riskColor(row.risk)} />
-            <MetricMini label="CONF" value={`${row.conf}%`} color={confianceColor(row.conf)} />
+            <MetricMini label="MOMENTUM" value={Math.round(row.momentumScore)} color={row.momentumScore >= 55 ? "hsl(var(--signal-go))" : row.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
+            <MetricMini label="OPP" value={row.opp} color={opportunityColor(row.opp)} />
+            <MetricMini label={fr ? "LIQ." : "LIQ."} value={row.liquidityLevel} color={row.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : row.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
           </div>
 
-          {/* Conviction & Momentum */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg px-3 py-2 bg-muted/30 border border-border">
-              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase">CONVICTION</div>
-              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : row.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))" }}>
-                {row.convictionLevel}
-              </div>
+          {/* Sparkline */}
+          {row.spark.length > 0 && (
+            <div className="rounded-lg px-3 py-2 bg-muted/20 border border-border flex items-center gap-3">
+              <span className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase">7D</span>
+              <SparklineMini data={row.spark} width={120} height={24} />
             </div>
-            <div className="rounded-lg px-3 py-2 bg-muted/30 border border-border">
-              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase">MOMENTUM</div>
-              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.momentumScore >= 55 ? "hsl(var(--signal-go))" : row.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))" }}>
-                {Math.round(row.momentumScore)}
+          )}
+
+          {/* 3 Reasons */}
+          {top3.length > 0 && (
+            <div className="rounded-lg p-3 bg-muted/20 border border-border">
+              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
+                {fr ? "POINTS CLÉS" : "KEY POINTS"}
               </div>
+              {top3.map((r, i) => (
+                <div key={i} className="flex items-center gap-2 mb-1.5 last:mb-0">
+                  <span className="text-[10px]" style={{ color: toneColor(r.tone) }}>{r.icon}</span>
+                  <span className="font-mono text-[11px] text-foreground/80">{r.text}</span>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
 
           {/* Thesis */}
           {thesis.length > 0 && (
             <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-go), 0.03)", border: "1px solid hsla(var(--signal-go), 0.08)" }}>
-              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
+              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
                 {fr ? "THÈSE" : "THESIS"}
               </div>
-              {thesis.map((r, i) => <div key={i} className="font-mono text-[11px] text-foreground/80 mb-1">+ {r}</div>)}
+              {thesis.map((r, i) => <div key={i} className="font-mono text-[11px] text-foreground/75 mb-1">+ {r}</div>)}
             </div>
           )}
 
           {/* Invalidation */}
           {invalidation.length > 0 && (
             <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-break), 0.03)", border: "1px solid hsla(var(--signal-break), 0.08)" }}>
-              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
-                {fr ? "INVALIDATION" : "INVALIDATION"}
+              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
+                INVALIDATION
               </div>
-              {invalidation.map((r, i) => <div key={i} className="font-mono text-[11px] text-foreground/80 mb-1">− {r}</div>)}
+              {invalidation.map((r, i) => <div key={i} className="font-mono text-[11px] text-foreground/75 mb-1">− {r}</div>)}
             </div>
           )}
 
           {/* Active alerts */}
-          {(row.isOverridden || row.depegProbability >= 50 || row.delistCategory !== "NORMAL") && (
-            <div className="rounded-lg p-3" style={{ background: "hsla(var(--destructive),0.04)", border: "1px solid hsla(var(--destructive),0.1)" }}>
-              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
+          {alerts.length > 0 && (
+            <div className="rounded-lg p-3 border border-destructive/15 bg-destructive/[0.03]">
+              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
                 {fr ? "ALERTES ACTIVES" : "ACTIVE ALERTS"}
               </div>
-              {row.isOverridden && <div className="font-mono text-[11px] mb-1" style={{ color: "hsl(var(--destructive))" }}>⛔ Override actif</div>}
-              {row.depegProbability >= 50 && <div className="font-mono text-[11px] mb-1" style={{ color: "hsl(38,92%,55%)" }}>⚠ Depeg {row.depegProbability}%</div>}
-              {row.delistCategory !== "NORMAL" && <div className="font-mono text-[11px] mb-1" style={{ color: "hsl(var(--destructive))" }}>🔴 Risque delist</div>}
+              {alerts.map((a, i) => (
+                <div key={i} className="flex items-center gap-2 mb-1.5 last:mb-0">
+                  <span className="text-[10px]">{a.icon}</span>
+                  <span className="font-mono text-[11px]" style={{ color: a.color }}>{a.text}</span>
+                </div>
+              ))}
             </div>
           )}
 
           {/* Confidence bar */}
-          <ConfidenceBar value={row.confianceScore} label="DATA" height={4} />
+          <ConfidenceBar value={row.confianceScore} label="DATA CONFIDENCE" height={4} />
+        </div>
 
-          {/* CTA */}
+        {/* ── Footer CTAs ── */}
+        <div className="px-5 pb-5 pt-2 border-t border-border space-y-2">
           <button
-            onClick={() => navigate(`/subnets/${row.netuid}`)}
-            className="w-full text-center font-mono text-[10px] tracking-wider py-2.5 rounded-lg transition-colors"
-            style={{ background: "hsla(var(--gold), 0.05)", color: "hsl(var(--gold))", border: "1px solid hsla(var(--gold), 0.1)" }}
+            onClick={() => { onClose(); navigate(`/subnets/${row.netuid}`); }}
+            className="w-full text-center font-mono text-[10px] tracking-wider py-2.5 rounded-lg transition-all hover:brightness-110"
+            style={{ background: "hsla(var(--gold), 0.08)", color: "hsl(var(--gold))", border: "1px solid hsla(var(--gold), 0.15)" }}
           >
-            {fr ? "Voir la fiche complète →" : "View full profile →"}
+            {fr ? "Ouvrir le subnet →" : "Open subnet →"}
           </button>
+          {!row.owned && onAddWatchlist && (
+            <button
+              onClick={() => { onAddWatchlist(row.netuid); onClose(); }}
+              className="w-full text-center font-mono text-[10px] tracking-wider py-2.5 rounded-lg transition-all text-muted-foreground/70 hover:text-foreground border border-border hover:border-foreground/20"
+            >
+              {fr ? "＋ Ajouter à la watchlist" : "＋ Add to watchlist"}
+            </button>
+          )}
+          {row.owned && (
+            <div className="text-center font-mono text-[9px] text-muted-foreground/50 py-1">
+              ★ {fr ? "Dans votre portefeuille" : "In your portfolio"}
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -206,7 +277,7 @@ export default function SubnetsPage() {
   const { t, lang } = useI18n();
   const fr = lang === "fr";
   const isMobile = useIsMobile();
-  const { ownedNetuids } = useLocalPortfolio();
+  const { ownedNetuids, addPosition } = useLocalPortfolio();
 
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug } = useSubnetScores();
@@ -557,7 +628,7 @@ export default function SubnetsPage() {
         </div>
       </div>
 
-      <QuickViewDrawer row={drawerRow} verdict={drawerRow?.verdict} open={!!drawerRow} onClose={() => setDrawerRow(null)} fr={fr} />
+      <QuickViewDrawer row={drawerRow} open={!!drawerRow} onClose={() => setDrawerRow(null)} fr={fr} onAddWatchlist={(netuid) => addPosition(netuid, 0)} />
     </div>
   );
 }
