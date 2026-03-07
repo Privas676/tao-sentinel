@@ -299,10 +299,10 @@ export default function CompassPage() {
   ];
 
   const rotationGroups = [
-    { key: "leaders", title: fr ? "Leaders" : "Leaders", icon: "🚀", items: rotationMap.leaders, color: "hsl(145,65%,48%)" },
-    { key: "accum", title: fr ? "Accumulation" : "Accumulation", icon: "🧲", items: rotationMap.accumulating, color: "hsl(38,92%,55%)" },
-    { key: "fragile", title: fr ? "Fragiles" : "Fragile", icon: "⚠", items: rotationMap.fragile, color: "hsl(38,70%,50%)" },
-    { key: "avoid", title: fr ? "À éviter" : "Avoid", icon: "🚫", items: rotationMap.avoid, color: "hsl(4,80%,50%)" },
+    { key: "leaders", title: fr ? "Leaders" : "Leaders", icon: "🚀", items: rotationMap.leaders, color: GO },
+    { key: "accum", title: fr ? "Accumulation" : "Accumulation", icon: "🧲", items: rotationMap.accumulating, color: WARN },
+    { key: "fragile", title: fr ? "Fragiles" : "Fragile", icon: "⚠", items: rotationMap.fragile, color: WARN },
+    { key: "avoid", title: fr ? "À éviter" : "Avoid", icon: "🚫", items: rotationMap.avoid, color: BREAK },
   ];
 
   return (
