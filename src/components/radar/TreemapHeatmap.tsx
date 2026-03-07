@@ -3,7 +3,6 @@ import { type SubnetRadarData } from "@/hooks/use-stake-analytics";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
