@@ -531,6 +531,21 @@ export default function PortfolioPage() {
                         }}>OVERRIDE</span>
                       )}
                     </td>
+                    <td className="py-3 px-2 text-center">
+                      {r.verdict ? (
+                        <VerdictBadgeWithTooltip
+                          verdict={r.verdict.verdict}
+                          confidence={r.verdict.confidence}
+                          positiveReasons={r.verdict.positiveReasons}
+                          negativeReasons={r.verdict.negativeReasons}
+                          entryScore={r.verdict.entryScore}
+                          holdScore={r.verdict.holdScore}
+                          exitRisk={r.verdict.exitRisk}
+                        />
+                      ) : (
+                        <span className="font-mono text-[9px] text-white/15">—</span>
+                      )}
+                    </td>
                     <td className="py-3 px-2 text-sm font-mono text-white/70">
                       <InlineEditQty value={r.taoInvest} onSave={(v) => handleUpdateQty(r.netuid, v)} />
                     </td>
