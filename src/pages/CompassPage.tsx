@@ -79,23 +79,9 @@ function TaoPriceTicker({ taoUsd, scoreTimestamp }: { taoUsd: number | null; sco
 }
 
 /* ─── Section Header ─── */
-function SectionHeader({ title, icon, accentVar = "--gold", badge }: {
-  title: string; icon: string; accentVar?: string; badge?: ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 mb-4">
-      <span style={{ fontSize: 14 }}>{icon}</span>
-      <span
-        className="font-mono tracking-[0.2em] uppercase font-bold"
-        style={{ fontSize: 11, color: `hsla(var(${accentVar}), 0.7)` }}
-      >
-        {title}
-      </span>
-      <div className="flex-1 h-px" style={{ background: `hsla(var(${accentVar}), 0.08)` }} />
-      {badge}
-    </div>
-  );
-}
+import { SectionHeader } from "@/components/sentinel/SectionHeader";
+import { ScorePill } from "@/components/sentinel/ScorePill";
+import { MetricCard } from "@/components/sentinel/MetricCard";
 
 /* ─── Subnet Side Panel ─── */
 function SubnetQuickPanel({ signal, open, onClose }: { signal: DashSignal | null; open: boolean; onClose: () => void }) {
