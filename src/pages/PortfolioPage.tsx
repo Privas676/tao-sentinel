@@ -437,7 +437,7 @@ export default function PortfolioPage() {
                           <span className="text-muted-foreground ml-1">τ</span>
                         </td>
                         {/* Weight */}
-                        <td className="py-3 px-3 font-mono text-[10px] text-muted-foreground/55">{weight.toFixed(1)}%</td>
+                        <td className="py-3 px-3 font-mono text-[10px] text-muted-foreground">{weight.toFixed(1)}%</td>
                         {/* Conviction */}
                         <td className="py-3 px-3 font-mono text-[11px] font-bold" style={{ color: conv > 20 ? GO : conv > 0 ? WARN : BREAK }}>{conv}</td>
                         {/* Risk */}
