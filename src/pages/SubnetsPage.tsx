@@ -71,12 +71,6 @@ function mainSignal(s: UnifiedSubnetScore, fr: boolean): string {
   return fr ? "Stable" : "Stable";
 }
 
-function actionFilterLabel(a: ActionFilter, fr: boolean): string {
-  if (a === "ALL") return fr ? "Toutes" : "All";
-  if (a === "ENTER") return fr ? "Entrer" : "Enter";
-  if (a === "HOLD") return fr ? "Attendre" : "Hold";
-  return fr ? "Sortir" : "Exit";
-}
 
 /* ─── Saved views ─── */
 const SAVED_VIEWS_KEY = "sentinel-subnet-views";
