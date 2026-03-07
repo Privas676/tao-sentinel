@@ -508,7 +508,7 @@ export default function PortfolioPage() {
               <SubnetDropdown subnets={subnetList || []} value={addNetuid} onChange={setAddNetuid} isOwned={portfolio.isOwned} />
             </div>
             <div>
-              <label className="font-mono text-[9px] text-muted-foreground/30 tracking-wider">{fr ? "QUANTITÉ TAO" : "QUANTITY TAO"}</label>
+              <label className="font-mono text-[9px] text-muted-foreground tracking-wider">{fr ? "QUANTITÉ TAO" : "QUANTITY TAO"}</label>
               <input type="number" value={addQty} onChange={e => setAddQty(Number(e.target.value))} min={0.01} step={1}
                 className="w-full mt-1 bg-muted/20 border border-border rounded-lg px-3 py-2 font-mono text-xs text-foreground/80" />
             </div>
