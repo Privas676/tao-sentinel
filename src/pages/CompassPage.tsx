@@ -562,13 +562,3 @@ export default function CompassPage() {
     </div>
   );
 }
-
-/* ─── Metric Pill (compact reusable) ─── */
-function MetricPill({ label, value, color, small }: { label: string; value: string | number; color: string; small?: boolean }) {
-  return (
-    <div className="flex flex-col items-center gap-0.5">
-      <span className="font-mono text-muted-foreground/30 uppercase" style={{ fontSize: 7, letterSpacing: "0.12em" }}>{label}</span>
-      <span className="font-mono font-bold" style={{ color, fontSize: small ? 9 : 14 }}>{value}</span>
-    </div>
-  );
-}
