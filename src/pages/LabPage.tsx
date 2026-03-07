@@ -10,9 +10,9 @@ import QuantDiagnosticsPage from "./QuantDiagnosticsPage";
 /* ═══════════════════════════════════════ */
 
 const TABS = [
-  { key: "radar", icon: "📡", label_fr: "Radar Intelligence", label_en: "Radar Intelligence" },
-  { key: "quant", icon: "🔬", label_fr: "Diagnostics Quant", label_en: "Quant Diagnostics" },
-  { key: "methodology", icon: "📖", label_fr: "Méthodologie", label_en: "Methodology" },
+  { key: "radar", icon: "📡", label_fr: "Radar", label_en: "Radar", full_fr: "Radar Intelligence", full_en: "Radar Intelligence" },
+  { key: "quant", icon: "🔬", label_fr: "Quant", label_en: "Quant", full_fr: "Diagnostics Quant", full_en: "Quant Diagnostics" },
+  { key: "methodology", icon: "📖", label_fr: "Méthodo", label_en: "Method", full_fr: "Méthodologie", full_en: "Methodology" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
