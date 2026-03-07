@@ -103,6 +103,10 @@ export default function SubnetDetailPage() {
   const { scores, sparklines } = useSubnetScores();
   const { verdicts } = useSubnetVerdicts();
   const { data: radarData } = useStakeAnalytics();
+  const { isOwned, addPosition, removePosition } = useLocalPortfolio();
+  const [justToggled, setJustToggled] = useState(false);
+
+  const inPortfolio = isOwned(netuid);
 
   const score = scores.get(netuid);
   const verdict = verdicts.get(netuid);
@@ -114,6 +118,16 @@ export default function SubnetDetailPage() {
   }, [radarData, netuid]);
 
   const isSpecial = !!SPECIAL_SUBNETS[netuid];
+
+  const handlePortfolioToggle = () => {
+    if (inPortfolio) {
+      removePosition(netuid);
+    } else {
+      addPosition(netuid, 0, score?.alphaPrice);
+    }
+    setJustToggled(true);
+    setTimeout(() => setJustToggled(false), 1200);
+  };
 
   if (!score) {
     return (
