@@ -496,7 +496,7 @@ export default function CompassPage() {
         {/* ═══ 6. CARTE DE ROTATION ═══ */}
         <section>
           <SectionHeader title={fr ? "CARTE DE ROTATION" : "ROTATION MAP"} icon="🗺" />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {rotationGroups.map(g => (
               <div key={g.key} className="rounded-xl overflow-hidden" style={{ border: `1px solid color-mix(in srgb, ${g.color} 15%, transparent)`, background: `color-mix(in srgb, ${g.color} 3%, transparent)` }}>
                 <div className="px-3 py-2 flex items-center gap-1.5" style={{ borderBottom: `1px solid color-mix(in srgb, ${g.color} 10%, transparent)` }}>

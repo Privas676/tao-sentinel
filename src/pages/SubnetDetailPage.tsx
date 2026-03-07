@@ -327,7 +327,7 @@ export default function SubnetDetailPage() {
         {/* ══════════════════════════════════════════ */}
         {/*   DEEP DIVE — 2-column metrics grid         */}
         {/* ══════════════════════════════════════════ */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           {/* Flow & Momentum */}
           <SectionCard>

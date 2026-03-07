@@ -499,7 +499,7 @@ export default function SubnetsPage() {
         {/* ═══ MASTER TABLE ═══ */}
         <SwipeHint storageKey="swipe-subnets-v4" />
 
-        <div className="rounded-xl overflow-hidden border border-border">
+        <div className="rounded-xl overflow-hidden border border-border" style={{ boxShadow: "var(--shadow-card)" }}>
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
             <table className="w-full font-mono" style={{ minWidth: 1100 }}>
               <thead>
