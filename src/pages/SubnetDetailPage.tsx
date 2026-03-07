@@ -500,7 +500,7 @@ export default function SubnetDetailPage() {
                   };
                   return (
                     <div key={p} className={`flex items-center gap-2.5 py-1 px-2.5 rounded-md transition-colors ${active ? "bg-muted/40" : ""}`}>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${active ? "" : "opacity-20"}`} style={{ background: active ? profile.color : MUTED }} />
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${active ? "" : "opacity-[0.35]"}`} style={{ background: active ? profile.color : MUTED }} />
                       <span className={`font-mono text-[10px] ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                         {fr ? labels[p].fr : labels[p].en}
                       </span>

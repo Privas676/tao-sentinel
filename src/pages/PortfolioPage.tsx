@@ -342,7 +342,7 @@ export default function PortfolioPage() {
 
           {rows.length === 0 ? (
             <div className="py-16 text-center space-y-3">
-              <span className="text-3xl opacity-30">📊</span>
+              <span className="text-3xl opacity-70">📊</span>
               <p className="font-mono text-[11px] text-muted-foreground">{fr ? "Aucune position" : "No positions"}</p>
               <button onClick={() => setShowAdd(true)} className="font-mono text-[10px] text-primary/60 hover:text-primary transition-colors">
                 + {fr ? "Ajouter un subnet" : "Add a subnet"}

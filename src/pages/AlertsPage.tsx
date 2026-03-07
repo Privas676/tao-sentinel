@@ -606,7 +606,7 @@ export default function AlertsPage() {
         ) : (
           filteredByTab.length === 0 ? (
             <div className="py-16 text-center space-y-3">
-              <span className="text-3xl opacity-30">🔕</span>
+              <span className="text-3xl opacity-70">🔕</span>
               <p className="font-mono text-[11px] text-muted-foreground">{fr ? "Aucune alerte dans cette catégorie" : "No alerts in this category"}</p>
             </div>
           ) : (
