@@ -296,7 +296,7 @@ function AlertCard({ group, fr, scores, onDismiss }: {
   const subnet = ev.netuid != null ? scores.get(ev.netuid) : null;
   const confidence = subnet?.confianceScore ?? null;
 
-  const borderColor = sev === "critical" ? "border-l-destructive/50" : sev === "warning" ? "border-l-signal-hold/50" : "border-l-border";
+  const borderStyle = sev === "critical" ? { borderLeftColor: BREAK } : sev === "warning" ? { borderLeftColor: WARN } : {};
 
   return (
     <div className={`rounded-lg border border-border bg-card overflow-hidden border-l-[3px] ${borderColor}`}>
