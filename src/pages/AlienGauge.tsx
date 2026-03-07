@@ -833,6 +833,9 @@ export default function AlienGauge() {
           </div>
         )}
 
+        {/* ═══ VERDICT ENGINE — TOP 3 RENTRE / HOLD / SORS ═══ */}
+        <VerdictSummaryPanel />
+
         {/* ═══ TOP 3 OPPORTUNITIES + TOP 3 RISKS ═══ */}
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div>
