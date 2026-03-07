@@ -3,7 +3,8 @@ import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
-import { useMemo } from "react";
+import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
+import { useMemo, useState } from "react";
 import {
   verdictColor, verdictBg, verdictBorder, verdictIcon,
 } from "@/components/VerdictBadge";
@@ -102,6 +103,10 @@ export default function SubnetDetailPage() {
   const { scores, sparklines } = useSubnetScores();
   const { verdicts } = useSubnetVerdicts();
   const { data: radarData } = useStakeAnalytics();
+  const { isOwned, addPosition, removePosition } = useLocalPortfolio();
+  const [justToggled, setJustToggled] = useState(false);
+
+  const inPortfolio = isOwned(netuid);
 
   const score = scores.get(netuid);
   const verdict = verdicts.get(netuid);
@@ -113,6 +118,16 @@ export default function SubnetDetailPage() {
   }, [radarData, netuid]);
 
   const isSpecial = !!SPECIAL_SUBNETS[netuid];
+
+  const handlePortfolioToggle = () => {
+    if (inPortfolio) {
+      removePosition(netuid);
+    } else {
+      addPosition(netuid, 0, score?.alphaPrice);
+    }
+    setJustToggled(true);
+    setTimeout(() => setJustToggled(false), 1200);
+  };
 
   if (!score) {
     return (
@@ -180,6 +195,26 @@ export default function SubnetDetailPage() {
             </span>
           </div>
         )}
+      </div>
+
+      {/* ── Portfolio quick action ── */}
+      <div className="mb-6">
+        <button
+          onClick={handlePortfolioToggle}
+          className="font-mono text-[11px] tracking-wider px-4 py-2 rounded-lg transition-all duration-200"
+          style={{
+            background: inPortfolio ? "hsla(var(--gold), 0.12)" : "hsla(0,0%,100%,0.03)",
+            color: inPortfolio ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))",
+            border: `1px solid ${inPortfolio ? "hsla(var(--gold), 0.25)" : "hsla(0,0%,100%,0.08)"}`,
+          }}
+        >
+          {justToggled
+            ? (inPortfolio ? "✓ Ajouté" : "✓ Retiré")
+            : inPortfolio
+              ? `★ ${fr ? "Dans le portefeuille" : "In portfolio"}`
+              : `+ ${fr ? "Ajouter au portefeuille" : "Add to portfolio"}`
+          }
+        </button>
       </div>
 
       {/* ── Top-level KPIs ── */}
