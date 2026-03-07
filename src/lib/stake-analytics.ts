@@ -485,15 +485,17 @@ export function estimateSlippageBps(taoInPool: number, alphaInPool: number, trad
 
 /**
  * Estimate bid/ask spread from pool depth.
- * Smaller pools → wider spread. Based on constant-product math for a minimal trade.
+ * Uses a 0.1 TAO reference trade to measure round-trip cost.
  */
 export function estimateSpreadBps(taoInPool: number, alphaInPool: number): number {
   if (taoInPool <= 0 || alphaInPool <= 0) return 0;
-  // Spread ≈ slippage of buying + slippage of selling a small amount
-  const minTrade = Math.min(taoInPool * 0.001, 0.1); // 0.1% of pool or 0.1 TAO
-  const buySlippage = estimateSlippageBps(taoInPool, alphaInPool, minTrade);
-  const sellSlippage = estimateSlippageBps(alphaInPool, taoInPool, minTrade * (alphaInPool / taoInPool));
-  return buySlippage + sellSlippage;
+  // Use fixed 0.1 TAO trade for spread estimation
+  const tradeTao = 0.1;
+  const buySlippage = estimateSlippageBps(taoInPool, alphaInPool, tradeTao);
+  // Sell side: convert 0.1 TAO worth of alpha back
+  const alphaEquiv = tradeTao * (alphaInPool / taoInPool);
+  const sellSlippage = estimateSlippageBps(alphaInPool, taoInPool, alphaEquiv);
+  return Math.max(1, buySlippage + sellSlippage); // minimum 1bp if pool exists
 }
 
 export function computeAMMMetrics(eco: EconomicContext): AMMMetrics {
@@ -504,28 +506,47 @@ export function computeAMMMetrics(eco: EconomicContext): AMMMetrics {
   const spreadBps = estimateSpreadBps(taoInPool, alphaInPool);
   const poolDepth = taoInPool * 2; // proxy: total pool value ≈ 2x TAO side
 
-  // AMM Efficiency score (0-100): higher = more efficient/liquid
-  let efficiency = 50;
-  // Pool depth bonus
-  if (poolDepth > 10000) efficiency += 25;
-  else if (poolDepth > 1000) efficiency += 20;
-  else if (poolDepth > 100) efficiency += 10;
-  else if (poolDepth > 10) efficiency += 5;
-  else efficiency -= 10;
-  // Slippage penalty
-  if (slippageBps1Tao > 500) efficiency -= 25;
-  else if (slippageBps1Tao > 200) efficiency -= 15;
-  else if (slippageBps1Tao > 50) efficiency -= 5;
-  else efficiency += 10;
-  // Spread penalty
-  if (spreadBps > 200) efficiency -= 15;
-  else if (spreadBps > 50) efficiency -= 5;
-  else efficiency += 10;
-  // Balance bonus (closer to 1:1 = better)
+  // AMM Efficiency score (0-100) — continuous scale for differentiation
+  let efficiency = 0;
+
+  // Pool depth component (0-35): log-scaled for better spread
+  if (poolDepth > 0) {
+    const depthLog = Math.log10(poolDepth + 1); // e.g. 10K→4, 100K→5, 1M→6
+    efficiency += clamp(Math.round(depthLog * 7), 0, 35);
+  }
+
+  // Slippage component for 1 TAO (0-25): lower slippage = better
+  if (slippageBps1Tao <= 0 && taoInPool > 0) efficiency += 25; // negligible
+  else if (slippageBps1Tao <= 5) efficiency += 22;
+  else if (slippageBps1Tao <= 10) efficiency += 18;
+  else if (slippageBps1Tao <= 20) efficiency += 14;
+  else if (slippageBps1Tao <= 50) efficiency += 8;
+  else if (slippageBps1Tao <= 100) efficiency += 4;
+  // >100bp: 0
+
+  // Slippage for 10 TAO (0-20): tests deeper liquidity
+  if (slippageBps10Tao <= 0 && taoInPool > 0) efficiency += 20;
+  else if (slippageBps10Tao <= 10) efficiency += 18;
+  else if (slippageBps10Tao <= 30) efficiency += 14;
+  else if (slippageBps10Tao <= 50) efficiency += 10;
+  else if (slippageBps10Tao <= 100) efficiency += 6;
+  else if (slippageBps10Tao <= 200) efficiency += 3;
+
+  // Spread component (0-10)
+  if (spreadBps <= 2) efficiency += 10;
+  else if (spreadBps <= 5) efficiency += 8;
+  else if (spreadBps <= 10) efficiency += 6;
+  else if (spreadBps <= 30) efficiency += 4;
+  else if (spreadBps <= 100) efficiency += 2;
+
+  // Pool balance component (0-10): ratio closer to spot = better
   if (poolBalance > 0) {
     const imbalance = Math.abs(Math.log(poolBalance));
-    if (imbalance < 0.1) efficiency += 5;
-    else if (imbalance > 2) efficiency -= 10;
+    if (imbalance < 0.5) efficiency += 10;
+    else if (imbalance < 1) efficiency += 7;
+    else if (imbalance < 2) efficiency += 4;
+    else if (imbalance < 3) efficiency += 2;
+    // >3x imbalance: 0
   }
 
   return {
