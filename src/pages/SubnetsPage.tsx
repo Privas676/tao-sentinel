@@ -364,7 +364,7 @@ export default function SubnetsPage() {
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
-      <div className="px-4 sm:px-6 py-4 max-w-[1400px] mx-auto space-y-4">
+      <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto space-y-5">
 
         {/* ═══ HEADER ═══ */}
         <PageHeader
