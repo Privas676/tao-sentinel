@@ -29,28 +29,19 @@ function DetailSparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number
   );
 }
 
-/* ── Logic helpers ── */
+/* ── Logic helpers — use unified decision source ── */
 
-function convictionLevel(s: UnifiedSubnetScore, v?: SubnetVerdictData): { level: "HIGH" | "MEDIUM" | "LOW"; score: number } {
-  const raw = v ? Math.max(v.entryScore, v.holdScore) : Math.abs(s.opp - s.risk) * (s.conf / 100);
-  return { level: raw >= 70 ? "HIGH" : raw >= 40 ? "MEDIUM" : "LOW", score: Math.round(raw) };
-}
-
-function actionLabel(a: string): "RENTRE" | "SORS" | "RENFORCER" | "HOLD" {
-  return a === "ENTER" ? "RENTRE" : a === "EXIT" ? "SORS" : a === "STAKE" ? "RENFORCER" : "HOLD";
-}
-
-function urgency(s: UnifiedSubnetScore, fr: boolean): { text: string; color: string } {
-  if (s.isOverridden) return { text: fr ? "Immédiate — sortie forcée" : "Immediate — forced exit", color: BREAK };
-  if (s.depegProbability >= 50) return { text: fr ? "Haute — risque depeg" : "High — depeg risk", color: BREAK };
-  if (s.action === "EXIT") return { text: fr ? "Haute" : "High", color: BREAK };
-  if (s.action === "ENTER" && s.opp > 65) return { text: fr ? "Haute — fenêtre ouverte" : "High — window open", color: GO };
+function urgency(d: SubnetDecision, fr: boolean): { text: string; color: string } {
+  if (d.isOverridden) return { text: fr ? "Immédiate — sortie forcée" : "Immediate — forced exit", color: BREAK };
+  if (d.depegProbability >= 50) return { text: fr ? "Haute — risque depeg" : "High — depeg risk", color: BREAK };
+  if (d.engineAction === "EXIT") return { text: fr ? "Haute" : "High", color: BREAK };
+  if (d.engineAction === "ENTER" && d.opp > 65) return { text: fr ? "Haute — fenêtre ouverte" : "High — window open", color: GO };
   return { text: fr ? "Normale" : "Normal", color: MUTED };
 }
 
-function horizon(s: UnifiedSubnetScore, fr: boolean): string {
-  if (s.action === "ENTER") return fr ? "Court à moyen terme" : "Short to medium term";
-  if (s.action === "HOLD" || s.action === "STAKE") return fr ? "Moyen terme" : "Medium term";
+function horizon(d: SubnetDecision, fr: boolean): string {
+  if (d.engineAction === "ENTER") return fr ? "Court à moyen terme" : "Short to medium term";
+  if (d.engineAction === "HOLD" || d.engineAction === "STAKE") return fr ? "Moyen terme" : "Medium term";
   return fr ? "Court terme" : "Short term";
 }
 

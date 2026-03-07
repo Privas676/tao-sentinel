@@ -95,8 +95,8 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
             </div>
           </SheetHeader>
           <div className="flex items-center justify-between mt-3">
-            <ActionBadge action={badgeAction} />
-            <span className="font-mono text-[11px] font-bold text-foreground/80">{row.signalPrincipal}</span>
+            <ActionBadge action={decision.badgeAction} />
+            <span className="font-mono text-[11px] font-bold text-foreground/80">{decision.signalPrincipal}</span>
           </div>
         </div>
 
