@@ -69,7 +69,7 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
               className="w-full bg-muted/20 border border-border rounded px-2.5 py-1.5 font-mono text-[11px] text-foreground placeholder:text-muted-foreground outline-none focus:border-muted-foreground" />
           </div>
           <div className="max-h-52 overflow-y-auto">
-            {filtered.length === 0 && <div className="px-3 py-3 font-mono text-[10px] text-muted-foreground/20 text-center">—</div>}
+            {filtered.length === 0 && <div className="px-3 py-3 font-mono text-[10px] text-muted-foreground text-center">—</div>}
             {filtered.map(s => (
               <button key={s.netuid} type="button" onClick={() => { onChange(s.netuid); setOpen(false); setSearch(""); }}
                 className={`w-full text-left px-3 py-2 font-mono text-[11px] flex items-center gap-2 transition-colors ${s.netuid === value ? "bg-muted/40 text-foreground" : "text-foreground/65 hover:bg-muted/20"}`}>
