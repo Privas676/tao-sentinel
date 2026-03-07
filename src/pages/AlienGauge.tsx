@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { VerdictBadge, VerdictRow, verdictColor, verdictIcon } from "@/components/VerdictBadge";
 import { Link } from "react-router-dom";
@@ -385,6 +386,33 @@ function SubnetPanel({ signal, open, onClose }: { signal: DashSignal | null; ope
 }
 
 /* ═══════════════════════════════════════ */
+/*   COLLAPSIBLE SECTION HELPER            */
+/* ═══════════════════════════════════════ */
+function CollapsibleSection({ title, icon, color, lineColor, badge, children, defaultOpen = true }: {
+  title: string; icon: string; color: string; lineColor: string;
+  badge?: ReactNode; children: ReactNode; defaultOpen?: boolean;
+}) {
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(!isMobile);
+  useEffect(() => { setOpen(!isMobile || defaultOpen === false ? defaultOpen : !isMobile); }, [isMobile]);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <div className="flex items-center gap-2 mb-3 cursor-pointer group select-none">
+          <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color }}>
+            {icon} {title}
+          </span>
+          <div className="flex-1 h-px" style={{ background: lineColor }} />
+          {badge}
+          <span className="font-mono text-[10px] transition-transform" style={{ color: "rgba(255,255,255,0.25)", transform: open ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>{children}</CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/* ═══════════════════════════════════════ */
 /*   VERDICT SUMMARY PANEL                   */
 /* ═══════════════════════════════════════ */
 function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex, globalStability, confianceScore }: {
@@ -441,13 +469,7 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
   return (
     <div className="mt-6 space-y-5">
       {/* ═══ MACRO DRIVERS ═══ */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
-            DRIVERS DU MOMENT
-          </span>
-          <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
-        </div>
+      <CollapsibleSection title="DRIVERS DU MOMENT" icon="📊" color="rgba(255,215,0,0.5)" lineColor="rgba(255,215,0,0.08)">
         <div className="flex flex-wrap gap-2">
           {drivers.map(d => (
             <div key={d.label} className="flex items-center gap-2 px-3 py-2 rounded-lg"
@@ -458,15 +480,11 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
             </div>
           ))}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ═══ DECISION ENGINE — TOP 5 ═══ */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
-            DECISION ENGINE
-          </span>
-          <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
+      <CollapsibleSection title="DECISION ENGINE" icon="⚙" color="rgba(255,215,0,0.5)" lineColor="rgba(255,215,0,0.08)"
+        badge={
           <div className="flex gap-2">
             {sections.map(s => (
               <span key={s.title} className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: `${s.color}15`, color: s.color, border: `1px solid ${s.color}40` }}>
@@ -474,7 +492,7 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
               </span>
             ))}
           </div>
-        </div>
+        }>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {sections.map(s => (
             <div key={s.title} className="rounded-xl" style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)" }}>
@@ -499,20 +517,16 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
             </div>
           ))}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ═══ RISQUES CRITIQUES ═══ */}
       {criticalRisks.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(229,57,53,0.5)" }}>
-              🚨 RISQUES CRITIQUES
-            </span>
-            <div className="flex-1 h-px" style={{ background: "rgba(229,57,53,0.08)" }} />
+        <CollapsibleSection title="RISQUES CRITIQUES" icon="🚨" color="rgba(229,57,53,0.5)" lineColor="rgba(229,57,53,0.08)"
+          badge={
             <span className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: "rgba(229,57,53,0.08)", color: "rgba(229,57,53,0.7)", border: "1px solid rgba(229,57,53,0.2)" }}>
               {criticalRisks.length}
             </span>
-          </div>
+          }>
           <div className="rounded-xl overflow-hidden" style={{ background: "rgba(229,57,53,0.02)", border: "1px solid rgba(229,57,53,0.08)" }}>
             {criticalRisks.map(s => {
               const tags: { label: string; color: string }[] = [];
@@ -538,7 +552,7 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
               );
             })}
           </div>
-        </div>
+        </CollapsibleSection>
       )}
     </div>
   );
