@@ -27,6 +27,7 @@ import { SectionHeader } from "@/components/sentinel/SectionHeader";
 import { MetricCard } from "@/components/sentinel/MetricCard";
 import { SparklineMini } from "@/components/sentinel/SparklineMini";
 import { ConfidenceBar } from "@/components/sentinel/ConfidenceBar";
+import { GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 
 /* ═══════════════════════════════════════════════ */
 /*   COMPASS — Strategic Decision Command Center  */
