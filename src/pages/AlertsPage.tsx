@@ -5,15 +5,8 @@ import { useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
-import { useDelistMode } from "@/hooks/use-delist-mode";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
-import {
-  evaluateAllDelistRisks,
-  delistCategoryColor,
-  type DelistRiskResult,
-  type SubnetMetricsForDelist,
-} from "@/lib/delist-risk";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   RISK & ALERTS — Decision Vigilance Center             */
