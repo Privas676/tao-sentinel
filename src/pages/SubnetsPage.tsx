@@ -71,12 +71,6 @@ function mainSignal(s: UnifiedSubnetScore, fr: boolean): string {
   return fr ? "Stable" : "Stable";
 }
 
-function actionFilterLabel(a: ActionFilter, fr: boolean): string {
-  if (a === "ALL") return fr ? "Toutes" : "All";
-  if (a === "ENTER") return fr ? "Entrer" : "Enter";
-  if (a === "HOLD") return fr ? "Attendre" : "Hold";
-  return fr ? "Sortir" : "Exit";
-}
 
 /* ─── Saved views ─── */
 const SAVED_VIEWS_KEY = "sentinel-subnet-views";
@@ -119,15 +113,15 @@ function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
 
           {/* Conviction & Momentum */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg px-3 py-2" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+            <div className="rounded-lg px-3 py-2 bg-muted/30 border border-border">
               <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase">CONVICTION</div>
-              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.convictionLevel === "HIGH" ? "hsl(145,65%,48%)" : row.convictionLevel === "MEDIUM" ? "hsl(38,92%,55%)" : "hsl(var(--muted-foreground))" }}>
+              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : row.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))" }}>
                 {row.convictionLevel}
               </div>
             </div>
-            <div className="rounded-lg px-3 py-2" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+            <div className="rounded-lg px-3 py-2 bg-muted/30 border border-border">
               <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase">MOMENTUM</div>
-              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.momentumScore >= 55 ? "hsl(145,65%,48%)" : row.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>
+              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.momentumScore >= 55 ? "hsl(var(--signal-go))" : row.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))" }}>
                 {Math.round(row.momentumScore)}
               </div>
             </div>
@@ -135,7 +129,7 @@ function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
 
           {/* Thesis */}
           {thesis.length > 0 && (
-            <div className="rounded-lg p-3" style={{ background: "hsla(145,65%,48%,0.03)", border: "1px solid hsla(145,65%,48%,0.08)" }}>
+            <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-go), 0.03)", border: "1px solid hsla(var(--signal-go), 0.08)" }}>
               <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
                 {fr ? "THÈSE" : "THESIS"}
               </div>
@@ -145,7 +139,7 @@ function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
 
           {/* Invalidation */}
           {invalidation.length > 0 && (
-            <div className="rounded-lg p-3" style={{ background: "hsla(4,80%,50%,0.03)", border: "1px solid hsla(4,80%,50%,0.08)" }}>
+            <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-break), 0.03)", border: "1px solid hsla(var(--signal-break), 0.08)" }}>
               <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
                 {fr ? "INVALIDATION" : "INVALIDATION"}
               </div>
@@ -184,11 +178,24 @@ function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
 
 function MetricMini({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
-    <div className="rounded-lg px-3 py-2 text-center" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+    <div className="rounded-lg px-3 py-2 text-center bg-muted/30 border border-border">
       <div className="font-mono text-[7px] text-muted-foreground/65 tracking-wider uppercase">{label}</div>
       <div className="font-mono text-lg font-bold mt-0.5" style={{ color }}>{value}</div>
     </div>
   );
+}
+
+/* ─── Filter label helpers ─── */
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground/40">{label}</span>
+      {children}
+    </div>
+  );
+}
+function FilterSep() {
+  return <div className="w-px self-stretch" style={{ background: "hsla(0,0%,100%,0.06)", minHeight: 28 }} />;
 }
 
 /* ═══════════════════════════════════════ */
@@ -318,7 +325,7 @@ export default function SubnetsPage() {
     </th>
   );
 
-  const total = countRentre + countHold + countSors;
+  
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
@@ -339,33 +346,7 @@ export default function SubnetsPage() {
           }
         />
 
-        {/* ═══ VERDICT DISTRIBUTION ═══ */}
-        {total > 0 && (
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2 font-mono text-[10px]">
-              <button onClick={() => setActionFilter(actionFilter === "ENTER" ? "ALL" : "ENTER")}
-                className={`px-2.5 py-1 rounded transition-all ${actionFilter === "ENTER" ? "font-bold" : "opacity-70 hover:opacity-100"}`}
-                style={{ background: actionFilter === "ENTER" ? "hsla(145,65%,48%,0.1)" : "transparent", color: "hsl(145,65%,48%)", border: actionFilter === "ENTER" ? "1px solid hsla(145,65%,48%,0.2)" : "1px solid transparent" }}>
-                🟢 {countRentre}
-              </button>
-              <button onClick={() => setActionFilter(actionFilter === "HOLD" ? "ALL" : "HOLD")}
-                className={`px-2.5 py-1 rounded transition-all ${actionFilter === "HOLD" ? "font-bold" : "opacity-70 hover:opacity-100"}`}
-                style={{ background: actionFilter === "HOLD" ? "hsla(38,92%,55%,0.1)" : "transparent", color: "hsl(38,92%,55%)", border: actionFilter === "HOLD" ? "1px solid hsla(38,92%,55%,0.2)" : "1px solid transparent" }}>
-                🟡 {countHold}
-              </button>
-              <button onClick={() => setActionFilter(actionFilter === "EXIT" ? "ALL" : "EXIT")}
-                className={`px-2.5 py-1 rounded transition-all ${actionFilter === "EXIT" ? "font-bold" : "opacity-70 hover:opacity-100"}`}
-                style={{ background: actionFilter === "EXIT" ? "hsla(4,80%,50%,0.1)" : "transparent", color: "hsl(4,80%,50%)", border: actionFilter === "EXIT" ? "1px solid hsla(4,80%,50%,0.2)" : "1px solid transparent" }}>
-                🔴 {countSors}
-              </button>
-            </div>
-            <div className="flex h-2 rounded-full overflow-hidden" style={{ width: 100, background: "hsla(0,0%,100%,0.04)" }}>
-              {countRentre > 0 && <div className="h-full" style={{ width: `${(countRentre / total) * 100}%`, background: "hsl(145,65%,48%)" }} />}
-              {countHold > 0 && <div className="h-full" style={{ width: `${(countHold / total) * 100}%`, background: "hsl(38,92%,55%)" }} />}
-              {countSors > 0 && <div className="h-full" style={{ width: `${(countSors / total) * 100}%`, background: "hsl(4,80%,50%)" }} />}
-            </div>
-          </div>
-        )}
+        {/* Verdict counts integrated into filter bar below — no separate distribution bar */}
 
         {/* ═══ FILTER BAR ═══ */}
         <div className="rounded-xl p-3 space-y-2.5" style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
@@ -396,74 +377,86 @@ export default function SubnetsPage() {
             ))}
           </div>
 
-          {/* Filter chips */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Tous" : "All" },
-                { key: "PORTFOLIO", label: "Portfolio" },
-              ]}
-              active={scope}
-              onChange={v => setScope(v as ScopeFilter)}
-            />
-            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Toutes" : "All" },
-                { key: "ENTER", label: fr ? "Entrer" : "Enter" },
-                { key: "HOLD", label: fr ? "Attendre" : "Hold" },
-                { key: "EXIT", label: fr ? "Sortir" : "Exit" },
-              ]}
-              active={actionFilter}
-              onChange={v => setActionFilter(v as ActionFilter)}
-            />
-            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Tous" : "All" },
-                { key: "OK", label: "OK" },
-                { key: "WATCH", label: "⚠" },
-                { key: "DANGER", label: "🔴" },
-              ]}
-              active={statusFilter}
-              onChange={v => setStatusFilter(v as StatusFilter)}
-            />
-            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Toutes" : "All" },
-                { key: "HIGH", label: fr ? "Haute" : "High" },
-                { key: "MEDIUM", label: fr ? "Moy." : "Med" },
-                { key: "LOW", label: fr ? "Faible" : "Low" },
-              ]}
-              active={convictionFilter}
-              onChange={v => setConvictionFilter(v as ConvictionFilter)}
-            />
+          {/* Filter chips — labeled groups */}
+          <div className="flex items-start gap-4 flex-wrap">
+            <FilterGroup label="SCOPE">
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Tous" : "All" },
+                  { key: "PORTFOLIO", label: "Portfolio" },
+                ]}
+                active={scope}
+                onChange={v => setScope(v as ScopeFilter)}
+              />
+            </FilterGroup>
+            <FilterSep />
+            <FilterGroup label="ACTION">
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Toutes" : "All" },
+                  { key: "ENTER", label: fr ? "Entrer" : "Enter", count: countRentre || undefined },
+                  { key: "HOLD", label: fr ? "Attendre" : "Hold", count: countHold || undefined },
+                  { key: "EXIT", label: fr ? "Sortir" : "Exit", count: countSors || undefined },
+                ]}
+                active={actionFilter}
+                onChange={v => setActionFilter(v as ActionFilter)}
+              />
+            </FilterGroup>
+            <FilterSep />
+            <FilterGroup label={fr ? "STATUT" : "STATUS"}>
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Tous" : "All" },
+                  { key: "OK", label: "OK" },
+                  { key: "WATCH", label: "⚠" },
+                  { key: "DANGER", label: "🔴" },
+                ]}
+                active={statusFilter}
+                onChange={v => setStatusFilter(v as StatusFilter)}
+              />
+            </FilterGroup>
+            <FilterSep />
+            <FilterGroup label="CONVICTION">
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Toutes" : "All" },
+                  { key: "HIGH", label: fr ? "Haute" : "High" },
+                  { key: "MEDIUM", label: fr ? "Moy." : "Med" },
+                  { key: "LOW", label: fr ? "Faible" : "Low" },
+                ]}
+                active={convictionFilter}
+                onChange={v => setConvictionFilter(v as ConvictionFilter)}
+              />
+            </FilterGroup>
           </div>
           {/* Second row — advanced filters */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Toutes" : "All" },
-                { key: "HIGH", label: fr ? "Haute" : "High" },
-                { key: "MEDIUM", label: fr ? "Moy." : "Med" },
-                { key: "LOW", label: fr ? "Faible" : "Low" },
-              ]}
-              active={liquidityFilter}
-              onChange={v => setLiquidityFilter(v as LiquidityFilter)}
-            />
-            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Toutes" : "All" },
-                { key: "HEALTHY", label: fr ? "Saine" : "Healthy" },
-                { key: "FRAGILE", label: fr ? "Fragile" : "Fragile" },
-                { key: "CONCENTRATED", label: fr ? "Concentrée" : "Conc." },
-              ]}
-              active={structureFilter}
-              onChange={v => setStructureFilter(v as StructureFilter)}
-            />
-            <span className="ml-auto font-mono text-[9px] text-muted-foreground/65">
+          <div className="flex items-start gap-4 flex-wrap">
+            <FilterGroup label={fr ? "LIQUIDITÉ" : "LIQUIDITY"}>
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Toutes" : "All" },
+                  { key: "HIGH", label: fr ? "Haute" : "High" },
+                  { key: "MEDIUM", label: fr ? "Moy." : "Med" },
+                  { key: "LOW", label: fr ? "Faible" : "Low" },
+                ]}
+                active={liquidityFilter}
+                onChange={v => setLiquidityFilter(v as LiquidityFilter)}
+              />
+            </FilterGroup>
+            <FilterSep />
+            <FilterGroup label="STRUCTURE">
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Toutes" : "All" },
+                  { key: "HEALTHY", label: fr ? "Saine" : "Healthy" },
+                  { key: "FRAGILE", label: fr ? "Fragile" : "Fragile" },
+                  { key: "CONCENTRATED", label: fr ? "Concentrée" : "Conc." },
+                ]}
+                active={structureFilter}
+                onChange={v => setStructureFilter(v as StructureFilter)}
+              />
+            </FilterGroup>
+            <span className="ml-auto font-mono text-[9px] text-muted-foreground/65 self-end pb-0.5">
               {rows.length} / {scoresList.length} {fr ? "résultats" : "results"}
             </span>
           </div>
@@ -505,16 +498,16 @@ export default function SubnetsPage() {
                   </tr>
                 ) : rows.map((r, idx) => {
                   const actionLabel = r.action === "ENTER" ? (fr ? "Entrer" : "Enter") : r.action === "EXIT" ? (fr ? "Sortir" : "Exit") : r.action === "HOLD" ? "Hold" : r.action === "STAKE" ? "Stake" : r.action;
-                  const convColor = r.convictionLevel === "HIGH" ? "hsl(145,65%,48%)" : r.convictionLevel === "MEDIUM" ? "hsl(38,92%,55%)" : "hsl(var(--muted-foreground))";
-                  const liqColor = r.liquidityLevel === "HIGH" ? "hsl(145,65%,48%)" : r.liquidityLevel === "MEDIUM" ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)";
-                  const structColor = r.structureLevel === "HEALTHY" ? "hsl(145,65%,48%)" : r.structureLevel === "FRAGILE" ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)";
+                  const convColor = r.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : r.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
+                  const liqColor = r.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : r.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
+                  const structColor = r.structureLevel === "HEALTHY" ? "hsl(var(--signal-go))" : r.structureLevel === "FRAGILE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
                   return (
                     <tr
                       key={r.netuid}
                       className="transition-colors cursor-pointer hover:bg-accent/30"
                       style={{
                         borderBottom: "1px solid hsla(0,0%,100%,0.03)",
-                        ...(r.isOverridden ? { background: "hsla(4,80%,50%,0.03)", borderLeft: "2px solid hsla(4,80%,50%,0.4)" } : {}),
+                        ...(r.isOverridden ? { background: "hsla(var(--signal-break), 0.03)", borderLeft: "2px solid hsla(var(--signal-break), 0.4)" } : {}),
                       }}
                       onClick={() => setDrawerRow(r)}
                     >
@@ -522,12 +515,12 @@ export default function SubnetsPage() {
                       <td className="py-2 px-2.5 text-[10px] sticky left-[44px] z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
                         <span className="text-foreground/85 font-medium">{r.name}</span>
                         {SPECIAL_SUBNETS[r.netuid] && (
-                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(210,80%,55%,0.08)", color: "hsl(210,80%,55%)", border: "1px solid hsla(210,80%,55%,0.2)" }}>
+                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-hold), 0.08)", color: "hsl(var(--signal-hold))", border: "1px solid hsla(var(--signal-hold), 0.2)" }}>
                             {SPECIAL_SUBNETS[r.netuid].label}
                           </span>
                         )}
                         {r.isOverridden && (
-                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(4,80%,50%,0.08)", color: "hsl(4,80%,50%)", border: "1px solid hsla(4,80%,50%,0.2)" }}>⛔</span>
+                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-break), 0.08)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.2)" }}>⛔</span>
                         )}
                       </td>
                       <td className="py-2 px-2.5 text-center">
@@ -540,7 +533,7 @@ export default function SubnetsPage() {
                       </td>
                       <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: confianceColor(r.confianceScore) }}>{r.confianceScore}%</td>
                       <td className="py-2 px-2.5 text-right font-mono text-[10px] font-bold" style={{ color: riskColor(r.risk) }}>{r.risk}</td>
-                      <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: r.momentumScore >= 55 ? "hsl(145,65%,48%)" : r.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>{Math.round(r.momentumScore)}</td>
+                      <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: r.momentumScore >= 55 ? "hsl(var(--signal-go))" : r.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))" }}>{Math.round(r.momentumScore)}</td>
                       <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: opportunityColor(r.opp) }}>{r.opp}</td>
                       <td className="py-2 px-2.5 text-center">
                         <span className="font-mono text-[9px]" style={{ color: liqColor }}>{r.liquidityLevel === "HIGH" ? "●" : r.liquidityLevel === "MEDIUM" ? "◐" : "○"}</span>
