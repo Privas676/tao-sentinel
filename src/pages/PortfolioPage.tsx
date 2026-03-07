@@ -66,7 +66,7 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
         <div className="absolute z-50 mt-1 w-full rounded-lg overflow-hidden shadow-2xl bg-popover border border-border">
           <div className="px-2 pt-2 pb-1">
             <input ref={inputRef} type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..."
-              className="w-full bg-muted/20 border border-border rounded px-2.5 py-1.5 font-mono text-[11px] text-foreground/80 placeholder:text-muted-foreground/30 outline-none focus:border-muted-foreground/40" />
+              className="w-full bg-muted/20 border border-border rounded px-2.5 py-1.5 font-mono text-[11px] text-foreground placeholder:text-muted-foreground outline-none focus:border-muted-foreground" />
           </div>
           <div className="max-h-52 overflow-y-auto">
             {filtered.length === 0 && <div className="px-3 py-3 font-mono text-[10px] text-muted-foreground/20 text-center">—</div>}
