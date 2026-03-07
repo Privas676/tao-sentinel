@@ -706,8 +706,8 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
     verdict = "HOLD";
   }
 
-  // G5: Strong emissions but extreme concentration → don't upgrade
-  if (input.economicContext.emissionsPercent > 2 && input.snapshot.stakeConcentration > 75 && verdict === "RENTRE") {
+  // G5: Strong emissions but extreme concentration → don't upgrade (Bittensor: only >98%)
+  if (input.economicContext.emissionsPercent > 2 && input.snapshot.stakeConcentration > 98 && verdict === "RENTRE") {
     verdict = "HOLD";
   }
 
