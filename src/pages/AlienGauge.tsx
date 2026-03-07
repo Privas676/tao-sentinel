@@ -386,6 +386,33 @@ function SubnetPanel({ signal, open, onClose }: { signal: DashSignal | null; ope
 }
 
 /* ═══════════════════════════════════════ */
+/*   COLLAPSIBLE SECTION HELPER            */
+/* ═══════════════════════════════════════ */
+function CollapsibleSection({ title, icon, color, lineColor, badge, children, defaultOpen = true }: {
+  title: string; icon: string; color: string; lineColor: string;
+  badge?: ReactNode; children: ReactNode; defaultOpen?: boolean;
+}) {
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(!isMobile);
+  useEffect(() => { setOpen(!isMobile || defaultOpen === false ? defaultOpen : !isMobile); }, [isMobile]);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <div className="flex items-center gap-2 mb-3 cursor-pointer group select-none">
+          <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color }}>
+            {icon} {title}
+          </span>
+          <div className="flex-1 h-px" style={{ background: lineColor }} />
+          {badge}
+          <span className="font-mono text-[10px] transition-transform" style={{ color: "rgba(255,255,255,0.25)", transform: open ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>{children}</CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/* ═══════════════════════════════════════ */
 /*   VERDICT SUMMARY PANEL                   */
 /* ═══════════════════════════════════════ */
 function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex, globalStability, confianceScore }: {
