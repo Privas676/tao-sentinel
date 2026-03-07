@@ -26,6 +26,7 @@ export type SubnetRadarData = {
   priceContext: PriceContext;
   economicContext: EconomicContext;
   derivedMetrics: DerivedMetrics;
+  ammMetrics: AMMMetrics;
   stakeChange24hPct: number;
   stakeChange7dPct: number;
   sparklineCapital: number[];
