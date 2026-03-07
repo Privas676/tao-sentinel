@@ -326,37 +326,43 @@ export default function PortfolioPage() {
         {/* ══════════════════════════════════ */}
         {analytics && analytics.weights.length > 0 && (
           <SectionCard>
-            <SectionTitle icon="⚖️" title={fr ? "Allocation & Cible" : "Allocation & Target"} />
-            <div className="px-5 py-4">
-              <div className="space-y-2">
-                {analytics.weights.sort((a, b) => b.weight - a.weight).map(w => {
-                  const targetWeight = w.pAction === "EXIT" ? 0
-                    : w.pAction === "REDUCE" ? Math.max(0, w.weight * 0.5)
-                    : w.pAction === "REINFORCE" ? Math.min(15, w.weight * 1.5)
-                    : w.weight;
-                  const delta = targetWeight - w.weight;
-                  return (
-                    <div key={w.netuid} className="flex items-center gap-3">
-                      <Link to={`/subnets/${w.netuid}`} className="font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors w-[110px] shrink-0 truncate">
-                        SN-{w.netuid} {w.name}
-                      </Link>
-                      <div className="flex-1 flex items-center gap-1.5">
-                        <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/20 relative">
-                          <div className="h-full rounded-full bg-muted-foreground/25" style={{ width: `${Math.min(100, w.weight)}%` }} />
+            <SectionTitle icon="⚖️" title={fr ? "Allocation & Cible" : "Allocation & Target"} badge={
+              <button onClick={() => setShowAlloc(!showAlloc)} className="font-mono text-[8px] text-muted-foreground hover:text-foreground transition-colors">
+                {showAlloc ? "▲" : "▼"} {analytics.weights.length} pos.
+              </button>
+            } />
+            {showAlloc && (
+              <div className="px-5 py-4">
+                <div className="space-y-2">
+                  {analytics.weights.sort((a, b) => b.weight - a.weight).map(w => {
+                    const targetWeight = w.pAction === "EXIT" ? 0
+                      : w.pAction === "REDUCE" ? Math.max(0, w.weight * 0.5)
+                      : w.pAction === "REINFORCE" ? Math.min(15, w.weight * 1.5)
+                      : w.weight;
+                    const delta = targetWeight - w.weight;
+                    return (
+                      <div key={w.netuid} className="flex items-center gap-3">
+                        <Link to={`/subnets/${w.netuid}`} className="font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors w-[110px] shrink-0 truncate">
+                          SN-{w.netuid} {w.name}
+                        </Link>
+                        <div className="flex-1 flex items-center gap-1.5">
+                          <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/20 relative">
+                            <div className="h-full rounded-full bg-muted-foreground/25" style={{ width: `${Math.min(100, w.weight)}%` }} />
+                          </div>
+                          <span className="font-mono text-[9px] text-muted-foreground w-10 text-right">{w.weight.toFixed(1)}%</span>
                         </div>
-                        <span className="font-mono text-[9px] text-muted-foreground w-10 text-right">{w.weight.toFixed(1)}%</span>
+                        <span className="font-mono text-[9px] w-6 text-center" style={{ color: delta > 2 ? GO : delta < -2 ? BREAK : MUTED }}>
+                          {delta > 0 ? "↑" : delta < -1 ? "↓" : "="}
+                        </span>
+                        <span className="font-mono text-[9px] w-10 text-right" style={{ color: portfolioActionColor(w.pAction) }}>
+                          {targetWeight.toFixed(1)}%
+                        </span>
                       </div>
-                      <span className="font-mono text-[9px] w-6 text-center" style={{ color: delta > 2 ? GO : delta < -2 ? BREAK : MUTED }}>
-                        {delta > 0 ? "↑" : delta < -1 ? "↓" : "="}
-                      </span>
-                      <span className="font-mono text-[9px] w-10 text-right" style={{ color: portfolioActionColor(w.pAction) }}>
-                        {targetWeight.toFixed(1)}%
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </SectionCard>
         )}
 
