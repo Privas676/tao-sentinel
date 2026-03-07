@@ -434,7 +434,7 @@ export default function PortfolioPage() {
                         {/* Position */}
                         <td className="py-3 px-3 font-mono text-[11px] text-foreground/70">
                           <InlineEditQty value={r.taoInvest} onSave={v => { portfolio.updateQuantity(r.netuid, v); toast.success("✓"); }} />
-                          <span className="text-muted-foreground/25 ml-1">τ</span>
+                          <span className="text-muted-foreground ml-1">τ</span>
                         </td>
                         {/* Weight */}
                         <td className="py-3 px-3 font-mono text-[10px] text-muted-foreground/55">{weight.toFixed(1)}%</td>
