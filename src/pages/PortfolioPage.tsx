@@ -431,12 +431,12 @@ export default function PortfolioPage() {
                     return (
                       <tr key={r.netuid} className={`border-b border-border hover:bg-muted/10 transition-colors ${rowBorder}`}>
                         {/* Subnet */}
-                        <td className="py-3 px-3">
+                        <td className="py-3 px-3 sticky left-0 z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
                           <Link to={`/subnets/${r.netuid}`} className="hover:text-foreground transition-colors">
-                           <span className="font-mono text-[11px] text-muted-foreground">SN-{r.netuid}</span>
-                            <span className="font-mono text-[11px] text-foreground/80 ml-1.5 hidden sm:inline">{r.name}</span>
+                           <span className="text-[11px] text-muted-foreground">SN-{r.netuid}</span>
+                            <span className="text-[11px] text-foreground/80 ml-1.5 hidden sm:inline">{r.name}</span>
                           </Link>
-                          {r.isOverridden && <span className="sm:hidden ml-1.5 font-mono text-[7px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">OVR</span>}
+                          {r.isOverridden && <span className="sm:hidden ml-1.5 text-[7px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">OVR</span>}
                         </td>
                         {/* Position */}
                         <td className="py-3 px-3 font-mono text-[11px] text-foreground/70">
