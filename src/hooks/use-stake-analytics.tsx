@@ -268,7 +268,15 @@ export function useStakeAnalytics() {
           uidMax,
           registrationCost: raoToTao(chain.registration_cost ?? rp.registration_cost ?? 0),
           incentiveBurn: Number(chain.incentive_burn ?? rp.incentive_burn ?? 0),
-          recyclePerDay: raoToTao(chain.recycled_24_hours ?? rp.recycle_per_day ?? 0),
+          // recycled_24_hours from Taostats is in rao; some subnets report aberrant values
+          // (possibly cumulative or mis-reported). Cap to 50x daily emissions as sanity check.
+          recyclePerDay: (() => {
+            const rawRecycle = raoToTao(chain.recycled_24_hours ?? rp.recycle_per_day ?? 0);
+            const emissionRao = Number(chain.emission ?? 0);
+            const dailyEmissionTao = raoToTao(emissionRao * BLOCKS_PER_DAY);
+            const maxSane = dailyEmissionTao > 0 ? dailyEmissionTao * 50 : rawRecycle;
+            return Math.min(rawRecycle, maxSane);
+          })(),
         };
 
         const miners7d = prev7d?.miners_active || minersActive;
