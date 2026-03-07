@@ -325,13 +325,12 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px]">SN</TableHead>
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
             <TableHead className="font-mono text-[10px] text-right">MCap τ</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Stake τ</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Buy/Sell</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Stake Flow</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Momentum</TableHead>
             <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Em./day</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Narrative</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -345,7 +344,6 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
                 <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
                 <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
                 <TableCell className="font-mono text-xs text-right">{formatMcap(d.priceContext.marketCap)}</TableCell>
-                <TableCell className="font-mono text-xs text-right">{formatTao(d.snapshot.stakeTotal)}</TableCell>
                 <TableCell className="font-mono text-xs text-right">
                   {totalVol > 0 ? (
                     <span>
@@ -362,11 +360,14 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
                 <TableCell className="text-right hidden sm:table-cell">
                   <Sparkline data={(d.sparklineCapital?.length ?? 0) >= 2 ? d.sparklineCapital : generateCapitalSparkline(d)} />
                 </TableCell>
-                <TableCell className="font-mono text-xs text-right text-muted-foreground">
-                  {d.priceContext.emissionShare > 0 ? `${d.priceContext.emissionShare.toFixed(1)}%` : "—"}
+                <TableCell className="text-right">
+                  <span className="font-mono text-xs" style={{ color: narrativeScoreColor(d.scores.narrativeScore) }}>{d.scores.narrativeScore}</span>
                 </TableCell>
-                <TableCell className="font-mono text-xs text-right text-muted-foreground">
-                  {eco.emissionsPerDay > 0 ? formatTao(eco.emissionsPerDay) : "—"}
+                <TableCell className="text-right">
+                  {d.alerts.narrativeStarting ? <SignalChip label="NARRATIVE" color="purple" /> :
+                   d.alerts.earlyAdoption ? <SignalChip label="EARLY" color="green" /> :
+                   d.alerts.smartMoneySignal ? <SignalChip label="SMART $" color="blue" /> :
+                   <span className="font-mono text-[10px] text-muted-foreground/40">—</span>}
                 </TableCell>
               </TableRow>
             );
