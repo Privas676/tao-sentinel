@@ -394,9 +394,8 @@ export default function SubnetDetailPage() {
             <SectionTitle icon="📈" title="Flow & Momentum" />
             <div className="px-5 py-4 space-y-0.5">
               <Metric label={fr ? "Prix 7j" : "Price 7d"} value={pctChange != null ? `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}%` : "—"} color={pctChange != null ? (pctChange > 0 ? GO : BREAK) : undefined} />
-              <Metric label="Momentum" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK} />
               <Metric label="Capital Flow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
-              {eco && <Metric label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} color={eco.sentiment > 0.55 ? GO : eco.sentiment < 0.45 ? BREAK : WARN} sub={`${(eco.sentiment * 100).toFixed(0)}%`} />}
+              {eco && <Metric label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} />}
               <Metric label="Trend" value={s.momentumLabel} color={momentumColor(s.momentumLabel)} />
               <div className="pt-3 flex justify-center"><Sparkline data={spark} /></div>
             </div>
