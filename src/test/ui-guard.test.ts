@@ -49,13 +49,15 @@ describe("UI Guard — CI blocker", () => {
 
   it("no frozen page files have been deleted", async () => {
     const pageFiles = [
-      "AlienGauge.tsx",
+      "CompassPage.tsx",
       "SubnetsPage.tsx",
+      "SubnetDetailPage.tsx",
+      "PortfolioPage.tsx",
       "AlertsPage.tsx",
       "SettingsPage.tsx",
-      "PortfolioPage.tsx",
-      "InstallPage.tsx",
+      "LabPage.tsx",
       "AuthPage.tsx",
+      "InstallPage.tsx",
     ];
 
     for (const file of pageFiles) {

@@ -247,7 +247,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           {/* Right side — contextual slot */}
           <div className="ml-auto flex items-center gap-2">
             <span
-              className="font-mono text-[8px] tracking-wider text-muted-foreground/30 hidden sm:inline"
+              className="font-mono text-[8px] tracking-wider text-muted-foreground hidden sm:inline"
             >
               v4.0
             </span>
