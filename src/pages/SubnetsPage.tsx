@@ -520,7 +520,7 @@ export default function SubnetsPage() {
                           </span>
                         )}
                         {r.isOverridden && (
-                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(4,80%,50%,0.08)", color: "hsl(4,80%,50%)", border: "1px solid hsla(4,80%,50%,0.2)" }}>⛔</span>
+                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-break), 0.08)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.2)" }}>⛔</span>
                         )}
                       </td>
                       <td className="py-2 px-2.5 text-center">
