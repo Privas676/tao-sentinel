@@ -67,15 +67,9 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
   if (!row) return null;
 
   const verdict = row.verdict;
-  const thesis = verdict?.positiveReasons?.slice(0, 3) || [];
-  const invalidation = verdict?.negativeReasons?.slice(0, 3) || [];
-
-  /* Map to ActionBadge type */
-  const badgeAction = row.action === "ENTER" ? "RENTRE" as const
-    : row.action === "EXIT" ? "SORS" as const
-    : row.action === "STAKE" ? "RENFORCER" as const
-    : row.action === "WATCH" ? "SURVEILLER" as const
-    : "HOLD" as const;
+  const decision = row.decision;
+  const thesis = decision.thesis;
+  const invalidation = decision.invalidation;
 
   /* Alerts */
   const alerts: { icon: string; text: string; color: string }[] = [];
@@ -83,6 +77,8 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
   if (row.depegProbability >= 50) alerts.push({ icon: "⚠", text: `Depeg ${row.depegProbability}%`, color: "hsl(var(--signal-go-spec))" });
   if (row.delistCategory !== "NORMAL") alerts.push({ icon: "🔴", text: fr ? `Risque delist (${row.delistCategory})` : `Delist risk (${row.delistCategory})`, color: "hsl(var(--destructive))" });
   if (row.dataUncertain) alerts.push({ icon: "❓", text: fr ? "Données incertaines" : "Uncertain data", color: "hsl(var(--muted-foreground))" });
+  // Conflict explanation as an info alert
+  if (decision.conflictExplanation) alerts.push({ icon: "⚖️", text: decision.conflictExplanation, color: "hsl(var(--signal-go-spec))" });
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
