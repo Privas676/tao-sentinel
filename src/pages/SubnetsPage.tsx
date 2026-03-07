@@ -217,6 +217,10 @@ export default function SubnetsPage() {
             case "sc": av = scRank(a.sc); bv = scRank(b.sc); break;
             case "confiance": av = a.confianceScore; bv = b.confianceScore; break;
             case "depeg": av = a.depegProbability; bv = b.depegProbability; break;
+            case "verdict": {
+              const vRank = (v: string | undefined) => v === "RENTRE" ? 3 : v === "HOLD" ? 2 : v === "SORS" ? 1 : 0;
+              av = vRank(a.verdict?.verdict); bv = vRank(b.verdict?.verdict); break;
+            }
             case "dstate": {
               const dsA = decisionStates?.get(a.netuid);
               const dsB = decisionStates?.get(b.netuid);
