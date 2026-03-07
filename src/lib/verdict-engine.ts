@@ -49,6 +49,10 @@ export type VerdictInput = {
   stability?: number;        // 0-100
   dataConfidence?: number;   // 0-100
   isWhitelisted?: boolean;
+  // From old engine (cross-check)
+  oldEngineRisk?: number;    // 0-100 from useSubnetScores
+  isOverridden?: boolean;    // from protection engine
+  systemStatus?: string;     // "DEPEG" | "SURVEILLANCE" | etc.
 };
 
 /* ═══════════════════════════════════════ */
