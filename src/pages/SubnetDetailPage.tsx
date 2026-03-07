@@ -3,7 +3,8 @@ import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
-import { useMemo } from "react";
+import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
+import { useMemo, useState } from "react";
 import {
   verdictColor, verdictBg, verdictBorder, verdictIcon,
 } from "@/components/VerdictBadge";
