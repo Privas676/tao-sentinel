@@ -500,11 +500,11 @@ export default function SubnetsPage() {
         {/* ═══ MASTER TABLE ═══ */}
         <SwipeHint storageKey="swipe-subnets-v4" />
 
-        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid hsla(0,0%,100%,0.05)" }}>
+        <div className="rounded-xl overflow-hidden border border-border">
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
             <table className="w-full font-mono" style={{ minWidth: 1100 }}>
               <thead>
-                <tr style={{ background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.06)" }}>
+                <tr className="bg-muted/20 border-b border-border">
                   <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 sticky left-0 z-10 bg-background cursor-pointer" onClick={() => toggleSort("netuid")}>
                     SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
                   </th>
