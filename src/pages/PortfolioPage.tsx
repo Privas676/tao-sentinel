@@ -186,7 +186,10 @@ export default function PortfolioPage() {
     if (rows.length === 0) return null;
     const totalTao = rows.reduce((a, r) => a + r.taoInvest, 0);
     const weights = rows.map(r => ({ ...r, weight: totalTao > 0 ? (r.taoInvest / totalTao) * 100 : 0 }));
-    const avgConviction = rows.reduce((a, r) => a + Math.max(r.opp - r.risk, 0), 0) / rows.length;
+    const avgConviction = rows.reduce((a, r) => {
+      const c = r.verdict ? Math.max(r.verdict.entryScore, r.verdict.holdScore) : Math.round(Math.abs(r.opp - r.risk) * (r.confianceScore / 100));
+      return a + c;
+    }, 0) / rows.length;
     const avgRisk = rows.reduce((a, r) => a + r.risk, 0) / rows.length;
     const maxWeight = Math.max(...weights.map(w => w.weight));
     const reinforceCount = rows.filter(r => r.pAction === "REINFORCE").length;
