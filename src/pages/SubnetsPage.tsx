@@ -160,7 +160,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
           {/* Invalidation */}
           {invalidation.length > 0 && (
             <div className="rounded-lg p-3 bg-destructive/[0.03] border border-destructive/10">
-              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
+              <div className="font-mono text-[7px] text-muted-foreground tracking-widest uppercase mb-2">
                 INVALIDATION
               </div>
               {invalidation.map((r, i) => <div key={i} className="font-mono text-[11px] text-foreground/75 mb-1">− {r}</div>)}
