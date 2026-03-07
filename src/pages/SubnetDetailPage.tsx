@@ -562,7 +562,7 @@ function QuadrantBlock({ title, items, tone, position }: { title: string; items:
         <div className="space-y-1.5">
           {items.map((item, i) => (
             <div key={i} className="font-mono text-[11px] text-foreground/70 leading-relaxed flex items-start gap-2">
-              <span className="opacity-40 mt-px shrink-0">•</span>
+              <span className="text-muted-foreground mt-px shrink-0">•</span>
               <span>{item}</span>
             </div>
           ))}
