@@ -41,11 +41,11 @@ describe("action color helpers", () => {
   });
   it("actionIcon returns emoji for all actions", () => {
     expect(actionIcon("ENTER")).toBe("🟢");
-    expect(actionIcon("WATCH")).toBe("🟡");
+    expect(actionIcon("WATCH")).toBe("👁");
     expect(actionIcon("EXIT")).toBe("🔴");
-    expect(actionIcon("STAKE")).toBe("🔵");
-    expect(actionIcon("NEUTRAL")).toBe("⚪");
-    expect(actionIcon("HOLD")).toBe("🔷");
+    expect(actionIcon("STAKE")).toBe("⬆");
+    expect(actionIcon("NEUTRAL")).toBe("⏸");
+    expect(actionIcon("HOLD")).toBe("🟡");
   });
 
   it("ENTER is green", () => expect(actionColor("ENTER")).toContain("76,175,80"));
