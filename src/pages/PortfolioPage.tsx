@@ -8,6 +8,8 @@ import { stabilityColor } from "@/lib/gauge-engine";
 import { systemStatusLabel, systemStatusColor } from "@/lib/risk-override";
 import type { SmartCapitalState } from "@/lib/gauge-engine";
 import { toast } from "sonner";
+import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
+import { VerdictBadgeWithTooltip, verdictColor, verdictIcon } from "@/components/VerdictBadge";
 
 /* ═══════════════════════════════════════ */
 /*        SPARKLINE COMPONENT              */
@@ -221,8 +223,8 @@ export default function PortfolioPage() {
 
 
 
-  // ── UNIFIED SCORES (single source of truth) ──
   const { scores, scoreTimestamp, sparklines, subnetList, dataAlignment, dataAgeDebug, taoUsd } = useSubnetScores();
+  const { verdicts } = useSubnetVerdicts();
 
   // Format helpers — prices and values follow different rules
   const fmtTaoValue = (taoAmount: number) => {
@@ -241,6 +243,7 @@ export default function PortfolioPage() {
     return portfolio.positions.map(pos => {
       const netuid = pos.subnet_id;
       const s = scores.get(netuid);
+      const v = verdicts.get(netuid);
 
       const opp = s?.opp ?? 0;
       const risk = s?.risk ?? 0;
@@ -278,9 +281,10 @@ export default function PortfolioPage() {
         stability, sc, action,
         isOverridden, systemStatus,
         confianceData, alerts,
+        verdict: v,
       };
     });
-  }, [portfolio.positions, scores]);
+  }, [portfolio.positions, scores, verdicts]);
 
   // Portfolio totals
   const totals = useMemo(() => {
@@ -363,6 +367,20 @@ export default function PortfolioPage() {
         <SummaryCard label={fr ? "Stabilité moy." : "Avg Stability"} value={`${totals.avgStability.toFixed(0)}%`}
           color={stabilityColor(totals.avgStability)} />
       </div>
+
+      {/* ── VERDICT SUMMARY ── */}
+      {rows.length > 0 && (() => {
+        const conserver = rows.filter(r => r.verdict?.verdict === "HOLD" || r.verdict?.verdict === "RENTRE").length;
+        const alleger = rows.filter(r => r.verdict?.verdict === "HOLD" && r.verdict.confidence === "faible").length;
+        const sortir = rows.filter(r => r.verdict?.verdict === "SORS").length;
+        return (
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <MiniStat label={fr ? "🟢 Conserver" : "🟢 Keep"} value={`${conserver}`} color="rgba(76,175,80,0.8)" />
+            <MiniStat label={fr ? "🟡 Surveiller" : "🟡 Watch"} value={`${alleger}`} color="rgba(255,193,7,0.8)" />
+            <MiniStat label={fr ? "🔴 Sortir" : "🔴 Exit"} value={`${sortir}`} color={sortir > 0 ? "rgba(229,57,53,0.9)" : "rgba(255,255,255,0.4)"} />
+          </div>
+        );
+      })()}
 
       {/* ── MINI DASHBOARD ── */}
       <div className="grid grid-cols-3 gap-3 mb-5">
@@ -470,7 +488,8 @@ export default function PortfolioPage() {
           <table className="text-left border-collapse" style={{ minWidth: 1100 }}>
             <thead>
               <tr className="border-b border-white/[0.06]">
-                {["SN", fr ? "Nom" : "Name", fr ? "TAO investis" : "TAO Invested", "Alpha (qty)",
+                {["SN", fr ? "Nom" : "Name", "VERDICT",
+                  fr ? "TAO investis" : "TAO Invested", "Alpha (qty)",
                   fr ? "Prix α" : "Price α", fr ? "Valeur" : "Value",
                   fr ? "Prix 7j" : "Price 7d",
                   "Opp", fr ? "Risque" : "Risk", "AS", fr ? "Stabilité" : "Stability",
@@ -510,6 +529,21 @@ export default function PortfolioPage() {
                         <span className="ml-2 text-[8px] px-1.5 py-0.5 rounded" style={{
                           background: "rgba(229,57,53,0.15)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.3)",
                         }}>OVERRIDE</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-2 text-center">
+                      {r.verdict ? (
+                        <VerdictBadgeWithTooltip
+                          verdict={r.verdict.verdict}
+                          confidence={r.verdict.confidence}
+                          positiveReasons={r.verdict.positiveReasons}
+                          negativeReasons={r.verdict.negativeReasons}
+                          entryScore={r.verdict.entryScore}
+                          holdScore={r.verdict.holdScore}
+                          exitRisk={r.verdict.exitRisk}
+                        />
+                      ) : (
+                        <span className="font-mono text-[9px] text-white/15">—</span>
                       )}
                     </td>
                     <td className="py-3 px-2 text-sm font-mono text-white/70">

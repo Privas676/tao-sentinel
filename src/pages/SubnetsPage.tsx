@@ -7,6 +7,8 @@ import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import MarketContextPanel from "@/components/MarketContextPanel";
 import { type ScoreFactor, topFactors } from "@/lib/score-factors";
+import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
+import { VerdictBadgeWithTooltip, verdictColor } from "@/components/VerdictBadge";
 import {
   deriveMomentumLabel, momentumColor, computeMomentumScore,
   opportunityColor, riskColor, clamp,
@@ -135,8 +137,8 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
 
 
 
-type SortCol = "netuid" | "name" | "status" | "dstate" | "price" | "var30d" | "spark" | "opp" | "risk" | "depeg" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | null;
-type ViewMode = "all" | "opportunities" | "risks" | "mine";
+type SortCol = "netuid" | "name" | "status" | "dstate" | "price" | "var30d" | "spark" | "opp" | "risk" | "depeg" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | "verdict" | null;
+type ViewMode = "all" | "opportunities" | "risks" | "mine" | "rentre" | "hold" | "sors";
 
 function scColor(state: SmartCapitalState): string {
   switch (state) {
@@ -169,6 +171,7 @@ export default function SubnetsPage() {
 
   // ── UNIFIED SCORES (single source of truth) ──
   const { scoresList, sparklines, scoreTimestamp, marketContext, dataAlignment, dataAgeDebug, decisionStates, fleetDistribution } = useSubnetScores();
+  const { verdicts } = useSubnetVerdicts();
 
   const rows = useMemo(() => {
     return scoresList
@@ -176,11 +179,15 @@ export default function SubnetsPage() {
         ...r,
         owned: ownedNetuids.has(r.netuid),
         spark: sparklines?.get(r.netuid) || [],
+        verdict: verdicts.get(r.netuid),
       }))
       .filter(r => {
         if (mode === "opportunities") return r.assetType !== "CORE_NETWORK" && !r.isOverridden && r.opp > r.risk;
         if (mode === "risks") return r.assetType !== "CORE_NETWORK" && r.risk >= r.opp;
         if (mode === "mine") return r.owned;
+        if (mode === "rentre") return r.verdict?.verdict === "RENTRE";
+        if (mode === "hold") return r.verdict?.verdict === "HOLD";
+        if (mode === "sors") return r.verdict?.verdict === "SORS";
         return true;
       })
       .sort((a, b) => {
@@ -210,6 +217,10 @@ export default function SubnetsPage() {
             case "sc": av = scRank(a.sc); bv = scRank(b.sc); break;
             case "confiance": av = a.confianceScore; bv = b.confianceScore; break;
             case "depeg": av = a.depegProbability; bv = b.depegProbability; break;
+            case "verdict": {
+              const vRank = (v: string | undefined) => v === "RENTRE" ? 3 : v === "HOLD" ? 2 : v === "SORS" ? 1 : 0;
+              av = vRank(a.verdict?.verdict); bv = vRank(b.verdict?.verdict); break;
+            }
             case "dstate": {
               const dsA = decisionStates?.get(a.netuid);
               const dsB = decisionStates?.get(b.netuid);
@@ -227,10 +238,13 @@ export default function SubnetsPage() {
         }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, mode, ownedNetuids, sparklines, sortCol, sortDir, decisionStates]);
+  }, [scoresList, mode, ownedNetuids, sparklines, sortCol, sortDir, decisionStates, verdicts]);
 
   const modeOptions: { value: ViewMode; label: string }[] = [
     { value: "all", label: t("sub.mode_all") },
+    { value: "rentre", label: "🟢 RENTRE" },
+    { value: "hold", label: "🟡 HOLD" },
+    { value: "sors", label: "🔴 SORS" },
     { value: "opportunities", label: t("sub.mode_opp") },
     { value: "risks", label: t("sub.mode_risk") },
     ...(ownedNetuids.size > 0 ? [{ value: "mine" as ViewMode, label: lang === "fr" ? "Mes subnets" : "My subnets" }] : []),
@@ -326,6 +340,9 @@ export default function SubnetsPage() {
               <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors sticky left-[40px] z-10 bg-background" style={{ boxShadow: "4px 0 8px -2px rgba(0,0,0,0.3)" }} onClick={() => toggleSort("name")}>
                 {t("sub.name")} {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
+              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("verdict")}>
+                VERDICT {sortCol === "verdict" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+              </th>
               <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("dstate")}>
                 ÉTAT {sortCol === "dstate" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
@@ -417,6 +434,21 @@ export default function SubnetsPage() {
                         title={r.overrideReasons.join(' • ')}>
                         ⚠ Warning
                       </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                    {r.verdict ? (
+                      <VerdictBadgeWithTooltip
+                        verdict={r.verdict.verdict}
+                        confidence={r.verdict.confidence}
+                        positiveReasons={r.verdict.positiveReasons}
+                        negativeReasons={r.verdict.negativeReasons}
+                        entryScore={r.verdict.entryScore}
+                        holdScore={r.verdict.holdScore}
+                        exitRisk={r.verdict.exitRisk}
+                      />
+                    ) : (
+                      <span className="font-mono text-[9px] text-white/15">—</span>
                     )}
                   </td>
                   <td className="py-3 px-2 text-center relative group/ds">
