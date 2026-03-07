@@ -401,7 +401,7 @@ export default function SubnetsPage() {
                 ✕ {fr ? "Reset" : "Reset"}
               </button>
             )}
-            <button onClick={saveCurrentView} className="font-mono text-[9px] px-2.5 py-1 rounded-lg text-muted-foreground/65 hover:text-foreground transition-colors border border-border">
+            <button onClick={saveCurrentView} className="font-mono text-[9px] px-2.5 py-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors border border-border">
               💾 {fr ? "Sauvegarder" : "Save view"}
             </button>
             {savedViews.length > 0 && savedViews.map((v, i) => (
