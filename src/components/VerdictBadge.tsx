@@ -4,6 +4,7 @@
 /*   with confidence and tooltip reasons     */
 /* ═══════════════════════════════════════ */
 
+import React from "react";
 import type { Verdict, ConfidenceLevel } from "@/lib/verdict-engine";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
