@@ -507,7 +507,7 @@ export default function SubnetsPage() {
                   <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground sticky left-0 z-10 bg-background cursor-pointer" onClick={() => toggleSort("netuid")}>
                     SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
                   </th>
-                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 sticky left-[44px] z-10 bg-background cursor-pointer" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }} onClick={() => toggleSort("name")}>
+                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground sticky left-[44px] z-10 bg-background cursor-pointer" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }} onClick={() => toggleSort("name")}>
                     Subnet {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
                   </th>
                   <SortHeader col="action" label="Action" align="center" />
