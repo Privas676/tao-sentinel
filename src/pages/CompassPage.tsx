@@ -95,7 +95,7 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
           </div>
           {signal.reasons.length > 0 && (
             <div className="rounded-lg p-3" style={{ background: "hsla(0,0%,100%,0.02)" }}>
-              <div className="font-mono text-[9px] text-muted-foreground/40 tracking-widest mb-2">RAISONS</div>
+              <div className="font-mono text-[9px] text-muted-foreground/65 tracking-widest mb-2">RAISONS</div>
               {signal.reasons.map((r, i) => <div key={i} className="font-mono text-xs text-muted-foreground mb-1">• {r}</div>)}
             </div>
           )}
