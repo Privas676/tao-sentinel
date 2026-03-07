@@ -11,7 +11,7 @@ import {
 import { actionColor, actionIcon } from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
 import { healthColor, formatUsd } from "@/lib/subnet-health";
-import { ActionBadge, StatusBadge, ConfidenceBar, SparklineMini } from "@/components/sentinel";
+import { ActionBadge, StatusBadge, SparklineMini } from "@/components/sentinel";
 
 /* ═══════════════════════════════════════ */
 /*   SUBNET DETAIL — Command Center        */
@@ -19,12 +19,12 @@ import { ActionBadge, StatusBadge, ConfidenceBar, SparklineMini } from "@/compon
 
 /* ── Reusable building blocks ── */
 
-function Section({ title, icon, children, accent }: { title: string; icon: string; children: React.ReactNode; accent?: string }) {
+function Section({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card/50">
       <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
         <span className="text-sm">{icon}</span>
-        <h3 className="font-mono text-[10px] tracking-widest uppercase" style={{ color: accent || "hsl(var(--gold))" }}>
+        <h3 className="font-mono text-[10px] tracking-widest uppercase text-[hsl(var(--gold))]">
           {title}
         </h3>
       </div>
@@ -68,15 +68,15 @@ function KPI({ label, value, color }: { label: string; value: string | number; c
   );
 }
 
-function ReasonList({ items, positive, fr }: { items: string[]; positive: boolean; fr: boolean }) {
+function ReasonList({ items, positive }: { items: string[]; positive: boolean }) {
   if (!items.length) return null;
   const color = positive ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))";
   const icon = positive ? "+" : "−";
   return (
     <div className="space-y-1">
       {items.map((r, i) => (
-        <div key={i} className="font-mono text-[11px] py-0.5" style={{ color: `color-mix(in srgb, ${color} 80%, transparent)` }}>
-          {icon} {r}
+        <div key={i} className="font-mono text-[11px] py-0.5 text-foreground/70">
+          <span style={{ color }}>{icon}</span> {r}
         </div>
       ))}
     </div>
@@ -130,6 +130,10 @@ function fitScore(score: UnifiedSubnetScore): number {
   if (score.confianceScore > 60) fit += 10;
   if (score.isOverridden) fit -= 30;
   return Math.max(0, Math.min(100, fit));
+}
+
+function convictionColor(level: "HIGH" | "MEDIUM" | "LOW"): string {
+  return level === "HIGH" ? "hsl(var(--signal-go))" : level === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
 }
 
 /* ═══════════════════════════════════════ */
@@ -196,11 +200,11 @@ export default function SubnetDetailPage() {
         {/*  1. HEADER                          */}
         {/* ═══════════════════════════════════ */}
         <div className="flex items-center gap-4 flex-wrap">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center font-mono text-lg font-bold border border-border" style={{ background: "hsla(var(--gold), 0.06)", color: "hsl(var(--gold))" }}>
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center font-mono text-lg font-bold border border-border bg-muted/20 text-[hsl(var(--gold))]">
             {netuid}
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="font-mono text-base tracking-wider" style={{ color: "hsl(var(--gold))" }}>
+            <h1 className="font-mono text-base tracking-wider text-[hsl(var(--gold))]">
               {s.name}
             </h1>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -211,52 +215,39 @@ export default function SubnetDetailPage() {
           <ActionBadge action={s.action === "ENTER" ? "RENTRE" : s.action === "EXIT" ? "SORS" : s.action === "STAKE" ? "RENFORCER" : "HOLD"} />
         </div>
 
-        {/* Header KPIs */}
-        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
-          <KPI label="CONVICTION" value={conv.level} color={conv.level === "HIGH" ? "hsl(var(--signal-go))" : conv.level === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))"} />
+        {/* Header KPIs — 6 unique metrics, no duplicates */}
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          <KPI label="CONVICTION" value={`${conv.level} (${conv.score})`} color={convictionColor(conv.level)} />
           <KPI label="CONFIDENCE" value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
           <KPI label="RISK" value={s.risk} color={riskColor(s.risk)} />
           <KPI label="STABILITY" value={s.stability} color={stabilityColor(s.stability)} />
           <KPI label="MOMENTUM" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? "hsl(var(--signal-go))" : s.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
           <KPI label="OPP" value={s.opp} color={opportunityColor(s.opp)} />
-          <KPI label="ASYM" value={s.asymmetry} color={s.asymmetry > 0 ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))"} />
-          <KPI label="DATA" value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
         </div>
 
         {/* ═══════════════════════════════════ */}
-        {/*  2. DECISION SUMMARY                */}
+        {/*  2. DECISION SUMMARY (no duplicate ActionBadge / Conviction) */}
         {/* ═══════════════════════════════════ */}
         <Section icon="🎯" title={fr ? "Résumé Décisionnel" : "Decision Summary"}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <ActionBadge action={s.action === "ENTER" ? "RENTRE" : s.action === "EXIT" ? "SORS" : s.action === "STAKE" ? "RENFORCER" : "HOLD"} />
-                <div>
-                  <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase">CONVICTION</div>
-                  <div className="font-mono text-sm font-bold" style={{ color: conv.level === "HIGH" ? "hsl(var(--signal-go))" : conv.level === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))" }}>
-                    {conv.level} ({conv.score})
-                  </div>
-                </div>
-              </div>
-
+            <div className="space-y-2">
               <MetricRow label={fr ? "Horizon" : "Horizon"} value={horizonLabel(s, fr)} />
               <MetricRow label={fr ? "Urgence" : "Urgency"} value={urgencyLabel(s, fr)} color={s.isOverridden || s.action === "EXIT" ? "hsl(var(--signal-break))" : undefined} />
-              <MetricRow label={fr ? "Régime compatible" : "Regime fit"} value={s.systemStatus === "OK" ? (fr ? "Favorable" : "Favorable") : s.systemStatus === "SURVEILLANCE" ? (fr ? "Neutre" : "Neutral") : (fr ? "Défavorable" : "Unfavorable")} />
+              <MetricRow label={fr ? "Régime" : "Regime"} value={s.systemStatus === "OK" ? (fr ? "Favorable" : "Favorable") : s.systemStatus === "SURVEILLANCE" ? (fr ? "Neutre" : "Neutral") : (fr ? "Défavorable" : "Unfavorable")} color={s.systemStatus === "OK" ? "hsl(var(--signal-go))" : s.systemStatus === "SURVEILLANCE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
+              <MetricRow label={fr ? "Asymétrie" : "Asymmetry"} value={s.asymmetry > 0 ? `+${s.asymmetry}` : `${s.asymmetry}`} color={s.asymmetry > 0 ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))"} />
             </div>
 
             <div className="space-y-3">
-              {/* Thesis */}
               {verdict?.positiveReasons && verdict.positiveReasons.length > 0 && (
                 <div>
                   <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-1.5">{fr ? "THÈSE" : "THESIS"}</div>
-                  <ReasonList items={verdict.positiveReasons.slice(0, 3)} positive fr={fr} />
+                  <ReasonList items={verdict.positiveReasons.slice(0, 3)} positive />
                 </div>
               )}
-              {/* Invalidation */}
               {verdict?.negativeReasons && verdict.negativeReasons.length > 0 && (
                 <div>
                   <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-1.5">INVALIDATION</div>
-                  <ReasonList items={verdict.negativeReasons.slice(0, 3)} positive={false} fr={fr} />
+                  <ReasonList items={verdict.negativeReasons.slice(0, 3)} positive={false} />
                 </div>
               )}
             </div>
@@ -312,21 +303,16 @@ export default function SubnetDetailPage() {
         </Section>
 
         {/* ═══════════════════════════════════ */}
-        {/*  4. CONVICTION STACK                */}
+        {/*  4. CONVICTION STACK (unique — no repeated Confidence/Regime) */}
         {/* ═══════════════════════════════════ */}
         <Section icon="📊" title="Conviction Stack">
-          <div className="space-y-1.5 mb-4">
+          <div className="space-y-1.5">
             <ScoreBar label="Flow" value={rs?.capitalMomentum ?? s.opp} color={healthColor(rs?.capitalMomentum ?? s.opp)} />
             <ScoreBar label={fr ? "Liquidité" : "Liquidity"} value={s.healthScores.liquidityHealth} />
             <ScoreBar label="Structure" value={s.stability} color={stabilityColor(s.stability)} />
             <ScoreBar label="Economics" value={rs?.healthIndex ?? 50} />
             <ScoreBar label="Smart Money" value={rs?.smartMoneyScore ?? 50} />
-            <ScoreBar label={fr ? "Risque" : "Risk"} value={100 - s.risk} color={healthColor(100 - s.risk)} />
-          </div>
-          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-border">
-            <KPI label={fr ? "CONVICTION FINALE" : "FINAL CONVICTION"} value={conv.score} color={conv.level === "HIGH" ? "hsl(var(--signal-go))" : conv.level === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))"} />
-            <KPI label="CONFIDENCE" value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
-            <KPI label="REGIME FIT" value={s.systemStatus === "OK" ? "✓" : s.systemStatus === "SURVEILLANCE" ? "~" : "✕"} color={s.systemStatus === "OK" ? "hsl(var(--signal-go))" : s.systemStatus === "SURVEILLANCE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
+            <ScoreBar label={fr ? "Risque (inv.)" : "Risk (inv.)"} value={100 - s.risk} color={healthColor(100 - s.risk)} />
           </div>
         </Section>
 
@@ -336,13 +322,12 @@ export default function SubnetDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* 5. Flow & Momentum */}
-          <Section icon="📈" title={fr ? "Flow & Momentum" : "Flow & Momentum"}>
+          <Section icon="📈" title="Flow & Momentum">
             <div className="space-y-1">
-              <MetricRow label="Prix 7d" value={pctChange != null ? `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}%` : "—"} color={pctChange != null ? (pctChange > 0 ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))") : undefined} />
+              <MetricRow label={fr ? "Prix 7j" : "Price 7d"} value={pctChange != null ? `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}%` : "—"} color={pctChange != null ? (pctChange > 0 ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))") : undefined} />
               <MetricRow label="Momentum" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? "hsl(var(--signal-go))" : s.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
-              <MetricRow label="Capital Inflow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
-              {eco && <MetricRow label="Buy/Sell" value={`${eco.buyersCount}/${eco.sellersCount}`} color={eco.sentiment > 0.55 ? "hsl(var(--signal-go))" : eco.sentiment < 0.45 ? "hsl(var(--signal-break))" : "hsl(var(--signal-go-spec))"} sub={`${(eco.sentiment * 100).toFixed(0)}%`} />}
-              {rs && <MetricRow label="Smart Money Flow" value={rs.smartMoneyScore} color={healthColor(rs.smartMoneyScore)} />}
+              <MetricRow label="Capital Flow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
+              {eco && <MetricRow label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} color={eco.sentiment > 0.55 ? "hsl(var(--signal-go))" : eco.sentiment < 0.45 ? "hsl(var(--signal-break))" : "hsl(var(--signal-go-spec))"} sub={`${(eco.sentiment * 100).toFixed(0)}%`} />}
               <MetricRow label="Trend" value={s.momentumLabel} color={momentumColor(s.momentumLabel)} />
             </div>
             <div className="mt-3 flex justify-center">
@@ -355,7 +340,7 @@ export default function SubnetDetailPage() {
             <div className="space-y-1">
               {amm && (
                 <>
-                  <MetricRow label="Spread bid/ask" value={`${(amm.spreadBps / 100).toFixed(3)}%`} color={amm.spreadBps < 50 ? "hsl(var(--signal-go))" : amm.spreadBps < 200 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
+                  <MetricRow label="Spread" value={`${(amm.spreadBps / 100).toFixed(3)}%`} color={amm.spreadBps < 50 ? "hsl(var(--signal-go))" : amm.spreadBps < 200 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
                   <MetricRow label="Slippage 1τ" value={`${(amm.slippageBps1Tao / 100).toFixed(2)}%`} />
                   <MetricRow label="Slippage 10τ" value={`${(amm.slippageBps10Tao / 100).toFixed(2)}%`} color={amm.slippageBps10Tao > 500 ? "hsl(var(--signal-break))" : undefined} />
                   <MetricRow label={fr ? "Profondeur" : "Depth"} value={`${amm.poolDepth.toFixed(1)}τ`} color={healthColor(Math.min(100, amm.poolDepth))} />
@@ -364,7 +349,7 @@ export default function SubnetDetailPage() {
               )}
               {eco && (
                 <>
-                  <MetricRow label="Pool Balance" value={`α${eco.alphaInPool.toFixed(0)} / τ${eco.taoInPool.toFixed(1)}`} />
+                  <MetricRow label="Pool" value={`α${eco.alphaInPool.toFixed(0)} / τ${eco.taoInPool.toFixed(1)}`} />
                   <MetricRow label="Vol/MCap" value={`${(eco.volumeMarketcapRatio * 100).toFixed(2)}%`} />
                 </>
               )}
@@ -389,7 +374,6 @@ export default function SubnetDetailPage() {
                   <MetricRow label="Dump Risk" value={rs.dumpRisk} color={healthColor(100 - rs.dumpRisk)} />
                 </>
               )}
-              <ScoreBar label={fr ? "Stabilité" : "Stability"} value={s.stability} color={stabilityColor(s.stability)} />
             </div>
           </Section>
 
@@ -411,8 +395,8 @@ export default function SubnetDetailPage() {
             </div>
           </Section>
 
-          {/* 9. Smart Money & Narrative */}
-          <Section icon="🐋" title={fr ? "Smart Money & Narrative" : "Smart Money & Narrative"}>
+          {/* 9. Smart Money (no duplicate Smart Money score — only here) */}
+          <Section icon="🐋" title="Smart Money">
             <div className="space-y-1">
               {rs && (
                 <>
@@ -427,12 +411,12 @@ export default function SubnetDetailPage() {
                   <MetricRow label="Sentiment" value={`${(eco.sentiment * 100).toFixed(0)}%`} color={eco.sentiment > 0.55 ? "hsl(var(--signal-go))" : eco.sentiment < 0.45 ? "hsl(var(--signal-break))" : "hsl(var(--signal-go-spec))"} sub={eco.sentiment > 0.55 ? "Buy" : eco.sentiment < 0.45 ? "Sell" : "Neutral"} />
                 </>
               )}
-              {sn && <MetricRow label={fr ? "Holders" : "Holders"} value={sn.holdersCount} />}
+              {sn && <MetricRow label="Holders" value={sn.holdersCount} />}
               <ScoreBar label={fr ? "Activité" : "Activity"} value={s.healthScores.activityHealth} />
             </div>
           </Section>
 
-          {/* 10. Portfolio Fit */}
+          {/* 10. Portfolio Fit — computed values, no hardcoded strings */}
           <Section icon="📁" title="Portfolio Fit">
             {(() => {
               const fit = fitScore(s);
@@ -440,13 +424,16 @@ export default function SubnetDetailPage() {
                 : s.action === "HOLD" || s.action === "STAKE" ? (fr ? "Position de fond" : "Core position")
                 : (fr ? "À céder" : "To exit");
               const weight = fit >= 70 ? "5-10%" : fit >= 50 ? "2-5%" : "<2%";
+              const redundancy = sn && sn.stakeConcentration > 60 ? (fr ? "Élevée" : "High") : sn && sn.stakeConcentration > 30 ? (fr ? "Modérée" : "Moderate") : (fr ? "Faible" : "Low");
+              const redundancyColor = sn && sn.stakeConcentration > 60 ? "hsl(var(--signal-break))" : sn && sn.stakeConcentration > 30 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-go))";
+              const diversOk = s.stability > 40 && s.risk < 60;
               return (
                 <div className="space-y-1">
                   <MetricRow label="Fit Score" value={fit} color={healthColor(fit)} />
                   <MetricRow label={fr ? "Rôle conseillé" : "Suggested role"} value={role} />
                   <MetricRow label={fr ? "Poids recommandé" : "Recommended weight"} value={weight} />
-                  <MetricRow label={fr ? "Redondance" : "Redundancy"} value={fr ? "Faible" : "Low"} color="hsl(var(--signal-go))" />
-                  <MetricRow label="Diversification" value={fr ? "Compatible" : "Compatible"} color="hsl(var(--signal-go))" />
+                  <MetricRow label={fr ? "Redondance" : "Redundancy"} value={redundancy} color={redundancyColor} />
+                  <MetricRow label="Diversification" value={diversOk ? "✓" : "✕"} color={diversOk ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))"} />
                   <MetricRow label={fr ? "Contribution risque" : "Risk contribution"} value={s.risk > 60 ? (fr ? "Élevée" : "High") : s.risk > 35 ? (fr ? "Modérée" : "Moderate") : (fr ? "Faible" : "Low")} color={riskColor(s.risk)} />
                 </div>
               );
@@ -502,12 +489,12 @@ export default function SubnetDetailPage() {
       {/*  12. STICKY FOOTER                  */}
       {/* ═══════════════════════════════════ */}
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
-          {/* Action */}
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3 flex items-center gap-2 sm:gap-3">
+          {/* Action — always visible */}
           <ActionBadge action={s.action === "ENTER" ? "RENTRE" : s.action === "EXIT" ? "SORS" : s.action === "STAKE" ? "RENFORCER" : "HOLD"} size="sm" />
 
-          {/* Recommended size */}
-          <span className="font-mono text-[9px] text-muted-foreground/65">
+          {/* Size — hidden on very small screens */}
+          <span className="font-mono text-[9px] text-muted-foreground/65 hidden sm:inline">
             {fr ? "Taille :" : "Size:"} {fitScore(s) >= 70 ? "5-10%" : fitScore(s) >= 50 ? "2-5%" : "<2%"}
           </span>
 
@@ -518,29 +505,20 @@ export default function SubnetDetailPage() {
             <span className="font-mono text-[9px] text-primary animate-pulse">{justAction}</span>
           )}
 
-          {/* Add to watchlist */}
-          <button
-            onClick={() => { if (!inPortfolio) { addPosition(netuid, 0, s.alphaPrice); flash("✓ Ajouté"); } }}
-            className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg border border-border text-muted-foreground/70 hover:text-foreground transition-colors"
-            disabled={inPortfolio}
-          >
-            {inPortfolio ? "★ Portfolio" : "+ Watchlist"}
-          </button>
-
           {/* Portfolio toggle */}
           <button
             onClick={() => {
-              if (inPortfolio) { removePosition(netuid); flash("✓ Retiré"); }
-              else { addPosition(netuid, 0, s.alphaPrice); flash("✓ Ajouté"); }
+              if (inPortfolio) { removePosition(netuid); flash(fr ? "✓ Retiré" : "✓ Removed"); }
+              else { addPosition(netuid, 0, s.alphaPrice); flash(fr ? "✓ Ajouté" : "✓ Added"); }
             }}
-            className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg transition-all"
+            className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg transition-all border border-border"
             style={{
-              background: inPortfolio ? "hsla(var(--gold), 0.08)" : "hsla(var(--signal-go), 0.06)",
+              background: inPortfolio ? "hsl(var(--gold) / 0.08)" : "hsl(var(--signal-go) / 0.06)",
               color: inPortfolio ? "hsl(var(--gold))" : "hsl(var(--signal-go))",
-              border: `1px solid ${inPortfolio ? "hsla(var(--gold), 0.15)" : "hsla(var(--signal-go), 0.15)"}`,
+              borderColor: inPortfolio ? "hsl(var(--gold) / 0.15)" : "hsl(var(--signal-go) / 0.15)",
             }}
           >
-            {inPortfolio ? (fr ? "Retirer" : "Remove") : (fr ? "Ajouter" : "Add to portfolio")}
+            {inPortfolio ? (fr ? "★ Retirer" : "★ Remove") : (fr ? "+ Portfolio" : "+ Portfolio")}
           </button>
 
           {/* Alert CTA */}
@@ -548,7 +526,7 @@ export default function SubnetDetailPage() {
             to="/alerts"
             className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg border border-border text-muted-foreground/70 hover:text-foreground transition-colors"
           >
-            🔔 {fr ? "Alerte" : "Alert"}
+            🔔
           </Link>
         </div>
       </div>
@@ -561,7 +539,7 @@ export default function SubnetDetailPage() {
 function WhyBlock({ title, items, tone }: { title: string; items: string[]; tone: "go" | "warn" | "break" | "neutral" }) {
   const colors = {
     go: { bg: "bg-primary/[0.03]", border: "border-primary/10", text: "hsl(var(--signal-go))" },
-    warn: { bg: "bg-yellow-500/[0.03]", border: "border-yellow-500/10", text: "hsl(var(--signal-go-spec))" },
+    warn: { bg: "bg-accent/30", border: "border-accent", text: "hsl(var(--signal-go-spec))" },
     break: { bg: "bg-destructive/[0.03]", border: "border-destructive/10", text: "hsl(var(--signal-break))" },
     neutral: { bg: "bg-muted/20", border: "border-border", text: "hsl(var(--muted-foreground))" },
   }[tone];
