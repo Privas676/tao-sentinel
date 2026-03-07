@@ -293,9 +293,9 @@ export default function CompassPage() {
   }, [enrichedSignals, sentinelIndex, fr]);
 
   const sections = [
-    { key: "enter", title: fr ? "ENTRÉES" : "ENTER", emoji: "🟢", items: topRentre, count: countRentre, color: "hsl(145,65%,48%)", bg: "hsla(145,65%,48%,0.04)", border: "hsla(145,65%,48%,0.12)" },
-    { key: "hold", title: fr ? "RENFORCER" : "REINFORCE", emoji: "🟡", items: topHold, count: countHold, color: "hsl(38,92%,55%)", bg: "hsla(38,92%,55%,0.04)", border: "hsla(38,92%,55%,0.12)" },
-    { key: "exit", title: fr ? "RÉDUIRE / SORTIR" : "REDUCE / EXIT", emoji: "🔴", items: topSors, count: countSors, color: "hsl(4,80%,50%)", bg: "hsla(4,80%,50%,0.04)", border: "hsla(4,80%,50%,0.12)" },
+    { key: "enter", title: fr ? "ENTRÉES" : "ENTER", emoji: "🟢", items: topRentre, count: countRentre, color: GO, bg: `color-mix(in srgb, ${GO} 4%, transparent)`, border: `color-mix(in srgb, ${GO} 12%, transparent)` },
+    { key: "hold", title: fr ? "RENFORCER" : "REINFORCE", emoji: "🟡", items: topHold, count: countHold, color: WARN, bg: `color-mix(in srgb, ${WARN} 4%, transparent)`, border: `color-mix(in srgb, ${WARN} 12%, transparent)` },
+    { key: "exit", title: fr ? "RÉDUIRE / SORTIR" : "REDUCE / EXIT", emoji: "🔴", items: topSors, count: countSors, color: BREAK, bg: `color-mix(in srgb, ${BREAK} 4%, transparent)`, border: `color-mix(in srgb, ${BREAK} 12%, transparent)` },
   ];
 
   const rotationGroups = [
