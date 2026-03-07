@@ -157,7 +157,7 @@ export default function SubnetsPage() {
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const { ownedNetuids, addPosition, isOwned } = useLocalPortfolio();
-
+  const { preset, visibleColumns, setPreset, toggleColumn, isVisible } = useColumnConfig();
 
 
   const toggleSort = (col: SortCol) => {
