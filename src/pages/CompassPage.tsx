@@ -90,7 +90,7 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
             <div className="w-px h-8 bg-border" />
             <div className="text-center">
               <div className="font-mono text-2xl font-bold" style={{ color: riskColor(signal.risk) }}>{signal.risk}</div>
-              <div className="font-mono text-[9px] text-muted-foreground/50 tracking-widest">{t("gauge.risk")}</div>
+              <div className="font-mono text-[9px] text-muted-foreground/70 tracking-widest">{t("gauge.risk")}</div>
             </div>
           </div>
           {signal.reasons.length > 0 && (
