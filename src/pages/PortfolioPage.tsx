@@ -255,7 +255,7 @@ export default function PortfolioPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="font-mono text-lg sm:text-xl tracking-wider text-gold">Portfolio Commander</h1>
-            <p className="font-mono text-[10px] text-muted-foreground/45 mt-1 max-w-md leading-relaxed">
+            <p className="font-mono text-[10px] text-muted-foreground mt-1 max-w-md leading-relaxed">
               {fr ? "Pilote l'exposition, la concentration et les décisions de renfort ou de réduction." : "Control exposure, concentration, and reinforce/reduce decisions."}
             </p>
           </div>
