@@ -117,6 +117,7 @@ export default function PortfolioPage() {
   const fr = lang === "fr";
   const portfolio = useLocalPortfolio();
   const [showAdd, setShowAdd] = useState(false);
+  const [showAlloc, setShowAlloc] = useState(false);
   const [addNetuid, setAddNetuid] = useState<number>(1);
   const [addQty, setAddQty] = useState<number>(10);
   const { currency, toggle: toggleCurrency } = useCurrencyToggle();
