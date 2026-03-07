@@ -124,7 +124,7 @@ export default function SubnetDetailPage() {
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
   const [flash, setFlash] = useState<string | null>(null);
-
+  const [showDeepDive, setShowDeepDive] = useState(false);
   const s = scores.get(netuid);
   const verdict = verdicts.get(netuid);
   const spark = sparklines?.get(netuid) || [];

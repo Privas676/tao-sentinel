@@ -435,26 +435,32 @@ export default function CompassPage() {
             } />
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid hsla(0,0%,100%,0.05)" }}>
               <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
-                <table className="w-full font-mono" style={{ minWidth: 480 }}>
+                <table className="w-full font-mono" style={{ minWidth: 560 }}>
                   <thead>
                     <tr style={{ background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.04)" }}>
-                      {["SN", fr ? "Nom" : "Name", "Action", "Conv.", "Risk", "Mom.", "7d"].map(h => (
+                      {["SN", fr ? "Nom" : "Name", "Action", "Conv.", "Conf.", "Risk", "Mom.", "7d"].map(h => (
                         <th key={h} className="py-2 px-2.5 text-left text-[8px] tracking-wider text-muted-foreground uppercase whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {watchlist.map((s, idx) => (
-                      <tr key={s.netuid} className="cursor-pointer hover:bg-white/[0.015] transition-colors" style={{ borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }} onClick={() => setPanelSignal(s)}>
-                        <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</td>
-                        <td className="py-2 px-2.5 text-[10px] text-muted-foreground truncate" style={{ maxWidth: 120 }}>{s.name}</td>
-                        <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTER" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</td>
-                        <td className="py-2 px-2.5 text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</td>
-                        <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</td>
-                        <td className="py-2 px-2.5 text-[10px]" style={{ color: s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK }}>{Math.round(s.momentumScore)}</td>
-                        <td className="py-2 px-2.5"><SparklineMini data={s.sparkline_7d} width={50} height={16} /></td>
-                      </tr>
-                    ))}
+                    {watchlist.map((s, idx) => {
+                      const convScore = Math.abs(s.opp - s.risk) * (s.conf / 100);
+                      const convLevel = convScore >= 70 ? "HIGH" : convScore >= 40 ? "MED" : "LOW";
+                      const convLevelColor = convScore >= 70 ? GO : convScore >= 40 ? WARN : MUTED;
+                      return (
+                        <tr key={s.netuid} className="cursor-pointer hover:bg-white/[0.015] transition-colors" style={{ borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }} onClick={() => setPanelSignal(s)}>
+                          <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</td>
+                          <td className="py-2 px-2.5 text-[10px] text-muted-foreground truncate" style={{ maxWidth: 120 }}>{s.name}</td>
+                          <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTER" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</td>
+                          <td className="py-2 px-2.5 text-[9px] font-bold" style={{ color: convLevelColor }}>{convLevel}</td>
+                          <td className="py-2 px-2.5 text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</td>
+                          <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</td>
+                          <td className="py-2 px-2.5 text-[10px]" style={{ color: s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK }}>{Math.round(s.momentumScore)}</td>
+                          <td className="py-2 px-2.5"><SparklineMini data={s.sparkline_7d} width={50} height={16} /></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

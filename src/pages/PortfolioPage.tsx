@@ -414,6 +414,10 @@ export default function PortfolioPage() {
                             {portfolioActionLabel(r.pAction, fr)}
                           </span>
                         </td>
+                        {/* Signal reason */}
+                        <td className="py-3 px-3 font-mono text-[9px] text-muted-foreground" style={{ maxWidth: 130 }}>
+                          {signalReason}
+                        </td>
                         {/* Momentum */}
                         <td className="py-3 px-3">
                           <Sparkline data={sparklines?.get(r.netuid) || []} />
