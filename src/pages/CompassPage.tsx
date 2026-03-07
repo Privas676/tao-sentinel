@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
+import { useState, useMemo, useRef, type ReactNode } from "react";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { VerdictRow } from "@/components/VerdictBadge";
 import { Link } from "react-router-dom";
