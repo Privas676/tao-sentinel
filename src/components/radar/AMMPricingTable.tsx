@@ -4,7 +4,7 @@ import { ammEfficiencyColor, slippageColor } from "@/lib/stake-analytics";
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/table";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 function formatTao(v: number): string {
   if (v >= 1e6) return `${(v / 1e6).toFixed(1)}Mτ`;
