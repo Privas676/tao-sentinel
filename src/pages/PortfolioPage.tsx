@@ -148,9 +148,10 @@ export default function PortfolioPage() {
     const netuid = pos.subnet_id;
     const s = scores.get(netuid);
     const v = verdicts.get(netuid);
+    const decision = s ? buildSubnetDecision(s, v, fr) : null;
     const alphaPriceTao = s?.consensusPrice ?? 0;
     const alphaQty = alphaPriceTao > 0 ? pos.quantity_tao / alphaPriceTao : 0;
-    const pAction = portfolioAction(s);
+    const pAction = decision?.portfolioActionFr ?? "CONSERVER";
     return {
       netuid, name: s?.name || `SN-${netuid}`,
       taoInvest: pos.quantity_tao, entryPrice: pos.entry_price, alphaPriceTao, alphaQty,
@@ -162,9 +163,9 @@ export default function PortfolioPage() {
       depegProbability: s?.depegProbability ?? 0,
       delistCategory: s?.delistCategory ?? "NORMAL",
       healthScores: s?.healthScores ?? { liquidityHealth: 50, activityHealth: 50, emissionPressure: 50, dilutionRisk: 50, concentrationRisk: 50 },
-      verdict: v, score: s,
+      verdict: v, score: s, decision,
     };
-  }), [portfolio.positions, scores, verdicts]);
+  }), [portfolio.positions, scores, verdicts, fr]);
 
   /* ── Portfolio analytics ── */
   const analytics = useMemo(() => {
