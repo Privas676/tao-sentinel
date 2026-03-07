@@ -524,7 +524,7 @@ export default function AlertsPage() {
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
-      <div className="px-4 sm:px-6 py-5 max-w-[1200px] mx-auto space-y-6">
+      <div className="px-4 sm:px-6 py-6 max-w-[1200px] mx-auto space-y-7">
 
         {/* ── 1. HEADER ── */}
         <div>
