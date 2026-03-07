@@ -628,7 +628,7 @@ export default function SubnetsPage() {
         </div>
       </div>
 
-      <QuickViewDrawer row={drawerRow} open={!!drawerRow} onClose={() => setDrawerRow(null)} fr={fr} onAddWatchlist={(netuid) => addPosition({ subnet_id: netuid, quantity_tao: 0, timestamp_added: new Date().toISOString() })} />
+      <QuickViewDrawer row={drawerRow} open={!!drawerRow} onClose={() => setDrawerRow(null)} fr={fr} onAddWatchlist={(netuid) => addPosition(netuid, 0)} />
     </div>
   );
 }
