@@ -195,35 +195,6 @@ export default function SubnetDetailPage() {
               <KPIChip label="MOMENTUM" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK} />
             </div>
 
-            {/* Thesis + Invalidation — prominent, side by side */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6">
-              <div className="rounded-lg p-4 border border-primary/10 bg-primary/[0.02]">
-                <div className="font-mono text-[7px] tracking-[0.2em] uppercase mb-2.5" style={{ color: GO }}>{fr ? "THÈSE" : "THESIS"}</div>
-                {verdict?.positiveReasons && verdict.positiveReasons.length > 0 ? (
-                  verdict.positiveReasons.slice(0, 4).map((r, i) => (
-                    <div key={i} className="font-mono text-[11px] text-foreground/75 py-0.5 leading-relaxed">
-                      <span style={{ color: GO }}>+</span> {r}
-                    </div>
-                  ))
-                ) : (
-                  <div className="font-mono text-[10px] text-muted-foreground italic">{fr ? "Aucune thèse positive identifiée" : "No positive thesis identified"}</div>
-                )}
-              </div>
-
-              <div className="rounded-lg p-4 border border-destructive/10 bg-destructive/[0.02]">
-                <div className="font-mono text-[7px] tracking-[0.2em] uppercase mb-2.5" style={{ color: BREAK }}>INVALIDATION</div>
-                {verdict?.negativeReasons && verdict.negativeReasons.length > 0 ? (
-                  verdict.negativeReasons.slice(0, 4).map((r, i) => (
-                    <div key={i} className="font-mono text-[11px] text-foreground/75 py-0.5 leading-relaxed">
-                      <span style={{ color: BREAK }}>−</span> {r}
-                    </div>
-                  ))
-                ) : (
-                  <div className="font-mono text-[10px] text-muted-foreground italic">{fr ? "Aucune invalidation identifiée" : "No invalidation identified"}</div>
-                )}
-              </div>
-            </div>
-
             {/* Secondary context row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 mt-4 pt-4 border-t border-border">
               <Metric label={fr ? "Horizon" : "Horizon"} value={horizon(s, fr)} />
