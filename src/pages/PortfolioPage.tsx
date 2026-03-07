@@ -370,6 +370,7 @@ export default function PortfolioPage() {
         {/* ══════════════════════════════════ */}
         {/*   5. POSITIONS TABLE                */}
         {/* ══════════════════════════════════ */}
+        <SwipeHint storageKey="swipe-portfolio-v1" />
         <SectionCard>
           <div className="flex items-center justify-between px-5 py-3 border-b border-border">
             <div className="flex items-center gap-2.5">
@@ -392,15 +393,16 @@ export default function PortfolioPage() {
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left" style={{ minWidth: 720 }}>
+            <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+              <table className="w-full text-left font-mono" style={{ minWidth: 820 }}>
                 <thead>
-                  <tr className="border-b border-border">
+                  <tr className="border-b border-border bg-muted/20">
+                    <th className="py-2.5 px-3 text-[8px] tracking-[0.15em] uppercase text-muted-foreground font-normal whitespace-nowrap sticky left-0 z-10 bg-background">Subnet</th>
                     {[
-                      "Subnet", fr ? "Position" : "Position", fr ? "Poids" : "Weight",
+                      fr ? "Position" : "Position", fr ? "Poids" : "Weight",
                       "Conv.", "Risk", "Action", fr ? "Raison" : "Signal", "Mom.", ""
                     ].map((h, i) => (
-                      <th key={i} className="py-2.5 px-3 font-mono text-[8px] tracking-[0.15em] uppercase text-muted-foreground font-normal whitespace-nowrap">{h}</th>
+                      <th key={i} className="py-2.5 px-3 text-[8px] tracking-[0.15em] uppercase text-muted-foreground font-normal whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
