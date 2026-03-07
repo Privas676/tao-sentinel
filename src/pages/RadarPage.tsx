@@ -82,15 +82,14 @@ function SignalChip({ label, color }: { label: string; color: "red" | "orange" |
 }
 
 /* ─── Tabs ─── */
-type TabKey = "capital" | "adoption" | "narrative" | "risk" | "heatmap" | "smartmoney" | "bubble" | "validator" | "alpha";
+type TabKey = "capital" | "adoption" | "risk" | "amm" | "heatmap" | "smartmoney" | "validator" | "economics";
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "capital", label: "Capital Flow", icon: "💰" },
   { key: "adoption", label: "Adoption", icon: "🚀" },
-  { key: "narrative", label: "Narrative", icon: "📊" },
-  { key: "risk", label: "Dump Risk", icon: "⚠️" },
-  { key: "bubble", label: "Bubble", icon: "🫧" },
+  { key: "risk", label: "Risk Monitor", icon: "⚠️" },
+  { key: "amm", label: "AMM / Pricing", icon: "💎" },
   { key: "validator", label: "Validators", icon: "🔍" },
-  { key: "alpha", label: "Alpha Fair Value", icon: "💎" },
+  { key: "economics", label: "Economics", icon: "📊" },
   { key: "heatmap", label: "Heatmap", icon: "🔥" },
   { key: "smartmoney", label: "Smart Money", icon: "🐋" },
 ];
