@@ -277,7 +277,7 @@ export default function SubnetsPage() {
   const { t, lang } = useI18n();
   const fr = lang === "fr";
   const isMobile = useIsMobile();
-  const { ownedNetuids } = useLocalPortfolio();
+  const { ownedNetuids, addPosition } = useLocalPortfolio();
 
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug } = useSubnetScores();
