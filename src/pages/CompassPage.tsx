@@ -529,7 +529,7 @@ export default function CompassPage() {
                 </span>
                 <div>
                   <div className="font-mono text-[12px] font-bold" style={{
-                    color: portfolioAlignment.status === "aligned" ? "hsl(145,65%,48%)" : portfolioAlignment.status === "partial" ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)",
+                    color: portfolioAlignment.status === "aligned" ? GO : portfolioAlignment.status === "partial" ? WARN : BREAK,
                   }}>
                     {portfolioAlignment.status === "aligned" ? (fr ? "Portefeuille aligné" : "Portfolio aligned") :
                      portfolioAlignment.status === "partial" ? (fr ? "Partiellement aligné" : "Partially aligned") :
