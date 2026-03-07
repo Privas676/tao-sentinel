@@ -293,3 +293,50 @@ describe("computeAllVerdicts", () => {
     expect(computeAllVerdicts([])).toEqual([]);
   });
 });
+
+/* ═══════════════════════════════════════ */
+/*  v3: Pillar breakdown                    */
+/* ═══════════════════════════════════════ */
+
+describe("v3 — Pillar auditability", () => {
+  it("exposes 4 pillar scores in result", () => {
+    const result = computeVerdict(makeInput());
+    expect(result.pillars).toBeDefined();
+    expect(result.pillars.momentum.score).toBeGreaterThanOrEqual(0);
+    expect(result.pillars.amm.score).toBeGreaterThanOrEqual(0);
+    expect(result.pillars.risk.score).toBeGreaterThanOrEqual(0);
+    expect(result.pillars.dataQuality.score).toBeGreaterThanOrEqual(0);
+  });
+
+  it("each pillar has components for auditability", () => {
+    const result = computeVerdict(makeInput());
+    expect(result.pillars.momentum.components.length).toBeGreaterThan(0);
+    expect(result.pillars.amm.components.length).toBeGreaterThan(0);
+    expect(result.pillars.risk.components.length).toBeGreaterThan(0);
+    expect(result.pillars.dataQuality.components.length).toBeGreaterThan(0);
+  });
+
+  it("dataReliability is classified", () => {
+    const result = computeVerdict(makeInput());
+    expect(["stable", "partial", "suspect", "stale"]).toContain(result.dataReliability);
+  });
+
+  it("reasons include pillar attribution", () => {
+    const result = computeVerdict(makeInput());
+    for (const r of result.allReasons) {
+      expect(["momentum", "amm", "risk", "data"]).toContain(r.pillar);
+    }
+  });
+
+  it("suspect data → HOLD prudent", () => {
+    const result = computeVerdict(makeInput({
+      dataConfidence: 5,
+      priceContext: makePrice({ currentPrice: 0, marketCap: 0, liquidity: 0, vol24h: 0 }),
+      snapshot: makeSnapshot({ validatorsActive: 0, minersActive: 0 }),
+      economicContext: makeEco({ taoInPool: 0, alphaInPool: 0, emissionsPerDay: 0, buyVolume: 0, sellVolume: 0, circulatingSupply: 0, buyersCount: 0, sellersCount: 0 }),
+    }));
+    // With very poor data, should be HOLD (prudent) unless overridden
+    expect(result.verdict).toBe("HOLD");
+    expect(result.dataReliability).not.toBe("stable");
+  });
+});
