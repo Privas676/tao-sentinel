@@ -678,7 +678,14 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Fair (MCap/Circ)</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Deviation</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Circ. Supply</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Burn Ratio</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Burn Ratio</span></TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{BURN_RATIO_TOOLTIP}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
