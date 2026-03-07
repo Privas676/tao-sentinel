@@ -322,7 +322,7 @@ export default function CompassPage() {
             <span className="ml-auto font-mono text-[8px] text-muted-foreground">{scoresList.length} subnets</span>
           </div>
 
-          <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.025) 0%, hsla(0,0%,100%,0.005) 100%)", border: "1px solid hsla(var(--gold), 0.08)" }}>
+          <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.02) 0%, transparent 100%)", border: "1px solid hsla(var(--gold), 0.06)", boxShadow: "0 4px 24px -4px hsla(var(--gold), 0.04)" }}>
             {/* Main hero content */}
             <div className="p-5 sm:p-8">
               <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-10">
