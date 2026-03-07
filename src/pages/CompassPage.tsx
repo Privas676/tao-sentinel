@@ -328,7 +328,7 @@ export default function CompassPage() {
               <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-10">
                 {/* Score central */}
                 <div className="flex flex-col items-center flex-shrink-0">
-                  <span className="font-mono tracking-[0.25em] uppercase text-muted-foreground/30" style={{ fontSize: 7 }}>SENTINEL INDEX</span>
+                  <span className="font-mono tracking-[0.25em] uppercase text-muted-foreground/65" style={{ fontSize: 7 }}>SENTINEL INDEX</span>
                   <span className="font-mono font-bold leading-none mt-1" style={{ fontSize: isMobile ? 52 : 68, color: sentinelIndexColor(sentinelIndex), textShadow: "0 0 40px hsla(var(--gold), 0.1)" }}>
                     {sentinelIndex}
                   </span>
