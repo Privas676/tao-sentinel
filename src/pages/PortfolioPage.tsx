@@ -73,7 +73,7 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
             {filtered.map(s => (
               <button key={s.netuid} type="button" onClick={() => { onChange(s.netuid); setOpen(false); setSearch(""); }}
                 className={`w-full text-left px-3 py-2 font-mono text-[11px] flex items-center gap-2 transition-colors ${s.netuid === value ? "bg-muted/40 text-foreground" : "text-foreground/65 hover:bg-muted/20"}`}>
-                <span className="text-muted-foreground/30 w-8 shrink-0">SN-{s.netuid}</span>
+                <span className="text-muted-foreground w-8 shrink-0">SN-{s.netuid}</span>
                 <span className="truncate flex-1">{s.name}</span>
                 {isOwned(s.netuid) && <span className="text-[8px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/15">✓</span>}
               </button>
