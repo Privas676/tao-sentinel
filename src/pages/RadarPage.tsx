@@ -594,6 +594,7 @@ function EconomicsTable({ data }: { data: SubnetRadarData[] }) {
         </TableBody>
       </Table>
     </div>
+    </TooltipProvider>
   );
 }
 
