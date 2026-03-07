@@ -337,7 +337,7 @@ export default function SubnetDetailPage() {
               <Metric label="Capital Flow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
               {eco && <Metric label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} />}
               <Metric label="Trend" value={s.momentumLabel} color={momentumColor(s.momentumLabel)} />
-              <div className="pt-3 flex justify-center"><Sparkline data={spark} /></div>
+              <div className="pt-3 flex justify-center"><DetailSparkline data={spark} /></div>
             </div>
           </SectionCard>
 
