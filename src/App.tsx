@@ -165,10 +165,12 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <I18nProvider>
-        <BrowserRouter>
-          <AppLayout />
-        </BrowserRouter>
-        <Toaster />
+        <TooltipProvider delayDuration={200}>
+          <BrowserRouter>
+            <AppLayout />
+          </BrowserRouter>
+          <Toaster />
+        </TooltipProvider>
       </I18nProvider>
     </AuthProvider>
   </QueryClientProvider>
