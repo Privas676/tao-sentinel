@@ -156,10 +156,8 @@ export default function RadarPage() {
   const capitalFlow = useMemo(() => [...filtered].sort((a, b) => b.scores.capitalMomentum - a.scores.capitalMomentum), [filtered]);
   const adoptionRadar = useMemo(() => [...filtered].sort((a, b) => b.scores.subnetRadarScore - a.scores.subnetRadarScore), [filtered]);
   const dumpRiskSorted = useMemo(() => [...filtered].sort((a, b) => b.scores.dumpRisk - a.scores.dumpRisk), [filtered]);
-  const narrativeSorted = useMemo(() => [...filtered].sort((a, b) => b.scores.narrativeScore - a.scores.narrativeScore), [filtered]);
-  const bubbleSorted = useMemo(() => [...filtered].sort((a, b) => b.scores.bubbleScore - a.scores.bubbleScore), [filtered]);
   const validatorSorted = useMemo(() => [...filtered].sort((a, b) => b.scores.manipulationScore - a.scores.manipulationScore), [filtered]);
-  const alphaSorted = useMemo(() => [...filtered].sort((a, b) => a.scores.alphaInefficiency - b.scores.alphaInefficiency), [filtered]);
+  const economicsSorted = useMemo(() => [...filtered].sort((a, b) => b.economicContext.emissionsPerDay - a.economicContext.emissionsPerDay), [filtered]);
 
   if (isLoading) {
     return (
