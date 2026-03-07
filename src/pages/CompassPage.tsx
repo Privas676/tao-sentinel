@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from "react";
-import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
-import { VerdictRow } from "@/components/VerdictBadge";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
