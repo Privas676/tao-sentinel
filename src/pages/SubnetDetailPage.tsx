@@ -124,7 +124,7 @@ export default function SubnetDetailPage() {
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
   const [flash, setFlash] = useState<string | null>(null);
-
+  const [showDeepDive, setShowDeepDive] = useState(false);
   const s = scores.get(netuid);
   const verdict = verdicts.get(netuid);
   const spark = sparklines?.get(netuid) || [];
@@ -325,132 +325,150 @@ export default function SubnetDetailPage() {
         </SectionCard>
 
         {/* ══════════════════════════════════════════ */}
-        {/*   DEEP DIVE — 2-column metrics grid         */}
+        {/*   DEEP DIVE — Collapsible advanced metrics   */}
         {/* ══════════════════════════════════════════ */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-          {/* Flow & Momentum */}
-          <SectionCard>
-            <SectionTitle icon="📈" title="Flow & Momentum" />
-            <div className="px-5 py-4 space-y-0.5">
-              <Metric label={fr ? "Prix 7j" : "Price 7d"} value={pctChange != null ? `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}%` : "—"} color={pctChange != null ? (pctChange > 0 ? GO : BREAK) : undefined} />
-              <Metric label="Capital Flow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
-              {eco && <Metric label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} />}
-              <Metric label="Trend" value={s.momentumLabel} color={momentumColor(s.momentumLabel)} />
-              <div className="pt-3 flex justify-center"><DetailSparkline data={spark} /></div>
+        <div>
+          <button
+            onClick={() => setShowDeepDive(!showDeepDive)}
+            className="w-full flex items-center justify-between px-5 py-3 rounded-xl border border-border bg-card transition-all hover:bg-muted/10"
+            style={{ boxShadow: "var(--shadow-card)" }}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-sm" style={{ opacity: 0.6 }}>📊</span>
+              <span className="font-mono text-[10px] tracking-[0.18em] uppercase font-bold" style={{ color: GOLD }}>
+                {fr ? "Analyse approfondie" : "Deep Dive Analysis"}
+              </span>
+              <span className="font-mono text-[8px] text-muted-foreground">
+                Flow · Liquidity · Structure · Economics · Smart Money
+              </span>
             </div>
-          </SectionCard>
+            <span className={`font-mono text-[10px] text-muted-foreground transition-transform ${showDeepDive ? "rotate-180" : ""}`}>▼</span>
+          </button>
 
-          {/* Liquidity & Execution */}
-          <SectionCard>
-            <SectionTitle icon="💧" title={fr ? "Liquidité & Exécution" : "Liquidity & Execution"} />
-            <div className="px-5 py-4 space-y-0.5">
-              {amm && (
-                <>
-                  <Metric label="Spread" value={`${(amm.spreadBps / 100).toFixed(3)}%`} color={amm.spreadBps < 50 ? GO : amm.spreadBps < 200 ? WARN : BREAK} />
-                  <Metric label="Slippage 1τ" value={`${(amm.slippageBps1Tao / 100).toFixed(2)}%`} />
-                  <Metric label="Slippage 10τ" value={`${(amm.slippageBps10Tao / 100).toFixed(2)}%`} color={amm.slippageBps10Tao > 500 ? BREAK : undefined} />
-                  <Metric label={fr ? "Profondeur" : "Depth"} value={`${amm.poolDepth.toFixed(1)}τ`} color={healthColor(Math.min(100, amm.poolDepth))} />
-                  <Metric label="AMM" value={amm.ammEfficiency} color={healthColor(amm.ammEfficiency)} />
-                </>
-              )}
-              {eco && <Metric label="Pool" value={`α${eco.alphaInPool.toFixed(0)} / τ${eco.taoInPool.toFixed(1)}`} />}
-              <BarScore label={fr ? "Score Liq." : "Liq. Score"} value={s.healthScores.liquidityHealth} />
+          {showDeepDive && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+
+              {/* Flow & Momentum */}
+              <SectionCard>
+                <SectionTitle icon="📈" title="Flow & Momentum" />
+                <div className="px-5 py-4 space-y-0.5">
+                  <Metric label={fr ? "Prix 7j" : "Price 7d"} value={pctChange != null ? `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}%` : "—"} color={pctChange != null ? (pctChange > 0 ? GO : BREAK) : undefined} />
+                  <Metric label="Capital Flow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
+                  {eco && <Metric label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} />}
+                  <Metric label="Trend" value={s.momentumLabel} color={momentumColor(s.momentumLabel)} />
+                  <div className="pt-3 flex justify-center"><DetailSparkline data={spark} /></div>
+                </div>
+              </SectionCard>
+
+              {/* Liquidity & Execution */}
+              <SectionCard>
+                <SectionTitle icon="💧" title={fr ? "Liquidité & Exécution" : "Liquidity & Execution"} />
+                <div className="px-5 py-4 space-y-0.5">
+                  {amm && (
+                    <>
+                      <Metric label="Spread" value={`${(amm.spreadBps / 100).toFixed(3)}%`} color={amm.spreadBps < 50 ? GO : amm.spreadBps < 200 ? WARN : BREAK} />
+                      <Metric label="Slippage 1τ" value={`${(amm.slippageBps1Tao / 100).toFixed(2)}%`} />
+                      <Metric label="Slippage 10τ" value={`${(amm.slippageBps10Tao / 100).toFixed(2)}%`} color={amm.slippageBps10Tao > 500 ? BREAK : undefined} />
+                      <Metric label={fr ? "Profondeur" : "Depth"} value={`${amm.poolDepth.toFixed(1)}τ`} color={healthColor(Math.min(100, amm.poolDepth))} />
+                      <Metric label="AMM" value={amm.ammEfficiency} color={healthColor(amm.ammEfficiency)} />
+                    </>
+                  )}
+                  {eco && <Metric label="Pool" value={`α${eco.alphaInPool.toFixed(0)} / τ${eco.taoInPool.toFixed(1)}`} />}
+                  <BarScore label={fr ? "Score Liq." : "Liq. Score"} value={s.healthScores.liquidityHealth} />
+                </div>
+              </SectionCard>
+
+              {/* Structure */}
+              <SectionCard>
+                <SectionTitle icon="🏗️" title="Structure" />
+                <div className="px-5 py-4 space-y-0.5">
+                  {sn && (
+                    <>
+                      <Metric label={fr ? "Validateurs" : "Validators"} value={sn.validatorsActive} />
+                      <Metric label={fr ? "Mineurs" : "Miners"} value={sn.minersActive} sub={`/ ${sn.minersTotal}`} />
+                      <Metric label="Holders" value={sn.holdersCount} />
+                      <Metric label="Concentration" value={`${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(1)}%`} color={sn.stakeConcentration > 50 ? BREAK : sn.stakeConcentration > 30 ? WARN : GO} />
+                    </>
+                  )}
+                  {rs && (
+                    <>
+                      <Metric label="Manipulation" value={rs.manipulationScore} color={healthColor(100 - rs.manipulationScore)} />
+                      <Metric label="Bubble" value={rs.bubbleScore} color={healthColor(100 - rs.bubbleScore)} />
+                      <Metric label="Dump" value={rs.dumpRisk} color={healthColor(100 - rs.dumpRisk)} />
+                    </>
+                  )}
+                </div>
+              </SectionCard>
+
+              {/* Economics */}
+              <SectionCard>
+                <SectionTitle icon="🏦" title="Economics" />
+                <div className="px-5 py-4 space-y-0.5">
+                  {eco && (
+                    <>
+                      <Metric label={fr ? "Émissions/j" : "Emissions/d"} value={`${eco.emissionsPerDay.toFixed(1)} α`} />
+                      <Metric label={fr ? "Part" : "Share"} value={`${eco.emissionsPercent.toFixed(2)}%`} />
+                      {dm && <Metric label="Burn" value={`${(dm.burnRatio * 100).toFixed(1)}%`} color={dm.burnRatio > 0.5 ? GO : dm.burnRatio > 0.2 ? WARN : BREAK} />}
+                      <Metric label="Supply" value={`${eco.circulatingSupply.toFixed(0)} α`} />
+                      {dm && <Metric label="UID Sat." value={`${(dm.uidSaturation * 100).toFixed(0)}%`} color={dm.uidSaturation > 0.9 ? BREAK : dm.uidSaturation > 0.7 ? WARN : GO} />}
+                      {dm && <Metric label={fr ? "Pression" : "Pressure"} value={dm.tradingPressure > 0 ? (fr ? "Achat" : "Buy") : (fr ? "Vente" : "Sell")} color={dm.tradingPressure > 0 ? GO : BREAK} />}
+                    </>
+                  )}
+                  <BarScore label={fr ? "Émission" : "Emission"} value={100 - s.healthScores.emissionPressure} />
+                </div>
+              </SectionCard>
+
+              {/* Smart Money */}
+              <SectionCard>
+                <SectionTitle icon="🐋" title="Smart Money" />
+                <div className="px-5 py-4 space-y-0.5">
+                  {rs && (
+                    <>
+                      <Metric label="Score" value={rs.smartMoneyScore} color={healthColor(rs.smartMoneyScore)} />
+                      <Metric label="Narrative" value={rs.narrativeScore} color={healthColor(rs.narrativeScore)} />
+                    </>
+                  )}
+                  {eco && <Metric label="Sentiment" value={`${(eco.sentiment * 100).toFixed(0)}%`} color={eco.sentiment > 0.55 ? GO : eco.sentiment < 0.45 ? BREAK : WARN} sub={eco.sentiment > 0.55 ? "Buy" : eco.sentiment < 0.45 ? "Sell" : "—"} />}
+                  <BarScore label={fr ? "Activité" : "Activity"} value={s.healthScores.activityHealth} />
+                </div>
+              </SectionCard>
+
+              {/* Portfolio Profile */}
+              <SectionCard>
+                <SectionTitle icon="📁" title={fr ? "Profil portefeuille" : "Portfolio Profile"} />
+                <div className="px-5 py-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="font-mono text-[13px] font-bold" style={{ color: profile.color }}>{fr ? profile.labelFr : profile.label}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">— Fit {fitScore(s)}/100</span>
+                  </div>
+                  <p className="font-mono text-[11px] text-muted-foreground leading-relaxed mb-4">
+                    {fr ? profile.descFr : profile.desc}
+                  </p>
+                  <div className="space-y-1.5">
+                    {(["core", "tactical", "opportunistic", "watchlist", "avoid"] as ProfileType[]).map(p => {
+                      const active = profile.profile === p;
+                      const labels: Record<ProfileType, { en: string; fr: string }> = {
+                        core: { en: "Core (5-15%)", fr: "Fond (5-15%)" },
+                        tactical: { en: "Tactical (2-5%)", fr: "Tactique (2-5%)" },
+                        opportunistic: { en: "Opportunistic (3-8%)", fr: "Opportuniste (3-8%)" },
+                        watchlist: { en: "Watchlist Only", fr: "Watchlist seule" },
+                        avoid: { en: "Avoid", fr: "Éviter" },
+                      };
+                      return (
+                        <div key={p} className={`flex items-center gap-2.5 py-1 px-2.5 rounded-md transition-colors ${active ? "bg-muted/40" : ""}`}>
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${active ? "" : "opacity-[0.35]"}`} style={{ background: active ? profile.color : MUTED }} />
+                          <span className={`font-mono text-[10px] ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                            {fr ? labels[p].fr : labels[p].en}
+                          </span>
+                          {active && <span className="font-mono text-[8px] text-muted-foreground ml-auto">◄</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </SectionCard>
             </div>
-          </SectionCard>
-
-          {/* Structure */}
-          <SectionCard>
-            <SectionTitle icon="🏗️" title="Structure" />
-            <div className="px-5 py-4 space-y-0.5">
-              {sn && (
-                <>
-                  <Metric label={fr ? "Validateurs" : "Validators"} value={sn.validatorsActive} />
-                  <Metric label={fr ? "Mineurs" : "Miners"} value={sn.minersActive} sub={`/ ${sn.minersTotal}`} />
-                  <Metric label="Holders" value={sn.holdersCount} />
-                  <Metric label="Concentration" value={`${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(1)}%`} color={sn.stakeConcentration > 50 ? BREAK : sn.stakeConcentration > 30 ? WARN : GO} />
-                </>
-              )}
-              {rs && (
-                <>
-                  <Metric label="Manipulation" value={rs.manipulationScore} color={healthColor(100 - rs.manipulationScore)} />
-                  <Metric label="Bubble" value={rs.bubbleScore} color={healthColor(100 - rs.bubbleScore)} />
-                  <Metric label="Dump" value={rs.dumpRisk} color={healthColor(100 - rs.dumpRisk)} />
-                </>
-              )}
-            </div>
-          </SectionCard>
-
-          {/* Economics */}
-          <SectionCard>
-            <SectionTitle icon="🏦" title="Economics" />
-            <div className="px-5 py-4 space-y-0.5">
-              {eco && (
-                <>
-                  <Metric label={fr ? "Émissions/j" : "Emissions/d"} value={`${eco.emissionsPerDay.toFixed(1)} α`} />
-                  <Metric label={fr ? "Part" : "Share"} value={`${eco.emissionsPercent.toFixed(2)}%`} />
-                  {dm && <Metric label="Burn" value={`${(dm.burnRatio * 100).toFixed(1)}%`} color={dm.burnRatio > 0.5 ? GO : dm.burnRatio > 0.2 ? WARN : BREAK} />}
-                  <Metric label="Supply" value={`${eco.circulatingSupply.toFixed(0)} α`} />
-                  {dm && <Metric label="UID Sat." value={`${(dm.uidSaturation * 100).toFixed(0)}%`} color={dm.uidSaturation > 0.9 ? BREAK : dm.uidSaturation > 0.7 ? WARN : GO} />}
-                  {dm && <Metric label={fr ? "Pression" : "Pressure"} value={dm.tradingPressure > 0 ? (fr ? "Achat" : "Buy") : (fr ? "Vente" : "Sell")} color={dm.tradingPressure > 0 ? GO : BREAK} />}
-                </>
-              )}
-              <BarScore label={fr ? "Émission" : "Emission"} value={100 - s.healthScores.emissionPressure} />
-            </div>
-          </SectionCard>
-
-          {/* Smart Money */}
-          <SectionCard>
-            <SectionTitle icon="🐋" title="Smart Money" />
-            <div className="px-5 py-4 space-y-0.5">
-              {rs && (
-                <>
-                  <Metric label="Score" value={rs.smartMoneyScore} color={healthColor(rs.smartMoneyScore)} />
-                  <Metric label="Narrative" value={rs.narrativeScore} color={healthColor(rs.narrativeScore)} />
-                </>
-              )}
-              {eco && <Metric label="Sentiment" value={`${(eco.sentiment * 100).toFixed(0)}%`} color={eco.sentiment > 0.55 ? GO : eco.sentiment < 0.45 ? BREAK : WARN} sub={eco.sentiment > 0.55 ? "Buy" : eco.sentiment < 0.45 ? "Sell" : "—"} />}
-              <BarScore label={fr ? "Activité" : "Activity"} value={s.healthScores.activityHealth} />
-            </div>
-          </SectionCard>
-
-          {/* Portfolio Profile */}
-          <SectionCard>
-            <SectionTitle icon="📁" title={fr ? "Profil portefeuille" : "Portfolio Profile"} />
-            <div className="px-5 py-4">
-              {/* Profile badge */}
-              <div className="flex items-center gap-3 mb-4">
-                <span className="font-mono text-[13px] font-bold" style={{ color: profile.color }}>{fr ? profile.labelFr : profile.label}</span>
-                <span className="font-mono text-[10px] text-muted-foreground">— Fit {fitScore(s)}/100</span>
-              </div>
-              <p className="font-mono text-[11px] text-muted-foreground leading-relaxed mb-4">
-                {fr ? profile.descFr : profile.desc}
-              </p>
-
-              {/* All 5 profiles with indicator */}
-              <div className="space-y-1.5">
-                {(["core", "tactical", "opportunistic", "watchlist", "avoid"] as ProfileType[]).map(p => {
-                  const active = profile.profile === p;
-                  const labels: Record<ProfileType, { en: string; fr: string }> = {
-                    core: { en: "Core (5-15%)", fr: "Fond (5-15%)" },
-                    tactical: { en: "Tactical (2-5%)", fr: "Tactique (2-5%)" },
-                    opportunistic: { en: "Opportunistic (3-8%)", fr: "Opportuniste (3-8%)" },
-                    watchlist: { en: "Watchlist Only", fr: "Watchlist seule" },
-                    avoid: { en: "Avoid", fr: "Éviter" },
-                  };
-                  return (
-                    <div key={p} className={`flex items-center gap-2.5 py-1 px-2.5 rounded-md transition-colors ${active ? "bg-muted/40" : ""}`}>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${active ? "" : "opacity-[0.35]"}`} style={{ background: active ? profile.color : MUTED }} />
-                      <span className={`font-mono text-[10px] ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                        {fr ? labels[p].fr : labels[p].en}
-                      </span>
-                      {active && <span className="font-mono text-[8px] text-muted-foreground ml-auto">◄</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </SectionCard>
+          )}
         </div>
 
         {/* ══════════════════════════════════════════ */}
