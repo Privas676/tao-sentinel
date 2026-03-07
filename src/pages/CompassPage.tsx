@@ -588,7 +588,7 @@ export default function CompassPage() {
 function MiniMetric({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="font-mono text-muted-foreground/65 uppercase" style={{ fontSize: 7, letterSpacing: "0.12em" }}>{label}</span>
+      <span className="font-mono text-muted-foreground uppercase" style={{ fontSize: 7, letterSpacing: "0.12em" }}>{label}</span>
       <span className="font-mono font-bold leading-none" style={{ color, fontSize: 13 }}>{value}</span>
     </div>
   );
