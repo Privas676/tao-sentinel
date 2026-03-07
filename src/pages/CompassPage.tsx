@@ -430,7 +430,7 @@ export default function CompassPage() {
         {watchlist.length > 0 && (
           <section>
             <SectionHeader title={fr ? "WATCHLIST ACTIVE" : "ACTIVE WATCHLIST"} icon="👁" badge={
-              <span className="font-mono text-[8px] text-muted-foreground/25">{fr ? "Top conviction" : "Top conviction"}</span>
+              <span className="font-mono text-[8px] text-muted-foreground/65">{fr ? "Top conviction" : "Top conviction"}</span>
             } />
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid hsla(0,0%,100%,0.05)" }}>
               {/* Header */}
