@@ -217,9 +217,9 @@ function computeAdoptionQualityScore(s: StakeSnapshot, d: StakeDeltas, dm: Deriv
   else if (d.validatorsGrowth7d >= -0.05) score += 3;
   else score += 0;
 
-  // Concentration penalty
-  if (s.stakeConcentration > 75) score -= 10;
-  else if (s.stakeConcentration > 55) score -= 5;
+  // Concentration penalty — Bittensor-calibrated (90%+ is normal)
+  if (s.stakeConcentration > 98) score -= 8;
+  else if (s.stakeConcentration > 95) score -= 4;
 
   return clamp(Math.round(score), 0, 100);
 }
