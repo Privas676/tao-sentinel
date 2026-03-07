@@ -240,7 +240,7 @@ export default function SubnetDetailPage() {
               <div className="flex-1 min-w-0">
                 <h1 className="font-mono text-lg sm:text-xl tracking-wide text-[hsl(var(--gold))] leading-tight">{s.name}</h1>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className="font-mono text-[9px] text-muted-foreground/45">SN-{netuid} · {s.assetType}</span>
+                  <span className="font-mono text-[9px] text-muted-foreground">SN-{netuid} · {s.assetType}</span>
                   {isSpecial && <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">{SPECIAL_SUBNETS[netuid].label}</span>}
                 </div>
               </div>
