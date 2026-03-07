@@ -203,7 +203,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               <Link
                 to="/auth"
                 onClick={() => isMobile && setSidebarOpen(false)}
-                className="flex items-center gap-2 px-1 font-mono text-[10px] tracking-wider text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
+                className="flex items-center gap-2 px-1 font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground/80 transition-colors"
               >
                 <span>🔒</span>
                 <span>Connexion</span>
