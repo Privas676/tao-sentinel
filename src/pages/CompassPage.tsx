@@ -450,7 +450,7 @@ export default function CompassPage() {
                         <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTER" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</td>
                         <td className="py-2 px-2.5 text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</td>
                         <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</td>
-                        <td className="py-2 px-2.5 text-[10px]" style={{ color: s.momentumScore >= 55 ? "hsl(145,65%,48%)" : s.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>{Math.round(s.momentumScore)}</td>
+                        <td className="py-2 px-2.5 text-[10px]" style={{ color: s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK }}>{Math.round(s.momentumScore)}</td>
                         <td className="py-2 px-2.5"><SparklineMini data={s.sparkline_7d} width={50} height={16} /></td>
                       </tr>
                     ))}
