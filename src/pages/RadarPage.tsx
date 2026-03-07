@@ -243,11 +243,10 @@ export default function RadarPage() {
         <div className="rounded-lg overflow-hidden" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
           {activeTab === "capital" && <CapitalFlowTable data={capitalFlow} />}
           {activeTab === "adoption" && <AdoptionTable data={adoptionRadar} />}
-          {activeTab === "narrative" && <NarrativeTable data={narrativeSorted} />}
-          {activeTab === "risk" && <DumpRiskTable data={dumpRiskSorted} />}
-          {activeTab === "bubble" && <BubbleTable data={bubbleSorted} />}
+          {activeTab === "risk" && <RiskMonitorTable data={dumpRiskSorted} />}
+          {activeTab === "amm" && <AMMPricingTable data={filtered} />}
           {activeTab === "validator" && <ValidatorTable data={validatorSorted} />}
-          {activeTab === "alpha" && <AlphaInefficiencyTable data={alphaSorted} />}
+          {activeTab === "economics" && <EconomicsTable data={economicsSorted} />}
           {activeTab === "heatmap" && <TreemapHeatmap data={filtered} />}
           {activeTab === "smartmoney" && <SmartMoneyPanel data={filtered} />}
         </div>
