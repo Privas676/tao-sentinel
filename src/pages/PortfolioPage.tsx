@@ -4,10 +4,8 @@ import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
-import { stabilityColor } from "@/lib/gauge-engine";
 import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
-import { ActionBadge } from "@/components/sentinel";
 import { toast } from "sonner";
 
 /* ═══════════════════════════════════════════════════════ */
@@ -24,14 +22,15 @@ const MUTED = "hsl(var(--muted-foreground))";
 /* ── Reusable atoms ── */
 
 function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-border bg-card/60 ${className}`}>{children}</div>;
+  return <div className={`rounded-xl border border-border bg-card ${className}`}>{children}</div>;
 }
 
-function SectionTitle({ icon, title }: { icon: string; title: string }) {
+function SectionTitle({ icon, title, badge }: { icon: string; title: string; badge?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2.5 px-5 py-3 border-b border-border">
       <span className="text-sm opacity-70">{icon}</span>
-      <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-[hsl(var(--gold))]">{title}</h2>
+      <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-gold">{title}</h2>
+      {badge && <div className="ml-auto">{badge}</div>}
     </div>
   );
 }
@@ -51,19 +50,6 @@ function Metric({ label, value, color }: { label: string; value: string | number
     <div className="flex justify-between items-center py-[5px]">
       <span className="text-muted-foreground/55 text-[11px]">{label}</span>
       <span className="font-mono text-[12px] font-medium" style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
-    </div>
-  );
-}
-
-function BarScore({ label, value, color }: { label: string; value: number; color?: string }) {
-  const c = color || healthColor(value);
-  return (
-    <div className="flex items-center gap-2.5 py-[3px]">
-      <span className="text-muted-foreground/55 text-[10px] w-[100px] shrink-0">{label}</span>
-      <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/25">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, value)}%`, background: c }} />
-      </div>
-      <span className="font-mono text-[10px] w-7 text-right font-semibold" style={{ color: c }}>{Math.round(value)}</span>
     </div>
   );
 }
@@ -148,10 +134,6 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
 }
 
 /* ── Action helpers ── */
-function actionLabel(a: string): "RENTRE" | "SORS" | "RENFORCER" | "HOLD" {
-  return a === "ENTER" || a === "REINFORCE" ? "RENTRE" : a === "EXIT" ? "SORS" : a === "STAKE" ? "RENFORCER" : "HOLD";
-}
-
 function portfolioAction(s: UnifiedSubnetScore | undefined): "REINFORCE" | "HOLD" | "REDUCE" | "EXIT" {
   if (!s) return "HOLD";
   if (s.isOverridden || s.action === "EXIT") return "EXIT";
@@ -174,9 +156,9 @@ function portfolioActionColor(a: string): string {
   return MUTED;
 }
 
-/* ═══════════════════════════════════════════ */
-/*   MAIN PAGE                                  */
-/* ═══════════════════════════════════════════ */
+/* ═══════════════════════════════════════ */
+/*   MAIN PAGE                              */
+/* ═══════════════════════════════════════ */
 export default function PortfolioPage() {
   const { lang } = useI18n();
   const fr = lang === "fr";
@@ -222,21 +204,17 @@ export default function PortfolioPage() {
     const avgConviction = rows.reduce((a, r) => a + Math.max(r.opp - r.risk, 0), 0) / rows.length;
     const avgRisk = rows.reduce((a, r) => a + r.risk, 0) / rows.length;
     const maxWeight = Math.max(...weights.map(w => w.weight));
-    const concentration = maxWeight; // Top position weight
     const reinforceCount = rows.filter(r => r.pAction === "REINFORCE").length;
-    const holdCount = rows.filter(r => r.pAction === "HOLD").length;
     const reduceCount = rows.filter(r => r.pAction === "REDUCE").length;
     const exitCount = rows.filter(r => r.pAction === "EXIT").length;
-    const highRiskPositions = rows.filter(r => r.risk > 60);
-    const lowLiqPositions = rows.filter(r => r.healthScores.liquidityHealth < 35);
     const fragilePositions = rows.filter(r => r.isOverridden || r.depegProbability >= 30 || r.risk > 70);
 
     // Alignment score
     let alignment: "aligned" | "partial" | "misaligned" = "aligned";
     if (exitCount >= 2 || fragilePositions.length > rows.length * 0.3) alignment = "misaligned";
-    else if (reduceCount > 0 || highRiskPositions.length > 0 || exitCount > 0) alignment = "partial";
+    else if (reduceCount > 0 || exitCount > 0) alignment = "partial";
 
-    // Missed opportunities: subnets NOT in portfolio with high opportunity
+    // Missed opportunities
     const ownedSet = new Set(rows.map(r => r.netuid));
     const missed = Array.from(scores.entries())
       .filter(([nid, sc]) => !ownedSet.has(nid) && sc.opp > 60 && sc.risk < 45 && sc.momentumScore > 50)
@@ -245,10 +223,9 @@ export default function PortfolioPage() {
       .map(([nid, sc]) => ({ netuid: nid, name: sc.name, opp: sc.opp }));
 
     return {
-      totalTao, weights, avgConviction, avgRisk, concentration, maxWeight,
-      reinforceCount, holdCount, reduceCount, exitCount,
-      highRiskPositions, lowLiqPositions, fragilePositions,
-      alignment, missed,
+      totalTao, weights, avgConviction, avgRisk, maxWeight,
+      reinforceCount, reduceCount, exitCount,
+      fragilePositions, alignment, missed,
     };
   }, [rows, scores]);
 
@@ -265,13 +242,6 @@ export default function PortfolioPage() {
     toast.success(fr ? `SN-${netuid} vendu ✓` : `SN-${netuid} sold ✓`);
   };
 
-  /* ── Bucket grouping ── */
-  const buckets = useMemo(() => ({
-    reinforce: rows.filter(r => r.pAction === "REINFORCE"),
-    hold: rows.filter(r => r.pAction === "HOLD"),
-    reduceExit: rows.filter(r => r.pAction === "REDUCE" || r.pAction === "EXIT"),
-  }), [rows]);
-
   /* ═══════════════════════════════════════ */
   /*   RENDER                                */
   /* ═══════════════════════════════════════ */
@@ -284,17 +254,16 @@ export default function PortfolioPage() {
         {/* ══════════════════════════════════ */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="font-mono text-lg sm:text-xl tracking-wider text-[hsl(var(--gold))]">Portfolio Commander</h1>
+            <h1 className="font-mono text-lg sm:text-xl tracking-wider text-gold">Portfolio Commander</h1>
             <p className="font-mono text-[10px] text-muted-foreground/45 mt-1 max-w-md leading-relaxed">
               {fr ? "Pilote l'exposition, la concentration et les décisions de renfort ou de réduction." : "Control exposure, concentration, and reinforce/reduce decisions."}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Currency toggle */}
             <div className="inline-flex items-center rounded-lg overflow-hidden border border-border">
               {(["TAO", "USD"] as Currency[]).map(c => (
                 <button key={c} onClick={() => toggleCurrency(c)}
-                  className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-all ${currency === c ? "bg-muted/40 text-[hsl(var(--gold))]" : "text-muted-foreground/30 hover:text-muted-foreground/50"}`}>
+                  className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-all ${currency === c ? "bg-muted/40 text-gold" : "text-muted-foreground/30 hover:text-muted-foreground/50"}`}>
                   {c === "TAO" ? "τ" : "$"}
                 </button>
               ))}
@@ -304,85 +273,68 @@ export default function PortfolioPage() {
         </div>
 
         {/* ══════════════════════════════════ */}
-        {/*   2. HERO KPIs                      */}
+        {/*   2. HERO KPIs (5 chips, no duplication) */}
         {/* ══════════════════════════════════ */}
         {analytics && (
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-            <KPIChip label={fr ? "VALEUR" : "VALUE"} value={fmtVal(analytics.totalTao)} color={GOLD} />
-            <KPIChip label="EXPOSURE" value={`${rows.length}`} sub={fr ? "positions" : "positions"} color="hsl(var(--foreground))" />
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+            <KPIChip label={fr ? "VALEUR" : "VALUE"} value={fmtVal(analytics.totalTao)} color={GOLD} sub={`${rows.length} pos.`} />
             <KPIChip label="CONVICTION" value={Math.round(analytics.avgConviction)} color={analytics.avgConviction > 20 ? GO : analytics.avgConviction > 0 ? WARN : BREAK} />
             <KPIChip label={fr ? "RISQUE" : "RISK"} value={Math.round(analytics.avgRisk)} color={analytics.avgRisk > 60 ? BREAK : analytics.avgRisk > 40 ? WARN : GO} />
-            <KPIChip label="CONCENTRATION" value={`${analytics.concentration.toFixed(0)}%`} color={analytics.concentration > 40 ? WARN : "hsl(var(--foreground))"} sub={fr ? "top pos." : "top pos."} />
-            <KPIChip label="DRY POWDER" value={analytics.reinforceCount > 0 ? `${analytics.reinforceCount}` : "0"} sub={fr ? "à renforcer" : "to reinforce"} color={analytics.reinforceCount > 0 ? GO : MUTED} />
+            <KPIChip label="CONCENTRATION" value={`${analytics.maxWeight.toFixed(0)}%`} color={analytics.maxWeight > 40 ? WARN : MUTED} sub={fr ? "top pos." : "top pos."} />
+            <KPIChip label={fr ? "À AGIR" : "ACTIONABLE"} value={analytics.reinforceCount + analytics.reduceCount + analytics.exitCount} color={analytics.exitCount > 0 ? BREAK : analytics.reduceCount > 0 ? WARN : GO} sub={fr ? "décisions" : "decisions"} />
           </div>
         )}
 
         {/* ══════════════════════════════════ */}
-        {/*   3. DIAGNOSTIC                     */}
+        {/*   3. DIAGNOSTIC + ALERTS (merged)   */}
         {/* ══════════════════════════════════ */}
         {analytics && (
           <SectionCard>
-            <SectionTitle icon="🩺" title={fr ? "Diagnostic portefeuille" : "Portfolio Diagnostic"} />
-            <div className="px-5 py-4">
-              {/* Alignment badge */}
-              <div className="flex items-center gap-3 mb-4">
-                <span className="font-mono text-[12px] font-bold" style={{
-                  color: analytics.alignment === "aligned" ? GO : analytics.alignment === "partial" ? WARN : BREAK,
-                }}>
-                  {analytics.alignment === "aligned" ? (fr ? "✓ Portefeuille aligné" : "✓ Portfolio aligned")
-                    : analytics.alignment === "partial" ? (fr ? "~ Partiellement aligné" : "~ Partially aligned")
-                    : (fr ? "✕ Portefeuille désaligné" : "✕ Portfolio misaligned")}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
-                {analytics.fragilePositions.length > 0 && (
-                  <Metric label={fr ? "Positions fragiles" : "Fragile positions"} value={analytics.fragilePositions.map(p => `SN-${p.netuid}`).join(", ")} color={BREAK} />
+            <SectionTitle icon="🩺" title={fr ? "Diagnostic & Alertes" : "Diagnostic & Alerts"} badge={
+              <span className="font-mono text-[10px] font-bold px-2.5 py-1 rounded-md" style={{
+                color: analytics.alignment === "aligned" ? GO : analytics.alignment === "partial" ? WARN : BREAK,
+                background: `color-mix(in srgb, ${analytics.alignment === "aligned" ? GO : analytics.alignment === "partial" ? WARN : BREAK} 8%, transparent)`,
+              }}>
+                {analytics.alignment === "aligned" ? (fr ? "✓ Aligné" : "✓ Aligned")
+                  : analytics.alignment === "partial" ? (fr ? "~ Partiel" : "~ Partial")
+                  : (fr ? "✕ Désaligné" : "✕ Misaligned")}
+              </span>
+            } />
+            <div className="px-5 py-4 space-y-3">
+              {/* Consolidated alert items — no duplication between diagnostic & alerts */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
+                {analytics.exitCount > 0 && (
+                  <Metric label={fr ? `Sortie${analytics.exitCount > 1 ? "s" : ""} recommandée${analytics.exitCount > 1 ? "s" : ""}` : `Exit${analytics.exitCount > 1 ? "s" : ""} recommended`}
+                    value={rows.filter(r => r.pAction === "EXIT").map(r => `SN-${r.netuid}`).join(", ")} color={BREAK} />
                 )}
-                {analytics.highRiskPositions.length > 0 && (
-                  <Metric label={fr ? "Risque élevé" : "High risk"} value={analytics.highRiskPositions.map(p => `SN-${p.netuid}`).join(", ")} color={WARN} />
+                {analytics.reduceCount > 0 && (
+                  <Metric label={fr ? `Réduction${analytics.reduceCount > 1 ? "s" : ""}` : `Reduction${analytics.reduceCount > 1 ? "s" : ""}`}
+                    value={rows.filter(r => r.pAction === "REDUCE").map(r => `SN-${r.netuid}`).join(", ")} color={WARN} />
                 )}
-                {analytics.concentration > 35 && (
-                  <Metric label={fr ? "Surexposition" : "Overexposure"} value={`Top position ${analytics.concentration.toFixed(0)}%`} color={WARN} />
+                {analytics.fragilePositions.length > 0 && analytics.fragilePositions.some(p => p.pAction !== "EXIT" && p.pAction !== "REDUCE") && (
+                  <Metric label={fr ? "Positions fragiles" : "Fragile positions"}
+                    value={analytics.fragilePositions.filter(p => p.pAction !== "EXIT" && p.pAction !== "REDUCE").map(p => `SN-${p.netuid}`).join(", ")} color={BREAK} />
+                )}
+                {analytics.maxWeight > 35 && (
+                  <Metric label={fr ? "Surexposition" : "Overexposure"} value={`Top: ${analytics.maxWeight.toFixed(0)}%`} color={WARN} />
                 )}
                 {analytics.reinforceCount > 0 && (
-                  <Metric label={fr ? "Renforts cohérents" : "Coherent reinforcements"} value={`${analytics.reinforceCount} ${fr ? "subnets" : "subnets"}`} color={GO} />
+                  <Metric label={fr ? "Renforts cohérents" : "Coherent reinforcements"}
+                    value={rows.filter(r => r.pAction === "REINFORCE").map(r => `SN-${r.netuid}`).join(", ")} color={GO} />
                 )}
                 {analytics.missed.length > 0 && (
                   <Metric label={fr ? "Opportunités manquées" : "Missed opportunities"} value={analytics.missed.map(m => `SN-${m.netuid}`).join(", ")} color={GOLD} />
                 )}
-                {analytics.lowLiqPositions.length > 0 && (
-                  <Metric label={fr ? "Liquidité faible" : "Low liquidity"} value={analytics.lowLiqPositions.map(p => `SN-${p.netuid}`).join(", ")} color={WARN} />
-                )}
               </div>
-            </div>
-          </SectionCard>
-        )}
-
-        {/* ══════════════════════════════════ */}
-        {/*   4. PORTFOLIO ALERTS (compact)     */}
-        {/* ══════════════════════════════════ */}
-        {analytics && (analytics.exitCount > 0 || analytics.reduceCount > 0 || analytics.missed.length > 0 || analytics.reinforceCount > 0) && (
-          <SectionCard>
-            <div className="px-5 py-3 flex flex-wrap gap-3">
-              {analytics.exitCount > 0 && (
-                <AlertChip icon="🔴" label={fr ? `${analytics.exitCount} sortie${analytics.exitCount > 1 ? "s" : ""} recommandée${analytics.exitCount > 1 ? "s" : ""}` : `${analytics.exitCount} exit${analytics.exitCount > 1 ? "s" : ""} recommended`} color={BREAK} />
-              )}
-              {analytics.reduceCount > 0 && (
-                <AlertChip icon="🟡" label={fr ? `${analytics.reduceCount} réduction${analytics.reduceCount > 1 ? "s" : ""}` : `${analytics.reduceCount} reduction${analytics.reduceCount > 1 ? "s" : ""}`} color={WARN} />
-              )}
-              {analytics.reinforceCount > 0 && (
-                <AlertChip icon="🟢" label={fr ? `${analytics.reinforceCount} renfort${analytics.reinforceCount > 1 ? "s" : ""} cohérent${analytics.reinforceCount > 1 ? "s" : ""}` : `${analytics.reinforceCount} reinforcement${analytics.reinforceCount > 1 ? "s" : ""}`} color={GO} />
-              )}
-              {analytics.missed.length > 0 && (
-                <AlertChip icon="💡" label={fr ? `${analytics.missed.length} opportunité${analytics.missed.length > 1 ? "s" : ""} manquée${analytics.missed.length > 1 ? "s" : ""}` : `${analytics.missed.length} missed`} color={GOLD} />
+              {analytics.alignment === "aligned" && analytics.exitCount === 0 && analytics.reduceCount === 0 && analytics.fragilePositions.length === 0 && (
+                <p className="font-mono text-[10px] text-muted-foreground/35 italic">{fr ? "Aucune alerte — portefeuille cohérent." : "No alerts — portfolio is coherent."}</p>
               )}
             </div>
           </SectionCard>
         )}
 
         {/* ══════════════════════════════════ */}
-        {/*   5. ALLOCATION TARGET              */}
+        {/*   4. ALLOCATION TARGET              */}
         {/* ══════════════════════════════════ */}
         {analytics && analytics.weights.length > 0 && (
           <SectionCard>
@@ -401,7 +353,6 @@ export default function PortfolioPage() {
                         SN-{w.netuid} {w.name}
                       </Link>
                       <div className="flex-1 flex items-center gap-1.5">
-                        {/* Current */}
                         <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/20 relative">
                           <div className="h-full rounded-full bg-muted-foreground/25" style={{ width: `${Math.min(100, w.weight)}%` }} />
                         </div>
@@ -422,13 +373,13 @@ export default function PortfolioPage() {
         )}
 
         {/* ══════════════════════════════════ */}
-        {/*   6. POSITIONS TABLE                */}
+        {/*   5. POSITIONS TABLE                */}
         {/* ══════════════════════════════════ */}
         <SectionCard>
           <div className="flex items-center justify-between px-5 py-3 border-b border-border">
             <div className="flex items-center gap-2.5">
               <span className="text-sm opacity-70">📋</span>
-              <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-[hsl(var(--gold))]">Positions</h2>
+              <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-gold">Positions</h2>
               <span className="font-mono text-[9px] text-muted-foreground/30">{rows.length}</span>
             </div>
             <button onClick={() => setShowAdd(true)}
@@ -447,13 +398,12 @@ export default function PortfolioPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left" style={{ minWidth: 900 }}>
+              <table className="w-full text-left" style={{ minWidth: 720 }}>
                 <thead>
                   <tr className="border-b border-border">
                     {[
                       "Subnet", fr ? "Position" : "Position", fr ? "Poids" : "Weight",
-                      "Conv.", "Risk", "Fit", "Action",
-                      "Mom.", fr ? "Statut" : "Status", ""
+                      "Conv.", "Risk", "Fit", "Action", "Mom.", ""
                     ].map((h, i) => (
                       <th key={i} className="py-2.5 px-3 font-mono text-[8px] tracking-[0.15em] uppercase text-muted-foreground/30 font-normal whitespace-nowrap">{h}</th>
                     ))}
@@ -467,7 +417,8 @@ export default function PortfolioPage() {
                     const weight = analytics ? (analytics.totalTao > 0 ? (r.taoInvest / analytics.totalTao) * 100 : 0) : 0;
                     const conv = Math.max(0, r.opp - r.risk);
                     const fit = (() => { let f = 50; if (r.opp > 50) f += 15; if (r.risk < 40) f += 10; if (r.stability > 50) f += 10; if (r.confianceScore > 60) f += 10; if (r.isOverridden) f -= 30; return Math.max(0, Math.min(100, f)); })();
-                    const rowBorder = r.pAction === "EXIT" ? "border-l-2 border-l-destructive/40" : r.pAction === "REDUCE" ? "border-l-2 border-l-[hsl(var(--signal-go-spec))]/40" : "";
+                    const actionColor = portfolioActionColor(r.pAction);
+                    const rowBorder = r.pAction === "EXIT" ? "border-l-2 border-l-destructive/40" : r.pAction === "REDUCE" ? "border-l-2 border-l-signal-hold/40" : "";
 
                     return (
                       <tr key={r.netuid} className={`border-b border-border hover:bg-muted/10 transition-colors ${rowBorder}`}>
@@ -475,8 +426,10 @@ export default function PortfolioPage() {
                         <td className="py-3 px-3">
                           <Link to={`/subnets/${r.netuid}`} className="hover:text-foreground transition-colors">
                             <span className="font-mono text-[11px] text-muted-foreground/50">SN-{r.netuid}</span>
-                            <span className="font-mono text-[11px] text-foreground/80 ml-1.5">{r.name}</span>
+                            <span className="font-mono text-[11px] text-foreground/80 ml-1.5 hidden sm:inline">{r.name}</span>
                           </Link>
+                          {/* Status badges inline on mobile */}
+                          {r.isOverridden && <span className="sm:hidden ml-1.5 font-mono text-[7px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">OVR</span>}
                         </td>
                         {/* Position */}
                         <td className="py-3 px-3 font-mono text-[11px] text-foreground/70">
@@ -494,9 +447,9 @@ export default function PortfolioPage() {
                         {/* Action */}
                         <td className="py-3 px-3">
                           <span className="font-mono text-[9px] font-bold tracking-wider px-2 py-1 rounded" style={{
-                            color: portfolioActionColor(r.pAction),
-                            background: `color-mix(in srgb, ${portfolioActionColor(r.pAction)} 8%, transparent)`,
-                            border: `1px solid color-mix(in srgb, ${portfolioActionColor(r.pAction)} 15%, transparent)`,
+                            color: actionColor,
+                            background: `color-mix(in srgb, ${actionColor} 8%, transparent)`,
+                            border: `1px solid color-mix(in srgb, ${actionColor} 15%, transparent)`,
                           }}>
                             {portfolioActionLabel(r.pAction, fr)}
                           </span>
@@ -504,12 +457,6 @@ export default function PortfolioPage() {
                         {/* Momentum */}
                         <td className="py-3 px-3">
                           <Sparkline data={sparklines?.get(r.netuid) || []} />
-                        </td>
-                        {/* Status */}
-                        <td className="py-3 px-3">
-                          {r.isOverridden && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">OVERRIDE</span>}
-                          {r.depegProbability >= 30 && !r.isOverridden && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">DEPEG {r.depegProbability}%</span>}
-                          {r.delistCategory !== "NORMAL" && !r.isOverridden && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-destructive/10 text-[hsl(var(--signal-go-spec))] border border-border">{r.delistCategory}</span>}
                         </td>
                         {/* Actions */}
                         <td className="py-3 px-3">
@@ -528,38 +475,6 @@ export default function PortfolioPage() {
             </div>
           )}
         </SectionCard>
-
-        {/* ══════════════════════════════════ */}
-        {/*   7. ACTION BUCKETS                 */}
-        {/* ══════════════════════════════════ */}
-        {rows.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            <BucketCard
-              title={fr ? "Renforcer" : "Reinforce"}
-              icon="🟢"
-              color={GO}
-              items={buckets.reinforce}
-              fr={fr}
-              empty={fr ? "Aucun renfort recommandé" : "No reinforcements"}
-            />
-            <BucketCard
-              title={fr ? "Conserver" : "Hold"}
-              icon="🟡"
-              color={WARN}
-              items={buckets.hold}
-              fr={fr}
-              empty={fr ? "Aucune position en conservation" : "No hold positions"}
-            />
-            <BucketCard
-              title={fr ? "Réduire / Sortir" : "Reduce / Exit"}
-              icon="🔴"
-              color={BREAK}
-              items={buckets.reduceExit}
-              fr={fr}
-              empty={fr ? "Aucune réduction nécessaire" : "No reductions needed"}
-            />
-          </div>
-        )}
 
         {/* ── Archive ── */}
         {portfolio.archive.length > 0 && (
@@ -603,7 +518,7 @@ export default function PortfolioPage() {
                 <span className="text-muted-foreground/60">{addPrice.toFixed(6)} τ</span>
               </div>
               {portfolio.isOwned(addNetuid) && (
-                <div className="font-mono text-[10px] text-[hsl(var(--signal-go-spec))]">{fr ? "⚠ Déjà possédé — quantité ajoutée" : "⚠ Already owned — qty added"}</div>
+                <div className="font-mono text-[10px] text-signal-hold">{fr ? "⚠ Déjà possédé — quantité ajoutée" : "⚠ Already owned — qty added"}</div>
               )}
             </div>
             <div className="flex gap-3 pt-2">
@@ -617,52 +532,5 @@ export default function PortfolioPage() {
         </div>
       )}
     </div>
-  );
-}
-
-/* ═══════════════════════════ */
-/*   SUB-COMPONENTS             */
-/* ═══════════════════════════ */
-
-function AlertChip({ icon, label, color }: { icon: string; label: string; color: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] px-3 py-1.5 rounded-lg" style={{
-      color, background: `color-mix(in srgb, ${color} 6%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 12%, transparent)`,
-    }}>
-      <span className="text-xs">{icon}</span> {label}
-    </span>
-  );
-}
-
-function BucketCard({ title, icon, color, items, fr, empty }: {
-  title: string; icon: string; color: string;
-  items: { netuid: number; name: string; opp: number; risk: number; pAction: string }[];
-  fr: boolean; empty: string;
-}) {
-  return (
-    <SectionCard>
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-        <span className="text-sm">{icon}</span>
-        <span className="font-mono text-[10px] tracking-[0.15em] uppercase font-bold" style={{ color }}>{title}</span>
-        <span className="font-mono text-[9px] text-muted-foreground/30 ml-auto">{items.length}</span>
-      </div>
-      <div className="px-4 py-3">
-        {items.length === 0 ? (
-          <div className="font-mono text-[10px] text-muted-foreground/20 italic py-2">{empty}</div>
-        ) : (
-          <div className="space-y-2">
-            {items.map(r => (
-              <Link key={r.netuid} to={`/subnets/${r.netuid}`} className="flex items-center gap-2 py-1.5 hover:bg-muted/10 rounded-md px-2 -mx-2 transition-colors">
-                <span className="font-mono text-[10px] text-muted-foreground/50 w-10 shrink-0">SN-{r.netuid}</span>
-                <span className="font-mono text-[10px] text-foreground/75 truncate flex-1">{r.name}</span>
-                <span className="font-mono text-[9px] font-bold" style={{ color: portfolioActionColor(r.pAction) }}>
-                  {portfolioActionLabel(r.pAction, fr)}
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-    </SectionCard>
   );
 }
