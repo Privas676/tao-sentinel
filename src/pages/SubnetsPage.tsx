@@ -145,7 +145,7 @@ function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
 
           {/* Invalidation */}
           {invalidation.length > 0 && (
-            <div className="rounded-lg p-3" style={{ background: "hsla(4,80%,50%,0.03)", border: "1px solid hsla(4,80%,50%,0.08)" }}>
+            <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-break), 0.03)", border: "1px solid hsla(var(--signal-break), 0.08)" }}>
               <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
                 {fr ? "INVALIDATION" : "INVALIDATION"}
               </div>
