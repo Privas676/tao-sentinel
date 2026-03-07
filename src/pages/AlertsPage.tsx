@@ -914,9 +914,9 @@ export default function AlertsPage() {
   ];
 
   return (
-    <div className="h-full w-full bg-background text-foreground p-4 sm:p-6 overflow-auto pt-14">
+    <div className="h-full w-full bg-background text-foreground p-4 sm:p-6 overflow-auto">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4 sm:mb-6 flex-wrap ml-28">
+      <div className="flex items-center gap-3 mb-4 sm:mb-6 flex-wrap">
         <h1 className="font-mono text-base sm:text-lg tracking-widest text-white/80">{t("alerts.title")}</h1>
         {stats.compressionPct > 0 && (
           <span className="font-mono text-[9px] px-2 py-0.5 rounded"

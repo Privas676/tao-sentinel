@@ -1,12 +1,5 @@
 /**
  * CI Guard — blocks build if UI structure has drifted.
- *
- * This test reads App.tsx source to verify:
- * 1. All frozen routes are present
- * 2. All frozen page imports are present
- * 3. Nav items count matches
- *
- * If any check fails, the test suite fails → CI blocks merge.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
@@ -19,6 +12,7 @@ import {
 } from "@/lib/safe-refactor";
 
 const APP_SOURCE = readFileSync(resolve(__dirname, "../App.tsx"), "utf-8");
+const SIDEBAR_SOURCE = readFileSync(resolve(__dirname, "../components/AppSidebar.tsx"), "utf-8");
 
 describe("UI Guard — CI blocker", () => {
   it("SAFE_REFACTOR_MODE is enabled", () => {
@@ -27,7 +21,6 @@ describe("UI Guard — CI blocker", () => {
 
   it("all frozen page imports exist in App.tsx", () => {
     for (const page of FROZEN_UI_PAGES) {
-      // Check that the page is imported (default or named)
       const importPattern = new RegExp(`import.*${page}.*from`);
       expect(
         importPattern.test(APP_SOURCE),
@@ -47,8 +40,8 @@ describe("UI Guard — CI blocker", () => {
   });
 
   it("nav items count matches frozen count", () => {
-    // Count navItems array entries by looking for { path: patterns
-    const matches = APP_SOURCE.match(/\{ path: "/g);
+    // Nav items are now in AppSidebar.tsx
+    const matches = SIDEBAR_SOURCE.match(/\{ path: "/g);
     expect(
       matches?.length,
       `Nav items count changed! Expected ${FROZEN_NAV_COUNT}, found ${matches?.length}`
