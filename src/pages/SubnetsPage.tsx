@@ -14,7 +14,7 @@ import {
   type SmartCapitalState,
 } from "@/lib/gauge-engine";
 import {
-  actionColor, actionIcon,
+  actionColor, actionIcon, actionLabel,
 } from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
 
@@ -29,6 +29,7 @@ type ConvictionFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type ScopeFilter = "ALL" | "PORTFOLIO" | "WATCHLIST";
 type LiquidityFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type StructureFilter = "ALL" | "HEALTHY" | "FRAGILE" | "CONCENTRATED";
+type ViewMode = "compact" | "analytic";
 
 type SortCol = "netuid" | "name" | "action" | "conviction" | "confidence" | "risk" | "momentum" | "opp" | "liquidity" | "stability" | null;
 
@@ -94,6 +95,12 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
   const thesis = verdict?.positiveReasons?.slice(0, 3) || [];
   const invalidation = verdict?.negativeReasons?.slice(0, 3) || [];
 
+  /* Map to ActionBadge type */
+  const badgeAction = row.action === "ENTER" ? "RENTRE" as const
+    : row.action === "EXIT" ? "SORS" as const
+    : row.action === "STAKE" ? "RENFORCER" as const
+    : row.action === "WATCH" ? "SURVEILLER" as const
+    : "HOLD" as const;
 
   /* Alerts */
   const alerts: { icon: string; text: string; color: string }[] = [];
@@ -117,7 +124,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
             </div>
           </SheetHeader>
           <div className="flex items-center justify-between mt-3">
-            <ActionBadge action={row.action === "ENTER" ? "RENTRE" : row.action === "EXIT" ? "SORS" : row.action === "STAKE" ? "RENFORCER" : "HOLD"} />
+            <ActionBadge action={badgeAction} />
             <span className="font-mono text-[11px] font-bold text-foreground/80">{row.signalPrincipal}</span>
           </div>
         </div>
@@ -259,6 +266,9 @@ export default function SubnetsPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [drawerRow, setDrawerRow] = useState<TableRow | null>(null);
   const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadSavedViews());
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try { return (localStorage.getItem("subnet-view-mode") as ViewMode) || "compact"; } catch { return "compact"; }
+  });
 
   const hasActiveFilters = scope !== "ALL" || actionFilter !== "ALL" || statusFilter !== "ALL" || convictionFilter !== "ALL" || liquidityFilter !== "ALL" || structureFilter !== "ALL" || search.length > 0;
 
@@ -288,6 +298,11 @@ export default function SubnetsPage() {
       else { setSortCol(null); setSortDir("desc"); }
     } else { setSortCol(col); setSortDir("desc"); }
   }, [sortCol, sortDir]);
+
+  const handleViewMode = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem("subnet-view-mode", mode);
+  }, []);
 
   // ── Build enriched rows ──
   const rows = useMemo<TableRow[]>(() => {
@@ -360,7 +375,7 @@ export default function SubnetsPage() {
     </th>
   );
 
-  
+  const isCompact = viewMode === "compact";
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
@@ -375,13 +390,24 @@ export default function SubnetsPage() {
           icon="📋"
           badge={<DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" />}
           actions={
-            <span className="font-mono text-[8px] text-muted-foreground">
-              {scoresList.length} subnets · {new Date(scoreTimestamp).toLocaleTimeString()}
-            </span>
+            <div className="flex items-center gap-3">
+              {/* View mode toggle */}
+              <div className="inline-flex items-center rounded-lg overflow-hidden border border-border">
+                <button onClick={() => handleViewMode("compact")}
+                  className={`font-mono text-[9px] tracking-wider px-2.5 py-1.5 transition-all ${isCompact ? "bg-muted/40 text-gold font-bold" : "text-muted-foreground hover:text-foreground"}`}>
+                  {fr ? "Compact" : "Compact"}
+                </button>
+                <button onClick={() => handleViewMode("analytic")}
+                  className={`font-mono text-[9px] tracking-wider px-2.5 py-1.5 transition-all ${!isCompact ? "bg-muted/40 text-gold font-bold" : "text-muted-foreground hover:text-foreground"}`}>
+                  {fr ? "Analytique" : "Analytic"}
+                </button>
+              </div>
+              <span className="font-mono text-[8px] text-muted-foreground">
+                {scoresList.length} subnets · {new Date(scoreTimestamp).toLocaleTimeString()}
+              </span>
+            </div>
           }
         />
-
-        {/* Verdict counts integrated into filter bar below — no separate distribution bar */}
 
         {/* ═══ FILTER BAR ═══ */}
         <div className="rounded-xl p-3.5 space-y-3 bg-muted/10 border border-border" style={{ boxShadow: "var(--shadow-card)" }}>
@@ -398,7 +424,7 @@ export default function SubnetsPage() {
             </div>
             {hasActiveFilters && (
               <button onClick={resetFilters} className="font-mono text-[9px] px-2.5 py-1 rounded-lg transition-colors hover:bg-accent" style={{ color: "hsl(var(--destructive))", border: "1px solid hsla(var(--destructive), 0.15)" }}>
-                ✕ {fr ? "Reset" : "Reset"}
+                ✕ Reset
               </button>
             )}
             <button onClick={saveCurrentView} className="font-mono text-[9px] px-2.5 py-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors border border-border">
@@ -463,37 +489,39 @@ export default function SubnetsPage() {
               />
             </FilterGroup>
           </div>
-          {/* Second row — advanced filters */}
-          <div className="flex items-start gap-4 flex-wrap">
-            <FilterGroup label={fr ? "LIQUIDITÉ" : "LIQUIDITY"}>
-              <FilterChipGroup
-                chips={[
-                  { key: "ALL", label: fr ? "Toutes" : "All" },
-                  { key: "HIGH", label: fr ? "Haute" : "High" },
-                  { key: "MEDIUM", label: fr ? "Moy." : "Med" },
-                  { key: "LOW", label: fr ? "Faible" : "Low" },
-                ]}
-                active={liquidityFilter}
-                onChange={v => setLiquidityFilter(v as LiquidityFilter)}
-              />
-            </FilterGroup>
-            <FilterSep />
-            <FilterGroup label="STRUCTURE">
-              <FilterChipGroup
-                chips={[
-                  { key: "ALL", label: fr ? "Toutes" : "All" },
-                  { key: "HEALTHY", label: fr ? "Saine" : "Healthy" },
-                  { key: "FRAGILE", label: fr ? "Fragile" : "Fragile" },
-                  { key: "CONCENTRATED", label: fr ? "Concentrée" : "Conc." },
-                ]}
-                active={structureFilter}
-                onChange={v => setStructureFilter(v as StructureFilter)}
-              />
-            </FilterGroup>
-             <span className="ml-auto font-mono text-[9px] text-muted-foreground self-end pb-0.5">
-              {rows.length} / {scoresList.length} {fr ? "résultats" : "results"}
-            </span>
-          </div>
+          {/* Second row — advanced filters (analytic mode only) */}
+          {!isCompact && (
+            <div className="flex items-start gap-4 flex-wrap">
+              <FilterGroup label={fr ? "LIQUIDITÉ" : "LIQUIDITY"}>
+                <FilterChipGroup
+                  chips={[
+                    { key: "ALL", label: fr ? "Toutes" : "All" },
+                    { key: "HIGH", label: fr ? "Haute" : "High" },
+                    { key: "MEDIUM", label: fr ? "Moy." : "Med" },
+                    { key: "LOW", label: fr ? "Faible" : "Low" },
+                  ]}
+                  active={liquidityFilter}
+                  onChange={v => setLiquidityFilter(v as LiquidityFilter)}
+                />
+              </FilterGroup>
+              <FilterSep />
+              <FilterGroup label="STRUCTURE">
+                <FilterChipGroup
+                  chips={[
+                    { key: "ALL", label: fr ? "Toutes" : "All" },
+                    { key: "HEALTHY", label: fr ? "Saine" : "Healthy" },
+                    { key: "FRAGILE", label: fr ? "Fragile" : "Fragile" },
+                    { key: "CONCENTRATED", label: fr ? "Concentrée" : "Conc." },
+                  ]}
+                  active={structureFilter}
+                  onChange={v => setStructureFilter(v as StructureFilter)}
+                />
+              </FilterGroup>
+            </div>
+          )}
+          <span className="font-mono text-[9px] text-muted-foreground">
+            {rows.length} / {scoresList.length} {fr ? "résultats" : "results"}
+          </span>
         </div>
 
         {/* ═══ MASTER TABLE ═══ */}
@@ -501,7 +529,7 @@ export default function SubnetsPage() {
 
         <div className="rounded-xl overflow-hidden border border-border" style={{ boxShadow: "var(--shadow-card)" }}>
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
-            <table className="w-full font-mono" style={{ minWidth: 1100 }}>
+            <table className="w-full font-mono" style={{ minWidth: isCompact ? 680 : 1100 }}>
               <thead>
                 <tr className="bg-muted/20 border-b border-border">
                   <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground sticky left-0 z-10 bg-background cursor-pointer" onClick={() => toggleSort("netuid")}>
@@ -511,27 +539,31 @@ export default function SubnetsPage() {
                     Subnet {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
                   </th>
                   <SortHeader col="action" label="Action" align="center" />
-                  <SortHeader col="conviction" label="Conviction" align="center" />
-                  <SortHeader col="confidence" label="Conf." align="right" />
+                  <SortHeader col="conviction" label="Conv." align="center" />
                   <SortHeader col="risk" label="Risk" align="right" />
-                  <SortHeader col="momentum" label="Mom." align="right" />
                   <SortHeader col="opp" label="Opp." align="right" />
-                  <SortHeader col="liquidity" label={fr ? "Liq." : "Liq."} align="center" />
-                  <SortHeader col="stability" label="Structure" align="center" />
-                   <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">PF</th>
-                   <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Signal</th>
-                   <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground">7d</th>
+                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Signal</th>
+                  {!isCompact && (
+                    <>
+                      <SortHeader col="confidence" label="Conf." align="right" />
+                      <SortHeader col="momentum" label="Mom." align="right" />
+                      <SortHeader col="liquidity" label="Liq." align="center" />
+                      <SortHeader col="stability" label="Struct." align="center" />
+                      <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">PF</th>
+                    </>
+                  )}
+                  <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground">7d</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="py-12 text-center text-muted-foreground text-[11px]">
+                    <td colSpan={isCompact ? 8 : 13} className="py-12 text-center text-muted-foreground text-[11px]">
                       {fr ? "Aucun subnet ne correspond aux filtres actifs." : "No subnets match active filters."}
                     </td>
                   </tr>
-                ) : rows.map((r, idx) => {
-                  const actionLabel = r.action === "ENTER" ? (fr ? "Entrer" : "Enter") : r.action === "EXIT" ? (fr ? "Sortir" : "Exit") : r.action === "HOLD" ? "Hold" : r.action === "STAKE" ? "Stake" : r.action;
+                ) : rows.map((r) => {
+                  const aLabel = actionLabel(r.action, fr);
                   const convColor = r.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : r.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
                   const liqColor = r.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : r.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
                   const structColor = r.structureLevel === "HEALTHY" ? "hsl(var(--signal-go))" : r.structureLevel === "FRAGILE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
@@ -559,26 +591,30 @@ export default function SubnetsPage() {
                       </td>
                       <td className="py-2 px-2.5 text-center">
                         <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{ color: actionColor(r.action), background: `color-mix(in srgb, ${actionColor(r.action)} 8%, transparent)` }}>
-                          {actionIcon(r.action)} {actionLabel}
+                          {actionIcon(r.action)} {aLabel}
                         </span>
                       </td>
                       <td className="py-2 px-2.5 text-center">
                         <span className="font-mono text-[9px] font-bold" style={{ color: convColor }}>{r.convictionLevel}</span>
                       </td>
-                      <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: confianceColor(r.confianceScore) }}>{r.confianceScore}%</td>
                       <td className="py-2 px-2.5 text-right font-mono text-[10px] font-bold" style={{ color: riskColor(r.risk) }}>{r.risk}</td>
-                      <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: r.momentumScore >= 55 ? "hsl(var(--signal-go))" : r.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))" }}>{Math.round(r.momentumScore)}</td>
                       <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: opportunityColor(r.opp) }}>{r.opp}</td>
-                      <td className="py-2 px-2.5 text-center">
-                        <span className="font-mono text-[9px]" style={{ color: liqColor }}>{r.liquidityLevel === "HIGH" ? "●" : r.liquidityLevel === "MEDIUM" ? "◐" : "○"}</span>
-                      </td>
-                      <td className="py-2 px-2.5 text-center">
-                        <span className="font-mono text-[9px]" style={{ color: structColor }}>{r.structureLevel === "HEALTHY" ? "✓" : r.structureLevel === "FRAGILE" ? "~" : "✕"}</span>
-                      </td>
-                      <td className="py-2 px-2.5 text-center">
-                        {r.owned ? <span className="text-[9px]" style={{ color: "hsl(var(--gold))" }}>★</span> : <span className="text-muted-foreground">—</span>}
-                      </td>
                       <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
+                      {!isCompact && (
+                        <>
+                          <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: confianceColor(r.confianceScore) }}>{r.confianceScore}%</td>
+                          <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: r.momentumScore >= 55 ? "hsl(var(--signal-go))" : r.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))" }}>{Math.round(r.momentumScore)}</td>
+                          <td className="py-2 px-2.5 text-center">
+                            <span className="font-mono text-[9px]" style={{ color: liqColor }}>{r.liquidityLevel === "HIGH" ? "●" : r.liquidityLevel === "MEDIUM" ? "◐" : "○"}</span>
+                          </td>
+                          <td className="py-2 px-2.5 text-center">
+                            <span className="font-mono text-[9px]" style={{ color: structColor }}>{r.structureLevel === "HEALTHY" ? "✓" : r.structureLevel === "FRAGILE" ? "~" : "✕"}</span>
+                          </td>
+                          <td className="py-2 px-2.5 text-center">
+                            {r.owned ? <span className="text-[9px]" style={{ color: "hsl(var(--gold))" }}>★</span> : <span className="text-muted-foreground">—</span>}
+                          </td>
+                        </>
+                      )}
                       <td className="py-2 px-2.5 text-center">
                         <SparklineMini data={r.spark} width={44} height={14} />
                       </td>

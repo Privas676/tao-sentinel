@@ -14,8 +14,6 @@ import { SectionCard, SectionTitle, KPIChip, Metric, Sparkline, GOLD, GO, WARN, 
 /*   PORTFOLIO COMMANDER — Strategic Cockpit               */
 /* ═══════════════════════════════════════════════════════ */
 
-/* Sparkline is now imported from Atoms */
-
 /* ── Currency ── */
 const CURRENCY_KEY = "portfolio_display_currency";
 type Currency = "TAO" | "USD";
@@ -196,6 +194,7 @@ export default function PortfolioPage() {
     const reinforceCount = rows.filter(r => r.pAction === "REINFORCE").length;
     const reduceCount = rows.filter(r => r.pAction === "REDUCE").length;
     const exitCount = rows.filter(r => r.pAction === "EXIT").length;
+    const holdCount = rows.filter(r => r.pAction === "HOLD").length;
     const fragilePositions = rows.filter(r => r.isOverridden || r.depegProbability >= 30 || r.risk > 70);
 
     // Alignment score
@@ -213,10 +212,25 @@ export default function PortfolioPage() {
 
     return {
       totalTao, weights, avgConviction, avgRisk, maxWeight,
-      reinforceCount, reduceCount, exitCount,
+      reinforceCount, reduceCount, exitCount, holdCount,
       fragilePositions, alignment, missed,
     };
   }, [rows, scores]);
+
+  /* ── Action categories for executive summary ── */
+  const actionCategories = useMemo(() => {
+    if (!analytics) return null;
+    const exitRows = rows.filter(r => r.pAction === "EXIT").sort((a, b) => b.risk - a.risk);
+    const reduceRows = rows.filter(r => r.pAction === "REDUCE").sort((a, b) => b.risk - a.risk);
+    const reinforceRows = rows.filter(r => r.pAction === "REINFORCE").sort((a, b) => b.opp - a.opp);
+    const holdRows = rows.filter(r => r.pAction === "HOLD");
+    return [
+      { key: "exit", label: fr ? "À VENDRE" : "SELL NOW", icon: "🔴", color: BREAK, rows: exitRows, priority: exitRows.length > 0 },
+      { key: "reduce", label: fr ? "À SURVEILLER" : "MONITOR", icon: "⚠", color: WARN, rows: reduceRows, priority: reduceRows.length > 0 },
+      { key: "reinforce", label: fr ? "À RENFORCER" : "REINFORCE", icon: "⬆", color: GO, rows: reinforceRows, priority: false },
+      { key: "hold", label: fr ? "À CONSERVER" : "HOLD", icon: "✓", color: MUTED, rows: holdRows, priority: false },
+    ];
+  }, [analytics, rows, fr]);
 
   /* ── Handlers ── */
   const addPrice = scores.get(addNetuid)?.consensusPrice ?? 0;
@@ -262,7 +276,7 @@ export default function PortfolioPage() {
         </div>
 
         {/* ══════════════════════════════════ */}
-        {/*   2. HERO KPIs (5 chips, no duplication) */}
+        {/*   2. HERO KPIs                      */}
         {/* ══════════════════════════════════ */}
         {analytics && (
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
@@ -271,6 +285,42 @@ export default function PortfolioPage() {
             <KPIChip label={fr ? "RISQUE" : "RISK"} value={Math.round(analytics.avgRisk)} color={analytics.avgRisk > 60 ? BREAK : analytics.avgRisk > 40 ? WARN : GO} />
             <KPIChip label="CONCENTRATION" value={`${analytics.maxWeight.toFixed(0)}%`} color={analytics.maxWeight > 40 ? WARN : MUTED} sub={fr ? "top pos." : "top pos."} />
             <KPIChip label={fr ? "À AGIR" : "ACTIONABLE"} value={analytics.reinforceCount + analytics.reduceCount + analytics.exitCount} color={analytics.exitCount > 0 ? BREAK : analytics.reduceCount > 0 ? WARN : GO} sub={fr ? "décisions" : "decisions"} />
+          </div>
+        )}
+
+        {/* ══════════════════════════════════ */}
+        {/*   2B. EXECUTIVE ACTION SUMMARY      */}
+        {/* ══════════════════════════════════ */}
+        {actionCategories && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {actionCategories.map(cat => (
+              <div key={cat.key} className="rounded-xl overflow-hidden" style={{
+                border: `1px solid color-mix(in srgb, ${cat.color} ${cat.priority ? "20%" : "10%"}, transparent)`,
+                background: `color-mix(in srgb, ${cat.color} ${cat.priority ? "5%" : "2%"}, transparent)`,
+              }}>
+                <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid color-mix(in srgb, ${cat.color} 8%, transparent)` }}>
+                  <span className="font-mono text-[9px] font-bold tracking-wider" style={{ color: cat.color }}>
+                    {cat.icon} {cat.label}
+                  </span>
+                  <span className="font-mono text-[11px] font-bold" style={{ color: cat.color }}>{cat.rows.length}</span>
+                </div>
+                <div className="px-3 py-2 space-y-1">
+                  {cat.rows.length === 0 ? (
+                    <div className="font-mono text-[9px] text-muted-foreground py-1">—</div>
+                  ) : cat.rows.slice(0, 3).map(r => (
+                    <Link key={r.netuid} to={`/subnets/${r.netuid}`} className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+                      <span className="font-mono text-[9px] text-muted-foreground">SN-{r.netuid}</span>
+                      <span className="font-mono text-[9px] text-foreground/70 truncate flex-1">{r.name}</span>
+                      {cat.key === "exit" && <span className="font-mono text-[8px] font-bold" style={{ color: BREAK }}>R{r.risk}</span>}
+                      {cat.key === "reinforce" && <span className="font-mono text-[8px] font-bold" style={{ color: GO }}>O{r.opp}</span>}
+                    </Link>
+                  ))}
+                  {cat.rows.length > 3 && (
+                    <div className="font-mono text-[8px] text-muted-foreground">+{cat.rows.length - 3} {fr ? "autres" : "more"}</div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -290,7 +340,6 @@ export default function PortfolioPage() {
               </span>
             } />
             <div className="px-5 py-4 space-y-3">
-              {/* Consolidated alert items — no duplication between diagnostic & alerts */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
                 {analytics.exitCount > 0 && (
                   <Metric label={fr ? `Sortie${analytics.exitCount > 1 ? "s" : ""} recommandée${analytics.exitCount > 1 ? "s" : ""}` : `Exit${analytics.exitCount > 1 ? "s" : ""} recommended`}
@@ -413,10 +462,9 @@ export default function PortfolioPage() {
                   }).map(r => {
                     const weight = analytics ? (analytics.totalTao > 0 ? (r.taoInvest / analytics.totalTao) * 100 : 0) : 0;
                     const conv = r.verdict ? Math.max(r.verdict.entryScore, r.verdict.holdScore) : Math.round(Math.abs(r.opp - r.risk) * (r.confianceScore / 100));
-                    const actionColor = portfolioActionColor(r.pAction);
+                    const aColor = portfolioActionColor(r.pAction);
                     const rowBorder = r.pAction === "EXIT" ? "border-l-2 border-l-destructive/40" : r.pAction === "REDUCE" ? "border-l-2 border-l-signal-hold/40" : "";
 
-                    // Generate brief signal reason
                     const signalReason = (() => {
                       if (r.isOverridden) return fr ? "Override actif" : "Active override";
                       if (r.depegProbability >= 40) return `Depeg ${r.depegProbability}%`;
@@ -430,7 +478,6 @@ export default function PortfolioPage() {
 
                     return (
                       <tr key={r.netuid} className={`border-b border-border hover:bg-muted/10 transition-colors ${rowBorder}`}>
-                        {/* Subnet */}
                         <td className="py-3 px-3 sticky left-0 z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
                           <Link to={`/subnets/${r.netuid}`} className="hover:text-foreground transition-colors">
                            <span className="text-[11px] text-muted-foreground">SN-{r.netuid}</span>
@@ -438,36 +485,28 @@ export default function PortfolioPage() {
                           </Link>
                           {r.isOverridden && <span className="sm:hidden ml-1.5 text-[7px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">OVR</span>}
                         </td>
-                        {/* Position */}
                         <td className="py-3 px-3 font-mono text-[11px] text-foreground/70">
                           <InlineEditQty value={r.taoInvest} onSave={v => { portfolio.updateQuantity(r.netuid, v); toast.success("✓"); }} />
                           <span className="text-muted-foreground ml-1">τ</span>
                         </td>
-                        {/* Weight */}
                         <td className="py-3 px-3 font-mono text-[10px] text-muted-foreground">{weight.toFixed(1)}%</td>
-                        {/* Conviction */}
                         <td className="py-3 px-3 font-mono text-[11px] font-bold" style={{ color: conv > 20 ? GO : conv > 0 ? WARN : BREAK }}>{conv}</td>
-                        {/* Risk */}
                         <td className="py-3 px-3 font-mono text-[11px] font-bold" style={{ color: r.risk > 60 ? BREAK : r.risk > 40 ? WARN : GO }}>{r.risk}</td>
-                        {/* Action */}
                         <td className="py-3 px-3">
                           <span className="font-mono text-[9px] font-bold tracking-wider px-2 py-1 rounded" style={{
-                            color: actionColor,
-                            background: `color-mix(in srgb, ${actionColor} 8%, transparent)`,
-                            border: `1px solid color-mix(in srgb, ${actionColor} 15%, transparent)`,
+                            color: aColor,
+                            background: `color-mix(in srgb, ${aColor} 8%, transparent)`,
+                            border: `1px solid color-mix(in srgb, ${aColor} 15%, transparent)`,
                           }}>
                             {portfolioActionLabel(r.pAction, fr)}
                           </span>
                         </td>
-                        {/* Signal reason */}
                         <td className="py-3 px-3 font-mono text-[9px] text-muted-foreground" style={{ maxWidth: 130 }}>
                           {signalReason}
                         </td>
-                        {/* Momentum */}
                         <td className="py-3 px-3">
                           <Sparkline data={sparklines?.get(r.netuid) || []} />
                         </td>
-                        {/* Actions */}
                         <td className="py-3 px-3">
                           <div className="flex gap-1">
                             <button onClick={() => handleSell(r.netuid)} className="font-mono text-[8px] px-2 py-1 rounded border border-destructive/15 text-destructive/60 hover:text-destructive transition-colors">

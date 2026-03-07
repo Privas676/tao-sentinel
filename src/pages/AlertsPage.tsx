@@ -32,6 +32,7 @@ type GroupedEvent = {
 };
 
 type TabType = "ALL" | "CRITICAL" | "WARNING" | "OVERRIDE" | "PORTFOLIO";
+type ImpactTier = "BLOQUANT" | "SURVEILLANCE" | "INFORMATION";
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
@@ -111,6 +112,44 @@ function passesStrictGating(ev: EventRow, scores: Map<number, any> | undefined):
   return hardConditions.length >= 2;
 }
 
+/* ── Impact tier classification ── */
+const BLOQUANT_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE"]);
+const SURVEILLANCE_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE"]);
+
+function alertImpactTier(type: string | null, portfolioNetuids: Set<number>, netuid: number | null): ImpactTier {
+  if (BLOQUANT_TYPES.has(type || "")) return "BLOQUANT";
+  if (SURVEILLANCE_TYPES.has(type || "")) return "SURVEILLANCE";
+  // Portfolio-held subnets with warnings get elevated
+  if (netuid != null && portfolioNetuids.has(netuid) && type !== "GO" && type !== "EARLY") return "SURVEILLANCE";
+  return "INFORMATION";
+}
+
+function impactTierConfig(tier: ImpactTier, fr: boolean): { label: string; color: string; icon: string; description: string } {
+  switch (tier) {
+    case "BLOQUANT":
+      return {
+        label: fr ? "BLOQUANT" : "BLOCKING",
+        color: BREAK,
+        icon: "⛔",
+        description: fr ? "Bloque une entrée ou force une sortie" : "Blocks entry or forces exit",
+      };
+    case "SURVEILLANCE":
+      return {
+        label: fr ? "SURVEILLANCE" : "MONITOR",
+        color: WARN,
+        icon: "👁",
+        description: fr ? "Nécessite réduction ou surveillance active" : "Requires reduction or active monitoring",
+      };
+    case "INFORMATION":
+      return {
+        label: "INFO",
+        color: MUTED,
+        icon: "ℹ",
+        description: fr ? "Informatif — aucune action immédiate" : "Informational — no immediate action",
+      };
+  }
+}
+
 /* ── Classification ── */
 const CRITICAL_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE"]);
 const WARNING_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE"]);
@@ -134,13 +173,13 @@ function typeDisplayInfo(type: string | null, fr: boolean): { label: string; ico
     case "EXIT_FAST":
       return { label: fr ? "ZONE CRITIQUE" : "CRITICAL ZONE", icon: "⛔", color: BREAK };
     case "GO":
-      return { label: "GO", icon: "🟢", color: GO };
+      return { label: fr ? "ENTRER" : "ENTER", icon: "🟢", color: GO };
     case "GO_SPECULATIVE":
       return { label: fr ? "SPÉCULATIF" : "SPECULATIVE", icon: "🔶", color: WARN };
     case "EARLY":
-      return { label: "EARLY", icon: "🌱", color: GO };
+      return { label: fr ? "SURVEILLER" : "MONITOR", icon: "🌱", color: GO };
     case "HOLD":
-      return { label: "HOLD", icon: "⏸", color: MUTED };
+      return { label: fr ? "ATTENDRE" : "HOLD", icon: "⏸", color: MUTED };
     case "DEPEG_WARNING":
       return { label: fr ? "DÉPEG ⚠" : "DEPEG ⚠", icon: "⚠", color: WARN };
     case "DEPEG_CRITICAL":
@@ -250,11 +289,13 @@ function alertSummary(ev: EventRow, fr: boolean): string {
 /* ═══════════════════════════════════════════ */
 /*   ALERT CARD COMPONENT                      */
 /* ═══════════════════════════════════════════ */
-function AlertCard({ group, fr, scores, onDismiss }: {
+function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids }: {
   group: GroupedEvent;
   fr: boolean;
   scores: Map<number, any>;
   onDismiss?: (key: string) => void;
+  impactTier: ImpactTier;
+  portfolioNetuids: Set<number>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const ev = group.latest;
@@ -263,8 +304,10 @@ function AlertCard({ group, fr, scores, onDismiss }: {
   const sevBadge = severityBadge(sev);
   const subnet = ev.netuid != null ? scores.get(ev.netuid) : null;
   const confidence = subnet?.confianceScore ?? null;
+  const isPortfolioHeld = ev.netuid != null && portfolioNetuids.has(ev.netuid);
+  const tierConfig = impactTierConfig(impactTier, fr);
 
-  const borderStyle = sev === "critical" ? { borderLeftColor: BREAK } : sev === "warning" ? { borderLeftColor: WARN } : {};
+  const borderStyle = impactTier === "BLOQUANT" ? { borderLeftColor: BREAK } : impactTier === "SURVEILLANCE" ? { borderLeftColor: WARN } : { borderLeftColor: "transparent" };
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden border-l-[3px]" style={borderStyle}>
@@ -272,14 +315,14 @@ function AlertCard({ group, fr, scores, onDismiss }: {
         className={`px-4 py-3 ${group.count > 1 ? "cursor-pointer" : ""}`}
         onClick={() => group.count > 1 && setExpanded(!expanded)}
       >
-        {/* Row 1: severity + type + subnet + time */}
+        {/* Row 1: impact tier + type + subnet + time */}
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <span className="font-mono text-[8px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{
-            color: sevBadge.color,
-            background: `color-mix(in srgb, ${sevBadge.color} 8%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${sevBadge.color} 15%, transparent)`,
+            color: tierConfig.color,
+            background: `color-mix(in srgb, ${tierConfig.color} 8%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${tierConfig.color} 15%, transparent)`,
           }}>
-            {sevBadge.label}
+            {tierConfig.icon} {tierConfig.label}
           </span>
           <span className="font-mono text-[10px] font-bold" style={{ color: info.color }}>
             {info.icon} {info.label}
@@ -289,6 +332,9 @@ function AlertCard({ group, fr, scores, onDismiss }: {
               SN-{ev.netuid}
               {subnet?.name && <span className="text-muted-foreground ml-1 text-[9px]">{subnet.name}</span>}
             </Link>
+          )}
+          {isPortfolioHeld && (
+            <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--gold), 0.08)", color: "hsl(var(--gold))", border: "1px solid hsla(var(--gold), 0.15)" }}>★ PF</span>
           )}
           <div className="ml-auto flex items-center gap-2">
             {group.count > 1 && (
@@ -328,7 +374,7 @@ function AlertCard({ group, fr, scores, onDismiss }: {
       {expanded && group.count > 1 && (
         <div className="border-t border-border px-4 py-2 bg-muted/10">
           <div className="font-mono text-[8px] text-muted-foreground tracking-widest mb-1.5">
-            {fr ? "OCCURRENCES" : "OCCURRENCES"} ({group.count}) — 6h
+            OCCURRENCES ({group.count}) — 6h
           </div>
           {group.occurrences.map((occ, idx) => (
             <div key={occ.id} className="flex items-center gap-3 py-1 font-mono text-[10px] border-b border-border last:border-0">
@@ -346,11 +392,12 @@ function AlertCard({ group, fr, scores, onDismiss }: {
 /* ═══════════════════════════════════════════ */
 /*   GROUPED BY SUBNET VIEW                    */
 /* ═══════════════════════════════════════════ */
-function SubnetGroupedView({ groups, fr, scores, onDismiss }: {
+function SubnetGroupedView({ groups, fr, scores, onDismiss, portfolioNetuids }: {
   groups: GroupedEvent[];
   fr: boolean;
   scores: Map<number, any>;
   onDismiss: (key: string) => void;
+  portfolioNetuids: Set<number>;
 }) {
   const bySubnet = useMemo(() => {
     const map = new Map<number, GroupedEvent[]>();
@@ -396,7 +443,9 @@ function SubnetGroupedView({ groups, fr, scores, onDismiss }: {
             </div>
             <div className="px-3 py-2 space-y-1.5">
               {alerts.map(g => (
-                <AlertCard key={g.key} group={g} fr={fr} scores={scores} onDismiss={onDismiss} />
+                <AlertCard key={g.key} group={g} fr={fr} scores={scores} onDismiss={onDismiss}
+                  impactTier={alertImpactTier(g.latest.type, portfolioNetuids, g.latest.netuid)}
+                  portfolioNetuids={portfolioNetuids} />
               ))}
             </div>
           </SectionCard>
@@ -411,21 +460,19 @@ function SubnetGroupedView({ groups, fr, scores, onDismiss }: {
 /* ═══════════════════════════════════════════ */
 function WhyItMatters({ fr }: { fr: boolean }) {
   const items = fr ? [
-    { icon: "⛔", title: "Critiques", desc: "Les alertes critiques signalent un risque immédiat de perte. Structure cassée, depeg confirmé ou override engine — chaque minute compte." },
-    { icon: "⚠", title: "Warnings", desc: "Les warnings signalent une dégradation en cours. Depeg en approche, flux suspects ou pression anormale — surveiller et préparer." },
-    { icon: "🛡", title: "Overrides", desc: "Quand l'engine bloque un subnet, c'est que plusieurs conditions structurelles sont réunies. Ne pas forcer l'entrée." },
-    { icon: "🐋", title: "Whales", desc: "Les mouvements de plus de 100τ par des entités identifiées (exchanges, fonds) créent une pression directionnelle mesurable." },
+    { icon: "⛔", title: "Bloquant", desc: "Force une sortie ou bloque une entrée. Structure cassée, depeg confirmé ou override engine — chaque minute compte." },
+    { icon: "👁", title: "Surveillance", desc: "Dégradation en cours nécessitant surveillance active ou réduction. Depeg en approche, whale suspecte." },
+    { icon: "ℹ", title: "Information", desc: "Signal informatif sans action immédiate requise. Opportunités, nouvelles entrées, événements systèmes." },
   ] : [
-    { icon: "⛔", title: "Critical", desc: "Critical alerts signal immediate loss risk. Broken structure, confirmed depeg or engine override — every minute counts." },
-    { icon: "⚠", title: "Warnings", desc: "Warnings signal ongoing degradation. Approaching depeg, suspicious flows or abnormal pressure — monitor and prepare." },
-    { icon: "🛡", title: "Overrides", desc: "When the engine blocks a subnet, multiple structural conditions are met. Do not force entry." },
-    { icon: "🐋", title: "Whales", desc: "Movements over 100τ by identified entities (exchanges, funds) create measurable directional pressure." },
+    { icon: "⛔", title: "Blocking", desc: "Forces exit or blocks entry. Broken structure, confirmed depeg or engine override — every minute counts." },
+    { icon: "👁", title: "Monitor", desc: "Ongoing degradation requiring active monitoring or reduction. Approaching depeg, suspicious whale." },
+    { icon: "ℹ", title: "Information", desc: "Informational signal with no immediate action required. Opportunities, new entries, system events." },
   ];
 
   return (
     <SectionCard>
-      <SectionTitle icon="💡" title={fr ? "Pourquoi c'est important" : "Why it matters"} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-5 py-4">
+      <SectionTitle icon="💡" title={fr ? "Hiérarchie d'impact" : "Impact hierarchy"} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-5 py-4">
         {items.map((item, i) => (
           <div key={i} className="flex gap-3">
             <span className="text-lg shrink-0 mt-0.5">{item.icon}</span>
@@ -488,36 +535,44 @@ export default function AlertsPage() {
     processedGroups.filter(g => !dismissed.has(alertKey(g))),
   [processedGroups, dismissed]);
 
-  /* ── Stats ── */
+  /* ── Stats with impact tiers ── */
   const stats = useMemo(() => {
-    const criticals = undismissed.filter(g => alertSeverityClass(g.latest.type) === "critical");
-    const warnings = undismissed.filter(g => alertSeverityClass(g.latest.type) === "warning");
-    const overrides = undismissed.filter(g => g.latest.type === "RISK_OVERRIDE");
-    const invalidations = undismissed.filter(g =>
-      g.latest.type === "DEPEG_CRITICAL" || g.latest.type === "DEPEG_WARNING" || g.latest.type === "BREAK"
-    );
+    const bloquant = undismissed.filter(g => alertImpactTier(g.latest.type, portfolio.ownedNetuids, g.latest.netuid) === "BLOQUANT").length;
+    const surveillance = undismissed.filter(g => alertImpactTier(g.latest.type, portfolio.ownedNetuids, g.latest.netuid) === "SURVEILLANCE").length;
+    const information = undismissed.filter(g => alertImpactTier(g.latest.type, portfolio.ownedNetuids, g.latest.netuid) === "INFORMATION").length;
+    const overrides = undismissed.filter(g => g.latest.type === "RISK_OVERRIDE").length;
     const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
-    const recent = undismissed.filter(g => new Date(g.lastTs).getTime() > twoHoursAgo);
-    return { criticals: criticals.length, warnings: warnings.length, overrides: overrides.length, invalidations: invalidations.length, recent: recent.length };
-  }, [undismissed]);
+    const recent = undismissed.filter(g => new Date(g.lastTs).getTime() > twoHoursAgo).length;
+    return { bloquant, surveillance, information, overrides, recent };
+  }, [undismissed, portfolio.ownedNetuids]);
 
   /* ── Tab filter ── */
   const filteredByTab = useMemo(() => {
-    if (tab === "CRITICAL") return undismissed.filter(g => alertSeverityClass(g.latest.type) === "critical");
-    if (tab === "WARNING") return undismissed.filter(g => alertSeverityClass(g.latest.type) === "warning");
+    if (tab === "CRITICAL") return undismissed.filter(g => alertImpactTier(g.latest.type, portfolio.ownedNetuids, g.latest.netuid) === "BLOQUANT");
+    if (tab === "WARNING") return undismissed.filter(g => alertImpactTier(g.latest.type, portfolio.ownedNetuids, g.latest.netuid) === "SURVEILLANCE");
     if (tab === "OVERRIDE") return undismissed.filter(g => g.latest.type === "RISK_OVERRIDE");
     if (tab === "PORTFOLIO") {
-      const ownedNetuids = portfolio.ownedNetuids;
-      return undismissed.filter(g => g.latest.netuid != null && ownedNetuids.has(g.latest.netuid));
+      return undismissed.filter(g => g.latest.netuid != null && portfolio.ownedNetuids.has(g.latest.netuid));
     }
     return undismissed;
   }, [tab, undismissed, portfolio.ownedNetuids]);
 
+  /* ── Sort by impact tier then time ── */
+  const sortedByImpact = useMemo(() => {
+    const tierRank: Record<ImpactTier, number> = { BLOQUANT: 0, SURVEILLANCE: 1, INFORMATION: 2 };
+    return [...filteredByTab].sort((a, b) => {
+      const ta = alertImpactTier(a.latest.type, portfolio.ownedNetuids, a.latest.netuid);
+      const tb = alertImpactTier(b.latest.type, portfolio.ownedNetuids, b.latest.netuid);
+      if (tierRank[ta] !== tierRank[tb]) return tierRank[ta] - tierRank[tb];
+      return new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime();
+    });
+  }, [filteredByTab, portfolio.ownedNetuids]);
+
   /* ── Tabs config ── */
   const tabs: { value: TabType; label: string; count: number }[] = [
     { value: "ALL", label: fr ? "Toutes" : "All", count: undismissed.length },
-    { value: "CRITICAL", label: fr ? "Critiques" : "Critical", count: stats.criticals },
-    { value: "WARNING", label: "Warnings", count: stats.warnings },
+    { value: "CRITICAL", label: fr ? "Bloquant" : "Blocking", count: stats.bloquant },
+    { value: "WARNING", label: fr ? "Surveillance" : "Monitor", count: stats.surveillance },
     { value: "OVERRIDE", label: "Overrides", count: stats.overrides },
     { value: "PORTFOLIO", label: "Portfolio", count: undismissed.filter(g => g.latest.netuid != null && portfolio.ownedNetuids.has(g.latest.netuid)).length },
   ];
@@ -530,16 +585,16 @@ export default function AlertsPage() {
         <div>
           <h1 className="font-mono text-lg sm:text-xl tracking-wider text-gold">Risk & Alerts</h1>
           <p className="font-mono text-[10px] text-muted-foreground mt-1 max-w-md leading-relaxed">
-            {fr ? "Overrides, anomalies, invalidations et subnets sous surveillance." : "Overrides, anomalies, invalidations and subnets under watch."}
+            {fr ? "Hiérarchie d'impact : Bloquant → Surveillance → Information." : "Impact hierarchy: Blocking → Monitor → Information."}
           </p>
         </div>
 
-        {/* ── 2. KPI BAR ── */}
+        {/* ── 2. KPI BAR — Impact tiers ── */}
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-          <KPIChip label={fr ? "CRITIQUES" : "CRITICAL"} value={stats.criticals} color={stats.criticals > 0 ? BREAK : MUTED} />
-          <KPIChip label="WARNINGS" value={stats.warnings} color={stats.warnings > 0 ? WARN : MUTED} />
+          <KPIChip label={fr ? "BLOQUANT" : "BLOCKING"} value={stats.bloquant} color={stats.bloquant > 0 ? BREAK : MUTED} />
+          <KPIChip label={fr ? "SURVEILLANCE" : "MONITOR"} value={stats.surveillance} color={stats.surveillance > 0 ? WARN : MUTED} />
+          <KPIChip label="INFO" value={stats.information} color={MUTED} />
           <KPIChip label="OVERRIDES" value={stats.overrides} color={stats.overrides > 0 ? BREAK : MUTED} />
-          <KPIChip label="INVALIDATIONS" value={stats.invalidations} color={stats.invalidations > 0 ? WARN : MUTED} />
           <KPIChip label={fr ? "RÉCENTS" : "RECENT"} value={stats.recent} color={stats.recent > 0 ? GO : MUTED} sub="< 2h" />
         </div>
 
@@ -584,17 +639,19 @@ export default function AlertsPage() {
 
         {/* ── 4. FEED / GROUPED VIEW ── */}
         {viewMode === "grouped" ? (
-          <SubnetGroupedView groups={filteredByTab} fr={fr} scores={scores} onDismiss={handleDismiss} />
+          <SubnetGroupedView groups={sortedByImpact} fr={fr} scores={scores} onDismiss={handleDismiss} portfolioNetuids={portfolio.ownedNetuids} />
         ) : (
-          filteredByTab.length === 0 ? (
+          sortedByImpact.length === 0 ? (
             <div className="py-16 text-center space-y-3">
               <span className="text-3xl opacity-70">🔕</span>
               <p className="font-mono text-[11px] text-muted-foreground">{fr ? "Aucune alerte dans cette catégorie" : "No alerts in this category"}</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredByTab.map(group => (
-                <AlertCard key={group.key} group={group} fr={fr} scores={scores} onDismiss={handleDismiss} />
+              {sortedByImpact.map(group => (
+                <AlertCard key={group.key} group={group} fr={fr} scores={scores} onDismiss={handleDismiss}
+                  impactTier={alertImpactTier(group.latest.type, portfolio.ownedNetuids, group.latest.netuid)}
+                  portfolioNetuids={portfolio.ownedNetuids} />
               ))}
             </div>
           )
