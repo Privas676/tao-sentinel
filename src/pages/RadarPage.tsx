@@ -21,9 +21,20 @@ import TreemapHeatmap from "@/components/radar/TreemapHeatmap";
 import AMMPricingTable from "@/components/radar/AMMPricingTable";
 
 /* ─── Burn Ratio formatter: capped values flagged ─── */
-function formatBurnRatio(ratio: number): string {
+function formatBurnRatio(ratio: number): React.ReactNode {
   if (ratio <= 0) return "—";
-  if (ratio >= 10) return "≥1000%⚠";
+  if (ratio >= 10) return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-help" style={{ color: "rgba(255,193,7,0.9)" }}>
+          ≥1000%<span className="ml-0.5">⚠</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[220px] text-[10px] leading-snug">
+        Valeur brute suspecte — probablement un artefact de données source (cumul ou erreur API). Capée à 1000% pour l'affichage.
+      </TooltipContent>
+    </Tooltip>
+  );
   const pct = ratio * 100;
   if (pct < 0.01) return "<0.01%";
   if (pct < 0.1) return `${pct.toFixed(2)}%`;
