@@ -521,16 +521,12 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
 
       {/* ═══ RISQUES CRITIQUES ═══ */}
       {criticalRisks.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(229,57,53,0.5)" }}>
-              🚨 RISQUES CRITIQUES
-            </span>
-            <div className="flex-1 h-px" style={{ background: "rgba(229,57,53,0.08)" }} />
+        <CollapsibleSection title="RISQUES CRITIQUES" icon="🚨" color="rgba(229,57,53,0.5)" lineColor="rgba(229,57,53,0.08)"
+          badge={
             <span className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: "rgba(229,57,53,0.08)", color: "rgba(229,57,53,0.7)", border: "1px solid rgba(229,57,53,0.2)" }}>
               {criticalRisks.length}
             </span>
-          </div>
+          }>
           <div className="rounded-xl overflow-hidden" style={{ background: "rgba(229,57,53,0.02)", border: "1px solid rgba(229,57,53,0.08)" }}>
             {criticalRisks.map(s => {
               const tags: { label: string; color: string }[] = [];
@@ -556,7 +552,7 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
               );
             })}
           </div>
-        </div>
+        </CollapsibleSection>
       )}
     </div>
   );
