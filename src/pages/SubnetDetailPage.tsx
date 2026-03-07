@@ -2,143 +2,177 @@ import { useParams, Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts, type SubnetVerdictData } from "@/hooks/use-subnet-verdict";
-import { useStakeAnalytics, type SubnetRadarData } from "@/hooks/use-stake-analytics";
+import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useMemo, useState } from "react";
-import {
-  opportunityColor, riskColor, stabilityColor, momentumColor,
-} from "@/lib/gauge-engine";
-import { actionColor, actionIcon } from "@/lib/strategy-engine";
+import { opportunityColor, riskColor, stabilityColor, momentumColor } from "@/lib/gauge-engine";
 import { confianceColor } from "@/lib/data-fusion";
-import { healthColor, formatUsd } from "@/lib/subnet-health";
-import { ActionBadge, StatusBadge, SparklineMini } from "@/components/sentinel";
+import { healthColor } from "@/lib/subnet-health";
+import { ActionBadge } from "@/components/sentinel";
 
-/* ═══════════════════════════════════════ */
-/*   SUBNET DETAIL — Command Center        */
-/* ═══════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════ */
+/*   SUBNET COMMAND CENTER — Decision-First Architecture   */
+/* ═══════════════════════════════════════════════════════ */
 
-/* ── Reusable building blocks ── */
+/* ── Design tokens ── */
+const GOLD = "hsl(var(--gold))";
+const GO = "hsl(var(--signal-go))";
+const WARN = "hsl(var(--signal-go-spec))";
+const BREAK = "hsl(var(--signal-break))";
+const MUTED = "hsl(var(--muted-foreground))";
 
-function Section({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+/* ── Reusable atoms ── */
+
+function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card/50">
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
-        <span className="text-sm">{icon}</span>
-        <h3 className="font-mono text-[10px] tracking-widest uppercase text-[hsl(var(--gold))]">
-          {title}
-        </h3>
-      </div>
-      <div className="px-5 py-4">{children}</div>
+    <div className={`rounded-xl border border-border bg-card/60 backdrop-blur-sm ${className}`}>
+      {children}
     </div>
   );
 }
 
-function MetricRow({ label, value, color, sub }: { label: string; value: string | number; color?: string; sub?: string }) {
+function SectionTitle({ icon, title }: { icon: string; title: string }) {
   return (
-    <div className="flex justify-between items-center py-1.5">
-      <span className="text-muted-foreground/65 text-[11px]">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-[12px] font-medium" style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
-        {sub && <span className="text-[9px] text-muted-foreground/40">{sub}</span>}
+    <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border">
+      <span className="text-sm opacity-70">{icon}</span>
+      <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-[hsl(var(--gold))]">{title}</h2>
+    </div>
+  );
+}
+
+function Metric({ label, value, color, sub, mono = true }: { label: string; value: string | number; color?: string; sub?: string; mono?: boolean }) {
+  return (
+    <div className="flex justify-between items-center py-[5px]">
+      <span className="text-muted-foreground/60 text-[11px] leading-tight">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <span className={`text-[12px] font-medium ${mono ? "font-mono" : ""}`} style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
+        {sub && <span className="text-[9px] text-muted-foreground/35">{sub}</span>}
       </div>
     </div>
   );
 }
 
-function ScoreBar({ label, value, max = 100, color }: { label: string; value: number; max?: number; color?: string }) {
-  const pct = Math.min(100, (value / max) * 100);
+function BarScore({ label, value, color }: { label: string; value: number; color?: string }) {
   const c = color || healthColor(value);
+  const pct = Math.min(100, Math.max(0, value));
   return (
-    <div className="flex items-center gap-2 py-1">
-      <span className="text-muted-foreground/65 text-[10px] w-24 shrink-0">{label}</span>
-      <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-muted/30">
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: c }} />
+    <div className="flex items-center gap-2.5 py-[3px]">
+      <span className="text-muted-foreground/55 text-[10px] w-[90px] shrink-0">{label}</span>
+      <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/25">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: c }} />
       </div>
-      <span className="font-mono text-[10px] w-8 text-right" style={{ color: c }}>{Math.round(value)}</span>
+      <span className="font-mono text-[10px] w-7 text-right font-semibold" style={{ color: c }}>{Math.round(value)}</span>
     </div>
   );
 }
 
-function KPI({ label, value, color }: { label: string; value: string | number; color?: string }) {
+function KPIChip({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
-    <div className="rounded-lg px-3 py-2.5 text-center bg-muted/30 border border-border">
-      <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-1">{label}</div>
-      <div className="font-mono text-sm font-bold" style={{ color }}>{value}</div>
+    <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2 bg-muted/25 border border-border min-w-0">
+      <span className="font-mono text-[6.5px] text-muted-foreground/45 tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
+      <span className="font-mono text-[13px] font-bold leading-none" style={{ color }}>{value}</span>
     </div>
   );
 }
 
-function ReasonList({ items, positive }: { items: string[]; positive: boolean }) {
-  if (!items.length) return null;
-  const color = positive ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))";
-  const icon = positive ? "+" : "−";
+function Sparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number; h?: number }) {
+  if (data.length < 2) return <span className="text-muted-foreground/15 text-[9px] italic">no data</span>;
+  const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
+  const trend = data[data.length - 1] - data[0];
+  const c = trend > 0 ? GO : trend < 0 ? BREAK : MUTED;
+  const pts = data.map((v, i) => `${((i / (data.length - 1)) * w).toFixed(1)},${(h - 3 - ((v - min) / range) * (h - 6)).toFixed(1)}`).join(" ");
   return (
-    <div className="space-y-1">
-      {items.map((r, i) => (
-        <div key={i} className="font-mono text-[11px] py-0.5 text-foreground/70">
-          <span style={{ color }}>{icon}</span> {r}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Sparkline({ data, width = 180, height = 40 }: { data: number[]; width?: number; height?: number }) {
-  if (data.length < 2) return <span className="text-muted-foreground/20 text-[9px]">—</span>;
-  const min = Math.min(...data), max = Math.max(...data);
-  const range = max - min || 1;
-  const last = data[data.length - 1], first = data[0];
-  const trend = last - first;
-  const color = trend > 0 ? "hsl(var(--signal-go))" : trend < 0 ? "hsl(var(--signal-break))" : "hsl(var(--muted-foreground))";
-  const pts = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - 2 - ((v - min) / range) * (height - 4);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  return (
-    <svg width={width} height={height}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width={w} height={h} className="opacity-80">
+      <polyline points={pts} fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-/* ── Helpers ── */
-function convictionLevel(score: UnifiedSubnetScore, verdict?: SubnetVerdictData): { level: "HIGH" | "MEDIUM" | "LOW"; score: number } {
-  const s = verdict ? Math.max(verdict.entryScore, verdict.holdScore) : Math.abs(score.opp - score.risk) * (score.conf / 100);
-  return { level: s >= 70 ? "HIGH" : s >= 40 ? "MEDIUM" : "LOW", score: Math.round(s) };
+/* ── Logic helpers ── */
+
+function convictionLevel(s: UnifiedSubnetScore, v?: SubnetVerdictData): { level: "HIGH" | "MEDIUM" | "LOW"; score: number } {
+  const raw = v ? Math.max(v.entryScore, v.holdScore) : Math.abs(s.opp - s.risk) * (s.conf / 100);
+  return { level: raw >= 70 ? "HIGH" : raw >= 40 ? "MEDIUM" : "LOW", score: Math.round(raw) };
 }
 
-function urgencyLabel(score: UnifiedSubnetScore, fr: boolean): string {
-  if (score.isOverridden) return fr ? "Immédiate — sortie forcée" : "Immediate — forced exit";
-  if (score.depegProbability >= 50) return fr ? "Haute — risque depeg" : "High — depeg risk";
-  if (score.action === "EXIT") return fr ? "Haute — signal de sortie" : "High — exit signal";
-  if (score.action === "ENTER" && score.opp > 65) return fr ? "Haute — fenêtre d'entrée" : "High — entry window";
-  return fr ? "Normale" : "Normal";
+function actionLabel(a: string): "RENTRE" | "SORS" | "RENFORCER" | "HOLD" {
+  return a === "ENTER" ? "RENTRE" : a === "EXIT" ? "SORS" : a === "STAKE" ? "RENFORCER" : "HOLD";
 }
 
-function horizonLabel(score: UnifiedSubnetScore, fr: boolean): string {
-  if (score.action === "ENTER") return fr ? "Court à moyen terme" : "Short to medium term";
-  if (score.action === "HOLD" || score.action === "STAKE") return fr ? "Moyen terme (swing)" : "Medium term (swing)";
-  return fr ? "Court terme (sortie)" : "Short term (exit)";
+function urgency(s: UnifiedSubnetScore, fr: boolean): { text: string; color: string } {
+  if (s.isOverridden) return { text: fr ? "Immédiate — sortie forcée" : "Immediate — forced exit", color: BREAK };
+  if (s.depegProbability >= 50) return { text: fr ? "Haute — risque depeg" : "High — depeg risk", color: BREAK };
+  if (s.action === "EXIT") return { text: fr ? "Haute" : "High", color: BREAK };
+  if (s.action === "ENTER" && s.opp > 65) return { text: fr ? "Haute — fenêtre ouverte" : "High — window open", color: GO };
+  return { text: fr ? "Normale" : "Normal", color: MUTED };
 }
 
-function fitScore(score: UnifiedSubnetScore): number {
-  let fit = 50;
-  if (score.opp > 50) fit += 15;
-  if (score.risk < 40) fit += 10;
-  if (score.stability > 50) fit += 10;
-  if (score.confianceScore > 60) fit += 10;
-  if (score.isOverridden) fit -= 30;
-  return Math.max(0, Math.min(100, fit));
+function horizon(s: UnifiedSubnetScore, fr: boolean): string {
+  if (s.action === "ENTER") return fr ? "Court à moyen terme" : "Short to medium term";
+  if (s.action === "HOLD" || s.action === "STAKE") return fr ? "Moyen terme" : "Medium term";
+  return fr ? "Court terme" : "Short term";
 }
 
-function convictionColor(level: "HIGH" | "MEDIUM" | "LOW"): string {
-  return level === "HIGH" ? "hsl(var(--signal-go))" : level === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
+function fitScore(s: UnifiedSubnetScore): number {
+  let f = 50;
+  if (s.opp > 50) f += 15;
+  if (s.risk < 40) f += 10;
+  if (s.stability > 50) f += 10;
+  if (s.confianceScore > 60) f += 10;
+  if (s.isOverridden) f -= 30;
+  return Math.max(0, Math.min(100, f));
 }
 
-/* ═══════════════════════════════════════ */
-/*   MAIN PAGE                              */
-/* ═══════════════════════════════════════ */
+function convColor(l: "HIGH" | "MEDIUM" | "LOW") {
+  return l === "HIGH" ? GO : l === "MEDIUM" ? WARN : MUTED;
+}
+
+/* ── Portfolio profile logic ── */
+type ProfileType = "core" | "tactical" | "opportunistic" | "watchlist" | "avoid";
+
+function portfolioProfile(s: UnifiedSubnetScore): { profile: ProfileType; label: string; labelFr: string; color: string; desc: string; descFr: string } {
+  if (s.isOverridden || s.delistCategory !== "NORMAL" || s.depegProbability >= 40 || s.risk > 75)
+    return { profile: "avoid", label: "Avoid", labelFr: "Éviter", color: BREAK, desc: "Too risky for any portfolio. Critical alerts active.", descFr: "Trop risqué. Alertes critiques actives." };
+  if (s.opp < 35 && s.momentumScore < 35 && s.confianceScore < 50)
+    return { profile: "watchlist", label: "Watchlist Only", labelFr: "Watchlist uniquement", color: MUTED, desc: "Not ready yet. Monitor for improvement signals.", descFr: "Pas encore prêt. Surveiller les signaux d'amélioration." };
+  if (s.opp > 60 && s.risk < 50 && s.momentumScore > 50)
+    return { profile: "opportunistic", label: "Opportunistic", labelFr: "Opportuniste", color: GO, desc: "Strong entry window. Size 3-8% with defined exit.", descFr: "Fenêtre d'entrée forte. Taille 3-8% avec sortie définie." };
+  if (s.stability > 55 && s.risk < 45 && s.confianceScore > 55)
+    return { profile: "core", label: "Core Position", labelFr: "Position de fond", color: GOLD, desc: "Stable, low-risk. Suitable for 5-15% allocation.", descFr: "Stable, risque faible. Allocation 5-15% adaptée." };
+  return { profile: "tactical", label: "Tactical", labelFr: "Tactique", color: WARN, desc: "Moderate conviction. Position 2-5%, active monitoring.", descFr: "Conviction modérée. Position 2-5%, suivi actif." };
+}
+
+/* ── Watch points generator ── */
+function watchPoints(s: UnifiedSubnetScore, eco: any, sn: any, fr: boolean): { icon: string; text: string; urgency: "high" | "medium" | "low" }[] {
+  const pts: { icon: string; text: string; urgency: "high" | "medium" | "low" }[] = [];
+
+  if (s.depegProbability >= 30)
+    pts.push({ icon: "⚠", text: fr ? `Probabilité de depeg à ${s.depegProbability}% — seuil critique à 50%` : `Depeg probability at ${s.depegProbability}% — critical at 50%`, urgency: "high" });
+  if (s.isOverridden)
+    pts.push({ icon: "🚨", text: fr ? "Override manuel actif — sortie recommandée" : "Manual override active — exit recommended", urgency: "high" });
+  if (s.risk > 60)
+    pts.push({ icon: "🔴", text: fr ? `Risque élevé (${s.risk}/100) — surveiller les catalyseurs de baisse` : `High risk (${s.risk}/100) — watch for downside catalysts`, urgency: "high" });
+  if (s.momentumScore < 35)
+    pts.push({ icon: "📉", text: fr ? `Momentum faible (${Math.round(s.momentumScore)}) — attendre un retournement` : `Weak momentum (${Math.round(s.momentumScore)}) — wait for reversal`, urgency: "medium" });
+  if (s.confianceScore < 55)
+    pts.push({ icon: "📊", text: fr ? `Données insuffisantes (${s.confianceScore}%) — fiabilité limitée` : `Insufficient data (${s.confianceScore}%) — limited reliability`, urgency: "medium" });
+  if (eco?.sentiment != null && eco.sentiment < 0.4)
+    pts.push({ icon: "🐻", text: fr ? "Pression vendeuse dominante — surveiller les sorties de capital" : "Dominant sell pressure — monitor capital outflows", urgency: "medium" });
+  if (s.healthScores.liquidityHealth < 35)
+    pts.push({ icon: "💧", text: fr ? "Liquidité critique — slippage élevé probable" : "Critical liquidity — high slippage likely", urgency: "medium" });
+  if (s.opp > 60 && s.momentumScore > 55)
+    pts.push({ icon: "🎯", text: fr ? "Fenêtre d'entrée potentielle — volume et momentum alignés" : "Potential entry window — volume and momentum aligned", urgency: "low" });
+  if (sn?.stakeConcentration > 50)
+    pts.push({ icon: "🏗", text: fr ? `Concentration élevée (${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(0)}%) — risque de dump coordonné` : `High concentration (${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(0)}%) — coordinated dump risk`, urgency: "medium" });
+
+  // Sort by urgency, take top 5
+  const order = { high: 0, medium: 1, low: 2 };
+  return pts.sort((a, b) => order[a.urgency] - order[b.urgency]).slice(0, 5);
+}
+
+/* ═══════════════════════════════════════════════ */
+/*   MAIN PAGE                                      */
+/* ═══════════════════════════════════════════════ */
 export default function SubnetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { lang } = useI18n();
@@ -149,7 +183,7 @@ export default function SubnetDetailPage() {
   const { verdicts } = useSubnetVerdicts();
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
-  const [justAction, setJustAction] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
 
   const s = scores.get(netuid);
   const verdict = verdicts.get(netuid);
@@ -157,375 +191,401 @@ export default function SubnetDetailPage() {
   const radar = useMemo(() => radarData?.find(r => r.netuid === netuid) || null, [radarData, netuid]);
   const inPortfolio = isOwned(netuid);
   const isSpecial = !!SPECIAL_SUBNETS[netuid];
-  const conv = s ? convictionLevel(s, verdict) : { level: "LOW" as const, score: 0 };
 
-  const flash = (msg: string) => { setJustAction(msg); setTimeout(() => setJustAction(null), 1500); };
+  const doFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(null), 1500); };
 
   if (!s) {
     return (
       <div className="h-full w-full bg-background text-foreground p-6 flex flex-col items-center justify-center gap-4">
         <div className="animate-pulse font-mono text-muted-foreground/40 text-sm tracking-widest">
-          {fr ? "Chargement du subnet..." : "Loading subnet..."}
+          {fr ? "Chargement..." : "Loading..."}
         </div>
-        <Link to="/subnets" className="font-mono text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60">← Subnets</Link>
+        <Link to="/subnets" className="font-mono text-[10px] text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors">← Subnets</Link>
       </div>
     );
   }
 
-  const pctChange = spark.length >= 2 && spark[0] > 0
-    ? ((spark[spark.length - 1] - spark[0]) / spark[0]) * 100
-    : null;
-
+  const conv = convictionLevel(s, verdict);
+  const urg = urgency(s, fr);
   const eco = radar?.economicContext;
   const dm = radar?.derivedMetrics;
-  const pc = radar?.priceContext;
   const sn = radar?.snapshot;
   const rs = radar?.scores;
   const amm = radar?.ammMetrics;
+  const profile = portfolioProfile(s);
+  const watches = watchPoints(s, eco, sn, fr);
+  const pctChange = spark.length >= 2 && spark[0] > 0 ? ((spark[spark.length - 1] - spark[0]) / spark[0]) * 100 : null;
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-24">
-      <div className="px-4 sm:px-6 py-4 max-w-[1200px] mx-auto space-y-5">
+      <div className="px-4 sm:px-6 py-5 max-w-[1100px] mx-auto space-y-6">
 
         {/* ── Breadcrumb ── */}
-        <div className="flex items-center gap-2">
-          <Link to="/subnets" className="font-mono text-[10px] tracking-wider text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors">
-            ← Subnets
-          </Link>
-          <span className="font-mono text-[10px] text-muted-foreground/20">/</span>
-          <span className="font-mono text-[10px] text-muted-foreground/60">SN-{netuid}</span>
-        </div>
+        <nav className="flex items-center gap-2">
+          <Link to="/subnets" className="font-mono text-[10px] tracking-wider text-muted-foreground/35 hover:text-muted-foreground/65 transition-colors">← Subnets</Link>
+          <span className="text-muted-foreground/15 text-[10px]">/</span>
+          <span className="font-mono text-[10px] text-muted-foreground/55">SN-{netuid}</span>
+        </nav>
 
-        {/* ═══════════════════════════════════ */}
-        {/*  1. HEADER                          */}
-        {/* ═══════════════════════════════════ */}
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center font-mono text-lg font-bold border border-border bg-muted/20 text-[hsl(var(--gold))]">
-            {netuid}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="font-mono text-base tracking-wider text-[hsl(var(--gold))]">
-              {s.name}
-            </h1>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <span className="font-mono text-[9px] text-muted-foreground/50">SN-{netuid} · {s.assetType}</span>
-              {isSpecial && <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">{SPECIAL_SUBNETS[netuid].label}</span>}
-            </div>
-          </div>
-          <ActionBadge action={s.action === "ENTER" ? "RENTRE" : s.action === "EXIT" ? "SORS" : s.action === "STAKE" ? "RENFORCER" : "HOLD"} />
-        </div>
-
-        {/* Header KPIs — 6 unique metrics, no duplicates */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-          <KPI label="CONVICTION" value={`${conv.level} (${conv.score})`} color={convictionColor(conv.level)} />
-          <KPI label="CONFIDENCE" value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
-          <KPI label="RISK" value={s.risk} color={riskColor(s.risk)} />
-          <KPI label="STABILITY" value={s.stability} color={stabilityColor(s.stability)} />
-          <KPI label="MOMENTUM" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? "hsl(var(--signal-go))" : s.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
-          <KPI label="OPP" value={s.opp} color={opportunityColor(s.opp)} />
-        </div>
-
-        {/* ═══════════════════════════════════ */}
-        {/*  2. DECISION SUMMARY (no duplicate ActionBadge / Conviction) */}
-        {/* ═══════════════════════════════════ */}
-        <Section icon="🎯" title={fr ? "Résumé Décisionnel" : "Decision Summary"}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <MetricRow label={fr ? "Horizon" : "Horizon"} value={horizonLabel(s, fr)} />
-              <MetricRow label={fr ? "Urgence" : "Urgency"} value={urgencyLabel(s, fr)} color={s.isOverridden || s.action === "EXIT" ? "hsl(var(--signal-break))" : undefined} />
-              <MetricRow label={fr ? "Régime" : "Regime"} value={s.systemStatus === "OK" ? (fr ? "Favorable" : "Favorable") : s.systemStatus === "SURVEILLANCE" ? (fr ? "Neutre" : "Neutral") : (fr ? "Défavorable" : "Unfavorable")} color={s.systemStatus === "OK" ? "hsl(var(--signal-go))" : s.systemStatus === "SURVEILLANCE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
-              <MetricRow label={fr ? "Asymétrie" : "Asymmetry"} value={s.asymmetry > 0 ? `+${s.asymmetry}` : `${s.asymmetry}`} color={s.asymmetry > 0 ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))"} />
-            </div>
-
-            <div className="space-y-3">
-              {verdict?.positiveReasons && verdict.positiveReasons.length > 0 && (
-                <div>
-                  <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-1.5">{fr ? "THÈSE" : "THESIS"}</div>
-                  <ReasonList items={verdict.positiveReasons.slice(0, 3)} positive />
+        {/* ══════════════════════════════════════════ */}
+        {/*   HERO — Identity + Primary Decision       */}
+        {/* ══════════════════════════════════════════ */}
+        <SectionCard>
+          <div className="px-5 sm:px-6 py-5 sm:py-6">
+            {/* Identity row */}
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center font-mono text-xl font-bold border border-border bg-muted/15 text-[hsl(var(--gold))] shrink-0">
+                {netuid}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="font-mono text-lg sm:text-xl tracking-wide text-[hsl(var(--gold))] leading-tight">{s.name}</h1>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="font-mono text-[9px] text-muted-foreground/45">SN-{netuid} · {s.assetType}</span>
+                  {isSpecial && <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">{SPECIAL_SUBNETS[netuid].label}</span>}
                 </div>
-              )}
-              {verdict?.negativeReasons && verdict.negativeReasons.length > 0 && (
-                <div>
-                  <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-1.5">INVALIDATION</div>
-                  <ReasonList items={verdict.negativeReasons.slice(0, 3)} positive={false} />
-                </div>
-              )}
+              </div>
+              <ActionBadge action={actionLabel(s.action)} />
+            </div>
+
+            {/* Primary decision strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <KPIChip label="CONVICTION" value={`${conv.level}`} color={convColor(conv.level)} />
+              <KPIChip label="SCORE" value={conv.score} color={convColor(conv.level)} />
+              <KPIChip label="CONFIDENCE" value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
+              <KPIChip label="RISK" value={s.risk} color={riskColor(s.risk)} />
+              <KPIChip label="MOMENTUM" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK} />
+            </div>
+
+            {/* Thesis + Invalidation — prominent, side by side */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
+              <div className="rounded-lg p-4 border border-primary/10 bg-primary/[0.02]">
+                <div className="font-mono text-[7px] tracking-[0.2em] uppercase mb-2.5" style={{ color: GO }}>{fr ? "THÈSE" : "THESIS"}</div>
+                {verdict?.positiveReasons && verdict.positiveReasons.length > 0 ? (
+                  verdict.positiveReasons.slice(0, 4).map((r, i) => (
+                    <div key={i} className="font-mono text-[11px] text-foreground/75 py-0.5 leading-relaxed">
+                      <span style={{ color: GO }}>+</span> {r}
+                    </div>
+                  ))
+                ) : (
+                  <div className="font-mono text-[10px] text-muted-foreground/25 italic">{fr ? "Aucune thèse positive identifiée" : "No positive thesis identified"}</div>
+                )}
+              </div>
+
+              <div className="rounded-lg p-4 border border-destructive/10 bg-destructive/[0.02]">
+                <div className="font-mono text-[7px] tracking-[0.2em] uppercase mb-2.5" style={{ color: BREAK }}>INVALIDATION</div>
+                {verdict?.negativeReasons && verdict.negativeReasons.length > 0 ? (
+                  verdict.negativeReasons.slice(0, 4).map((r, i) => (
+                    <div key={i} className="font-mono text-[11px] text-foreground/75 py-0.5 leading-relaxed">
+                      <span style={{ color: BREAK }}>−</span> {r}
+                    </div>
+                  ))
+                ) : (
+                  <div className="font-mono text-[10px] text-muted-foreground/25 italic">{fr ? "Aucune invalidation identifiée" : "No invalidation identified"}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Secondary context row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 mt-4 pt-4 border-t border-border">
+              <Metric label={fr ? "Horizon" : "Horizon"} value={horizon(s, fr)} />
+              <Metric label={fr ? "Urgence" : "Urgency"} value={urg.text} color={urg.color} />
+              <Metric label={fr ? "Régime" : "Regime"} value={s.systemStatus === "OK" ? (fr ? "Favorable" : "Favorable") : s.systemStatus === "SURVEILLANCE" ? (fr ? "Neutre" : "Neutral") : (fr ? "Défavorable" : "Unfavorable")} color={s.systemStatus === "OK" ? GO : s.systemStatus === "SURVEILLANCE" ? WARN : BREAK} />
+              <Metric label={fr ? "Asymétrie" : "Asymmetry"} value={s.asymmetry > 0 ? `+${s.asymmetry}` : `${s.asymmetry}`} color={s.asymmetry > 0 ? GO : BREAK} />
             </div>
           </div>
-        </Section>
+        </SectionCard>
 
-        {/* ═══════════════════════════════════ */}
-        {/*  3. WHY / WHY NOT                   */}
-        {/* ═══════════════════════════════════ */}
-        <Section icon="⚖️" title={fr ? "Analyse Décisionnelle" : "Decision Analysis"}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <WhyBlock
+        {/* ══════════════════════════════════════════ */}
+        {/*   WATCH NOW — What to monitor               */}
+        {/* ══════════════════════════════════════════ */}
+        {watches.length > 0 && (
+          <SectionCard>
+            <SectionTitle icon="👁" title={fr ? "Ce qu'il faut surveiller maintenant" : "What to watch now"} />
+            <div className="px-5 py-4 space-y-2">
+              {watches.map((w, i) => {
+                const bgClass = w.urgency === "high" ? "bg-destructive/[0.04] border-destructive/15" : w.urgency === "medium" ? "bg-accent/20 border-border" : "bg-primary/[0.02] border-primary/10";
+                const dotColor = w.urgency === "high" ? BREAK : w.urgency === "medium" ? WARN : GO;
+                return (
+                  <div key={i} className={`flex items-start gap-3 rounded-lg px-4 py-2.5 border ${bgClass}`}>
+                    <span className="text-sm mt-0.5 shrink-0 w-5 text-center">{w.icon}</span>
+                    <span className="font-mono text-[11px] text-foreground/80 leading-relaxed flex-1">{w.text}</span>
+                    <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: dotColor }} />
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+        )}
+
+        {/* ══════════════════════════════════════════ */}
+        {/*   WHY / WHY NOT — Premium 4-quadrant        */}
+        {/* ══════════════════════════════════════════ */}
+        <SectionCard>
+          <SectionTitle icon="⚖️" title={fr ? "Analyse décisionnelle" : "Decision Analysis"} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
+            <QuadrantBlock
               title={fr ? "Pourquoi entrer" : "Why enter"}
+              tone="go"
               items={[
                 s.opp > 55 ? (fr ? `Opportunité ${s.opp}/100` : `Opportunity ${s.opp}/100`) : null,
                 s.momentumScore >= 55 ? (fr ? `Momentum haussier (${Math.round(s.momentumScore)})` : `Bullish momentum (${Math.round(s.momentumScore)})`) : null,
-                s.asymmetry > 20 ? (fr ? `Asymétrie favorable (+${s.asymmetry})` : `Favorable asymmetry (+${s.asymmetry})`) : null,
-                eco && eco.sentiment > 0.55 ? (fr ? "Pression acheteuse" : "Buying pressure") : null,
+                s.asymmetry > 20 ? (fr ? `Asymétrie +${s.asymmetry}` : `Asymmetry +${s.asymmetry}`) : null,
+                eco?.sentiment != null && eco.sentiment > 0.55 ? (fr ? "Pression acheteuse" : "Buy pressure") : null,
               ].filter(Boolean) as string[]}
-              tone="go"
+              position="tl"
             />
-            <WhyBlock
+            <QuadrantBlock
               title={fr ? "Pourquoi attendre" : "Why wait"}
+              tone="warn"
               items={[
                 s.risk > 40 && s.risk < 65 ? (fr ? `Risque modéré (${s.risk})` : `Moderate risk (${s.risk})`) : null,
-                s.confianceScore < 60 ? (fr ? `Données incomplètes (${s.confianceScore}%)` : `Incomplete data (${s.confianceScore}%)`) : null,
+                s.confianceScore < 60 ? (fr ? `Données ${s.confianceScore}%` : `Data ${s.confianceScore}%`) : null,
                 s.momentumScore < 40 ? (fr ? "Momentum faible" : "Weak momentum") : null,
                 s.stability < 40 ? (fr ? "Structure instable" : "Unstable structure") : null,
               ].filter(Boolean) as string[]}
-              tone="warn"
+              position="tr"
             />
-            <WhyBlock
-              title={fr ? "Ce qui doit s'améliorer" : "What needs to improve"}
-              items={[
-                s.risk > 50 ? (fr ? `Réduire le risque (${s.risk} → <40)` : `Reduce risk (${s.risk} → <40)`) : null,
-                s.healthScores.liquidityHealth < 40 ? (fr ? "Liquidité insuffisante" : "Insufficient liquidity") : null,
-                s.healthScores.activityHealth < 40 ? (fr ? "Activité réseau faible" : "Low network activity") : null,
-                sn && sn.stakeConcentration > 50 ? (fr ? "Décentraliser le stake" : "Decentralize stake") : null,
-              ].filter(Boolean) as string[]}
+            <QuadrantBlock
+              title={fr ? "Ce qui doit s'améliorer" : "Needs improvement"}
               tone="neutral"
-            />
-            <WhyBlock
-              title={fr ? "Ce qui invalide" : "What invalidates"}
               items={[
-                s.isOverridden ? (fr ? "Override actif — zone critique" : "Active override — critical zone") : null,
-                s.depegProbability >= 40 ? `Depeg ${s.depegProbability}%` : null,
-                s.delistCategory !== "NORMAL" ? (fr ? `Risque delist (${s.delistCategory})` : `Delist risk (${s.delistCategory})`) : null,
-                s.risk > 75 ? (fr ? "Zone de danger extrême" : "Extreme danger zone") : null,
+                s.risk > 50 ? (fr ? `Risque ${s.risk} → <40` : `Risk ${s.risk} → <40`) : null,
+                s.healthScores.liquidityHealth < 40 ? (fr ? "Liquidité" : "Liquidity") : null,
+                s.healthScores.activityHealth < 40 ? (fr ? "Activité réseau" : "Network activity") : null,
+                sn && sn.stakeConcentration > 50 ? (fr ? "Concentration" : "Concentration") : null,
               ].filter(Boolean) as string[]}
+              position="bl"
+            />
+            <QuadrantBlock
+              title={fr ? "Ce qui invalide" : "Invalidates"}
               tone="break"
+              items={[
+                s.isOverridden ? "Override actif" : null,
+                s.depegProbability >= 40 ? `Depeg ${s.depegProbability}%` : null,
+                s.delistCategory !== "NORMAL" ? `Delist: ${s.delistCategory}` : null,
+                s.risk > 75 ? (fr ? "Zone danger" : "Danger zone") : null,
+              ].filter(Boolean) as string[]}
+              position="br"
             />
           </div>
-        </Section>
+        </SectionCard>
 
-        {/* ═══════════════════════════════════ */}
-        {/*  4. CONVICTION STACK (unique — no repeated Confidence/Regime) */}
-        {/* ═══════════════════════════════════ */}
-        <Section icon="📊" title="Conviction Stack">
-          <div className="space-y-1.5">
-            <ScoreBar label="Flow" value={rs?.capitalMomentum ?? s.opp} color={healthColor(rs?.capitalMomentum ?? s.opp)} />
-            <ScoreBar label={fr ? "Liquidité" : "Liquidity"} value={s.healthScores.liquidityHealth} />
-            <ScoreBar label="Structure" value={s.stability} color={stabilityColor(s.stability)} />
-            <ScoreBar label="Economics" value={rs?.healthIndex ?? 50} />
-            <ScoreBar label="Smart Money" value={rs?.smartMoneyScore ?? 50} />
-            <ScoreBar label={fr ? "Risque (inv.)" : "Risk (inv.)"} value={100 - s.risk} color={healthColor(100 - s.risk)} />
+        {/* ══════════════════════════════════════════ */}
+        {/*   CONVICTION STACK                          */}
+        {/* ══════════════════════════════════════════ */}
+        <SectionCard>
+          <SectionTitle icon="📊" title="Conviction Stack" />
+          <div className="px-5 py-4 space-y-1">
+            <BarScore label="Flow" value={rs?.capitalMomentum ?? s.opp} />
+            <BarScore label={fr ? "Liquidité" : "Liquidity"} value={s.healthScores.liquidityHealth} />
+            <BarScore label="Structure" value={s.stability} color={stabilityColor(s.stability)} />
+            <BarScore label="Economics" value={rs?.healthIndex ?? 50} />
+            <BarScore label="Smart Money" value={rs?.smartMoneyScore ?? 50} />
+            <BarScore label={fr ? "Risque (inv.)" : "Risk (inv.)"} value={100 - s.risk} />
           </div>
-        </Section>
+        </SectionCard>
 
-        {/* ═══════════════════════════════════ */}
-        {/*  5-9. DETAIL GRID                   */}
-        {/* ═══════════════════════════════════ */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* ══════════════════════════════════════════ */}
+        {/*   DEEP DIVE — 2-column metrics grid         */}
+        {/* ══════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-          {/* 5. Flow & Momentum */}
-          <Section icon="📈" title="Flow & Momentum">
-            <div className="space-y-1">
-              <MetricRow label={fr ? "Prix 7j" : "Price 7d"} value={pctChange != null ? `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}%` : "—"} color={pctChange != null ? (pctChange > 0 ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))") : undefined} />
-              <MetricRow label="Momentum" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? "hsl(var(--signal-go))" : s.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
-              <MetricRow label="Capital Flow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
-              {eco && <MetricRow label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} color={eco.sentiment > 0.55 ? "hsl(var(--signal-go))" : eco.sentiment < 0.45 ? "hsl(var(--signal-break))" : "hsl(var(--signal-go-spec))"} sub={`${(eco.sentiment * 100).toFixed(0)}%`} />}
-              <MetricRow label="Trend" value={s.momentumLabel} color={momentumColor(s.momentumLabel)} />
+          {/* Flow & Momentum */}
+          <SectionCard>
+            <SectionTitle icon="📈" title="Flow & Momentum" />
+            <div className="px-5 py-4 space-y-0.5">
+              <Metric label={fr ? "Prix 7j" : "Price 7d"} value={pctChange != null ? `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}%` : "—"} color={pctChange != null ? (pctChange > 0 ? GO : BREAK) : undefined} />
+              <Metric label="Momentum" value={Math.round(s.momentumScore)} color={s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK} />
+              <Metric label="Capital Flow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
+              {eco && <Metric label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} color={eco.sentiment > 0.55 ? GO : eco.sentiment < 0.45 ? BREAK : WARN} sub={`${(eco.sentiment * 100).toFixed(0)}%`} />}
+              <Metric label="Trend" value={s.momentumLabel} color={momentumColor(s.momentumLabel)} />
+              <div className="pt-3 flex justify-center"><Sparkline data={spark} /></div>
             </div>
-            <div className="mt-3 flex justify-center">
-              <Sparkline data={spark} />
-            </div>
-          </Section>
+          </SectionCard>
 
-          {/* 6. Liquidity & Execution */}
-          <Section icon="💧" title={fr ? "Liquidité & Exécution" : "Liquidity & Execution"}>
-            <div className="space-y-1">
+          {/* Liquidity & Execution */}
+          <SectionCard>
+            <SectionTitle icon="💧" title={fr ? "Liquidité & Exécution" : "Liquidity & Execution"} />
+            <div className="px-5 py-4 space-y-0.5">
               {amm && (
                 <>
-                  <MetricRow label="Spread" value={`${(amm.spreadBps / 100).toFixed(3)}%`} color={amm.spreadBps < 50 ? "hsl(var(--signal-go))" : amm.spreadBps < 200 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
-                  <MetricRow label="Slippage 1τ" value={`${(amm.slippageBps1Tao / 100).toFixed(2)}%`} />
-                  <MetricRow label="Slippage 10τ" value={`${(amm.slippageBps10Tao / 100).toFixed(2)}%`} color={amm.slippageBps10Tao > 500 ? "hsl(var(--signal-break))" : undefined} />
-                  <MetricRow label={fr ? "Profondeur" : "Depth"} value={`${amm.poolDepth.toFixed(1)}τ`} color={healthColor(Math.min(100, amm.poolDepth))} />
-                  <MetricRow label="AMM Score" value={amm.ammEfficiency} color={healthColor(amm.ammEfficiency)} />
+                  <Metric label="Spread" value={`${(amm.spreadBps / 100).toFixed(3)}%`} color={amm.spreadBps < 50 ? GO : amm.spreadBps < 200 ? WARN : BREAK} />
+                  <Metric label="Slippage 1τ" value={`${(amm.slippageBps1Tao / 100).toFixed(2)}%`} />
+                  <Metric label="Slippage 10τ" value={`${(amm.slippageBps10Tao / 100).toFixed(2)}%`} color={amm.slippageBps10Tao > 500 ? BREAK : undefined} />
+                  <Metric label={fr ? "Profondeur" : "Depth"} value={`${amm.poolDepth.toFixed(1)}τ`} color={healthColor(Math.min(100, amm.poolDepth))} />
+                  <Metric label="AMM" value={amm.ammEfficiency} color={healthColor(amm.ammEfficiency)} />
                 </>
               )}
-              {eco && (
-                <>
-                  <MetricRow label="Pool" value={`α${eco.alphaInPool.toFixed(0)} / τ${eco.taoInPool.toFixed(1)}`} />
-                  <MetricRow label="Vol/MCap" value={`${(eco.volumeMarketcapRatio * 100).toFixed(2)}%`} />
-                </>
-              )}
-              <ScoreBar label={fr ? "Score Liq." : "Liq. Score"} value={s.healthScores.liquidityHealth} />
+              {eco && <Metric label="Pool" value={`α${eco.alphaInPool.toFixed(0)} / τ${eco.taoInPool.toFixed(1)}`} />}
+              <BarScore label={fr ? "Score Liq." : "Liq. Score"} value={s.healthScores.liquidityHealth} />
             </div>
-          </Section>
+          </SectionCard>
 
-          {/* 7. Structure & Concentration */}
-          <Section icon="🏗️" title={fr ? "Structure & Concentration" : "Structure & Concentration"}>
-            <div className="space-y-1">
+          {/* Structure */}
+          <SectionCard>
+            <SectionTitle icon="🏗️" title="Structure" />
+            <div className="px-5 py-4 space-y-0.5">
               {sn && (
                 <>
-                  <MetricRow label={fr ? "Validateurs" : "Validators"} value={sn.validatorsActive} />
-                  <MetricRow label={fr ? "Mineurs actifs" : "Active miners"} value={sn.minersActive} sub={`/ ${sn.minersTotal}`} />
-                  <MetricRow label="Concentration" value={`${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(1)}%`} color={sn.stakeConcentration > 50 ? "hsl(var(--signal-break))" : sn.stakeConcentration > 30 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-go))"} />
+                  <Metric label={fr ? "Validateurs" : "Validators"} value={sn.validatorsActive} />
+                  <Metric label={fr ? "Mineurs" : "Miners"} value={sn.minersActive} sub={`/ ${sn.minersTotal}`} />
+                  <Metric label="Concentration" value={`${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(1)}%`} color={sn.stakeConcentration > 50 ? BREAK : sn.stakeConcentration > 30 ? WARN : GO} />
                 </>
               )}
               {rs && (
                 <>
-                  <MetricRow label="Manipulation" value={rs.manipulationScore} color={healthColor(100 - rs.manipulationScore)} />
-                  <MetricRow label="Bubble Risk" value={rs.bubbleScore} color={healthColor(100 - rs.bubbleScore)} />
-                  <MetricRow label="Dump Risk" value={rs.dumpRisk} color={healthColor(100 - rs.dumpRisk)} />
+                  <Metric label="Manipulation" value={rs.manipulationScore} color={healthColor(100 - rs.manipulationScore)} />
+                  <Metric label="Bubble" value={rs.bubbleScore} color={healthColor(100 - rs.bubbleScore)} />
+                  <Metric label="Dump" value={rs.dumpRisk} color={healthColor(100 - rs.dumpRisk)} />
                 </>
               )}
             </div>
-          </Section>
+          </SectionCard>
 
-          {/* 8. Economics */}
-          <Section icon="🏦" title="Economics">
-            <div className="space-y-1">
+          {/* Economics */}
+          <SectionCard>
+            <SectionTitle icon="🏦" title="Economics" />
+            <div className="px-5 py-4 space-y-0.5">
               {eco && (
                 <>
-                  <MetricRow label={fr ? "Émissions/jour" : "Emissions/day"} value={`${eco.emissionsPerDay.toFixed(1)} α`} />
-                  <MetricRow label={fr ? "Part émission" : "Emission share"} value={`${eco.emissionsPercent.toFixed(2)}%`} />
-                  {dm && <MetricRow label="Burn Ratio" value={`${(dm.burnRatio * 100).toFixed(1)}%`} color={dm.burnRatio > 0.5 ? "hsl(var(--signal-go))" : dm.burnRatio > 0.2 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />}
-                  <MetricRow label="Circ. Supply" value={`${eco.circulatingSupply.toFixed(0)} α`} />
-                  {dm && <MetricRow label="UID Saturation" value={`${(dm.uidSaturation * 100).toFixed(0)}%`} color={dm.uidSaturation > 0.9 ? "hsl(var(--signal-break))" : dm.uidSaturation > 0.7 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-go))"} />}
-                  {dm && <MetricRow label={fr ? "Pression token" : "Token pressure"} value={dm.tradingPressure > 0 ? (fr ? "Achat" : "Buy") : (fr ? "Vente" : "Sell")} color={dm.tradingPressure > 0 ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))"} />}
+                  <Metric label={fr ? "Émissions/j" : "Emissions/d"} value={`${eco.emissionsPerDay.toFixed(1)} α`} />
+                  <Metric label={fr ? "Part" : "Share"} value={`${eco.emissionsPercent.toFixed(2)}%`} />
+                  {dm && <Metric label="Burn" value={`${(dm.burnRatio * 100).toFixed(1)}%`} color={dm.burnRatio > 0.5 ? GO : dm.burnRatio > 0.2 ? WARN : BREAK} />}
+                  <Metric label="Supply" value={`${eco.circulatingSupply.toFixed(0)} α`} />
+                  {dm && <Metric label="UID Sat." value={`${(dm.uidSaturation * 100).toFixed(0)}%`} color={dm.uidSaturation > 0.9 ? BREAK : dm.uidSaturation > 0.7 ? WARN : GO} />}
+                  {dm && <Metric label={fr ? "Pression" : "Pressure"} value={dm.tradingPressure > 0 ? (fr ? "Achat" : "Buy") : (fr ? "Vente" : "Sell")} color={dm.tradingPressure > 0 ? GO : BREAK} />}
                 </>
               )}
-              <ScoreBar label={fr ? "Émission" : "Emission"} value={100 - s.healthScores.emissionPressure} />
-              <ScoreBar label="Dilution" value={100 - s.healthScores.dilutionRisk} />
+              <BarScore label={fr ? "Émission" : "Emission"} value={100 - s.healthScores.emissionPressure} />
             </div>
-          </Section>
+          </SectionCard>
 
-          {/* 9. Smart Money (no duplicate Smart Money score — only here) */}
-          <Section icon="🐋" title="Smart Money">
-            <div className="space-y-1">
+          {/* Smart Money */}
+          <SectionCard>
+            <SectionTitle icon="🐋" title="Smart Money" />
+            <div className="px-5 py-4 space-y-0.5">
               {rs && (
                 <>
-                  <MetricRow label="Smart Money" value={rs.smartMoneyScore} color={healthColor(rs.smartMoneyScore)} />
-                  <MetricRow label="Narrative" value={rs.narrativeScore} color={healthColor(rs.narrativeScore)} />
+                  <Metric label="Score" value={rs.smartMoneyScore} color={healthColor(rs.smartMoneyScore)} />
+                  <Metric label="Narrative" value={rs.narrativeScore} color={healthColor(rs.narrativeScore)} />
                 </>
               )}
-              {eco && (
-                <>
-                  <MetricRow label={fr ? "Acheteurs" : "Buyers"} value={eco.buyersCount} />
-                  <MetricRow label={fr ? "Vendeurs" : "Sellers"} value={eco.sellersCount} />
-                  <MetricRow label="Sentiment" value={`${(eco.sentiment * 100).toFixed(0)}%`} color={eco.sentiment > 0.55 ? "hsl(var(--signal-go))" : eco.sentiment < 0.45 ? "hsl(var(--signal-break))" : "hsl(var(--signal-go-spec))"} sub={eco.sentiment > 0.55 ? "Buy" : eco.sentiment < 0.45 ? "Sell" : "Neutral"} />
-                </>
-              )}
-              {sn && <MetricRow label="Holders" value={sn.holdersCount} />}
-              <ScoreBar label={fr ? "Activité" : "Activity"} value={s.healthScores.activityHealth} />
+              {eco && <Metric label="Sentiment" value={`${(eco.sentiment * 100).toFixed(0)}%`} color={eco.sentiment > 0.55 ? GO : eco.sentiment < 0.45 ? BREAK : WARN} sub={eco.sentiment > 0.55 ? "Buy" : eco.sentiment < 0.45 ? "Sell" : "—"} />}
+              {sn && <Metric label="Holders" value={sn.holdersCount} />}
+              <BarScore label={fr ? "Activité" : "Activity"} value={s.healthScores.activityHealth} />
             </div>
-          </Section>
+          </SectionCard>
 
-          {/* 10. Portfolio Fit — computed values, no hardcoded strings */}
-          <Section icon="📁" title="Portfolio Fit">
-            {(() => {
-              const fit = fitScore(s);
-              const role = s.action === "ENTER" ? (fr ? "Position de croissance" : "Growth position")
-                : s.action === "HOLD" || s.action === "STAKE" ? (fr ? "Position de fond" : "Core position")
-                : (fr ? "À céder" : "To exit");
-              const weight = fit >= 70 ? "5-10%" : fit >= 50 ? "2-5%" : "<2%";
-              const redundancy = sn && sn.stakeConcentration > 60 ? (fr ? "Élevée" : "High") : sn && sn.stakeConcentration > 30 ? (fr ? "Modérée" : "Moderate") : (fr ? "Faible" : "Low");
-              const redundancyColor = sn && sn.stakeConcentration > 60 ? "hsl(var(--signal-break))" : sn && sn.stakeConcentration > 30 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-go))";
-              const diversOk = s.stability > 40 && s.risk < 60;
-              return (
-                <div className="space-y-1">
-                  <MetricRow label="Fit Score" value={fit} color={healthColor(fit)} />
-                  <MetricRow label={fr ? "Rôle conseillé" : "Suggested role"} value={role} />
-                  <MetricRow label={fr ? "Poids recommandé" : "Recommended weight"} value={weight} />
-                  <MetricRow label={fr ? "Redondance" : "Redundancy"} value={redundancy} color={redundancyColor} />
-                  <MetricRow label="Diversification" value={diversOk ? "✓" : "✕"} color={diversOk ? "hsl(var(--signal-go))" : "hsl(var(--signal-break))"} />
-                  <MetricRow label={fr ? "Contribution risque" : "Risk contribution"} value={s.risk > 60 ? (fr ? "Élevée" : "High") : s.risk > 35 ? (fr ? "Modérée" : "Moderate") : (fr ? "Faible" : "Low")} color={riskColor(s.risk)} />
-                </div>
-              );
-            })()}
-          </Section>
+          {/* Portfolio Profile */}
+          <SectionCard>
+            <SectionTitle icon="📁" title={fr ? "Profil portefeuille" : "Portfolio Profile"} />
+            <div className="px-5 py-4">
+              {/* Profile badge */}
+              <div className="flex items-center gap-3 mb-4">
+                <span className="font-mono text-[13px] font-bold" style={{ color: profile.color }}>{fr ? profile.labelFr : profile.label}</span>
+                <span className="font-mono text-[10px] text-muted-foreground/50">— Fit {fitScore(s)}/100</span>
+              </div>
+              <p className="font-mono text-[11px] text-foreground/65 leading-relaxed mb-4">
+                {fr ? profile.descFr : profile.desc}
+              </p>
+
+              {/* All 5 profiles with indicator */}
+              <div className="space-y-1.5">
+                {(["core", "tactical", "opportunistic", "watchlist", "avoid"] as ProfileType[]).map(p => {
+                  const active = profile.profile === p;
+                  const labels: Record<ProfileType, { en: string; fr: string }> = {
+                    core: { en: "Core (5-15%)", fr: "Fond (5-15%)" },
+                    tactical: { en: "Tactical (2-5%)", fr: "Tactique (2-5%)" },
+                    opportunistic: { en: "Opportunistic (3-8%)", fr: "Opportuniste (3-8%)" },
+                    watchlist: { en: "Watchlist Only", fr: "Watchlist seule" },
+                    avoid: { en: "Avoid", fr: "Éviter" },
+                  };
+                  return (
+                    <div key={p} className={`flex items-center gap-2.5 py-1 px-2.5 rounded-md transition-colors ${active ? "bg-muted/40" : ""}`}>
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${active ? "" : "opacity-20"}`} style={{ background: active ? profile.color : MUTED }} />
+                      <span className={`font-mono text-[10px] ${active ? "text-foreground font-medium" : "text-muted-foreground/40"}`}>
+                        {fr ? labels[p].fr : labels[p].en}
+                      </span>
+                      {active && <span className="font-mono text-[8px] text-muted-foreground/40 ml-auto">◄</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </SectionCard>
         </div>
 
-        {/* ═══════════════════════════════════ */}
-        {/*  11. SCENARIOS                      */}
-        {/* ═══════════════════════════════════ */}
-        <Section icon="🔮" title={fr ? "Scénarios" : "Scenarios"}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <ScenarioCard
-              title="Bull Case"
-              color="hsl(var(--signal-go))"
+        {/* ══════════════════════════════════════════ */}
+        {/*   SCENARIOS                                 */}
+        {/* ══════════════════════════════════════════ */}
+        <SectionCard>
+          <SectionTitle icon="🔮" title={fr ? "Scénarios" : "Scenarios"} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-border">
+            <ScenarioBlock
+              title="Bull"
+              color={GO}
               items={[
-                s.opp > 50 ? (fr ? `Opportunité se confirme (${s.opp})` : `Opportunity confirms (${s.opp})`) : (fr ? "Momentum s'accélère" : "Momentum accelerates"),
-                eco && eco.sentiment > 0.5 ? (fr ? "Pression d'achat soutenue" : "Sustained buy pressure") : (fr ? "Adoption croissante" : "Growing adoption"),
+                s.opp > 50 ? (fr ? `Opportunité confirmée (${s.opp})` : `Opportunity confirms (${s.opp})`) : (fr ? "Momentum accélère" : "Momentum accelerates"),
+                eco?.sentiment != null && eco.sentiment > 0.5 ? (fr ? "Achat soutenu" : "Sustained buying") : (fr ? "Adoption croissante" : "Growing adoption"),
                 fr ? "Breakout prix + volume" : "Price + volume breakout",
               ]}
             />
-            <ScenarioCard
-              title="Base Case"
-              color="hsl(var(--signal-go-spec))"
+            <ScenarioBlock
+              title="Base"
+              color={WARN}
               items={[
                 fr ? "Consolidation latérale" : "Sideways consolidation",
                 fr ? "Volumes stables" : "Stable volumes",
                 fr ? "Pas de catalyseur" : "No catalyst",
               ]}
             />
-            <ScenarioCard
-              title="Bear Case"
-              color="hsl(var(--signal-break))"
+            <ScenarioBlock
+              title="Bear"
+              color={BREAK}
               items={[
-                s.risk > 40 ? (fr ? `Risque matérialise (${s.risk})` : `Risk materializes (${s.risk})`) : (fr ? "Perte de momentum" : "Momentum loss"),
+                s.risk > 40 ? (fr ? `Risque matérialisé (${s.risk})` : `Risk materializes (${s.risk})`) : (fr ? "Perte de momentum" : "Momentum loss"),
                 s.depegProbability > 20 ? `Depeg → ${s.depegProbability}%` : (fr ? "Sortie de capital" : "Capital outflow"),
                 fr ? "Liquidité s'assèche" : "Liquidity dries up",
               ]}
             />
           </div>
-        </Section>
+        </SectionCard>
 
-        {/* External link */}
-        <div className="flex justify-end">
+        {/* External ref */}
+        <div className="flex justify-end pb-2">
           <a href={`https://taostats.io/subnets/${netuid}`} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[10px] tracking-wider text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors">
-            {fr ? "Voir sur Taostats →" : "View on Taostats →"}
+            className="font-mono text-[9px] tracking-wider text-muted-foreground/25 hover:text-muted-foreground/55 transition-colors">
+            Taostats →
           </a>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════ */}
-      {/*  12. STICKY FOOTER                  */}
-      {/* ═══════════════════════════════════ */}
+      {/* ══════════════════════════════════════════ */}
+      {/*   STICKY FOOTER                             */}
+      {/* ══════════════════════════════════════════ */}
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3 flex items-center gap-2 sm:gap-3">
-          {/* Action — always visible */}
-          <ActionBadge action={s.action === "ENTER" ? "RENTRE" : s.action === "EXIT" ? "SORS" : s.action === "STAKE" ? "RENFORCER" : "HOLD"} size="sm" />
-
-          {/* Size — hidden on very small screens */}
-          <span className="font-mono text-[9px] text-muted-foreground/65 hidden sm:inline">
-            {fr ? "Taille :" : "Size:"} {fitScore(s) >= 70 ? "5-10%" : fitScore(s) >= 50 ? "2-5%" : "<2%"}
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-2.5">
+          <ActionBadge action={actionLabel(s.action)} size="sm" />
+          <span className="font-mono text-[9px] text-muted-foreground/55 hidden sm:inline">
+            {fr ? profile.labelFr : profile.label}
           </span>
-
           <div className="flex-1" />
-
-          {/* Flash feedback */}
-          {justAction && (
-            <span className="font-mono text-[9px] text-primary animate-pulse">{justAction}</span>
-          )}
-
-          {/* Portfolio toggle */}
+          {flash && <span className="font-mono text-[9px] text-primary animate-pulse">{flash}</span>}
           <button
             onClick={() => {
-              if (inPortfolio) { removePosition(netuid); flash(fr ? "✓ Retiré" : "✓ Removed"); }
-              else { addPosition(netuid, 0, s.alphaPrice); flash(fr ? "✓ Ajouté" : "✓ Added"); }
+              if (inPortfolio) { removePosition(netuid); doFlash("✓"); }
+              else { addPosition(netuid, 0, s.alphaPrice); doFlash("✓"); }
             }}
-            className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg transition-all border border-border"
+            className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg border transition-all"
             style={{
               background: inPortfolio ? "hsl(var(--gold) / 0.08)" : "hsl(var(--signal-go) / 0.06)",
-              color: inPortfolio ? "hsl(var(--gold))" : "hsl(var(--signal-go))",
+              color: inPortfolio ? GOLD : GO,
               borderColor: inPortfolio ? "hsl(var(--gold) / 0.15)" : "hsl(var(--signal-go) / 0.15)",
             }}
           >
-            {inPortfolio ? (fr ? "★ Retirer" : "★ Remove") : (fr ? "+ Portfolio" : "+ Portfolio")}
+            {inPortfolio ? "★" : "+"} Portfolio
           </button>
-
-          {/* Alert CTA */}
-          <Link
-            to="/alerts"
-            className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg border border-border text-muted-foreground/70 hover:text-foreground transition-colors"
-          >
+          <Link to="/alerts" className="font-mono text-[9px] px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground/60 hover:text-foreground transition-colors">
             🔔
           </Link>
         </div>
@@ -534,37 +594,52 @@ export default function SubnetDetailPage() {
   );
 }
 
-/* ── Sub-components ── */
+/* ═══════════════════════════════════ */
+/*   SUB-COMPONENTS                     */
+/* ═══════════════════════════════════ */
 
-function WhyBlock({ title, items, tone }: { title: string; items: string[]; tone: "go" | "warn" | "break" | "neutral" }) {
-  const colors = {
-    go: { bg: "bg-primary/[0.03]", border: "border-primary/10", text: "hsl(var(--signal-go))" },
-    warn: { bg: "bg-accent/30", border: "border-accent", text: "hsl(var(--signal-go-spec))" },
-    break: { bg: "bg-destructive/[0.03]", border: "border-destructive/10", text: "hsl(var(--signal-break))" },
-    neutral: { bg: "bg-muted/20", border: "border-border", text: "hsl(var(--muted-foreground))" },
+function QuadrantBlock({ title, items, tone, position }: { title: string; items: string[]; tone: "go" | "warn" | "break" | "neutral"; position: "tl" | "tr" | "bl" | "br" }) {
+  const styles = {
+    go: { accent: GO, bg: "bg-primary/[0.02]" },
+    warn: { accent: WARN, bg: "bg-accent/10" },
+    break: { accent: BREAK, bg: "bg-destructive/[0.02]" },
+    neutral: { accent: MUTED, bg: "bg-muted/10" },
   }[tone];
+
+  const borderClass = {
+    tl: "border-b sm:border-r border-border",
+    tr: "border-b border-border",
+    bl: "sm:border-r border-b sm:border-b-0 border-border",
+    br: "",
+  }[position];
+
   return (
-    <div className={`rounded-lg p-3 ${colors.bg} border ${colors.border}`}>
-      <div className="font-mono text-[7px] tracking-widest uppercase mb-2" style={{ color: colors.text }}>
+    <div className={`p-5 ${styles.bg} ${borderClass}`}>
+      <div className="font-mono text-[8px] tracking-[0.18em] uppercase font-bold mb-3" style={{ color: styles.accent }}>
         {title}
       </div>
       {items.length === 0 ? (
-        <div className="font-mono text-[10px] text-muted-foreground/30">—</div>
+        <div className="font-mono text-[10px] text-muted-foreground/20 italic">—</div>
       ) : (
-        items.map((item, i) => (
-          <div key={i} className="font-mono text-[10px] text-foreground/70 mb-1">• {item}</div>
-        ))
+        <div className="space-y-1.5">
+          {items.map((item, i) => (
+            <div key={i} className="font-mono text-[11px] text-foreground/70 leading-relaxed flex items-start gap-2">
+              <span className="opacity-40 mt-px shrink-0">•</span>
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-function ScenarioCard({ title, color, items }: { title: string; color: string; items: string[] }) {
+function ScenarioBlock({ title, color, items }: { title: string; color: string; items: string[] }) {
   return (
-    <div className="rounded-lg p-3 bg-muted/20 border border-border">
-      <div className="font-mono text-[8px] tracking-widest uppercase mb-2 font-bold" style={{ color }}>{title}</div>
+    <div className="px-5 py-4">
+      <div className="font-mono text-[8px] tracking-[0.18em] uppercase font-bold mb-3" style={{ color }}>{title}</div>
       {items.map((item, i) => (
-        <div key={i} className="font-mono text-[10px] text-foreground/70 mb-1">→ {item}</div>
+        <div key={i} className="font-mono text-[10px] text-foreground/65 mb-1.5 leading-relaxed">→ {item}</div>
       ))}
     </div>
   );
