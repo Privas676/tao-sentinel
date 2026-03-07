@@ -27,6 +27,7 @@ import { SectionHeader } from "@/components/sentinel/SectionHeader";
 import { MetricCard } from "@/components/sentinel/MetricCard";
 import { SparklineMini } from "@/components/sentinel/SparklineMini";
 import { ConfidenceBar } from "@/components/sentinel/ConfidenceBar";
+import { GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 
 /* ═══════════════════════════════════════════════ */
 /*   COMPASS — Strategic Decision Command Center  */
@@ -269,11 +270,11 @@ export default function CompassPage() {
     const sellPressure = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => s.action === "EXIT" || s.risk > 70).length / enrichedSignals.length * 100) : 0;
     const entryRatio = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => s.action === "ENTER").length / enrichedSignals.length * 100) : 0;
     return [
-      { icon: "💰", label: fr ? "Smart Capital" : "Smart Capital", value: smartCapital.state === "ACCUMULATION" ? "Accum." : smartCapital.state === "DISTRIBUTION" ? "Distrib." : "Stable", num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? "hsl(145,65%,48%)" : smartCapital.state === "DISTRIBUTION" ? "hsl(4,80%,50%)" : "hsl(var(--muted-foreground))" },
-      { icon: "📈", label: "Momentum", value: `${avgMom}`, num: avgMom, color: avgMom >= 55 ? "hsl(145,65%,48%)" : avgMom >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
-      { icon: "💧", label: fr ? "Liquidité" : "Liquidity", value: `${avgLiqEff}%`, num: avgLiqEff, color: avgLiqEff >= 60 ? "hsl(145,65%,48%)" : avgLiqEff >= 40 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
-      { icon: "📉", label: fr ? "Pression vente" : "Sell Pressure", value: `${sellPressure}%`, num: sellPressure, color: sellPressure <= 15 ? "hsl(145,65%,48%)" : sellPressure <= 30 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
-      { icon: "🎯", label: fr ? "Taux entrée" : "Entry Rate", value: `${entryRatio}%`, num: entryRatio, color: entryRatio >= 10 ? "hsl(145,65%,48%)" : entryRatio >= 3 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
+      { icon: "💰", label: fr ? "Smart Capital" : "Smart Capital", value: smartCapital.state === "ACCUMULATION" ? "Accum." : smartCapital.state === "DISTRIBUTION" ? "Distrib." : "Stable", num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? GO : smartCapital.state === "DISTRIBUTION" ? BREAK : MUTED },
+      { icon: "📈", label: "Momentum", value: `${avgMom}`, num: avgMom, color: avgMom >= 55 ? GO : avgMom >= 35 ? WARN : BREAK },
+      { icon: "💧", label: fr ? "Liquidité" : "Liquidity", value: `${avgLiqEff}%`, num: avgLiqEff, color: avgLiqEff >= 60 ? GO : avgLiqEff >= 40 ? WARN : BREAK },
+      { icon: "📉", label: fr ? "Pression vente" : "Sell Pressure", value: `${sellPressure}%`, num: sellPressure, color: sellPressure <= 15 ? GO : sellPressure <= 30 ? WARN : BREAK },
+      { icon: "🎯", label: fr ? "Taux entrée" : "Entry Rate", value: `${entryRatio}%`, num: entryRatio, color: entryRatio >= 10 ? GO : entryRatio >= 3 ? WARN : BREAK },
     ];
   }, [enrichedSignals, smartCapital, fr]);
 
@@ -293,16 +294,16 @@ export default function CompassPage() {
   }, [enrichedSignals, sentinelIndex, fr]);
 
   const sections = [
-    { key: "enter", title: fr ? "ENTRÉES" : "ENTER", emoji: "🟢", items: topRentre, count: countRentre, color: "hsl(145,65%,48%)", bg: "hsla(145,65%,48%,0.04)", border: "hsla(145,65%,48%,0.12)" },
-    { key: "hold", title: fr ? "RENFORCER" : "REINFORCE", emoji: "🟡", items: topHold, count: countHold, color: "hsl(38,92%,55%)", bg: "hsla(38,92%,55%,0.04)", border: "hsla(38,92%,55%,0.12)" },
-    { key: "exit", title: fr ? "RÉDUIRE / SORTIR" : "REDUCE / EXIT", emoji: "🔴", items: topSors, count: countSors, color: "hsl(4,80%,50%)", bg: "hsla(4,80%,50%,0.04)", border: "hsla(4,80%,50%,0.12)" },
+    { key: "enter", title: fr ? "ENTRÉES" : "ENTER", emoji: "🟢", items: topRentre, count: countRentre, color: GO, bg: `color-mix(in srgb, ${GO} 4%, transparent)`, border: `color-mix(in srgb, ${GO} 12%, transparent)` },
+    { key: "hold", title: fr ? "RENFORCER" : "REINFORCE", emoji: "🟡", items: topHold, count: countHold, color: WARN, bg: `color-mix(in srgb, ${WARN} 4%, transparent)`, border: `color-mix(in srgb, ${WARN} 12%, transparent)` },
+    { key: "exit", title: fr ? "RÉDUIRE / SORTIR" : "REDUCE / EXIT", emoji: "🔴", items: topSors, count: countSors, color: BREAK, bg: `color-mix(in srgb, ${BREAK} 4%, transparent)`, border: `color-mix(in srgb, ${BREAK} 12%, transparent)` },
   ];
 
   const rotationGroups = [
-    { key: "leaders", title: fr ? "Leaders" : "Leaders", icon: "🚀", items: rotationMap.leaders, color: "hsl(145,65%,48%)" },
-    { key: "accum", title: fr ? "Accumulation" : "Accumulation", icon: "🧲", items: rotationMap.accumulating, color: "hsl(38,92%,55%)" },
-    { key: "fragile", title: fr ? "Fragiles" : "Fragile", icon: "⚠", items: rotationMap.fragile, color: "hsl(38,70%,50%)" },
-    { key: "avoid", title: fr ? "À éviter" : "Avoid", icon: "🚫", items: rotationMap.avoid, color: "hsl(4,80%,50%)" },
+    { key: "leaders", title: fr ? "Leaders" : "Leaders", icon: "🚀", items: rotationMap.leaders, color: GO },
+    { key: "accum", title: fr ? "Accumulation" : "Accumulation", icon: "🧲", items: rotationMap.accumulating, color: WARN },
+    { key: "fragile", title: fr ? "Fragiles" : "Fragile", icon: "⚠", items: rotationMap.fragile, color: WARN },
+    { key: "avoid", title: fr ? "À éviter" : "Avoid", icon: "🚫", items: rotationMap.avoid, color: BREAK },
   ];
 
   return (
@@ -450,7 +451,7 @@ export default function CompassPage() {
                         <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTER" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</td>
                         <td className="py-2 px-2.5 text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</td>
                         <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</td>
-                        <td className="py-2 px-2.5 text-[10px]" style={{ color: s.momentumScore >= 55 ? "hsl(145,65%,48%)" : s.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>{Math.round(s.momentumScore)}</td>
+                        <td className="py-2 px-2.5 text-[10px]" style={{ color: s.momentumScore >= 55 ? GO : s.momentumScore >= 35 ? WARN : BREAK }}>{Math.round(s.momentumScore)}</td>
                         <td className="py-2 px-2.5"><SparklineMini data={s.sparkline_7d} width={50} height={16} /></td>
                       </tr>
                     ))}
@@ -478,7 +479,7 @@ export default function CompassPage() {
                   <div key={s.netuid} className="flex items-center gap-2 py-2.5 px-3 cursor-pointer hover:bg-white/[0.02] transition-all"
                     style={{ borderBottom: idx < criticalRisks.length - 1 ? "1px solid hsla(var(--destructive), 0.06)" : "none" }}
                     onClick={() => setPanelSignal(s)}>
-                    <span className="font-mono font-bold text-[11px]" style={{ color: "hsl(var(--gold))", minWidth: 48 }}>SN-{s.netuid}</span>
+                    <span className="font-mono font-bold text-[11px]" style={{ color: GOLD, minWidth: 48 }}>SN-{s.netuid}</span>
                     <span className="font-mono text-[10px] truncate flex-1 text-muted-foreground">{s.name}</span>
                     <div className="flex gap-1 flex-shrink-0">
                       {tags.map((tag, i) => (
@@ -529,7 +530,7 @@ export default function CompassPage() {
                 </span>
                 <div>
                   <div className="font-mono text-[12px] font-bold" style={{
-                    color: portfolioAlignment.status === "aligned" ? "hsl(145,65%,48%)" : portfolioAlignment.status === "partial" ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)",
+                    color: portfolioAlignment.status === "aligned" ? GO : portfolioAlignment.status === "partial" ? WARN : BREAK,
                   }}>
                     {portfolioAlignment.status === "aligned" ? (fr ? "Portefeuille aligné" : "Portfolio aligned") :
                      portfolioAlignment.status === "partial" ? (fr ? "Partiellement aligné" : "Partially aligned") :
@@ -588,7 +589,7 @@ export default function CompassPage() {
 function MiniMetric({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="font-mono text-muted-foreground uppercase" style={{ fontSize: 7, letterSpacing: "0.12em" }}>{label}</span>
+      <span className="font-mono text-muted-foreground uppercase" style={{ fontSize: 8, letterSpacing: "0.12em" }}>{label}</span>
       <span className="font-mono font-bold leading-none" style={{ color, fontSize: 13 }}>{value}</span>
     </div>
   );

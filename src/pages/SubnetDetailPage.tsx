@@ -562,7 +562,7 @@ function QuadrantBlock({ title, items, tone, position }: { title: string; items:
         <div className="space-y-1.5">
           {items.map((item, i) => (
             <div key={i} className="font-mono text-[11px] text-foreground/70 leading-relaxed flex items-start gap-2">
-              <span className="opacity-40 mt-px shrink-0">•</span>
+              <span className="text-muted-foreground mt-px shrink-0">•</span>
               <span>{item}</span>
             </div>
           ))}
@@ -577,7 +577,7 @@ function ScenarioBlock({ title, color, items }: { title: string; color: string; 
     <div className="px-5 py-4">
       <div className="font-mono text-[8px] tracking-[0.18em] uppercase font-bold mb-3" style={{ color }}>{title}</div>
       {items.map((item, i) => (
-        <div key={i} className="font-mono text-[10px] text-foreground/65 mb-1.5 leading-relaxed">→ {item}</div>
+        <div key={i} className="font-mono text-[10px] text-muted-foreground mb-1.5 leading-relaxed">→ {item}</div>
       ))}
     </div>
   );
