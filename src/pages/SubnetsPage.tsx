@@ -369,53 +369,53 @@ export default function SubnetsPage() {
               <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors sticky left-[40px] z-10 bg-background" style={{ boxShadow: "4px 0 8px -2px rgba(0,0,0,0.3)" }} onClick={() => toggleSort("name")}>
                 {t("sub.name")} {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
               </th>
-              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("verdict")}>
+              {isVisible("verdict") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("verdict")}>
                 VERDICT {sortCol === "verdict" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("dstate")}>
+              </th>}
+              {isVisible("dstate") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("dstate")}>
                 ÉTAT {sortCol === "dstate" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("status")}>
+              </th>}
+              {isVisible("status") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("status")}>
                 STATUT {sortCol === "status" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("price")}>
+              </th>}
+              {isVisible("price") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("price")}>
                 Prix α {sortCol === "price" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("var30d")}>
+              </th>}
+              {isVisible("var30d") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("var30d")}>
                 Var 30j {sortCol === "var30d" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("spark")}>
+              </th>}
+              {isVisible("spark") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("spark")}>
                 {t("tip.price7d")} {sortCol === "spark" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("opp")}>
+              </th>}
+              {isVisible("opp") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("opp")}>
                 {t("sub.opp")} {sortCol === "opp" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("risk")}>
+              </th>}
+              {isVisible("risk") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("risk")}>
                 {t("sub.risk")} {sortCol === "risk" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              {mode === "risks" && (
+              </th>}
+              {isVisible("depeg") && mode === "risks" && (
                 <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("depeg")}>
                   Depeg % {sortCol === "depeg" ? (sortDir === "desc" ? "▼" : "▲") : ""}
                 </th>
               )}
-              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("asymmetry")}>
+              {isVisible("asymmetry") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("asymmetry")}>
                 AS {sortCol === "asymmetry" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("action")}>
+              </th>}
+              {isVisible("action") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("action")}>
                 ACTION {sortCol === "action" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("momentum")}>
+              </th>}
+              {isVisible("momentum") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("momentum")}>
                 {t("sub.momentum")} {sortCol === "momentum" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("sc")}>
+              </th>}
+              {isVisible("sc") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("sc")}>
                 {t("sc.label")} {sortCol === "sc" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("confiance")}>
+              </th>}
+              {isVisible("confiance") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("confiance")}>
                 {t("data.confiance")} {sortCol === "confiance" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-center py-3 px-2">🔬</th>
-              <th className="text-center py-3 px-2" title="Market Context (TMC)">📊</th>
-              <th className="text-center py-3 px-2">✔</th>
+              </th>}
+              {isVisible("health") && <th className="text-center py-3 px-2">🔬</th>}
+              {isVisible("tmc") && <th className="text-center py-3 px-2" title="Market Context (TMC)">📊</th>}
+              {isVisible("owned") && <th className="text-center py-3 px-2">✔</th>}
             </tr>
           </thead>
           <tbody>
