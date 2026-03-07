@@ -171,7 +171,7 @@ export default function SubnetsPage() {
 
   // ── UNIFIED SCORES (single source of truth) ──
   const { scoresList, sparklines, scoreTimestamp, marketContext, dataAlignment, dataAgeDebug, decisionStates, fleetDistribution } = useSubnetScores();
-  const { verdicts } = useSubnetVerdicts();
+  const { verdicts, countRentre, countHold, countSors } = useSubnetVerdicts();
 
   const rows = useMemo(() => {
     return scoresList
