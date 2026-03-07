@@ -10,6 +10,7 @@ import {
   bubbleScoreColor,
   manipulationScoreColor,
   inefficiencyColor,
+  ammEfficiencyColor,
 } from "@/lib/stake-analytics";
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
@@ -17,6 +18,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import Sparkline from "@/components/radar/Sparkline";
 import TreemapHeatmap from "@/components/radar/TreemapHeatmap";
+import AMMPricingTable from "@/components/radar/AMMPricingTable";
 
 /* ─── Burn Ratio formatter: always show value even if tiny ─── */
 function formatBurnRatio(ratio: number): string {
