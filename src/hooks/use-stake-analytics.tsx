@@ -157,8 +157,8 @@ export function useStakeAnalytics() {
       // Fetch 7d history + raw_payload from subnet_latest (NOT subnet_latest_display which times out)
       const netuidBatches: number[][] = [];
       const allNetuids = [...latest.keys()];
-      for (let i = 0; i < allNetuids.length; i += 30) {
-        netuidBatches.push(allNetuids.slice(i, i + 30));
+      for (let i = 0; i < allNetuids.length; i += 10) {
+        netuidBatches.push(allNetuids.slice(i, i + 10));
       }
 
       const [hist7dRes, ...rawPayloadResults] = await Promise.all([
