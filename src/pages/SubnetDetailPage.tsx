@@ -267,13 +267,14 @@ export default function SubnetDetailPage() {
               position="bl"
             />
             <QuadrantBlock
-              title={fr ? "Ce qui invalide" : "Invalidates"}
+              title={fr ? "Invalidation" : "Invalidation"}
               tone="break"
               items={[
-                s.isOverridden ? "Override actif" : null,
-                s.depegProbability >= 40 ? `Depeg ${s.depegProbability}%` : null,
-                s.delistCategory !== "NORMAL" ? `Delist: ${s.delistCategory}` : null,
-                s.risk > 75 ? (fr ? "Zone danger" : "Danger zone") : null,
+                ...(verdict?.negativeReasons?.slice(0, 3) || []),
+                s.isOverridden && !(verdict?.negativeReasons?.length) ? "Override actif" : null,
+                s.depegProbability >= 40 && !(verdict?.negativeReasons?.length) ? `Depeg ${s.depegProbability}%` : null,
+                s.delistCategory !== "NORMAL" && !(verdict?.negativeReasons?.length) ? `Delist: ${s.delistCategory}` : null,
+                s.risk > 75 && !(verdict?.negativeReasons?.length) ? (fr ? "Zone danger" : "Danger zone") : null,
               ].filter(Boolean) as string[]}
               position="br"
             />

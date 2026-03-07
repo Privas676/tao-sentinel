@@ -367,7 +367,7 @@ export default function PortfolioPage() {
                     return (order[a.pAction] ?? 3) - (order[b.pAction] ?? 3);
                   }).map(r => {
                     const weight = analytics ? (analytics.totalTao > 0 ? (r.taoInvest / analytics.totalTao) * 100 : 0) : 0;
-                    const conv = Math.max(0, r.opp - r.risk);
+                    const conv = r.verdict ? Math.max(r.verdict.entryScore, r.verdict.holdScore) : Math.round(Math.abs(r.opp - r.risk) * (r.confianceScore / 100));
                     const actionColor = portfolioActionColor(r.pAction);
                     const rowBorder = r.pAction === "EXIT" ? "border-l-2 border-l-destructive/40" : r.pAction === "REDUCE" ? "border-l-2 border-l-signal-hold/40" : "";
 
