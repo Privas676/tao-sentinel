@@ -292,6 +292,33 @@ export default function SubnetsPage() {
           ))}
         </div>
 
+        {/* Verdict distribution counter */}
+        {(() => {
+          const total = countRentre + countHold + countSors;
+          if (total === 0) return null;
+          const pctR = Math.round((countRentre / total) * 100);
+          const pctH = Math.round((countHold / total) * 100);
+          const pctS = Math.round((countSors / total) * 100);
+          return (
+            <div className="flex items-center gap-3 font-mono text-[10px]"
+              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "6px 12px" }}>
+              <span className="text-white/40 tracking-widest text-[8px]">VERDICTS</span>
+              <div className="flex items-center gap-1.5">
+                <span style={{ color: "rgba(76,175,80,0.9)" }}>🟢 {countRentre}</span>
+                <span className="text-white/15">|</span>
+                <span style={{ color: "rgba(255,193,7,0.85)" }}>🟡 {countHold}</span>
+                <span className="text-white/15">|</span>
+                <span style={{ color: "rgba(229,57,53,0.9)" }}>🔴 {countSors}</span>
+              </div>
+              <div className="flex h-2 rounded-full overflow-hidden" style={{ width: 80, background: "rgba(255,255,255,0.05)" }}>
+                {pctR > 0 && <div className="h-full transition-all" style={{ width: `${pctR}%`, background: "rgba(76,175,80,0.7)" }} />}
+                {pctH > 0 && <div className="h-full transition-all" style={{ width: `${pctH}%`, background: "rgba(255,193,7,0.5)" }} />}
+                {pctS > 0 && <div className="h-full transition-all" style={{ width: `${pctS}%`, background: "rgba(229,57,53,0.7)" }} />}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Override ratio indicator — visible in Risques view */}
         {mode === "risks" && (() => {
           const total = scoresList.filter(s => s.assetType !== "CORE_NETWORK").length;
