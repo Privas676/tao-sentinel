@@ -187,7 +187,7 @@ export default function RadarPage() {
         <div className="space-y-1">
           <h1 className="font-mono text-xl font-bold text-foreground tracking-tight">📡 Radar Intelligence</h1>
           <p className="font-mono text-[11px] text-muted-foreground">
-            Flux de capital · Narratives · Bulles · Manipulations · Alpha Fair Value · {search ? `${filtered.length}/` : ""}{radarData.length} subnets
+            Capital · Risk · AMM · Economics · Smart Money · {search ? `${filtered.length}/` : ""}{radarData.length} subnets
           </p>
         </div>
 
