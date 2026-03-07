@@ -223,7 +223,18 @@ export default function SubnetsPage() {
 
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug } = useSubnetScores();
-  const { verdicts, countRentre, countHold, countSors, isLoading: verdictLoading } = useSubnetVerdicts();
+  const { verdicts, isLoading: verdictLoading } = useSubnetVerdicts();
+
+  // ── Action counts from engine (single source of truth) ──
+  const actionCounts = useMemo(() => {
+    let enter = 0, hold = 0, exit = 0;
+    for (const s of scoresList) {
+      if (s.action === "ENTER") enter++;
+      else if (s.action === "EXIT") exit++;
+      else hold++; // HOLD, STAKE, NEUTRAL, WATCH all map to "Attendre" filter
+    }
+    return { enter, hold, exit };
+  }, [scoresList]);
 
   // ── Filters ──
   const [scope, setScope] = useState<ScopeFilter>("ALL");
@@ -424,12 +435,12 @@ export default function SubnetsPage() {
             <FilterSep />
             <FilterGroup label="ACTION">
               <FilterChipGroup
-                chips={[
-                  { key: "ALL", label: fr ? "Toutes" : "All" },
-                  { key: "ENTER", label: fr ? "Entrer" : "Enter", count: countRentre || undefined },
-                  { key: "HOLD", label: fr ? "Attendre" : "Hold", count: countHold || undefined },
-                  { key: "EXIT", label: fr ? "Sortir" : "Exit", count: countSors || undefined },
-                ]}
+                 chips={[
+                   { key: "ALL", label: fr ? "Toutes" : "All" },
+                   { key: "ENTER", label: fr ? "Entrer" : "Enter", count: actionCounts.enter || undefined },
+                   { key: "HOLD", label: fr ? "Attendre" : "Hold", count: actionCounts.hold || undefined },
+                   { key: "EXIT", label: fr ? "Sortir" : "Exit", count: actionCounts.exit || undefined },
+                 ]}
                 active={actionFilter}
                 onChange={v => setActionFilter(v as ActionFilter)}
               />

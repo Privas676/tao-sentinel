@@ -1,6 +1,4 @@
 import { useState, useMemo, useRef } from "react";
-import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
-import { VerdictRow } from "@/components/VerdictBadge";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -205,8 +203,16 @@ export default function CompassPage() {
 
   useAuditLogger(enrichedSignals, scoreTimestamp, dataAlignment ?? "UNKNOWN", dataConfidence, killSwitch, fleetDistribution);
 
-  // ── Verdict engine ──
-  const { topRentre, topHold, topSors, countRentre, countHold, countSors, isLoading: verdictLoading } = useSubnetVerdicts();
+  // ── Engine-action-based priority groups (single source of truth) ──
+  const priorityGroups = useMemo(() => {
+    const enterGroup = enrichedSignals.filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const holdGroup = enrichedSignals.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const exitGroup = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const enterCount = enrichedSignals.filter(s => s.action === "ENTER" && !s.isOverridden).length;
+    const holdCount = enrichedSignals.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).length;
+    const exitCount = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    return { enterGroup, holdGroup, exitGroup, enterCount, holdCount, exitCount };
+  }, [enrichedSignals]);
 
   // ── Best opportunity & worst risk ──
   const bestOpp = useMemo(() => {
@@ -305,9 +311,9 @@ export default function CompassPage() {
   }, [enrichedSignals, sentinelIndex, fr, bestOpp, worstRisk]);
 
   const sections = [
-    { key: "enter", title: fr ? "ENTRER" : "ENTER", emoji: "🟢", items: topRentre, count: countRentre, color: GO, bg: `color-mix(in srgb, ${GO} 4%, transparent)`, border: `color-mix(in srgb, ${GO} 12%, transparent)` },
-    { key: "hold", title: fr ? "RENFORCER" : "REINFORCE", emoji: "🟡", items: topHold, count: countHold, color: WARN, bg: `color-mix(in srgb, ${WARN} 4%, transparent)`, border: `color-mix(in srgb, ${WARN} 12%, transparent)` },
-    { key: "exit", title: fr ? "SORTIR" : "EXIT", emoji: "🔴", items: topSors, count: countSors, color: BREAK, bg: `color-mix(in srgb, ${BREAK} 4%, transparent)`, border: `color-mix(in srgb, ${BREAK} 12%, transparent)` },
+    { key: "enter", title: fr ? "ENTRER" : "ENTER", emoji: "🟢", items: priorityGroups.enterGroup, count: priorityGroups.enterCount, color: GO, bg: `color-mix(in srgb, ${GO} 4%, transparent)`, border: `color-mix(in srgb, ${GO} 12%, transparent)` },
+    { key: "hold", title: fr ? "SURVEILLER" : "WATCH", emoji: "🟡", items: priorityGroups.holdGroup, count: priorityGroups.holdCount, color: WARN, bg: `color-mix(in srgb, ${WARN} 4%, transparent)`, border: `color-mix(in srgb, ${WARN} 12%, transparent)` },
+    { key: "exit", title: fr ? "SORTIR" : "EXIT", emoji: "🔴", items: priorityGroups.exitGroup, count: priorityGroups.exitCount, color: BREAK, bg: `color-mix(in srgb, ${BREAK} 4%, transparent)`, border: `color-mix(in srgb, ${BREAK} 12%, transparent)` },
   ];
 
   const rotationGroups = [
@@ -383,10 +389,10 @@ export default function CompassPage() {
                     />
                     <DirectiveCard
                       label={fr ? "SORTIES" : "EXITS"}
-                      value={countSors}
+                      value={priorityGroups.exitCount}
                       sub={fr ? "à exécuter" : "to execute"}
-                      color={countSors > 0 ? BREAK : MUTED}
-                      icon={countSors > 0 ? "⚠" : "✓"}
+                      color={priorityGroups.exitCount > 0 ? BREAK : MUTED}
+                      icon={priorityGroups.exitCount > 0 ? "⚠" : "✓"}
                     />
                   </div>
 
@@ -427,7 +433,7 @@ export default function CompassPage() {
               </div>
             }
           />
-          {verdictLoading ? (
+          {enrichedSignals.length === 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[0, 1, 2].map(i => (
                 <div key={i} className="rounded-xl h-48 animate-pulse" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }} />
@@ -441,10 +447,17 @@ export default function CompassPage() {
                     <span className="font-mono text-[10px] font-bold tracking-wider" style={{ color: s.color }}>{s.emoji} {s.title}</span>
                     <span className="font-mono text-[8px] text-muted-foreground">{s.count}</span>
                   </div>
-                  {s.items.length > 0 ? s.items.slice(0, 5).map(v => (
-                    <VerdictRow key={v.netuid} netuid={v.netuid} name={v.name} verdict={v.verdict} confidence={v.confidence}
-                      mainScore={v.verdict === "SORS" ? v.exitRisk : v.verdict === "RENTRE" ? v.entryScore : v.holdScore}
-                      positiveReasons={v.positiveReasons} negativeReasons={v.negativeReasons} />
+                  {s.items.length > 0 ? s.items.slice(0, 5).map((v, idx) => (
+                    <div key={v.netuid} className="flex items-center gap-2 py-2 px-3 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                      style={{ borderBottom: idx < Math.min(s.items.length, 5) - 1 ? `1px solid ${s.border}` : "none" }}
+                      onClick={() => setPanelSignal(v)}>
+                      <span className="font-mono text-[10px] font-bold" style={{ color: GOLD, minWidth: 36 }}>SN-{v.netuid}</span>
+                      <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(v.action) }}>{actionIcon(v.action)} {actionLabel(v.action, fr)}</span>
+                      <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{v.overrideReasons[0] || v.name}</span>
+                      <span className="font-mono text-[10px] font-bold" style={{ color: s.key === "exit" ? riskColor(v.risk) : opportunityColor(v.opp) }}>
+                        {s.key === "exit" ? v.risk : v.opp}
+                      </span>
+                    </div>
                   )) : (
                     <div className="py-4 text-center font-mono text-[10px] text-muted-foreground">{fr ? "Aucun" : "None"}</div>
                   )}
