@@ -85,7 +85,7 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
           <div className="flex items-center justify-center gap-8">
             <div className="text-center">
               <div className="font-mono text-2xl font-bold" style={{ color: opportunityColor(signal.opp) }}>{signal.opp}</div>
-              <div className="font-mono text-[9px] text-muted-foreground/50 tracking-widest">{t("gauge.opportunity")}</div>
+              <div className="font-mono text-[9px] text-muted-foreground/70 tracking-widest">{t("gauge.opportunity")}</div>
             </div>
             <div className="w-px h-8 bg-border" />
             <div className="text-center">
