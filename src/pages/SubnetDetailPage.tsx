@@ -504,7 +504,7 @@ export default function SubnetDetailPage() {
                       <span className={`font-mono text-[10px] ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                         {fr ? labels[p].fr : labels[p].en}
                       </span>
-                      {active && <span className="font-mono text-[8px] text-muted-foreground/40 ml-auto">◄</span>}
+                      {active && <span className="font-mono text-[8px] text-muted-foreground ml-auto">◄</span>}
                     </div>
                   );
                 })}
