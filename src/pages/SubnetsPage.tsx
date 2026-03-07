@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useColumnConfig, ColumnConfigPanel, type ColumnKey } from "@/components/ColumnConfig";
 import SwipeHint from "@/components/SwipeHint";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
