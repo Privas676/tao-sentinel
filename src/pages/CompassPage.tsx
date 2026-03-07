@@ -247,7 +247,7 @@ export default function CompassPage() {
       const sig = enrichedSignals.find(s => s.netuid === netuid);
       if (!sig) { watching++; continue; }
       if (sig.action === "EXIT" || sig.isOverridden) misaligned++;
-      else if (sig.action === "ENTRY" || sig.action === "HOLD") aligned++;
+      else if (sig.action === "ENTER" || sig.action === "HOLD") aligned++;
       else watching++;
     }
     const total = held.length;
