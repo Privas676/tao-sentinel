@@ -349,7 +349,7 @@ export default function PortfolioPage() {
                   const delta = targetWeight - w.weight;
                   return (
                     <div key={w.netuid} className="flex items-center gap-3">
-                      <Link to={`/subnets/${w.netuid}`} className="font-mono text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors w-[110px] shrink-0 truncate">
+                      <Link to={`/subnets/${w.netuid}`} className="font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors w-[110px] shrink-0 truncate">
                         SN-{w.netuid} {w.name}
                       </Link>
                       <div className="flex-1 flex items-center gap-1.5">
