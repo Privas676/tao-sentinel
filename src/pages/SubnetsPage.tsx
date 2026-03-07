@@ -137,8 +137,8 @@ function ScoreBar({ label, score, inverted }: { label: string; score: number; in
 
 
 
-type SortCol = "netuid" | "name" | "status" | "dstate" | "price" | "var30d" | "spark" | "opp" | "risk" | "depeg" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | null;
-type ViewMode = "all" | "opportunities" | "risks" | "mine";
+type SortCol = "netuid" | "name" | "status" | "dstate" | "price" | "var30d" | "spark" | "opp" | "risk" | "depeg" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | "verdict" | null;
+type ViewMode = "all" | "opportunities" | "risks" | "mine" | "rentre" | "hold" | "sors";
 
 function scColor(state: SmartCapitalState): string {
   switch (state) {
