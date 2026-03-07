@@ -356,7 +356,7 @@ export default function PortfolioPage() {
                         <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/20 relative">
                           <div className="h-full rounded-full bg-muted-foreground/25" style={{ width: `${Math.min(100, w.weight)}%` }} />
                         </div>
-                        <span className="font-mono text-[9px] text-muted-foreground/45 w-10 text-right">{w.weight.toFixed(1)}%</span>
+                        <span className="font-mono text-[9px] text-muted-foreground w-10 text-right">{w.weight.toFixed(1)}%</span>
                       </div>
                       <span className="font-mono text-[9px] w-6 text-center" style={{ color: delta > 2 ? GO : delta < -2 ? BREAK : MUTED }}>
                         {delta > 0 ? "↑" : delta < -1 ? "↓" : "="}
