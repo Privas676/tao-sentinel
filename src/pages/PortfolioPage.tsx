@@ -178,10 +178,10 @@ export default function PortfolioPage() {
     }, 0) / rows.length;
     const avgRisk = rows.reduce((a, r) => a + r.risk, 0) / rows.length;
     const maxWeight = Math.max(...weights.map(w => w.weight));
-    const reinforceCount = rows.filter(r => r.pAction === "REINFORCE").length;
-    const reduceCount = rows.filter(r => r.pAction === "REDUCE").length;
-    const exitCount = rows.filter(r => r.pAction === "EXIT").length;
-    const holdCount = rows.filter(r => r.pAction === "HOLD").length;
+    const reinforceCount = rows.filter(r => r.pAction === "RENFORCER").length;
+    const reduceCount = rows.filter(r => r.pAction === "RÉDUIRE").length;
+    const exitCount = rows.filter(r => r.pAction === "SORTIR").length;
+    const holdCount = rows.filter(r => r.pAction === "CONSERVER").length;
     const fragilePositions = rows.filter(r => r.isOverridden || r.depegProbability >= 30 || r.risk > 70);
 
     // Alignment score
