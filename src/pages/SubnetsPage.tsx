@@ -94,21 +94,6 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
   const thesis = verdict?.positiveReasons?.slice(0, 3) || [];
   const invalidation = verdict?.negativeReasons?.slice(0, 3) || [];
 
-  /* Build "3 reasons" dynamically */
-  const reasons: { icon: string; text: string; tone: "go" | "warn" | "break" }[] = [];
-  if (row.opp > 55) reasons.push({ icon: "◆", text: fr ? `Opportunité ${row.opp}/100` : `Opportunity ${row.opp}/100`, tone: "go" });
-  if (row.momentumScore >= 55) reasons.push({ icon: "▲", text: fr ? `Momentum haussier (${Math.round(row.momentumScore)})` : `Bullish momentum (${Math.round(row.momentumScore)})`, tone: "go" });
-  if (row.convictionLevel === "HIGH") reasons.push({ icon: "★", text: fr ? "Conviction haute" : "High conviction", tone: "go" });
-  if (row.liquidityLevel === "HIGH") reasons.push({ icon: "●", text: fr ? "Liquidité solide" : "Strong liquidity", tone: "go" });
-  if (row.structureLevel === "HEALTHY") reasons.push({ icon: "✓", text: fr ? "Structure saine" : "Healthy structure", tone: "go" });
-  if (row.risk > 60) reasons.push({ icon: "⚠", text: fr ? `Risque élevé (${row.risk})` : `High risk (${row.risk})`, tone: "warn" });
-  if (row.risk > 75) reasons.push({ icon: "🔴", text: fr ? "Zone dangereuse" : "Danger zone", tone: "break" });
-  if (row.liquidityLevel === "LOW") reasons.push({ icon: "○", text: fr ? "Liquidité faible" : "Low liquidity", tone: "break" });
-  if (row.structureLevel === "CONCENTRATED") reasons.push({ icon: "✕", text: fr ? "Structure concentrée" : "Concentrated structure", tone: "warn" });
-  const top3 = reasons.slice(0, 3);
-
-  const toneColor = (t: "go" | "warn" | "break") =>
-    t === "go" ? "hsl(var(--signal-go))" : t === "warn" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
 
   /* Alerts */
   const alerts: { icon: string; text: string; color: string }[] = [];
@@ -120,7 +105,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[420px] border-l border-border bg-background text-foreground overflow-y-auto p-0">
-        {/* ── Header band ── */}
+        {/* ── Header: SN + Action + Signal ── */}
         <div className="px-5 pt-5 pb-4 border-b border-border">
           <SheetHeader>
             <div className="flex items-center justify-between">
@@ -131,30 +116,27 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
               <StatusBadge type={row.statusLevel === "DANGER" ? "danger" : row.statusLevel === "WATCH" ? "warning" : "success"} label={row.statusLevel} />
             </div>
           </SheetHeader>
-
-          {/* Action badge centered */}
-          <div className="flex items-center justify-center mt-4">
+          <div className="flex items-center justify-between mt-3">
             <ActionBadge action={row.action === "ENTER" ? "RENTRE" : row.action === "EXIT" ? "SORS" : row.action === "STAKE" ? "RENFORCER" : "HOLD"} />
+            <span className="font-mono text-[11px] font-bold text-foreground/80">{row.signalPrincipal}</span>
           </div>
         </div>
 
         {/* ── Body ── */}
         <div className="px-5 py-4 space-y-4">
 
-          {/* Signal principal */}
-          <div className="rounded-lg px-3 py-2.5 bg-muted/40 border border-border">
-            <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-1">SIGNAL PRINCIPAL</div>
-            <div className="font-mono text-[12px] font-bold text-foreground/90">{row.signalPrincipal}</div>
+          {/* Primary decision metrics — 2x2 */}
+          <div className="grid grid-cols-2 gap-2">
+            <MetricMini label="CONVICTION" value={row.convictionLevel} color={row.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : row.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))"} />
+            <MetricMini label="RISK" value={row.risk} color={riskColor(row.risk)} />
           </div>
 
-          {/* Metrics grid — 2x3 */}
-          <div className="grid grid-cols-3 gap-2">
-            <MetricMini label="CONVICTION" value={row.convictionLevel} color={row.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : row.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))"} />
-            <MetricMini label="CONFIDENCE" value={`${row.confianceScore}%`} color={confianceColor(row.confianceScore)} />
-            <MetricMini label="RISK" value={row.risk} color={riskColor(row.risk)} />
-            <MetricMini label="MOMENTUM" value={Math.round(row.momentumScore)} color={row.momentumScore >= 55 ? "hsl(var(--signal-go))" : row.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
+          {/* Secondary metrics — 2x2 */}
+          <div className="grid grid-cols-4 gap-2">
+            <MetricMini label="MOM." value={Math.round(row.momentumScore)} color={row.momentumScore >= 55 ? "hsl(var(--signal-go))" : row.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
             <MetricMini label="OPP" value={row.opp} color={opportunityColor(row.opp)} />
-            <MetricMini label={fr ? "LIQ." : "LIQ."} value={row.liquidityLevel} color={row.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : row.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
+            <MetricMini label="CONF" value={`${row.confianceScore}%`} color={confianceColor(row.confianceScore)} />
+            <MetricMini label="LIQ." value={row.liquidityLevel === "HIGH" ? "●" : row.liquidityLevel === "MEDIUM" ? "◐" : "○"} color={row.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : row.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))"} />
           </div>
 
           {/* Sparkline */}
@@ -165,24 +147,9 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
             </div>
           )}
 
-          {/* 3 Reasons */}
-          {top3.length > 0 && (
-            <div className="rounded-lg p-3 bg-muted/20 border border-border">
-              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
-                {fr ? "POINTS CLÉS" : "KEY POINTS"}
-              </div>
-              {top3.map((r, i) => (
-                <div key={i} className="flex items-center gap-2 mb-1.5 last:mb-0">
-                  <span className="text-[10px]" style={{ color: toneColor(r.tone) }}>{r.icon}</span>
-                  <span className="font-mono text-[11px] text-foreground/80">{r.text}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Thesis */}
           {thesis.length > 0 && (
-            <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-go), 0.03)", border: "1px solid hsla(var(--signal-go), 0.08)" }}>
+            <div className="rounded-lg p-3 bg-primary/[0.03] border border-primary/10">
               <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
                 {fr ? "THÈSE" : "THESIS"}
               </div>
@@ -192,7 +159,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
 
           {/* Invalidation */}
           {invalidation.length > 0 && (
-            <div className="rounded-lg p-3" style={{ background: "hsla(var(--signal-break), 0.03)", border: "1px solid hsla(var(--signal-break), 0.08)" }}>
+            <div className="rounded-lg p-3 bg-destructive/[0.03] border border-destructive/10">
               <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
                 INVALIDATION
               </div>
@@ -214,9 +181,6 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
               ))}
             </div>
           )}
-
-          {/* Confidence bar */}
-          <ConfidenceBar value={row.confianceScore} label="DATA CONFIDENCE" height={4} />
         </div>
 
         {/* ── Footer CTAs ── */}
@@ -249,9 +213,9 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
 
 function MetricMini({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
-    <div className="rounded-lg px-3 py-2 text-center bg-muted/30 border border-border">
+    <div className="rounded-lg px-2.5 py-2 text-center bg-muted/30 border border-border">
       <div className="font-mono text-[7px] text-muted-foreground/65 tracking-wider uppercase">{label}</div>
-      <div className="font-mono text-lg font-bold mt-0.5" style={{ color }}>{value}</div>
+      <div className="font-mono text-sm font-bold mt-0.5" style={{ color }}>{value}</div>
     </div>
   );
 }
@@ -420,7 +384,7 @@ export default function SubnetsPage() {
         {/* Verdict counts integrated into filter bar below — no separate distribution bar */}
 
         {/* ═══ FILTER BAR ═══ */}
-        <div className="rounded-xl p-3 space-y-2.5" style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+        <div className="rounded-xl p-3 space-y-2.5 bg-muted/15 border border-border">
           {/* Search + controls row */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1" style={{ minWidth: 180, maxWidth: 300 }}>
@@ -429,8 +393,7 @@ export default function SubnetsPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder={fr ? "Rechercher un subnet…" : "Search subnet…"}
-                className="w-full font-mono text-[11px] px-3 py-1.5 rounded-lg bg-background text-foreground placeholder:text-muted-foreground/40"
-                style={{ border: "1px solid hsla(0,0%,100%,0.08)" }}
+                className="w-full font-mono text-[11px] px-3 py-1.5 rounded-lg bg-background text-foreground placeholder:text-muted-foreground/40 border border-border"
               />
             </div>
             {hasActiveFilters && (
@@ -438,7 +401,7 @@ export default function SubnetsPage() {
                 ✕ {fr ? "Reset" : "Reset"}
               </button>
             )}
-            <button onClick={saveCurrentView} className="font-mono text-[9px] px-2.5 py-1 rounded-lg text-muted-foreground/65 hover:text-foreground transition-colors" style={{ border: "1px solid hsla(0,0%,100%,0.06)" }}>
+            <button onClick={saveCurrentView} className="font-mono text-[9px] px-2.5 py-1 rounded-lg text-muted-foreground/65 hover:text-foreground transition-colors border border-border">
               💾 {fr ? "Sauvegarder" : "Save view"}
             </button>
             {savedViews.length > 0 && savedViews.map((v, i) => (
@@ -536,11 +499,11 @@ export default function SubnetsPage() {
         {/* ═══ MASTER TABLE ═══ */}
         <SwipeHint storageKey="swipe-subnets-v4" />
 
-        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid hsla(0,0%,100%,0.05)" }}>
+        <div className="rounded-xl overflow-hidden border border-border">
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
             <table className="w-full font-mono" style={{ minWidth: 1100 }}>
               <thead>
-                <tr style={{ background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.06)" }}>
+                <tr className="bg-muted/20 border-b border-border">
                   <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 sticky left-0 z-10 bg-background cursor-pointer" onClick={() => toggleSort("netuid")}>
                     SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
                   </th>
@@ -577,7 +540,7 @@ export default function SubnetsPage() {
                       key={r.netuid}
                       className="transition-colors cursor-pointer hover:bg-accent/30"
                       style={{
-                        borderBottom: "1px solid hsla(0,0%,100%,0.03)",
+                        borderBottom: "1px solid hsl(var(--border))",
                         ...(r.isOverridden ? { background: "hsla(var(--signal-break), 0.03)", borderLeft: "2px solid hsla(var(--signal-break), 0.4)" } : {}),
                       }}
                       onClick={() => setDrawerRow(r)}
