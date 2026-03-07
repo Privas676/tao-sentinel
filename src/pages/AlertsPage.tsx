@@ -316,7 +316,6 @@ function AlertCard({ group, fr, scores, onDismiss }: {
           <span className="font-mono text-[10px] font-bold" style={{ color: info.color }}>
             {info.icon} {info.label}
           </span>
-          <span className="font-mono text-[9px] text-muted-foreground/30 tracking-wider">{info.category}</span>
           {ev.netuid != null && (
             <Link to={`/subnets/${ev.netuid}`} onClick={e => e.stopPropagation()} className="font-mono text-[11px] text-foreground/60 hover:text-foreground transition-colors">
               SN-{ev.netuid}
