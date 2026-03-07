@@ -339,33 +339,7 @@ export default function SubnetsPage() {
           }
         />
 
-        {/* ═══ VERDICT DISTRIBUTION ═══ */}
-        {total > 0 && (
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2 font-mono text-[10px]">
-              <button onClick={() => setActionFilter(actionFilter === "ENTER" ? "ALL" : "ENTER")}
-                className={`px-2.5 py-1 rounded transition-all ${actionFilter === "ENTER" ? "font-bold" : "opacity-70 hover:opacity-100"}`}
-                style={{ background: actionFilter === "ENTER" ? "hsla(145,65%,48%,0.1)" : "transparent", color: "hsl(145,65%,48%)", border: actionFilter === "ENTER" ? "1px solid hsla(145,65%,48%,0.2)" : "1px solid transparent" }}>
-                🟢 {countRentre}
-              </button>
-              <button onClick={() => setActionFilter(actionFilter === "HOLD" ? "ALL" : "HOLD")}
-                className={`px-2.5 py-1 rounded transition-all ${actionFilter === "HOLD" ? "font-bold" : "opacity-70 hover:opacity-100"}`}
-                style={{ background: actionFilter === "HOLD" ? "hsla(38,92%,55%,0.1)" : "transparent", color: "hsl(38,92%,55%)", border: actionFilter === "HOLD" ? "1px solid hsla(38,92%,55%,0.2)" : "1px solid transparent" }}>
-                🟡 {countHold}
-              </button>
-              <button onClick={() => setActionFilter(actionFilter === "EXIT" ? "ALL" : "EXIT")}
-                className={`px-2.5 py-1 rounded transition-all ${actionFilter === "EXIT" ? "font-bold" : "opacity-70 hover:opacity-100"}`}
-                style={{ background: actionFilter === "EXIT" ? "hsla(4,80%,50%,0.1)" : "transparent", color: "hsl(4,80%,50%)", border: actionFilter === "EXIT" ? "1px solid hsla(4,80%,50%,0.2)" : "1px solid transparent" }}>
-                🔴 {countSors}
-              </button>
-            </div>
-            <div className="flex h-2 rounded-full overflow-hidden" style={{ width: 100, background: "hsla(0,0%,100%,0.04)" }}>
-              {countRentre > 0 && <div className="h-full" style={{ width: `${(countRentre / total) * 100}%`, background: "hsl(145,65%,48%)" }} />}
-              {countHold > 0 && <div className="h-full" style={{ width: `${(countHold / total) * 100}%`, background: "hsl(38,92%,55%)" }} />}
-              {countSors > 0 && <div className="h-full" style={{ width: `${(countSors / total) * 100}%`, background: "hsl(4,80%,50%)" }} />}
-            </div>
-          </div>
-        )}
+        {/* Verdict counts integrated into filter bar below — no separate distribution bar */}
 
         {/* ═══ FILTER BAR ═══ */}
         <div className="rounded-xl p-3 space-y-2.5" style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
