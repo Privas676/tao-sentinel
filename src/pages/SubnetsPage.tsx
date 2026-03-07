@@ -370,74 +370,86 @@ export default function SubnetsPage() {
             ))}
           </div>
 
-          {/* Filter chips */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Tous" : "All" },
-                { key: "PORTFOLIO", label: "Portfolio" },
-              ]}
-              active={scope}
-              onChange={v => setScope(v as ScopeFilter)}
-            />
-            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Toutes" : "All" },
-                { key: "ENTER", label: fr ? "Entrer" : "Enter" },
-                { key: "HOLD", label: fr ? "Attendre" : "Hold" },
-                { key: "EXIT", label: fr ? "Sortir" : "Exit" },
-              ]}
-              active={actionFilter}
-              onChange={v => setActionFilter(v as ActionFilter)}
-            />
-            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Tous" : "All" },
-                { key: "OK", label: "OK" },
-                { key: "WATCH", label: "⚠" },
-                { key: "DANGER", label: "🔴" },
-              ]}
-              active={statusFilter}
-              onChange={v => setStatusFilter(v as StatusFilter)}
-            />
-            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Toutes" : "All" },
-                { key: "HIGH", label: fr ? "Haute" : "High" },
-                { key: "MEDIUM", label: fr ? "Moy." : "Med" },
-                { key: "LOW", label: fr ? "Faible" : "Low" },
-              ]}
-              active={convictionFilter}
-              onChange={v => setConvictionFilter(v as ConvictionFilter)}
-            />
+          {/* Filter chips — labeled groups */}
+          <div className="flex items-start gap-4 flex-wrap">
+            <FilterGroup label="SCOPE">
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Tous" : "All" },
+                  { key: "PORTFOLIO", label: "Portfolio" },
+                ]}
+                active={scope}
+                onChange={v => setScope(v as ScopeFilter)}
+              />
+            </FilterGroup>
+            <FilterSep />
+            <FilterGroup label="ACTION">
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Toutes" : "All" },
+                  { key: "ENTER", label: fr ? "Entrer" : "Enter", count: countRentre || undefined },
+                  { key: "HOLD", label: fr ? "Attendre" : "Hold", count: countHold || undefined },
+                  { key: "EXIT", label: fr ? "Sortir" : "Exit", count: countSors || undefined },
+                ]}
+                active={actionFilter}
+                onChange={v => setActionFilter(v as ActionFilter)}
+              />
+            </FilterGroup>
+            <FilterSep />
+            <FilterGroup label={fr ? "STATUT" : "STATUS"}>
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Tous" : "All" },
+                  { key: "OK", label: "OK" },
+                  { key: "WATCH", label: "⚠" },
+                  { key: "DANGER", label: "🔴" },
+                ]}
+                active={statusFilter}
+                onChange={v => setStatusFilter(v as StatusFilter)}
+              />
+            </FilterGroup>
+            <FilterSep />
+            <FilterGroup label="CONVICTION">
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Toutes" : "All" },
+                  { key: "HIGH", label: fr ? "Haute" : "High" },
+                  { key: "MEDIUM", label: fr ? "Moy." : "Med" },
+                  { key: "LOW", label: fr ? "Faible" : "Low" },
+                ]}
+                active={convictionFilter}
+                onChange={v => setConvictionFilter(v as ConvictionFilter)}
+              />
+            </FilterGroup>
           </div>
           {/* Second row — advanced filters */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Toutes" : "All" },
-                { key: "HIGH", label: fr ? "Haute" : "High" },
-                { key: "MEDIUM", label: fr ? "Moy." : "Med" },
-                { key: "LOW", label: fr ? "Faible" : "Low" },
-              ]}
-              active={liquidityFilter}
-              onChange={v => setLiquidityFilter(v as LiquidityFilter)}
-            />
-            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
-            <FilterChipGroup
-              chips={[
-                { key: "ALL", label: fr ? "Toutes" : "All" },
-                { key: "HEALTHY", label: fr ? "Saine" : "Healthy" },
-                { key: "FRAGILE", label: fr ? "Fragile" : "Fragile" },
-                { key: "CONCENTRATED", label: fr ? "Concentrée" : "Conc." },
-              ]}
-              active={structureFilter}
-              onChange={v => setStructureFilter(v as StructureFilter)}
-            />
-            <span className="ml-auto font-mono text-[9px] text-muted-foreground/65">
+          <div className="flex items-start gap-4 flex-wrap">
+            <FilterGroup label={fr ? "LIQUIDITÉ" : "LIQUIDITY"}>
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Toutes" : "All" },
+                  { key: "HIGH", label: fr ? "Haute" : "High" },
+                  { key: "MEDIUM", label: fr ? "Moy." : "Med" },
+                  { key: "LOW", label: fr ? "Faible" : "Low" },
+                ]}
+                active={liquidityFilter}
+                onChange={v => setLiquidityFilter(v as LiquidityFilter)}
+              />
+            </FilterGroup>
+            <FilterSep />
+            <FilterGroup label="STRUCTURE">
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Toutes" : "All" },
+                  { key: "HEALTHY", label: fr ? "Saine" : "Healthy" },
+                  { key: "FRAGILE", label: fr ? "Fragile" : "Fragile" },
+                  { key: "CONCENTRATED", label: fr ? "Concentrée" : "Conc." },
+                ]}
+                active={structureFilter}
+                onChange={v => setStructureFilter(v as StructureFilter)}
+              />
+            </FilterGroup>
+            <span className="ml-auto font-mono text-[9px] text-muted-foreground/65 self-end pb-0.5">
               {rows.length} / {scoresList.length} {fr ? "résultats" : "results"}
             </span>
           </div>
