@@ -483,12 +483,8 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
       </CollapsibleSection>
 
       {/* ═══ DECISION ENGINE — TOP 5 ═══ */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="font-mono tracking-[0.2em] uppercase font-bold" style={{ fontSize: 10, color: "rgba(255,215,0,0.5)" }}>
-            DECISION ENGINE
-          </span>
-          <div className="flex-1 h-px" style={{ background: "rgba(255,215,0,0.08)" }} />
+      <CollapsibleSection title="DECISION ENGINE" icon="⚙" color="rgba(255,215,0,0.5)" lineColor="rgba(255,215,0,0.08)"
+        badge={
           <div className="flex gap-2">
             {sections.map(s => (
               <span key={s.title} className="font-mono text-[9px] px-2 py-0.5 rounded" style={{ background: `${s.color}15`, color: s.color, border: `1px solid ${s.color}40` }}>
@@ -496,7 +492,7 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
               </span>
             ))}
           </div>
-        </div>
+        }>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {sections.map(s => (
             <div key={s.title} className="rounded-xl" style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)" }}>
@@ -521,7 +517,7 @@ function VerdictSummaryPanel({ enrichedSignals, smartCapitalState, sentinelIndex
             </div>
           ))}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* ═══ RISQUES CRITIQUES ═══ */}
       {criticalRisks.length > 0 && (
