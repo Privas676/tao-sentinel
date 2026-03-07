@@ -119,7 +119,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               >
                 TAO Sentinel
               </span>
-              <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground/50">
+              <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground">
                 Intelligence Terminal
               </span>
             </div>
