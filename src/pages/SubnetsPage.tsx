@@ -17,6 +17,7 @@ import {
   actionColor, actionIcon, actionLabel,
 } from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
+import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
 
 /* ═══════════════════════════════════════════════ */
 /*   SUBNET INTELLIGENCE — Unified Master Table   */
