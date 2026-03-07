@@ -411,7 +411,7 @@ export default function CompassPage() {
                 <div key={s.key} className="rounded-xl overflow-hidden" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
                   <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${s.border}` }}>
                     <span className="font-mono text-[10px] font-bold tracking-wider" style={{ color: s.color }}>{s.emoji} {s.title}</span>
-                    <span className="font-mono text-[8px] text-muted-foreground/65">{s.count}</span>
+                    <span className="font-mono text-[8px] text-muted-foreground">{s.count}</span>
                   </div>
                   {s.items.length > 0 ? s.items.slice(0, 5).map(v => (
                     <VerdictRow key={v.netuid} netuid={v.netuid} name={v.name} verdict={v.verdict} confidence={v.confidence}
