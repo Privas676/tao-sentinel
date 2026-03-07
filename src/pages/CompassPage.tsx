@@ -531,7 +531,7 @@ export default function CompassPage() {
                      portfolioAlignment.status === "partial" ? (fr ? "Partiellement aligné" : "Partially aligned") :
                      (fr ? "Désalignement détecté" : "Misalignment detected")}
                   </div>
-                  <div className="font-mono text-[9px] text-muted-foreground/35 mt-0.5">
+                  <div className="font-mono text-[9px] text-muted-foreground/70 mt-0.5">
                     {portfolioAlignment.total} position{portfolioAlignment.total !== 1 ? "s" : ""} · {portfolioAlignment.aligned} {fr ? "alignée" : "aligned"}{portfolioAlignment.aligned !== 1 ? "s" : ""} · {portfolioAlignment.misaligned} {fr ? "à risque" : "at risk"}
                   </div>
                 </div>
