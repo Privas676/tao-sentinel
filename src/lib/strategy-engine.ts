@@ -29,4 +29,5 @@ export {
 export {
   macroColor, macroBg, macroBorder, macroIcon,
   actionColor, actionBg, actionBorder, actionIcon,
+  actionLabel, actionLabelFr, actionLabelEn,
 } from "./strategy-colors";

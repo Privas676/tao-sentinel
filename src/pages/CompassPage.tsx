@@ -13,7 +13,7 @@ import {
   type RawSignal,
 } from "@/lib/gauge-engine";
 import {
-  actionColor, actionBg, actionBorder, actionIcon,
+  actionColor, actionBg, actionBorder, actionIcon, actionLabel,
   computeSentinelIndex, sentinelIndexColor, sentinelIndexLabel,
   deriveMacroRecommendation, macroColor, macroBg, macroBorder, macroIcon,
 } from "@/lib/strategy-engine";
@@ -80,7 +80,7 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
             <div className="font-mono text-sm text-muted-foreground">{signal.name}</div>
             <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: actionBg(signal.action), border: `1px solid ${actionBorder(signal.action)}` }}>
               <span>{actionIcon(signal.action)}</span>
-              <span className="font-mono font-bold tracking-wider text-xs" style={{ color: actionColor(signal.action) }}>{t(`strat.${signal.action.toLowerCase()}` as any)}</span>
+              <span className="font-mono font-bold tracking-wider text-xs" style={{ color: actionColor(signal.action) }}>{actionLabel(signal.action, fr)}</span>
             </div>
           </div>
           <div className="flex items-center justify-center gap-8">
@@ -208,6 +208,15 @@ export default function CompassPage() {
   // ── Verdict engine ──
   const { topRentre, topHold, topSors, countRentre, countHold, countSors, isLoading: verdictLoading } = useSubnetVerdicts();
 
+  // ── Best opportunity & worst risk ──
+  const bestOpp = useMemo(() => {
+    return [...enrichedSignals].filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp)[0] || null;
+  }, [enrichedSignals]);
+
+  const worstRisk = useMemo(() => {
+    return [...enrichedSignals].filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk)[0] || null;
+  }, [enrichedSignals]);
+
   // ── Critical risks ──
   const criticalRisks = useMemo(() => {
     return enrichedSignals
@@ -263,7 +272,7 @@ export default function CompassPage() {
   const rskGlobal = riskColor(globalRisk);
   const [panelSignal, setPanelSignal] = useState<DashSignal | null>(null);
 
-  // ── Drivers (computed from real data — no overlap with hero metrics) ──
+  // ── Drivers ──
   const drivers = useMemo(() => {
     const avgMom = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + s.momentumScore, 0) / enrichedSignals.length) : 0;
     const avgLiqEff = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + (s.quality || 50), 0) / enrichedSignals.length) : 50;
@@ -278,25 +287,27 @@ export default function CompassPage() {
     ];
   }, [enrichedSignals, smartCapital, fr]);
 
-  // ── Tactical summary ──
+  // ── Tactical summary — more directive ──
   const tacticalSummary = useMemo(() => {
     if (!enrichedSignals.length) return "";
     const entryCount = enrichedSignals.filter(s => s.action === "ENTER").length;
     const exitCount = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    const bestName = bestOpp ? `SN-${bestOpp.netuid} ${bestOpp.name}` : "";
+    const worstName = worstRisk ? `SN-${worstRisk.netuid}` : "";
     if (fr) {
-      if (sentinelIndex >= 65 && entryCount >= 5) return `Conditions favorables — ${entryCount} opportunités d'entrée identifiées, momentum haussier.`;
-      if (sentinelIndex >= 45) return `Marché neutre — sélectivité requise, ${entryCount} entrées possibles, ${exitCount} risques actifs.`;
-      return `Environnement défensif — ${exitCount} subnets en zone de risque, réduction d'exposition recommandée.`;
+      if (sentinelIndex >= 65 && entryCount >= 5) return `Marché favorable. ${entryCount} entrées identifiées${bestName ? ` — meilleure : ${bestName}` : ""}. ${exitCount > 0 ? `${exitCount} sortie(s) à exécuter.` : "Aucune sortie urgente."}`;
+      if (sentinelIndex >= 45) return `Marché neutre — sélectivité requise. ${entryCount} entrée(s) viable(s), ${exitCount} risque(s) actif(s).${worstName ? ` Risque dominant : ${worstName}.` : ""}`;
+      return `Environnement défensif — ${exitCount} subnets en danger.${worstName ? ` Priorité réduction : ${worstName}.` : ""} Exposition minimale recommandée.`;
     }
-    if (sentinelIndex >= 65 && entryCount >= 5) return `Favorable conditions — ${entryCount} entry opportunities identified, bullish momentum.`;
-    if (sentinelIndex >= 45) return `Neutral market — selectivity required, ${entryCount} possible entries, ${exitCount} active risks.`;
-    return `Defensive environment — ${exitCount} subnets in risk zone, exposure reduction recommended.`;
-  }, [enrichedSignals, sentinelIndex, fr]);
+    if (sentinelIndex >= 65 && entryCount >= 5) return `Favorable market. ${entryCount} entries identified${bestName ? ` — best: ${bestName}` : ""}. ${exitCount > 0 ? `${exitCount} exit(s) to execute.` : "No urgent exits."}`;
+    if (sentinelIndex >= 45) return `Neutral market — selectivity required. ${entryCount} viable entry(ies), ${exitCount} active risk(s).${worstName ? ` Dominant risk: ${worstName}.` : ""}`;
+    return `Defensive environment — ${exitCount} subnets in danger.${worstName ? ` Priority reduction: ${worstName}.` : ""} Minimal exposure recommended.`;
+  }, [enrichedSignals, sentinelIndex, fr, bestOpp, worstRisk]);
 
   const sections = [
-    { key: "enter", title: fr ? "ENTRÉES" : "ENTER", emoji: "🟢", items: topRentre, count: countRentre, color: GO, bg: `color-mix(in srgb, ${GO} 4%, transparent)`, border: `color-mix(in srgb, ${GO} 12%, transparent)` },
+    { key: "enter", title: fr ? "ENTRER" : "ENTER", emoji: "🟢", items: topRentre, count: countRentre, color: GO, bg: `color-mix(in srgb, ${GO} 4%, transparent)`, border: `color-mix(in srgb, ${GO} 12%, transparent)` },
     { key: "hold", title: fr ? "RENFORCER" : "REINFORCE", emoji: "🟡", items: topHold, count: countHold, color: WARN, bg: `color-mix(in srgb, ${WARN} 4%, transparent)`, border: `color-mix(in srgb, ${WARN} 12%, transparent)` },
-    { key: "exit", title: fr ? "RÉDUIRE / SORTIR" : "REDUCE / EXIT", emoji: "🔴", items: topSors, count: countSors, color: BREAK, bg: `color-mix(in srgb, ${BREAK} 4%, transparent)`, border: `color-mix(in srgb, ${BREAK} 12%, transparent)` },
+    { key: "exit", title: fr ? "SORTIR" : "EXIT", emoji: "🔴", items: topSors, count: countSors, color: BREAK, bg: `color-mix(in srgb, ${BREAK} 4%, transparent)`, border: `color-mix(in srgb, ${BREAK} 12%, transparent)` },
   ];
 
   const rotationGroups = [
@@ -310,7 +321,7 @@ export default function CompassPage() {
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
       <div className="px-4 sm:px-6 py-5 max-w-[1000px] mx-auto space-y-7 sm:space-y-9">
 
-        {/* ═══ 1. HERO DÉCISIONNEL ═══ */}
+        {/* ═══ 1. HERO DÉCISIONNEL — MORE DIRECTIVE ═══ */}
         <section>
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <TaoPriceTicker taoUsd={taoUsd} scoreTimestamp={scoreTimestamp} />
@@ -323,49 +334,65 @@ export default function CompassPage() {
             <span className="ml-auto font-mono text-[8px] text-muted-foreground">{scoresList.length} subnets</span>
           </div>
 
-          <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.02) 0%, transparent 100%)", border: "1px solid hsla(var(--gold), 0.06)", boxShadow: "0 4px 24px -4px hsla(var(--gold), 0.04)" }}>
-            {/* Main hero content */}
+          <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.03) 0%, transparent 100%)", border: "1px solid hsla(var(--gold), 0.08)", boxShadow: "0 4px 24px -4px hsla(var(--gold), 0.06)" }}>
             <div className="p-6 sm:p-8">
               <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-10">
                 {/* Score central */}
                 <div className="flex flex-col items-center flex-shrink-0">
                   <span className="font-mono tracking-[0.25em] uppercase text-muted-foreground" style={{ fontSize: 7 }}>SENTINEL INDEX</span>
-                  <span className="font-mono font-bold leading-none mt-1" style={{ fontSize: isMobile ? 52 : 68, color: sentinelIndexColor(sentinelIndex), textShadow: "0 0 40px hsla(var(--gold), 0.1)" }}>
+                  <span className="font-mono font-bold leading-none mt-1" style={{ fontSize: isMobile ? 56 : 72, color: sentinelIndexColor(sentinelIndex), textShadow: `0 0 50px ${sentinelIndexColor(sentinelIndex)}20` }}>
                     {sentinelIndex}
                   </span>
-                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 9 : 11, color: sentinelIndexColor(sentinelIndex) }}>
+                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 10 : 12, color: sentinelIndexColor(sentinelIndex) }}>
                     {sentinelLabel}
                   </span>
-                  {/* Confidence bar */}
-                  <div className="mt-3 w-24">
-                    <ConfidenceBar value={confianceScore} label="CONF" height={3} />
+                  <div className="mt-3 w-28">
+                    <ConfidenceBar value={confianceScore} label={fr ? "CONFIANCE MOTEUR" : "ENGINE CONF."} height={4} />
                   </div>
                 </div>
 
-                <div className="hidden sm:block w-px self-stretch" style={{ background: "hsla(var(--gold), 0.06)" }} />
-                <div className="sm:hidden w-3/4 h-px mx-auto" style={{ background: "hsla(var(--gold), 0.06)" }} />
+                <div className="hidden sm:block w-px self-stretch" style={{ background: "hsla(var(--gold), 0.08)" }} />
+                <div className="sm:hidden w-3/4 h-px mx-auto" style={{ background: "hsla(var(--gold), 0.08)" }} />
 
-                {/* Right side */}
+                {/* Right: directive summary */}
                 <div className="flex-1 flex flex-col gap-4 w-full items-center sm:items-start">
-                  {/* Metrics row */}
-                  <div className="flex items-center gap-4 sm:gap-5 flex-wrap justify-center sm:justify-start">
-                    <MiniMetric label="OPP" value={globalOpp} color={oppGlobal} />
-                    <MiniMetric label="RISK" value={globalRisk} color={rskGlobal} />
-                    <MiniMetric label={fr ? "Stabilité" : "Stability"} value={`${globalStability}%`} color={stabilityColor(globalStability)} />
+                  {/* Macro posture — prominent */}
+                  <div className="flex items-center gap-3 px-5 py-3 rounded-xl w-full" style={{ background: macroBg(macroRec), border: `1.5px solid ${macroBorder(macroRec)}`, boxShadow: `0 0 24px ${macroBg(macroRec)}` }}>
+                    <span style={{ fontSize: isMobile ? 18 : 22 }}>{macroIcon(macroRec)}</span>
+                    <div className="flex-1">
+                      <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground">{fr ? "POSTURE MARCHÉ" : "MARKET POSTURE"}</div>
+                      <div className="font-mono font-bold tracking-[0.12em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 13 : 15 }}>{macroRecLabel}</div>
+                    </div>
                   </div>
 
-                  {/* Macro badge */}
-                  <div className="flex items-center gap-2.5 px-4 py-2 rounded-xl" style={{ background: macroBg(macroRec), border: `1.5px solid ${macroBorder(macroRec)}`, boxShadow: `0 0 20px ${macroBg(macroRec)}` }}>
-                    <span style={{ fontSize: isMobile ? 14 : 18 }}>{macroIcon(macroRec)}</span>
-                    <div>
-                      <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground">{t("macro.label")}</div>
-                      <div className="font-mono font-bold tracking-[0.12em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 11 : 13 }}>{macroRecLabel}</div>
-                    </div>
+                  {/* 3 key answers — 5-second scan */}
+                  <div className="grid grid-cols-3 gap-2.5 w-full">
+                    <DirectiveCard
+                      label={fr ? "MEILLEURE OPP." : "BEST OPP."}
+                      value={bestOpp ? `SN-${bestOpp.netuid}` : "—"}
+                      sub={bestOpp ? bestOpp.name : ""}
+                      color={GO}
+                      icon="🟢"
+                    />
+                    <DirectiveCard
+                      label={fr ? "RISQUE DOMINANT" : "TOP RISK"}
+                      value={worstRisk ? `SN-${worstRisk.netuid}` : "—"}
+                      sub={worstRisk ? `Risk ${worstRisk.risk}` : ""}
+                      color={BREAK}
+                      icon="🔴"
+                    />
+                    <DirectiveCard
+                      label={fr ? "SORTIES" : "EXITS"}
+                      value={countSors}
+                      sub={fr ? "à exécuter" : "to execute"}
+                      color={countSors > 0 ? BREAK : MUTED}
+                      icon={countSors > 0 ? "⚠" : "✓"}
+                    />
                   </div>
 
                   {/* Tactical summary */}
                   {tacticalSummary && (
-                    <p className="font-mono text-[10px] text-muted-foreground leading-relaxed max-w-md" style={{ letterSpacing: "0.02em" }}>
+                    <p className="font-mono text-[10px] text-foreground/70 leading-relaxed max-w-lg" style={{ letterSpacing: "0.02em" }}>
                       {tacticalSummary}
                     </p>
                   )}
@@ -388,7 +415,7 @@ export default function CompassPage() {
         {/* ═══ 3. ACTIONS PRIORITAIRES ═══ */}
         <section>
           <SectionHeader
-            title={fr ? "ACTIONS PRIORITAIRES" : "PRIORITY ACTIONS"}
+            title={fr ? "DÉCISIONS PRIORITAIRES" : "PRIORITY DECISIONS"}
             icon="⚡"
             badge={
               <div className="flex gap-1.5">
@@ -452,7 +479,7 @@ export default function CompassPage() {
                         <tr key={s.netuid} className="cursor-pointer hover:bg-white/[0.015] transition-colors" style={{ borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }} onClick={() => setPanelSignal(s)}>
                           <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</td>
                           <td className="py-2 px-2.5 text-[10px] text-muted-foreground truncate" style={{ maxWidth: 120 }}>{s.name}</td>
-                          <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTER" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</td>
+                          <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {actionLabel(s.action, fr)}</td>
                           <td className="py-2 px-2.5 text-[9px] font-bold" style={{ color: convLevelColor }}>{convLevel}</td>
                           <td className="py-2 px-2.5 text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</td>
                           <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</td>
@@ -574,7 +601,7 @@ export default function CompassPage() {
           <div className="grid grid-cols-2 gap-3">
             <Link to="/subnets" className="flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]" style={{ background: "hsla(var(--gold), 0.04)", border: "1px solid hsla(var(--gold), 0.1)" }}>
               <span style={{ fontSize: 16 }}>📋</span>
-              <span className="text-[10px] tracking-wider font-bold" style={{ color: "hsl(var(--gold))" }}>{fr ? "Subnet Intelligence" : "Subnet Intelligence"}</span>
+              <span className="text-[10px] tracking-wider font-bold" style={{ color: "hsl(var(--gold))" }}>Subnet Intelligence</span>
               <span className="text-[8px] text-muted-foreground">{fr ? "Table de décision" : "Decision table"}</span>
             </Link>
             <Link to="/lab" className="flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.06)" }}>
@@ -587,6 +614,20 @@ export default function CompassPage() {
       </div>
 
       <SubnetQuickPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} fr={fr} />
+    </div>
+  );
+}
+
+/* ─── Directive Card — for hero 5-second scan ─── */
+function DirectiveCard({ label, value, sub, color, icon }: { label: string; value: string | number; sub: string; color: string; icon: string }) {
+  return (
+    <div className="rounded-lg p-2.5 text-center" style={{ background: `color-mix(in srgb, ${color} 4%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 12%, transparent)` }}>
+      <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground">{label}</div>
+      <div className="font-mono font-bold mt-1 flex items-center justify-center gap-1" style={{ color, fontSize: 13 }}>
+        <span style={{ fontSize: 10 }}>{icon}</span>
+        {value}
+      </div>
+      {sub && <div className="font-mono text-[8px] text-muted-foreground mt-0.5 truncate">{sub}</div>}
     </div>
   );
 }
