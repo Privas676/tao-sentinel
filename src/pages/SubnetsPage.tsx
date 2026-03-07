@@ -1,791 +1,570 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useColumnConfig, ColumnConfigPanel, type ColumnKey } from "@/components/ColumnConfig";
-import SwipeHint from "@/components/SwipeHint";
-import DataAlignmentBadge from "@/components/DataAlignmentBadge";
-import DistributionBadge from "@/components/DistributionBadge";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
-import MarketContextPanel from "@/components/MarketContextPanel";
-import { type ScoreFactor, topFactors } from "@/lib/score-factors";
-import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
-import { VerdictBadgeWithTooltip, verdictColor } from "@/components/VerdictBadge";
+import { useSubnetVerdicts, type SubnetVerdictData } from "@/hooks/use-subnet-verdict";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import DataAlignmentBadge from "@/components/DataAlignmentBadge";
+import SwipeHint from "@/components/SwipeHint";
 import {
-  deriveMomentumLabel, momentumColor, computeMomentumScore,
-  opportunityColor, riskColor, clamp,
+  opportunityColor, riskColor, stabilityColor,
   type SmartCapitalState,
-  stabilityColor,
 } from "@/lib/gauge-engine";
 import {
-  deriveSubnetAction, actionColor, actionBg, actionBorder, actionIcon,
+  actionColor, actionIcon,
 } from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
-import { type SourceMetrics } from "@/lib/data-fusion";
-import {
-  systemStatusColor, systemStatusLabel,
-} from "@/lib/risk-override";
-import {
-  stateLabel, stateColor, stateSeverity,
-  type DecisionState,
-} from "@/lib/engine-decision-state";
-import {
-  healthColor, dilutionLabel, formatUsd,
-  type HealthScores, type RecalculatedMetrics,
-} from "@/lib/subnet-health";
+
+/* ═══════════════════════════════════════════════ */
+/*   SUBNET INTELLIGENCE — Unified Master Table   */
+/* ═══════════════════════════════════════════════ */
+
+/* ─── Filter types ─── */
+type ActionFilter = "ALL" | "ENTER" | "HOLD" | "EXIT";
+type StatusFilter = "ALL" | "OK" | "WATCH" | "DANGER";
+type ConvictionFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
+type ScopeFilter = "ALL" | "PORTFOLIO" | "WATCHLIST";
+type LiquidityFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
+type StructureFilter = "ALL" | "HEALTHY" | "FRAGILE" | "CONCENTRATED";
+
+type SortCol = "netuid" | "name" | "action" | "conviction" | "confidence" | "risk" | "momentum" | "opp" | "liquidity" | "stability" | null;
+
+/* ─── Enriched row type ─── */
+type TableRow = UnifiedSubnetScore & {
+  owned: boolean;
+  spark: number[];
+  verdict?: SubnetVerdictData;
+  convictionLevel: "HIGH" | "MEDIUM" | "LOW";
+  liquidityLevel: "HIGH" | "MEDIUM" | "LOW";
+  structureLevel: "HEALTHY" | "FRAGILE" | "CONCENTRATED";
+  statusLevel: "OK" | "WATCH" | "DANGER";
+  signalPrincipal: string;
+};
+
+/* ─── Helpers ─── */
+function convictionFromScore(score: number): "HIGH" | "MEDIUM" | "LOW" {
+  return score >= 70 ? "HIGH" : score >= 40 ? "MEDIUM" : "LOW";
+}
+function liquidityFromHealth(health: number): "HIGH" | "MEDIUM" | "LOW" {
+  return health >= 60 ? "HIGH" : health >= 30 ? "MEDIUM" : "LOW";
+}
+function structureFromStability(stability: number, isOverridden: boolean): "HEALTHY" | "FRAGILE" | "CONCENTRATED" {
+  if (isOverridden) return "CONCENTRATED";
+  return stability >= 60 ? "HEALTHY" : stability >= 35 ? "FRAGILE" : "CONCENTRATED";
+}
+function statusFromSystem(s: UnifiedSubnetScore): "OK" | "WATCH" | "DANGER" {
+  if (s.isOverridden || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEPEG" || s.systemStatus === "DEREGISTRATION") return "DANGER";
+  if (s.isWarning || s.systemStatus === "SURVEILLANCE") return "WATCH";
+  return "OK";
+}
+function mainSignal(s: UnifiedSubnetScore, fr: boolean): string {
+  if (s.isOverridden) return s.overrideReasons[0] || (fr ? "Zone critique" : "Critical zone");
+  if (s.depegProbability >= 50) return fr ? `Depeg ${s.depegProbability}%` : `Depeg ${s.depegProbability}%`;
+  if (s.delistCategory !== "NORMAL") return fr ? "Risque delist" : "Delist risk";
+  if (s.action === "ENTER" && s.opp > 60) return fr ? "Forte opportunité" : "Strong opportunity";
+  if (s.action === "EXIT") return fr ? "Signal de sortie" : "Exit signal";
+  if (s.momentumScore >= 70) return fr ? "Momentum haussier" : "Bullish momentum";
+  if (s.risk > 60) return fr ? "Risque élevé" : "High risk";
+  return fr ? "Stable" : "Stable";
+}
+
+function actionFilterLabel(a: ActionFilter, fr: boolean): string {
+  if (a === "ALL") return fr ? "Toutes" : "All";
+  if (a === "ENTER") return fr ? "Entrer" : "Enter";
+  if (a === "HOLD") return fr ? "Attendre" : "Hold";
+  return fr ? "Sortir" : "Exit";
+}
+
+/* ─── Saved views ─── */
+const SAVED_VIEWS_KEY = "sentinel-subnet-views";
+type SavedView = { name: string; filters: { scope: ScopeFilter; action: ActionFilter; status: StatusFilter; conviction: ConvictionFilter; liquidity: LiquidityFilter; structure: StructureFilter } };
+
+function loadSavedViews(): SavedView[] {
+  try { return JSON.parse(localStorage.getItem(SAVED_VIEWS_KEY) || "[]"); } catch { return []; }
+}
 
 /* ═══════════════════════════════════════ */
-/*        SPARKLINE COMPONENT              */
+/*   QUICK VIEW DRAWER                      */
 /* ═══════════════════════════════════════ */
-const Sparkline = React.forwardRef<HTMLDivElement, { data: number[]; width?: number; height?: number }>(function Sparkline({ data, width = 64, height = 20 }, ref) {
-  if (data.length < 2) return <span className="text-white/10 text-[9px]">—</span>;
-  const min = Math.min(...data), max = Math.max(...data);
-  const range = max - min || 1;
-  const first = data[0], last = data[data.length - 1];
-  const trend = last - first;
-  const pctChange = first > 0 ? ((last - first) / first) * 100 : 0;
-  const color = trend > 0 ? "rgba(76,175,80,0.7)" : trend < 0 ? "rgba(229,57,53,0.7)" : "rgba(255,255,255,0.3)";
-  const pts = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - 1 - ((v - min) / range) * (height - 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  return (
-    <div className="relative group inline-block">
-      <svg width={width} height={height} className="inline-block">
-        <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
-        style={{ width: 130 }}>
-        <div className="rounded-lg px-3 py-2 font-mono text-[10px] space-y-1"
-          style={{ background: "rgba(10,10,14,0.95)", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 4px 20px rgba(0,0,0,0.6)" }}>
-          <div className="flex justify-between"><span className="text-white/35">Min</span><span className="text-white/70">{min.toFixed(4)}</span></div>
-          <div className="flex justify-between"><span className="text-white/35">Max</span><span className="text-white/70">{max.toFixed(4)}</span></div>
-          <div className="flex justify-between"><span className="text-white/35">7j</span><span style={{ color }} className="font-bold">{pctChange > 0 ? "+" : ""}{pctChange.toFixed(1)}%</span></div>
-        </div>
-      </div>
-    </div>
-  );
-});
-
-/* ═══════════════════════════════════════ */
-/*        HEALTH PANEL COMPONENT            */
-/* ═══════════════════════════════════════ */
-function HealthPanel({ health, onClose }: {
-  health: { netuid: number; name: string; recalc: RecalculatedMetrics; scores: HealthScores; displayedCap: number; displayedLiq: number };
-  onClose: () => void;
+function QuickViewDrawer({ row, verdict, open, onClose, fr }: {
+  row: TableRow | null; verdict?: SubnetVerdictData; open: boolean; onClose: () => void; fr: boolean;
 }) {
-  const { recalc, scores } = health;
-  const capDiv = health.displayedCap > 0 ? Math.abs(recalc.mcRecalc - health.displayedCap) / health.displayedCap * 100 : 0;
-  const liqDiv = health.displayedLiq > 0 ? Math.abs(recalc.liquidityRecalc - health.displayedLiq) / health.displayedLiq * 100 : 0;
+  const navigate = useNavigate();
+  if (!row) return null;
+
+  const thesis = verdict?.positiveReasons?.slice(0, 3) || [];
+  const invalidation = verdict?.negativeReasons?.slice(0, 3) || [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/70" />
-      <div className="relative rounded-xl p-5 font-mono text-[11px] max-w-md w-full mx-4 space-y-4"
-        style={{ background: "rgba(10,10,14,0.98)", border: "1px solid rgba(255,215,0,0.15)", boxShadow: "0 8px 40px rgba(0,0,0,0.8)" }}
-        onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-white/90 text-sm font-bold tracking-wider">🔬 HEALTH — SN-{health.netuid} {health.name}</h3>
-          <button onClick={onClose} className="text-white/30 hover:text-white/60 text-lg">✕</button>
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full sm:w-[400px] border-l border-border bg-background text-foreground overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="font-mono tracking-wider text-base">SN-{row.netuid} · {row.name}</SheetTitle>
+        </SheetHeader>
+        <div className="mt-5 space-y-5">
+          {/* Action */}
+          <div className="flex items-center justify-center">
+            <ActionBadge action={row.action === "ENTER" ? "RENTRE" : row.action === "EXIT" ? "SORS" : "HOLD"} />
+          </div>
+
+          {/* Key metrics */}
+          <div className="grid grid-cols-3 gap-3">
+            <MetricMini label="OPP" value={row.opp} color={opportunityColor(row.opp)} />
+            <MetricMini label="RISK" value={row.risk} color={riskColor(row.risk)} />
+            <MetricMini label="CONF" value={`${row.conf}%`} color={confianceColor(row.conf)} />
+          </div>
+
+          {/* Conviction & Momentum */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg px-3 py-2" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase">CONVICTION</div>
+              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.convictionLevel === "HIGH" ? "hsl(145,65%,48%)" : row.convictionLevel === "MEDIUM" ? "hsl(38,92%,55%)" : "hsl(var(--muted-foreground))" }}>
+                {row.convictionLevel}
+              </div>
+            </div>
+            <div className="rounded-lg px-3 py-2" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase">MOMENTUM</div>
+              <div className="font-mono text-sm font-bold mt-1" style={{ color: row.momentumScore >= 55 ? "hsl(145,65%,48%)" : row.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>
+                {Math.round(row.momentumScore)}
+              </div>
+            </div>
+          </div>
+
+          {/* Thesis */}
+          {thesis.length > 0 && (
+            <div className="rounded-lg p-3" style={{ background: "hsla(145,65%,48%,0.03)", border: "1px solid hsla(145,65%,48%,0.08)" }}>
+              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
+                {fr ? "THÈSE" : "THESIS"}
+              </div>
+              {thesis.map((r, i) => <div key={i} className="font-mono text-[11px] text-foreground/80 mb-1">+ {r}</div>)}
+            </div>
+          )}
+
+          {/* Invalidation */}
+          {invalidation.length > 0 && (
+            <div className="rounded-lg p-3" style={{ background: "hsla(4,80%,50%,0.03)", border: "1px solid hsla(4,80%,50%,0.08)" }}>
+              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
+                {fr ? "INVALIDATION" : "INVALIDATION"}
+              </div>
+              {invalidation.map((r, i) => <div key={i} className="font-mono text-[11px] text-foreground/80 mb-1">− {r}</div>)}
+            </div>
+          )}
+
+          {/* Active alerts */}
+          {(row.isOverridden || row.depegProbability >= 50 || row.delistCategory !== "NORMAL") && (
+            <div className="rounded-lg p-3" style={{ background: "hsla(var(--destructive),0.04)", border: "1px solid hsla(var(--destructive),0.1)" }}>
+              <div className="font-mono text-[8px] text-muted-foreground/65 tracking-wider uppercase mb-2">
+                {fr ? "ALERTES ACTIVES" : "ACTIVE ALERTS"}
+              </div>
+              {row.isOverridden && <div className="font-mono text-[11px] mb-1" style={{ color: "hsl(var(--destructive))" }}>⛔ Override actif</div>}
+              {row.depegProbability >= 50 && <div className="font-mono text-[11px] mb-1" style={{ color: "hsl(38,92%,55%)" }}>⚠ Depeg {row.depegProbability}%</div>}
+              {row.delistCategory !== "NORMAL" && <div className="font-mono text-[11px] mb-1" style={{ color: "hsl(var(--destructive))" }}>🔴 Risque delist</div>}
+            </div>
+          )}
+
+          {/* Confidence bar */}
+          <ConfidenceBar value={row.confianceScore} label="DATA" height={4} />
+
+          {/* CTA */}
+          <button
+            onClick={() => navigate(`/subnets/${row.netuid}`)}
+            className="w-full text-center font-mono text-[10px] tracking-wider py-2.5 rounded-lg transition-colors"
+            style={{ background: "hsla(var(--gold), 0.05)", color: "hsl(var(--gold))", border: "1px solid hsla(var(--gold), 0.1)" }}
+          >
+            {fr ? "Voir la fiche complète →" : "View full profile →"}
+          </button>
         </div>
-        <div className="space-y-1.5">
-          <div className="text-white/40 text-[9px] tracking-widest mb-1">RECALCULS</div>
-          <Row label="MC recalc" value={formatUsd(recalc.mcRecalc)} sub={capDiv > 2 ? `△ ${capDiv.toFixed(1)}%` : "✓"} warn={capDiv > 5} />
-          <Row label="FDV recalc" value={formatUsd(recalc.fdvRecalc)} />
-          <Row label="Dilution" value={`${recalc.dilutionRatio.toFixed(2)}x — ${dilutionLabel(recalc.dilutionRatio)}`} warn={recalc.dilutionRatio > 3} />
-          <Row label="Volume/MC" value={`${(recalc.volumeToMc * 100).toFixed(2)}%`} />
-          <Row label="Emission/MC" value={`${(recalc.emissionToMc * 100).toFixed(3)}%/j`} warn={recalc.emissionToMc > 0.005} />
-          <Row label="Liq/MC" value={`${(recalc.liquidityToMc * 100).toFixed(2)}%`} warn={recalc.liquidityToMc < 0.003} />
-          <Row label="Liq Haircut" value={`${recalc.liqHaircut > 0 ? "+" : ""}${recalc.liqHaircut.toFixed(2)}%`} sub={recalc.poolPrice > 0 ? `Pool: ${recalc.poolPrice.toFixed(5)}τ` : undefined} warn={Math.abs(recalc.liqHaircut) > 5} />
-          {liqDiv > 5 && <Row label="Liq divergence" value={`${liqDiv.toFixed(1)}%`} warn={true} />}
-        </div>
-        <div className="space-y-1.5 pt-2 border-t border-white/5">
-          <div className="text-white/40 text-[9px] tracking-widest mb-1">SCORES SANTÉ</div>
-          <ScoreBar label="Liquidité" score={scores.liquidityHealth} />
-          <ScoreBar label="Volume" score={scores.volumeHealth} />
-          <ScoreBar label="Émission" score={100 - scores.emissionPressure} inverted />
-          <ScoreBar label="Dilution" score={100 - scores.dilutionRisk} inverted />
-          <ScoreBar label="Activité" score={scores.activityHealth} />
-        </div>
-      </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function MetricMini({ label, value, color }: { label: string; value: string | number; color: string }) {
+  return (
+    <div className="rounded-lg px-3 py-2 text-center" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+      <div className="font-mono text-[7px] text-muted-foreground/65 tracking-wider uppercase">{label}</div>
+      <div className="font-mono text-lg font-bold mt-0.5" style={{ color }}>{value}</div>
     </div>
   );
 }
 
-function Row({ label, value, sub, warn }: { label: string; value: string; sub?: string; warn?: boolean }) {
-  return (
-    <div className="flex justify-between items-center">
-      <span className="text-white/40">{label}</span>
-      <span className="flex items-center gap-2">
-        <span className={warn ? "text-orange-400" : "text-white/70"}>{value}</span>
-        {sub && <span className={`text-[9px] ${warn ? "text-red-400" : "text-green-400/60"}`}>{sub}</span>}
-      </span>
-    </div>
-  );
-}
-
-function ScoreBar({ label, score, inverted }: { label: string; score: number; inverted?: boolean }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-white/40 w-16">{label}</span>
-      <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, background: healthColor(score) }} />
-      </div>
-      <span className="text-white/60 w-8 text-right">{Math.round(score)}</span>
-    </div>
-  );
-}
-
-
-
-type SortCol = "netuid" | "name" | "status" | "dstate" | "price" | "var30d" | "spark" | "opp" | "risk" | "depeg" | "asymmetry" | "action" | "momentum" | "sc" | "confiance" | "verdict" | null;
-type ViewMode = "all" | "opportunities" | "risks" | "mine" | "rentre" | "hold" | "sors";
-
-function scColor(state: SmartCapitalState): string {
-  switch (state) {
-    case "ACCUMULATION": return "rgba(76,175,80,0.8)";
-    case "DISTRIBUTION": return "rgba(229,57,53,0.8)";
-    case "STABLE": return "rgba(255,248,220,0.4)";
-  }
-}
-
+/* ═══════════════════════════════════════ */
+/*   MAIN PAGE                              */
+/* ═══════════════════════════════════════ */
 export default function SubnetsPage() {
   const navigate = useNavigate();
   const { t, lang } = useI18n();
-  const [mode, setMode] = useState<ViewMode>("all");
-  const [healthPanel, setHealthPanel] = useState<null | any>(null);
-  const [tmcPanel, setTmcPanel] = useState<null | { netuid: number; name: string }>(null);
+  const fr = lang === "fr";
+  const isMobile = useIsMobile();
+  const { ownedNetuids } = useLocalPortfolio();
+
+  // ── Data sources ──
+  const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug } = useSubnetScores();
+  const { verdicts, countRentre, countHold, countSors, isLoading: verdictLoading } = useSubnetVerdicts();
+
+  // ── Filters ──
+  const [scope, setScope] = useState<ScopeFilter>("ALL");
+  const [actionFilter, setActionFilter] = useState<ActionFilter>("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [convictionFilter, setConvictionFilter] = useState<ConvictionFilter>("ALL");
+  const [liquidityFilter, setLiquidityFilter] = useState<LiquidityFilter>("ALL");
+  const [structureFilter, setStructureFilter] = useState<StructureFilter>("ALL");
+  const [search, setSearch] = useState("");
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const { ownedNetuids, addPosition, isOwned } = useLocalPortfolio();
-  const { preset, visibleColumns, setPreset, toggleColumn, isVisible } = useColumnConfig();
+  const [drawerRow, setDrawerRow] = useState<TableRow | null>(null);
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadSavedViews());
 
+  const hasActiveFilters = scope !== "ALL" || actionFilter !== "ALL" || statusFilter !== "ALL" || convictionFilter !== "ALL" || liquidityFilter !== "ALL" || structureFilter !== "ALL" || search.length > 0;
 
-  const toggleSort = (col: SortCol) => {
+  const resetFilters = useCallback(() => {
+    setScope("ALL"); setActionFilter("ALL"); setStatusFilter("ALL");
+    setConvictionFilter("ALL"); setLiquidityFilter("ALL"); setStructureFilter("ALL");
+    setSearch("");
+  }, []);
+
+  const saveCurrentView = useCallback(() => {
+    const name = prompt(fr ? "Nom de la vue :" : "View name:");
+    if (!name) return;
+    const view: SavedView = { name, filters: { scope, action: actionFilter, status: statusFilter, conviction: convictionFilter, liquidity: liquidityFilter, structure: structureFilter } };
+    const updated = [...savedViews, view];
+    setSavedViews(updated);
+    localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(updated));
+  }, [scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, savedViews, fr]);
+
+  const loadView = useCallback((view: SavedView) => {
+    setScope(view.filters.scope); setActionFilter(view.filters.action); setStatusFilter(view.filters.status);
+    setConvictionFilter(view.filters.conviction); setLiquidityFilter(view.filters.liquidity); setStructureFilter(view.filters.structure);
+  }, []);
+
+  const toggleSort = useCallback((col: SortCol) => {
     if (sortCol === col) {
       if (sortDir === "desc") setSortDir("asc");
       else { setSortCol(null); setSortDir("desc"); }
-    } else {
-      setSortCol(col);
-      setSortDir("desc");
-    }
-  };
+    } else { setSortCol(col); setSortDir("desc"); }
+  }, [sortCol, sortDir]);
 
-  // ── UNIFIED SCORES (single source of truth) ──
-  const { scoresList, sparklines, scoreTimestamp, marketContext, dataAlignment, dataAgeDebug, decisionStates, fleetDistribution } = useSubnetScores();
-  const { verdicts, countRentre, countHold, countSors } = useSubnetVerdicts();
-
-  const rows = useMemo(() => {
+  // ── Build enriched rows ──
+  const rows = useMemo<TableRow[]>(() => {
+    const searchLower = search.toLowerCase();
     return scoresList
-      .map(r => ({
-        ...r,
-        owned: ownedNetuids.has(r.netuid),
-        spark: sparklines?.get(r.netuid) || [],
-        verdict: verdicts.get(r.netuid),
-      }))
+      .map(s => {
+        const verdict = verdicts.get(s.netuid);
+        const convictionScore = verdict ? Math.max(verdict.entryScore, verdict.holdScore) : Math.abs(s.opp - s.risk) * (s.conf / 100);
+        return {
+          ...s,
+          owned: ownedNetuids.has(s.netuid),
+          spark: sparklines?.get(s.netuid) || [],
+          verdict,
+          convictionLevel: convictionFromScore(convictionScore),
+          liquidityLevel: liquidityFromHealth(s.healthScores.liquidityHealth),
+          structureLevel: structureFromStability(s.stability, s.isOverridden),
+          statusLevel: statusFromSystem(s),
+          signalPrincipal: mainSignal(s, fr),
+        } as TableRow;
+      })
       .filter(r => {
-        if (mode === "opportunities") return r.assetType !== "CORE_NETWORK" && !r.isOverridden && r.opp > r.risk;
-        if (mode === "risks") return r.assetType !== "CORE_NETWORK" && r.risk >= r.opp;
-        if (mode === "mine") return r.owned;
-        if (mode === "rentre") return r.verdict?.verdict === "RENTRE";
-        if (mode === "hold") return r.verdict?.verdict === "HOLD";
-        if (mode === "sors") return r.verdict?.verdict === "SORS";
+        if (search && !r.name.toLowerCase().includes(searchLower) && !String(r.netuid).includes(searchLower)) return false;
+        if (scope === "PORTFOLIO" && !r.owned) return false;
+        if (actionFilter === "ENTER" && r.action !== "ENTER") return false;
+        if (actionFilter === "HOLD" && r.action !== "HOLD" && r.action !== "STAKE" && r.action !== "NEUTRAL" && r.action !== "WATCH") return false;
+        if (actionFilter === "EXIT" && r.action !== "EXIT") return false;
+        if (statusFilter === "OK" && r.statusLevel !== "OK") return false;
+        if (statusFilter === "WATCH" && r.statusLevel !== "WATCH") return false;
+        if (statusFilter === "DANGER" && r.statusLevel !== "DANGER") return false;
+        if (convictionFilter !== "ALL" && r.convictionLevel !== convictionFilter) return false;
+        if (liquidityFilter !== "ALL" && r.liquidityLevel !== liquidityFilter) return false;
+        if (structureFilter !== "ALL" && r.structureLevel !== structureFilter) return false;
         return true;
       })
       .sort((a, b) => {
         if (sortCol) {
-          const actionRank = (a: string) => ["EXIT","SELL","NEUTRAL","WATCH","HOLD","STAKE","ACCUMULATE","ENTER"].indexOf(a);
-          const scRank = (s: SmartCapitalState) => s === "ACCUMULATION" ? 2 : s === "STABLE" ? 1 : 0;
-          const momRank = (m: string) => ["COLD","COOL","WARM","HOT","FIRE"].indexOf(m);
-          const statusRank = (s: string) => ["CRITICAL","DEGRADED","WARNING","OK"].indexOf(s);
           let av = 0, bv = 0;
           switch (sortCol) {
             case "netuid": av = a.netuid; bv = b.netuid; break;
             case "name": return sortDir === "desc" ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
-            case "status": av = statusRank(a.systemStatus); bv = statusRank(b.systemStatus); break;
-            case "price": av = a.alphaPrice || 0; bv = b.alphaPrice || 0; break;
-            case "var30d": av = a.priceVar30d ?? -9999; bv = b.priceVar30d ?? -9999; break;
-            case "spark": {
-              const sa = a.spark, sb = b.spark;
-              const pctA = sa.length >= 2 && sa[0] > 0 ? (sa[sa.length-1] - sa[0]) / sa[0] : -9999;
-              const pctB = sb.length >= 2 && sb[0] > 0 ? (sb[sb.length-1] - sb[0]) / sb[0] : -9999;
-              av = pctA; bv = pctB; break;
+            case "action": {
+              const rank = (x: string) => ["EXIT","NEUTRAL","WATCH","HOLD","STAKE","ENTER"].indexOf(x);
+              av = rank(a.action); bv = rank(b.action); break;
             }
-            case "opp": av = a.opp; bv = b.opp; break;
+            case "conviction": {
+              const rank = (x: string) => x === "HIGH" ? 3 : x === "MEDIUM" ? 2 : 1;
+              av = rank(a.convictionLevel); bv = rank(b.convictionLevel); break;
+            }
+            case "confidence": av = a.confianceScore; bv = b.confianceScore; break;
             case "risk": av = a.risk; bv = b.risk; break;
-            case "asymmetry": av = a.asymmetry; bv = b.asymmetry; break;
-            case "action": av = actionRank(a.action); bv = actionRank(b.action); break;
-            case "momentum": av = momRank(a.momentumLabel); bv = momRank(b.momentumLabel); break;
-            case "sc": av = scRank(a.sc); bv = scRank(b.sc); break;
-            case "confiance": av = a.confianceScore; bv = b.confianceScore; break;
-            case "depeg": av = a.depegProbability; bv = b.depegProbability; break;
-            case "verdict": {
-              const vRank = (v: string | undefined) => v === "RENTRE" ? 3 : v === "HOLD" ? 2 : v === "SORS" ? 1 : 0;
-              av = vRank(a.verdict?.verdict); bv = vRank(b.verdict?.verdict); break;
-            }
-            case "dstate": {
-              const dsA = decisionStates?.get(a.netuid);
-              const dsB = decisionStates?.get(b.netuid);
-              av = dsA ? stateSeverity(dsA.state as DecisionState) : 0;
-              bv = dsB ? stateSeverity(dsB.state as DecisionState) : 0;
-              break;
-            }
+            case "momentum": av = a.momentumScore; bv = b.momentumScore; break;
+            case "opp": av = a.opp; bv = b.opp; break;
+            case "liquidity": av = a.healthScores.liquidityHealth; bv = b.healthScores.liquidityHealth; break;
+            case "stability": av = a.stability; bv = b.stability; break;
           }
           return sortDir === "desc" ? bv - av : av - bv;
         }
-        // Default sort
-        if (mode === "risks") {
-          if (a.isOverridden !== b.isOverridden) return a.isOverridden ? -1 : 1;
-          return b.risk - a.risk;
-        }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, mode, ownedNetuids, sparklines, sortCol, sortDir, decisionStates, verdicts]);
+  }, [scoresList, sparklines, verdicts, ownedNetuids, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, sortCol, sortDir, fr]);
 
-  const modeOptions: { value: ViewMode; label: string }[] = [
-    { value: "all", label: t("sub.mode_all") },
-    { value: "rentre", label: "🟢 RENTRE" },
-    { value: "hold", label: "🟡 HOLD" },
-    { value: "sors", label: "🔴 SORS" },
-    { value: "opportunities", label: t("sub.mode_opp") },
-    { value: "risks", label: t("sub.mode_risk") },
-    ...(ownedNetuids.size > 0 ? [{ value: "mine" as ViewMode, label: lang === "fr" ? "Mes subnets" : "My subnets" }] : []),
-  ];
+  // ── Column header helper ──
+  const SortHeader = ({ col, label, align = "left" }: { col: SortCol; label: string; align?: "left" | "center" | "right" }) => (
+    <th
+      className={`py-2.5 px-2.5 font-mono text-[8px] tracking-wider uppercase cursor-pointer select-none transition-colors hover:text-foreground/80 whitespace-nowrap ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"}`}
+      style={{ color: sortCol === col ? "hsl(var(--gold))" : undefined }}
+      onClick={() => toggleSort(col)}
+    >
+      {label} {sortCol === col ? (sortDir === "desc" ? "▼" : "▲") : ""}
+    </th>
+  );
 
-  const scLabelFn = (state: SmartCapitalState): string => {
-    switch (state) {
-      case "ACCUMULATION": return lang === "fr" ? "Accum." : "Accum.";
-      case "DISTRIBUTION": return lang === "fr" ? "Distrib." : "Distrib.";
-      case "STABLE": return "Stable";
-    }
-  };
+  const total = countRentre + countHold + countSors;
 
   return (
-    <div className="h-full w-full bg-background text-foreground p-4 sm:p-6 overflow-y-auto overflow-x-hidden">
-      <div className="flex items-center gap-3 mb-5 sm:mb-7">
-        <h1 className="font-mono text-lg sm:text-xl tracking-widest">{t("sub.title")}</h1>
-        <span className="font-mono text-[8px] px-2 py-0.5 rounded cursor-help"
-          style={{ background: "rgba(255,215,0,0.06)", color: "rgba(255,215,0,0.5)", border: "1px solid rgba(255,215,0,0.1)" }}
-          title={`Score snapshot: ${scoreTimestamp}`}>
-          ⏱ {new Date(scoreTimestamp).toLocaleTimeString()}
-        </span>
-        <DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} />
-        <DistributionBadge report={fleetDistribution} />
-      </div>
+    <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
+      <div className="px-4 sm:px-6 py-4 max-w-[1400px] mx-auto space-y-4">
 
-      {/* Filter row */}
-      <div className="flex items-center gap-3 mb-6 flex-wrap">
-        <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-          {modeOptions.map(opt => (
-            <button key={opt.value}
-              onClick={() => {
-                setMode(opt.value);
-                if (opt.value === "risks") { setSortCol("depeg"); setSortDir("desc"); }
-                else if (opt.value !== mode) { setSortCol(null); setSortDir("desc"); }
-              }}
-              className="font-mono text-[11px] tracking-wider px-4 py-2 transition-all"
-              style={{
-                background: mode === opt.value ? "rgba(255,215,0,0.1)" : "transparent",
-                color: mode === opt.value ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.35)",
-                fontWeight: mode === opt.value ? 700 : 400,
-              }}>
-              {opt.label}
+        {/* ═══ HEADER ═══ */}
+        <PageHeader
+          title="Subnet Intelligence"
+          subtitle={fr
+            ? "Vue maître de tous les subnets — filtrable par action, risque, conviction et portefeuille."
+            : "Master view of all subnets — filterable by action, risk, conviction, and portfolio."}
+          icon="📋"
+          badge={<DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" />}
+          actions={
+            <span className="font-mono text-[8px] text-muted-foreground/65">
+              {scoresList.length} subnets · {new Date(scoreTimestamp).toLocaleTimeString()}
+            </span>
+          }
+        />
+
+        {/* ═══ VERDICT DISTRIBUTION ═══ */}
+        {total > 0 && (
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2 font-mono text-[10px]">
+              <button onClick={() => setActionFilter(actionFilter === "ENTER" ? "ALL" : "ENTER")}
+                className={`px-2.5 py-1 rounded transition-all ${actionFilter === "ENTER" ? "font-bold" : "opacity-70 hover:opacity-100"}`}
+                style={{ background: actionFilter === "ENTER" ? "hsla(145,65%,48%,0.1)" : "transparent", color: "hsl(145,65%,48%)", border: actionFilter === "ENTER" ? "1px solid hsla(145,65%,48%,0.2)" : "1px solid transparent" }}>
+                🟢 {countRentre}
+              </button>
+              <button onClick={() => setActionFilter(actionFilter === "HOLD" ? "ALL" : "HOLD")}
+                className={`px-2.5 py-1 rounded transition-all ${actionFilter === "HOLD" ? "font-bold" : "opacity-70 hover:opacity-100"}`}
+                style={{ background: actionFilter === "HOLD" ? "hsla(38,92%,55%,0.1)" : "transparent", color: "hsl(38,92%,55%)", border: actionFilter === "HOLD" ? "1px solid hsla(38,92%,55%,0.2)" : "1px solid transparent" }}>
+                🟡 {countHold}
+              </button>
+              <button onClick={() => setActionFilter(actionFilter === "EXIT" ? "ALL" : "EXIT")}
+                className={`px-2.5 py-1 rounded transition-all ${actionFilter === "EXIT" ? "font-bold" : "opacity-70 hover:opacity-100"}`}
+                style={{ background: actionFilter === "EXIT" ? "hsla(4,80%,50%,0.1)" : "transparent", color: "hsl(4,80%,50%)", border: actionFilter === "EXIT" ? "1px solid hsla(4,80%,50%,0.2)" : "1px solid transparent" }}>
+                🔴 {countSors}
+              </button>
+            </div>
+            <div className="flex h-2 rounded-full overflow-hidden" style={{ width: 100, background: "hsla(0,0%,100%,0.04)" }}>
+              {countRentre > 0 && <div className="h-full" style={{ width: `${(countRentre / total) * 100}%`, background: "hsl(145,65%,48%)" }} />}
+              {countHold > 0 && <div className="h-full" style={{ width: `${(countHold / total) * 100}%`, background: "hsl(38,92%,55%)" }} />}
+              {countSors > 0 && <div className="h-full" style={{ width: `${(countSors / total) * 100}%`, background: "hsl(4,80%,50%)" }} />}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ FILTER BAR ═══ */}
+        <div className="rounded-xl p-3 space-y-2.5" style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.05)" }}>
+          {/* Search + controls row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1" style={{ minWidth: 180, maxWidth: 300 }}>
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={fr ? "Rechercher un subnet…" : "Search subnet…"}
+                className="w-full font-mono text-[11px] px-3 py-1.5 rounded-lg bg-background text-foreground placeholder:text-muted-foreground/40"
+                style={{ border: "1px solid hsla(0,0%,100%,0.08)" }}
+              />
+            </div>
+            {hasActiveFilters && (
+              <button onClick={resetFilters} className="font-mono text-[9px] px-2.5 py-1 rounded-lg transition-colors hover:bg-accent" style={{ color: "hsl(var(--destructive))", border: "1px solid hsla(var(--destructive), 0.15)" }}>
+                ✕ {fr ? "Reset" : "Reset"}
+              </button>
+            )}
+            <button onClick={saveCurrentView} className="font-mono text-[9px] px-2.5 py-1 rounded-lg text-muted-foreground/65 hover:text-foreground transition-colors" style={{ border: "1px solid hsla(0,0%,100%,0.06)" }}>
+              💾 {fr ? "Sauvegarder" : "Save view"}
             </button>
-          ))}
+            {savedViews.length > 0 && savedViews.map((v, i) => (
+              <button key={i} onClick={() => loadView(v)} className="font-mono text-[8px] px-2 py-1 rounded text-muted-foreground/65 hover:text-foreground transition-colors" style={{ background: "hsla(var(--gold), 0.04)", border: "1px solid hsla(var(--gold), 0.08)" }}>
+                {v.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Filter chips */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <FilterChipGroup
+              chips={[
+                { key: "ALL", label: fr ? "Tous" : "All" },
+                { key: "PORTFOLIO", label: "Portfolio" },
+              ]}
+              active={scope}
+              onChange={v => setScope(v as ScopeFilter)}
+            />
+            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
+            <FilterChipGroup
+              chips={[
+                { key: "ALL", label: fr ? "Toutes" : "All" },
+                { key: "ENTER", label: fr ? "Entrer" : "Enter" },
+                { key: "HOLD", label: fr ? "Attendre" : "Hold" },
+                { key: "EXIT", label: fr ? "Sortir" : "Exit" },
+              ]}
+              active={actionFilter}
+              onChange={v => setActionFilter(v as ActionFilter)}
+            />
+            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
+            <FilterChipGroup
+              chips={[
+                { key: "ALL", label: fr ? "Tous" : "All" },
+                { key: "OK", label: "OK" },
+                { key: "WATCH", label: "⚠" },
+                { key: "DANGER", label: "🔴" },
+              ]}
+              active={statusFilter}
+              onChange={v => setStatusFilter(v as StatusFilter)}
+            />
+            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
+            <FilterChipGroup
+              chips={[
+                { key: "ALL", label: fr ? "Toutes" : "All" },
+                { key: "HIGH", label: fr ? "Haute" : "High" },
+                { key: "MEDIUM", label: fr ? "Moy." : "Med" },
+                { key: "LOW", label: fr ? "Faible" : "Low" },
+              ]}
+              active={convictionFilter}
+              onChange={v => setConvictionFilter(v as ConvictionFilter)}
+            />
+          </div>
+          {/* Second row — advanced filters */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <FilterChipGroup
+              chips={[
+                { key: "ALL", label: fr ? "Toutes" : "All" },
+                { key: "HIGH", label: fr ? "Haute" : "High" },
+                { key: "MEDIUM", label: fr ? "Moy." : "Med" },
+                { key: "LOW", label: fr ? "Faible" : "Low" },
+              ]}
+              active={liquidityFilter}
+              onChange={v => setLiquidityFilter(v as LiquidityFilter)}
+            />
+            <div className="w-px h-4" style={{ background: "hsla(0,0%,100%,0.06)" }} />
+            <FilterChipGroup
+              chips={[
+                { key: "ALL", label: fr ? "Toutes" : "All" },
+                { key: "HEALTHY", label: fr ? "Saine" : "Healthy" },
+                { key: "FRAGILE", label: fr ? "Fragile" : "Fragile" },
+                { key: "CONCENTRATED", label: fr ? "Concentrée" : "Conc." },
+              ]}
+              active={structureFilter}
+              onChange={v => setStructureFilter(v as StructureFilter)}
+            />
+            <span className="ml-auto font-mono text-[9px] text-muted-foreground/65">
+              {rows.length} / {scoresList.length} {fr ? "résultats" : "results"}
+            </span>
+          </div>
         </div>
 
-        {/* Verdict distribution counter */}
-        {(() => {
-          const total = countRentre + countHold + countSors;
-          if (total === 0) return null;
-          const pctR = Math.round((countRentre / total) * 100);
-          const pctH = Math.round((countHold / total) * 100);
-          const pctS = Math.round((countSors / total) * 100);
-          return (
-            <div className="flex items-center gap-3 font-mono text-[10px]"
-              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "6px 12px" }}>
-              <span className="text-white/40 tracking-widest text-[8px]">VERDICTS</span>
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => setMode(mode === "rentre" ? "all" : "rentre")} className={`cursor-pointer hover:underline transition-opacity ${mode === "rentre" ? "opacity-100 font-bold" : "opacity-80 hover:opacity-100"}`} style={{ color: "rgba(76,175,80,0.9)" }}>🟢 {countRentre}</button>
-                <span className="text-white/15">|</span>
-                <button onClick={() => setMode(mode === "hold" ? "all" : "hold")} className={`cursor-pointer hover:underline transition-opacity ${mode === "hold" ? "opacity-100 font-bold" : "opacity-80 hover:opacity-100"}`} style={{ color: "rgba(255,193,7,0.85)" }}>🟡 {countHold}</button>
-                <span className="text-white/15">|</span>
-                <button onClick={() => setMode(mode === "sors" ? "all" : "sors")} className={`cursor-pointer hover:underline transition-opacity ${mode === "sors" ? "opacity-100 font-bold" : "opacity-80 hover:opacity-100"}`} style={{ color: "rgba(229,57,53,0.9)" }}>🔴 {countSors}</button>
-              </div>
-              <div className="flex h-2 rounded-full overflow-hidden" style={{ width: 80, background: "rgba(255,255,255,0.05)" }}>
-                {pctR > 0 && <div className="h-full transition-all" style={{ width: `${pctR}%`, background: "rgba(76,175,80,0.7)" }} />}
-                {pctH > 0 && <div className="h-full transition-all" style={{ width: `${pctH}%`, background: "rgba(255,193,7,0.5)" }} />}
-                {pctS > 0 && <div className="h-full transition-all" style={{ width: `${pctS}%`, background: "rgba(229,57,53,0.7)" }} />}
-              </div>
-            </div>
-          );
-        })()}
+        {/* ═══ MASTER TABLE ═══ */}
+        <SwipeHint storageKey="swipe-subnets-v4" />
 
-        {/* Override ratio indicator — visible in Risques view */}
-        {mode === "risks" && (() => {
-          const total = scoresList.filter(s => s.assetType !== "CORE_NETWORK").length;
-          const overrides = scoresList.filter(s => s.assetType !== "CORE_NETWORK" && s.isOverridden).length;
-          const warnings = scoresList.filter(s => s.assetType !== "CORE_NETWORK" && s.systemStatus === "SURVEILLANCE").length;
-          const criticals = scoresList.filter(s => s.assetType !== "CORE_NETWORK" && (s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEPEG" || s.systemStatus === "DEREGISTRATION")).length;
-          const pct = total > 0 ? Math.round((overrides / total) * 100) : 0;
-          const barColor = pct > 30 ? "rgba(229,57,53,0.8)" : pct > 15 ? "rgba(255,152,0,0.8)" : "rgba(76,175,80,0.8)";
-          return (
-            <div className="flex items-center gap-3 font-mono text-[10px]"
-              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "6px 12px" }}>
-              <div className="flex items-center gap-2">
-                <span className="text-white/40">Overrides</span>
-                <span className="font-bold" style={{ color: barColor }}>{overrides}/{total}</span>
-                <div className="w-16 h-1.5 rounded-full bg-white/5 overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
-                </div>
-                <span className="font-bold" style={{ color: barColor }}>{pct}%</span>
-              </div>
-              {criticals > 0 && (
-                <span className="flex items-center gap-1" style={{ color: "rgba(229,57,53,0.9)" }}>
-                  <span>🔴</span> {criticals} critical
-                </span>
-              )}
-              {warnings > 0 && (
-                <span className="flex items-center gap-1" style={{ color: "rgba(255,152,0,0.8)" }}>
-                  <span>🟠</span> {warnings} warn
-                </span>
-              )}
-            </div>
-          );
-        })()}
-        <ColumnConfigPanel preset={preset} visibleColumns={visibleColumns} setPreset={setPreset} toggleColumn={toggleColumn} />
-      </div>
-
-      <SwipeHint storageKey="swipe-hint-seen" />
-
-
-      {/* Table — swipe-friendly on mobile */}
-      <div className="overflow-x-auto -webkit-overflow-scrolling-touch relative" style={{ WebkitOverflowScrolling: "touch" }}>
-        <table className="w-full font-mono text-xs" style={{ minWidth: 1200 }}>
-          <thead>
-            <tr className="border-b border-white/10 text-white/40">
-              <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors sticky left-0 z-10 bg-background" onClick={() => toggleSort("netuid")}>
-                SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              <th className="text-left py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors sticky left-[40px] z-10 bg-background" style={{ boxShadow: "4px 0 8px -2px rgba(0,0,0,0.3)" }} onClick={() => toggleSort("name")}>
-                {t("sub.name")} {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>
-              {isVisible("verdict") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("verdict")}>
-                VERDICT {sortCol === "verdict" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("dstate") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("dstate")}>
-                ÉTAT {sortCol === "dstate" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("status") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("status")}>
-                STATUT {sortCol === "status" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("price") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("price")}>
-                Prix α {sortCol === "price" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("var30d") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("var30d")}>
-                Var 30j {sortCol === "var30d" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("spark") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("spark")}>
-                {t("tip.price7d")} {sortCol === "spark" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("opp") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("opp")}>
-                {t("sub.opp")} {sortCol === "opp" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("risk") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("risk")}>
-                {t("sub.risk")} {sortCol === "risk" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("depeg") && mode === "risks" && (
-                <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("depeg")}>
-                  Depeg % {sortCol === "depeg" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-                </th>
-              )}
-              {isVisible("asymmetry") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("asymmetry")}>
-                AS {sortCol === "asymmetry" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("action") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("action")}>
-                ACTION {sortCol === "action" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("momentum") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("momentum")}>
-                {t("sub.momentum")} {sortCol === "momentum" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("sc") && <th className="text-center py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("sc")}>
-                {t("sc.label")} {sortCol === "sc" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("confiance") && <th className="text-right py-3 px-2 cursor-pointer select-none hover:text-white/70 transition-colors" onClick={() => toggleSort("confiance")}>
-                {t("data.confiance")} {sortCol === "confiance" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-              </th>}
-              {isVisible("health") && <th className="text-center py-3 px-2">🔬</th>}
-              {isVisible("tmc") && <th className="text-center py-3 px-2" title="Market Context (TMC)">📊</th>}
-              {isVisible("owned") && <th className="text-center py-3 px-2">✔</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, idx) => {
-              const oppC = r.isOverridden ? "rgba(229,57,53,0.4)" : opportunityColor(r.opp);
-              const rskC = riskColor(r.risk);
-              const isTop1 = idx === 0 && !r.isOverridden && r.assetType !== "CORE_NETWORK";
-              const momColor = momentumColor(r.momentumLabel);
-              const actionLabel = r.action === "EXIT"
-                ? (lang === "fr" ? "SORTIR" : "EXIT")
-                : r.action === "STAKE"
-                ? "STAKER"
-                : r.action === "NEUTRAL"
-                ? "NEUTRE"
-                : r.action === "HOLD"
-                ? "HOLD"
-                : t(`strat.${r.action.toLowerCase()}` as any);
-              return (
-                <tr key={r.netuid}
-                  className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors cursor-pointer"
-                  style={{
-                    ...(isTop1 ? { background: "rgba(255,215,0,0.02)", borderLeft: "2px solid rgba(255,215,0,0.3)" } : {}),
-                    ...(r.isOverridden ? { background: "rgba(229,57,53,0.03)", borderLeft: "2px solid rgba(229,57,53,0.4)" } : {}),
-                  }}
-                  onClick={() => navigate(`/subnets/${r.netuid}`)}>
-                  <td className="py-3 px-2 text-white/55 text-sm sticky left-0 z-[5] bg-background">{r.netuid}</td>
-                  <td className="py-3 px-2 text-sm sticky left-[40px] z-[5] bg-background" style={{ color: isTop1 ? "rgba(255,248,220,0.95)" : r.isOverridden ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.75)", fontWeight: isTop1 ? 700 : 400, boxShadow: "4px 0 8px -2px rgba(0,0,0,0.3)" }}>
-                    <span>{r.name}</span>
-                    {SPECIAL_SUBNETS[r.netuid] && (
-                      <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider"
-                        style={{ background: "rgba(100,181,246,0.10)", color: "rgba(100,181,246,0.9)", border: "1px solid rgba(100,181,246,0.25)" }}>
-                        🔷 {SPECIAL_SUBNETS[r.netuid].label}
-                      </span>
-                    )}
-                    {r.isOverridden && (
-                      <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider"
-                        style={{ background: "rgba(229,57,53,0.12)", color: "rgba(229,57,53,0.9)", border: "1px solid rgba(229,57,53,0.25)" }}
-                        title={r.overrideReasons.join(' • ')}>
-                        ⛔ OVERRIDE ({r.overrideReasons.length} raisons)
-                      </span>
-                    )}
-                    {r.isWarning && !r.isOverridden && (
-                      <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] tracking-wider"
-                        style={{ background: "rgba(255,193,7,0.10)", color: "rgba(255,193,7,0.9)", border: "1px solid rgba(255,193,7,0.25)" }}
-                        title={r.overrideReasons.join(' • ')}>
-                        ⚠ Warning
-                      </span>
-                    )}
-                  </td>
-                  {isVisible("verdict") && (
-                  <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-                    {r.verdict ? (
-                      <VerdictBadgeWithTooltip
-                        verdict={r.verdict.verdict}
-                        confidence={r.verdict.confidence}
-                        positiveReasons={r.verdict.positiveReasons}
-                        negativeReasons={r.verdict.negativeReasons}
-                        entryScore={r.verdict.entryScore}
-                        holdScore={r.verdict.holdScore}
-                        exitRisk={r.verdict.exitRisk}
-                        pillars={r.verdict.pillars}
-                      />
-                    ) : (
-                      <span className="font-mono text-[9px] text-white/15">—</span>
-                    )}
-                  </td>
-                  )}
-                  {isVisible("dstate") && (
-                  <td className="py-3 px-2 text-center relative group/ds">
-                    {(() => {
-                      const ds = decisionStates?.get(r.netuid);
-                      const st = ds?.state as DecisionState | undefined;
-                      if (!st || st === "OK") return <span className="font-mono text-[9px] text-white/15">—</span>;
-                      const sev = stateSeverity(st);
-                      const col = stateColor(st);
-                      const cooldownMin = ds?.isCooledDown ? "En cooldown" : null;
-                      const pendingInfo = ds?.pendingState && ds.pendingTicks > 0
-                        ? `${stateLabel(ds.pendingState as DecisionState)} (${ds.pendingTicks} tick${ds.pendingTicks > 1 ? "s" : ""})`
-                        : null;
-                      const reasons = r.overrideReasons?.length ? r.overrideReasons : [];
-                      return (
-                        <div className="inline-block relative">
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider whitespace-nowrap cursor-help${sev >= 3 ? " animate-pulse" : ""}`}
-                            style={{ background: `${col}15`, color: col, border: `1px solid ${col}40` }}>
-                            {sev >= 3 ? "🚨" : sev >= 2 ? "⚠" : "👁"} {stateLabel(st)}
+        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid hsla(0,0%,100%,0.05)" }}>
+          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+            <table className="w-full font-mono" style={{ minWidth: 1100 }}>
+              <thead>
+                <tr style={{ background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.06)" }}>
+                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 sticky left-0 z-10 bg-background cursor-pointer" onClick={() => toggleSort("netuid")}>
+                    SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+                  </th>
+                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 sticky left-[44px] z-10 bg-background cursor-pointer" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }} onClick={() => toggleSort("name")}>
+                    Subnet {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+                  </th>
+                  <SortHeader col="action" label="Action" align="center" />
+                  <SortHeader col="conviction" label="Conviction" align="center" />
+                  <SortHeader col="confidence" label="Conf." align="right" />
+                  <SortHeader col="risk" label="Risk" align="right" />
+                  <SortHeader col="momentum" label="Mom." align="right" />
+                  <SortHeader col="opp" label="Opp." align="right" />
+                  <SortHeader col="liquidity" label={fr ? "Liq." : "Liq."} align="center" />
+                  <SortHeader col="stability" label="Structure" align="center" />
+                  <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 whitespace-nowrap">Fit</th>
+                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65 whitespace-nowrap">Signal</th>
+                  <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground/65">7d</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={13} className="py-12 text-center text-muted-foreground/65 text-[11px]">
+                      {fr ? "Aucun subnet ne correspond aux filtres actifs." : "No subnets match active filters."}
+                    </td>
+                  </tr>
+                ) : rows.map((r, idx) => {
+                  const actionLabel = r.action === "ENTER" ? (fr ? "Entrer" : "Enter") : r.action === "EXIT" ? (fr ? "Sortir" : "Exit") : r.action === "HOLD" ? "Hold" : r.action === "STAKE" ? "Stake" : r.action;
+                  const convColor = r.convictionLevel === "HIGH" ? "hsl(145,65%,48%)" : r.convictionLevel === "MEDIUM" ? "hsl(38,92%,55%)" : "hsl(var(--muted-foreground))";
+                  const liqColor = r.liquidityLevel === "HIGH" ? "hsl(145,65%,48%)" : r.liquidityLevel === "MEDIUM" ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)";
+                  const structColor = r.structureLevel === "HEALTHY" ? "hsl(145,65%,48%)" : r.structureLevel === "FRAGILE" ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)";
+                  return (
+                    <tr
+                      key={r.netuid}
+                      className="transition-colors cursor-pointer hover:bg-accent/30"
+                      style={{
+                        borderBottom: "1px solid hsla(0,0%,100%,0.03)",
+                        ...(r.isOverridden ? { background: "hsla(4,80%,50%,0.03)", borderLeft: "2px solid hsla(4,80%,50%,0.4)" } : {}),
+                      }}
+                      onClick={() => setDrawerRow(r)}
+                    >
+                      <td className="py-2 px-2.5 text-[10px] text-muted-foreground/80 sticky left-0 z-[5] bg-background">{r.netuid}</td>
+                      <td className="py-2 px-2.5 text-[10px] sticky left-[44px] z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
+                        <span className="text-foreground/85 font-medium">{r.name}</span>
+                        {SPECIAL_SUBNETS[r.netuid] && (
+                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(210,80%,55%,0.08)", color: "hsl(210,80%,55%)", border: "1px solid hsla(210,80%,55%,0.2)" }}>
+                            {SPECIAL_SUBNETS[r.netuid].label}
                           </span>
-                          <div className={`absolute left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover/ds:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
-                            style={{ width: 220 }}>
-                            <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
-                              style={{ background: "rgba(10,10,14,0.97)", border: `1px solid ${col}30`, boxShadow: `0 4px 24px rgba(0,0,0,0.7), 0 0 12px ${col}10` }}>
-                              <div className="font-bold text-[11px] tracking-wider" style={{ color: col }}>
-                                {sev >= 3 ? "🚨" : sev >= 2 ? "⚠" : "👁"} {stateLabel(st)}
-                              </div>
-                              <div className="flex justify-between text-white/40">
-                                <span>Sévérité</span>
-                                <span className="text-white/70 font-bold">{sev}/4</span>
-                              </div>
-                              <div className="flex justify-between text-white/40">
-                                <span>Transition</span>
-                                <span style={{ color: ds?.isTransition ? "rgba(76,175,80,0.9)" : "rgba(255,255,255,0.4)" }}>
-                                  {ds?.isTransition ? "✓ Nouvelle" : "Confirmé"}
-                                </span>
-                              </div>
-                              {cooldownMin && (
-                                <div className="flex justify-between text-white/40">
-                                  <span>Cooldown</span>
-                                  <span style={{ color: "rgba(255,193,7,0.8)" }}>⏳ Actif</span>
-                                </div>
-                              )}
-                              {pendingInfo && (
-                                <div className="pt-1 border-t border-white/5">
-                                  <div className="text-white/30 text-[8px] tracking-widest mb-0.5">TRANSITION PENDING</div>
-                                  <div className="text-white/60">{pendingInfo}</div>
-                                </div>
-                              )}
-                              {reasons.length > 0 && (
-                                <div className="pt-1 border-t border-white/5">
-                                  <div className="text-white/30 text-[8px] tracking-widest mb-0.5">RAISONS</div>
-                                  {reasons.slice(0, 4).map((reason, i) => (
-                                    <div key={i} className="text-white/55 truncate">• {reason}</div>
-                                  ))}
-                                  {reasons.length > 4 && <div className="text-white/30">+{reasons.length - 4} autres</div>}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  )}
-                  {isVisible("status") && (
-                  <td className="py-3 px-2 text-center">
-                    <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded"
-                      style={{ color: systemStatusColor(r.systemStatus), background: `${systemStatusColor(r.systemStatus)}15`, border: `1px solid ${systemStatusColor(r.systemStatus)}30` }}>
-                      {systemStatusLabel(r.systemStatus)}
-                    </span>
-                  </td>
-                  )}
-                  {isVisible("price") && (
-                  <td className="py-3 px-2 text-right font-mono text-[11px]" style={{ color: "rgba(255,255,255,0.65)" }}>
-                    {r.alphaPrice > 0 ? r.alphaPrice.toFixed(5) : "—"}
-                  </td>
-                  )}
-                  {isVisible("var30d") && (
-                  <td className="py-3 px-2 text-right font-mono text-[11px] font-bold" style={{
-                    color: r.priceVar30d == null ? "rgba(255,255,255,0.2)"
-                      : r.priceVar30d > 0 ? "rgba(76,175,80,0.85)"
-                      : r.priceVar30d < 0 ? "rgba(229,57,53,0.85)"
-                      : "rgba(255,255,255,0.4)"
-                  }}>
-                    {r.priceVar30d != null ? `${r.priceVar30d > 0 ? "+" : ""}${r.priceVar30d.toFixed(0)}%` : "—"}
-                  </td>
-                  )}
-                  {isVisible("spark") && (
-                  <td className="py-3 px-2 text-center"><Sparkline data={r.spark} /></td>
-                  )}
-                  {isVisible("opp") && (
-                  <td className="py-3 px-2 text-right font-bold text-sm relative group/opp" style={{ color: oppC }}>
-                    {r.opp}
-                    <div className={`absolute right-0 pointer-events-none opacity-0 group-hover/opp:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
-                      style={{ width: 230 }}>
-                      <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
-                        style={{ background: "rgba(10,10,14,0.97)", border: "1px solid rgba(255,215,0,0.2)", boxShadow: "0 4px 24px rgba(0,0,0,0.7)" }}>
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-[11px] tracking-wider" style={{ color: oppC }}>OPP {r.opp}</span>
-                          <span className="text-[8px] text-white/20" title={`Snapshot: ${scoreTimestamp}`}>📷 {new Date(scoreTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        <div className="text-white/25 text-[8px] tracking-widest pt-0.5">TOP CONTRIBUTEURS</div>
-                        {(() => {
-                          const h = r.healthScores;
-                          const factors: ScoreFactor[] = [
-                            { code: "MOMENTUM", label: "Momentum (PSI)", contribution: Math.round(clamp(r.psi - 40, 0, 60) / 60 * 30), rawValue: r.psi },
-                            { code: "VOLUME", label: "Volume santé", contribution: Math.round(h.volumeHealth / 100 * 20), rawValue: Math.round(h.volumeHealth) },
-                            { code: "ACTIVITY", label: "Activité mineurs", contribution: Math.round(h.activityHealth / 100 * 20), rawValue: Math.round(h.activityHealth) },
-                            { code: "SMART_CAPITAL", label: "Smart Capital", contribution: r.sc === "ACCUMULATION" ? 15 : r.sc === "DISTRIBUTION" ? 3 : 8, rawValue: r.sc === "ACCUMULATION" ? 70 : r.sc === "DISTRIBUTION" ? 20 : 45 },
-                            { code: "LIQUIDITY", label: "Liquidité", contribution: Math.round(h.liquidityHealth / 100 * 15), rawValue: Math.round(h.liquidityHealth) },
-                          ];
-                          return topFactors(factors, 3).map((f, i) => (
-                            <div key={i} className="space-y-0.5">
-                              <div className="flex justify-between items-center">
-                                <span className="text-white/50">{f.label}</span>
-                                <span className="text-white/75 font-bold">+{f.contribution}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <div className="flex-1 h-1 rounded-full bg-white/5 overflow-hidden">
-                                  <div className="h-full rounded-full" style={{ width: `${clamp((f.rawValue ?? 0), 0, 100)}%`, background: oppC }} />
-                                </div>
-                                <span className="text-white/30 text-[8px] w-6 text-right">{f.rawValue ?? 0}</span>
-                              </div>
-                            </div>
-                          ));
-                        })()}
-                        {r.isOverridden && <div className="text-red-400/80 text-[9px] pt-1.5 border-t border-white/5">⛔ Override actif → OPP = 0</div>}
-                      </div>
-                    </div>
-                  </td>
-                  )}
-                  {isVisible("risk") && (
-                  <td className="py-3 px-2 text-right font-bold text-sm relative group/rsk" style={{ color: rskC }}>
-                    {r.risk}
-                    <div className={`absolute right-0 pointer-events-none opacity-0 group-hover/rsk:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
-                      style={{ width: 230 }}>
-                      <div className="rounded-lg px-3 py-2.5 font-mono text-[10px] space-y-1.5"
-                        style={{ background: "rgba(10,10,14,0.97)", border: "1px solid rgba(229,57,53,0.2)", boxShadow: "0 4px 24px rgba(0,0,0,0.7)" }}>
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-[11px] tracking-wider" style={{ color: rskC }}>RISK {r.risk}</span>
-                          <span className="text-[8px] text-white/20" title={`Snapshot: ${scoreTimestamp}`}>📷 {new Date(scoreTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        <div className="text-white/25 text-[8px] tracking-widest pt-0.5">TOP CONTRIBUTEURS</div>
-                        {(() => {
-                          const h = r.healthScores;
-                          const factors: ScoreFactor[] = [
-                            { code: "LIQ_LOW", label: "Liquidité ↓", contribution: Math.round((100 - h.liquidityHealth) / 100 * 30), rawValue: Math.round(100 - h.liquidityHealth) },
-                            { code: "EMISSION", label: "Pression émission", contribution: Math.round(h.emissionPressure / 100 * 25), rawValue: Math.round(h.emissionPressure) },
-                            { code: "DILUTION", label: "Risque dilution", contribution: Math.round(h.dilutionRisk / 100 * 25), rawValue: Math.round(h.dilutionRisk) },
-                            { code: "ACTIVITY_LOW", label: "Activité ↓", contribution: Math.round((100 - h.activityHealth) / 100 * 20), rawValue: Math.round(100 - h.activityHealth) },
-                            { code: "HAIRCUT", label: "Haircut prix", contribution: Math.round(Math.min(Math.abs(r.recalc.liqHaircut), 50) / 50 * 15), rawValue: Math.round(Math.abs(r.recalc.liqHaircut)) },
-                          ];
-                          return topFactors(factors, 3).map((f, i) => (
-                            <div key={i} className="space-y-0.5">
-                              <div className="flex justify-between items-center">
-                                <span className="text-white/50">{f.label}</span>
-                                <span className="text-white/75 font-bold">+{f.contribution}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <div className="flex-1 h-1 rounded-full bg-white/5 overflow-hidden">
-                                  <div className="h-full rounded-full" style={{ width: `${clamp((f.rawValue ?? 0), 0, 100)}%`, background: rskC }} />
-                                </div>
-                                <span className="text-white/30 text-[8px] w-6 text-right">{f.rawValue ?? 0}</span>
-                              </div>
-                            </div>
-                          ));
-                        })()}
-                        {r.delistCategory !== "NORMAL" && (
-                          <div className="pt-1.5 border-t border-white/5">
-                            <div className="flex justify-between items-center">
-                              <span className="text-[9px]" style={{ color: r.delistCategory === "DEPEG_PRIORITY" ? "rgba(229,57,53,0.9)" : "rgba(255,152,0,0.9)" }}>
-                                {r.delistCategory === "DEPEG_PRIORITY" ? "🔴 RISQUE DEREG" : "🟠 Near Delist"}
-                              </span>
-                              <span className="text-white/60 font-bold text-[9px]">Score {r.delistScore}</span>
-                            </div>
-                          </div>
                         )}
-                      </div>
-                    </div>
-                  </td>
-                  )}
-                  {isVisible("depeg") && mode === "risks" && (() => {
-                    const dp = r.depegProbability;
-                    const dpColor = dp >= 85 ? "rgba(229,57,53,0.95)" : dp >= 70 ? "rgba(255,152,0,0.9)" : dp >= 30 ? "rgba(255,193,7,0.7)" : "rgba(76,175,80,0.7)";
-                    const dpLabel = r.depegState === "CONFIRMED" ? "🔴" : r.depegState === "WATCH" || r.depegState === "WAITLIST" ? "🟠" : "";
-                    return (
-                      <td className="py-3 px-2 relative group/depeg">
-                        <div className="flex items-center gap-1.5 justify-center">
-                          <div className="w-14 h-2 rounded-full bg-white/5 overflow-hidden">
-                            <div className="h-full rounded-full transition-all" style={{ width: `${dp}%`, background: dpColor }} />
-                          </div>
-                          <span className="font-mono text-[10px] font-bold" style={{ color: dpColor }}>
-                            {dpLabel}{dp}%
-                          </span>
-                        </div>
-                        {dp > 0 && r.depegSignals.length > 0 && (
-                          <div className={`absolute left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover/depeg:opacity-100 transition-opacity duration-150 z-50 ${idx < 3 ? 'top-full mt-2' : 'bottom-full mb-2'}`}
-                            style={{ width: 200 }}>
-                            <div className="rounded-lg px-3 py-2 font-mono text-[10px] space-y-1"
-                              style={{ background: "rgba(10,10,14,0.97)", border: `1px solid ${dpColor}30`, boxShadow: "0 4px 20px rgba(0,0,0,0.7)" }}>
-                              <div className="font-bold text-[11px]" style={{ color: dpColor }}>Depeg {dp}%</div>
-                              {r.depegSignals.map((s, i) => (
-                                <div key={i} className="text-white/55 text-[9px]">• {s}</div>
-                              ))}
-                            </div>
-                          </div>
+                        {r.isOverridden && (
+                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(4,80%,50%,0.08)", color: "hsl(4,80%,50%)", border: "1px solid hsla(4,80%,50%,0.2)" }}>⛔</span>
                         )}
                       </td>
-                    );
-                  })()}
-                  {isVisible("asymmetry") && (
-                  <td className="py-3 px-2 text-right font-bold text-sm" style={{ color: r.asymmetry > 20 ? "rgba(76,175,80,0.8)" : r.asymmetry > 0 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)" }}>
-                    {r.asymmetry > 0 ? "+" : ""}{r.asymmetry}
-                  </td>
-                  )}
-                  {isVisible("action") && (
-                  <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] tracking-wider font-bold"
-                      style={{
-                        color: actionColor(r.action),
-                        background: actionBg(r.action),
-                        border: `1px solid ${actionBorder(r.action)}`,
-                      }}>
-                      <span>{actionIcon(r.action)}</span>
-                      {actionLabel}
-                    </span>
-                  </td>
-                  )}
-                  {isVisible("momentum") && (
-                  <td className="py-3 px-2 text-center">
-                    <span className="font-mono text-[11px] font-bold" style={{ color: momColor }}>
-                      {r.momentumLabel}
-                    </span>
-                  </td>
-                  )}
-                  {isVisible("sc") && (
-                  <td className="py-3 px-2 text-center">
-                    <span className="font-mono text-[10px] font-bold" style={{ color: scColor(r.sc) }}>
-                      {scLabelFn(r.sc)}
-                    </span>
-                  </td>
-                  )}
-                  {isVisible("confiance") && (
-                  <td className="py-3 px-2 text-right">
-                    <span className="font-mono text-xs font-bold" style={{ color: confianceColor(r.confianceScore) }}>
-                      {r.confianceScore}%
-                    </span>
-                  </td>
-                  )}
-                  {isVisible("health") && (
-                  <td className="py-3 px-2 text-center">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setHealthPanel({ netuid: r.netuid, name: r.name, recalc: r.recalc, scores: r.healthScores, displayedCap: r.displayedCap, displayedLiq: r.displayedLiq }); }}
-                      className="text-[10px] px-1.5 py-0.5 rounded transition-colors hover:bg-white/5"
-                      style={{ color: "rgba(255,215,0,0.5)", border: "1px solid rgba(255,215,0,0.1)" }}>
-                      🔬
-                    </button>
-                  </td>
-                  )}
-                  {isVisible("tmc") && (
-                  <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setTmcPanel({ netuid: r.netuid, name: r.name }); }}
-                      className="text-[10px] px-1.5 py-0.5 rounded transition-colors hover:bg-white/5"
-                      style={{ color: marketContext?.has(r.netuid) ? "rgba(100,181,246,0.5)" : "rgba(255,255,255,0.15)", border: "1px solid rgba(100,181,246,0.1)" }}>
-                      📊
-                    </button>
-                  </td>
-                  )}
-                  {isVisible("owned") && (
-                  <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-                    {r.owned ? (
-                      <span style={{ color: "rgba(76,175,80,0.8)", fontSize: 14 }}>✔</span>
-                    ) : (
-                      <button onClick={(e) => { e.stopPropagation(); addPosition(r.netuid, 0); }}
-                        className="font-mono text-[8px] px-1.5 py-0.5 rounded opacity-40 hover:opacity-100 transition-opacity"
-                        style={{ background: "rgba(76,175,80,0.08)", color: "rgba(76,175,80,0.6)", border: "1px solid rgba(76,175,80,0.15)" }}>
-                        +
-                      </button>
-                    )}
-                  </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      <td className="py-2 px-2.5 text-center">
+                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{ color: actionColor(r.action), background: `color-mix(in srgb, ${actionColor(r.action)} 8%, transparent)` }}>
+                          {actionIcon(r.action)} {actionLabel}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2.5 text-center">
+                        <span className="font-mono text-[9px] font-bold" style={{ color: convColor }}>{r.convictionLevel}</span>
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: confianceColor(r.confianceScore) }}>{r.confianceScore}%</td>
+                      <td className="py-2 px-2.5 text-right font-mono text-[10px] font-bold" style={{ color: riskColor(r.risk) }}>{r.risk}</td>
+                      <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: r.momentumScore >= 55 ? "hsl(145,65%,48%)" : r.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>{Math.round(r.momentumScore)}</td>
+                      <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: opportunityColor(r.opp) }}>{r.opp}</td>
+                      <td className="py-2 px-2.5 text-center">
+                        <span className="font-mono text-[9px]" style={{ color: liqColor }}>{r.liquidityLevel === "HIGH" ? "●" : r.liquidityLevel === "MEDIUM" ? "◐" : "○"}</span>
+                      </td>
+                      <td className="py-2 px-2.5 text-center">
+                        <span className="font-mono text-[9px]" style={{ color: structColor }}>{r.structureLevel === "HEALTHY" ? "✓" : r.structureLevel === "FRAGILE" ? "~" : "✕"}</span>
+                      </td>
+                      <td className="py-2 px-2.5 text-center">
+                        {r.owned ? <span className="text-[9px]" style={{ color: "hsl(var(--gold))" }}>★</span> : <span className="text-muted-foreground/30">—</span>}
+                      </td>
+                      <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground/70 truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
+                      <td className="py-2 px-2.5 text-center">
+                        <SparklineMini data={r.spark} width={44} height={14} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
-      {/* Health Panel Modal */}
-      {healthPanel && <HealthPanel health={healthPanel} onClose={() => setHealthPanel(null)} />}
-
-      {/* Market Context Panel (TMC — informational only) */}
-      {tmcPanel && (
-        <MarketContextPanel
-          netuid={tmcPanel.netuid}
-          name={tmcPanel.name}
-          tmc={marketContext?.get(tmcPanel.netuid)}
-          onClose={() => setTmcPanel(null)}
-        />
-      )}
+      <QuickViewDrawer row={drawerRow} verdict={drawerRow?.verdict} open={!!drawerRow} onClose={() => setDrawerRow(null)} fr={fr} />
     </div>
   );
 }
