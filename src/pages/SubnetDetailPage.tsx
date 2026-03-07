@@ -564,7 +564,7 @@ export default function SubnetDetailPage() {
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-2.5">
           <ActionBadge action={actionLabel(s.action)} size="sm" />
-          <span className="font-mono text-[9px] text-muted-foreground/55 hidden sm:inline">
+          <span className="font-mono text-[9px] text-muted-foreground hidden sm:inline">
             {fr ? profile.labelFr : profile.label}
           </span>
           <div className="flex-1" />
