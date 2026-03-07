@@ -371,24 +371,14 @@ export default function CompassPage() {
           />
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {drivers.map(d => (
-              <div
+              <MetricCard
                 key={d.label}
-                className="rounded-lg px-3 py-3 flex flex-col items-center gap-1"
-                style={{ background: "hsla(0,0%,100%,0.015)", border: "1px solid hsla(0,0%,100%,0.05)" }}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span style={{ fontSize: 11 }}>{d.icon}</span>
-                  <span className="font-mono text-[8px] tracking-wider text-muted-foreground/40 uppercase">{d.label}</span>
-                </div>
-                <span className="font-mono text-sm font-bold" style={{ color: d.color }}>{d.value}</span>
-                {/* Mini bar */}
-                <div className="w-full h-[3px] rounded-full overflow-hidden" style={{ background: "hsla(0,0%,100%,0.04)" }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${Math.min(d.num, 100)}%`, background: d.color }}
-                  />
-                </div>
-              </div>
+                label={d.label}
+                value={d.value}
+                icon={d.icon}
+                color={d.color}
+                progress={d.num}
+              />
             ))}
           </div>
         </section>
