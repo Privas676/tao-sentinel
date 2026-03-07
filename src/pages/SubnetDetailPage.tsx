@@ -171,7 +171,7 @@ export default function SubnetDetailPage() {
         {/*   HERO — Identity + Primary Decision       */}
         {/* ══════════════════════════════════════════ */}
         <SectionCard>
-          <div className="px-5 sm:px-6 py-5 sm:py-6">
+          <div className="px-5 sm:px-7 py-6 sm:py-7">
             {/* Identity row */}
             <div className="flex items-start gap-4 mb-5">
               <div className="w-14 h-14 rounded-xl flex items-center justify-center font-mono text-xl font-bold border border-border bg-muted/15 text-[hsl(var(--gold))] shrink-0">
