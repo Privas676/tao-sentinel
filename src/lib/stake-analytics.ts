@@ -87,7 +87,7 @@ export type DerivedMetrics = {
   emissionEfficiency: number;  // emissions_per_day / market_cap
   poolBalance: number;         // tao_pool_percent / alpha_pool_percent
   tradingPressure: number;     // buy_volume - sell_volume
-  burnRatio: number;           // total_burned / total_issued
+  burnRatio: number;           // recycled_per_day / emissions_per_day (actual burn rate)
 };
 
 export function computeDerivedMetrics(eco: EconomicContext, p: PriceContext, s: StakeSnapshot): DerivedMetrics {
@@ -97,7 +97,7 @@ export function computeDerivedMetrics(eco: EconomicContext, p: PriceContext, s: 
     emissionEfficiency: p.marketCap > 0 ? eco.emissionsPerDay / p.marketCap : 0,
     poolBalance: eco.alphaPoolPercent > 0 ? eco.taoPoolPercent / eco.alphaPoolPercent : 0,
     tradingPressure: eco.buyVolume - eco.sellVolume,
-    burnRatio: eco.totalIssued > 0 ? eco.totalBurned / eco.totalIssued : 0,
+    burnRatio: eco.emissionsPerDay > 0 ? s.recyclePerDay / eco.emissionsPerDay : 0,
   };
 }
 
