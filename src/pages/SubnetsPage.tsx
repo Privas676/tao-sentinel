@@ -578,7 +578,7 @@ export default function SubnetsPage() {
                       <td className="py-2 px-2.5 text-center">
                         {r.owned ? <span className="text-[9px]" style={{ color: "hsl(var(--gold))" }}>★</span> : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground/70 truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
+                      <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
                       <td className="py-2 px-2.5 text-center">
                         <SparklineMini data={r.spark} width={44} height={14} />
                       </td>

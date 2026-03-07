@@ -572,7 +572,7 @@ export default function CompassPage() {
             </Link>
             <Link to="/lab" className="flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.06)" }}>
               <span style={{ fontSize: 16 }}>🔬</span>
-              <span className="text-[10px] tracking-wider font-bold text-muted-foreground/70">{fr ? "Laboratoire" : "Lab"}</span>
+              <span className="text-[10px] tracking-wider font-bold text-muted-foreground">{fr ? "Laboratoire" : "Lab"}</span>
               <span className="text-[8px] text-muted-foreground">{fr ? "Diagnostics avancés" : "Advanced diagnostics"}</span>
             </Link>
           </div>
