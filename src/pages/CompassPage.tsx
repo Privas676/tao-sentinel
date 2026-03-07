@@ -85,17 +85,17 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
           <div className="flex items-center justify-center gap-8">
             <div className="text-center">
               <div className="font-mono text-2xl font-bold" style={{ color: opportunityColor(signal.opp) }}>{signal.opp}</div>
-              <div className="font-mono text-[9px] text-muted-foreground/50 tracking-widest">{t("gauge.opportunity")}</div>
+              <div className="font-mono text-[9px] text-muted-foreground/70 tracking-widest">{t("gauge.opportunity")}</div>
             </div>
             <div className="w-px h-8 bg-border" />
             <div className="text-center">
               <div className="font-mono text-2xl font-bold" style={{ color: riskColor(signal.risk) }}>{signal.risk}</div>
-              <div className="font-mono text-[9px] text-muted-foreground/50 tracking-widest">{t("gauge.risk")}</div>
+              <div className="font-mono text-[9px] text-muted-foreground/70 tracking-widest">{t("gauge.risk")}</div>
             </div>
           </div>
           {signal.reasons.length > 0 && (
             <div className="rounded-lg p-3" style={{ background: "hsla(0,0%,100%,0.02)" }}>
-              <div className="font-mono text-[9px] text-muted-foreground/40 tracking-widest mb-2">RAISONS</div>
+              <div className="font-mono text-[9px] text-muted-foreground/65 tracking-widest mb-2">RAISONS</div>
               {signal.reasons.map((r, i) => <div key={i} className="font-mono text-xs text-muted-foreground mb-1">• {r}</div>)}
             </div>
           )}
@@ -262,20 +262,20 @@ export default function CompassPage() {
   const rskGlobal = riskColor(globalRisk);
   const [panelSignal, setPanelSignal] = useState<DashSignal | null>(null);
 
-  // ── Drivers (computed from real data) ──
+  // ── Drivers (computed from real data — no overlap with hero metrics) ──
   const drivers = useMemo(() => {
     const avgMom = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + s.momentumScore, 0) / enrichedSignals.length) : 0;
     const avgLiqEff = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + (s.quality || 50), 0) / enrichedSignals.length) : 50;
-    const avgConc = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + (s.stability || 50), 0) / enrichedSignals.length) : 50;
     const sellPressure = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => s.action === "EXIT" || s.risk > 70).length / enrichedSignals.length * 100) : 0;
+    const entryRatio = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => s.action === "ENTER").length / enrichedSignals.length * 100) : 0;
     return [
-      { icon: "💰", label: fr ? "Capital Flow" : "Capital Flow", value: smartCapital.state === "ACCUMULATION" ? "In" : smartCapital.state === "DISTRIBUTION" ? "Out" : "—", num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? "hsl(145,65%,48%)" : smartCapital.state === "DISTRIBUTION" ? "hsl(4,80%,50%)" : "hsl(var(--muted-foreground))" },
-      { icon: "🧠", label: "Smart Money", value: scLabel, num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? "hsl(145,65%,48%)" : smartCapital.state === "DISTRIBUTION" ? "hsl(4,80%,50%)" : "hsl(var(--muted-foreground))" },
+      { icon: "💰", label: fr ? "Smart Capital" : "Smart Capital", value: smartCapital.state === "ACCUMULATION" ? "Accum." : smartCapital.state === "DISTRIBUTION" ? "Distrib." : "Stable", num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? "hsl(145,65%,48%)" : smartCapital.state === "DISTRIBUTION" ? "hsl(4,80%,50%)" : "hsl(var(--muted-foreground))" },
+      { icon: "📈", label: "Momentum", value: `${avgMom}`, num: avgMom, color: avgMom >= 55 ? "hsl(145,65%,48%)" : avgMom >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
       { icon: "💧", label: fr ? "Liquidité" : "Liquidity", value: `${avgLiqEff}%`, num: avgLiqEff, color: avgLiqEff >= 60 ? "hsl(145,65%,48%)" : avgLiqEff >= 40 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
-      { icon: "🔒", label: fr ? "Concentration" : "Validator Conc.", value: `${avgConc}%`, num: avgConc, color: avgConc >= 60 ? "hsl(145,65%,48%)" : avgConc >= 40 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
       { icon: "📉", label: fr ? "Pression vente" : "Sell Pressure", value: `${sellPressure}%`, num: sellPressure, color: sellPressure <= 15 ? "hsl(145,65%,48%)" : sellPressure <= 30 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
+      { icon: "🎯", label: fr ? "Taux entrée" : "Entry Rate", value: `${entryRatio}%`, num: entryRatio, color: entryRatio >= 10 ? "hsl(145,65%,48%)" : entryRatio >= 3 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" },
     ];
-  }, [enrichedSignals, smartCapital, fr, scLabel]);
+  }, [enrichedSignals, smartCapital, fr]);
 
   // ── Tactical summary ──
   const tacticalSummary = useMemo(() => {
@@ -319,7 +319,7 @@ export default function CompassPage() {
                 🛡 SAFE MODE
               </span>
             )}
-            <span className="ml-auto font-mono text-[8px] text-muted-foreground/25">{scoresList.length} subnets</span>
+            <span className="ml-auto font-mono text-[8px] text-muted-foreground/65">{scoresList.length} subnets</span>
           </div>
 
           <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.025) 0%, hsla(0,0%,100%,0.005) 100%)", border: "1px solid hsla(var(--gold), 0.08)" }}>
@@ -328,11 +328,11 @@ export default function CompassPage() {
               <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-10">
                 {/* Score central */}
                 <div className="flex flex-col items-center flex-shrink-0">
-                  <span className="font-mono tracking-[0.25em] uppercase text-muted-foreground/30" style={{ fontSize: 7 }}>SENTINEL INDEX</span>
+                  <span className="font-mono tracking-[0.25em] uppercase text-muted-foreground/65" style={{ fontSize: 7 }}>SENTINEL INDEX</span>
                   <span className="font-mono font-bold leading-none mt-1" style={{ fontSize: isMobile ? 52 : 68, color: sentinelIndexColor(sentinelIndex), textShadow: "0 0 40px hsla(var(--gold), 0.1)" }}>
                     {sentinelIndex}
                   </span>
-                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 9 : 11, color: sentinelIndexColor(sentinelIndex), opacity: 0.6 }}>
+                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 9 : 11, color: sentinelIndexColor(sentinelIndex), opacity: 0.75 }}>
                     {sentinelLabel}
                   </span>
                   {/* Confidence bar */}
@@ -351,21 +351,20 @@ export default function CompassPage() {
                     <MiniMetric label="OPP" value={globalOpp} color={oppGlobal} />
                     <MiniMetric label="RISK" value={globalRisk} color={rskGlobal} />
                     <MiniMetric label={fr ? "Stabilité" : "Stability"} value={`${globalStability}%`} color={stabilityColor(globalStability)} />
-                    <MiniMetric label="SC" value={scLabel} color={smartCapital.state === "ACCUMULATION" ? "hsl(145,65%,48%)" : smartCapital.state === "DISTRIBUTION" ? "hsl(4,80%,50%)" : "hsl(var(--muted-foreground))"} />
                   </div>
 
                   {/* Macro badge */}
                   <div className="flex items-center gap-2.5 px-4 py-2 rounded-xl" style={{ background: macroBg(macroRec), border: `1.5px solid ${macroBorder(macroRec)}`, boxShadow: `0 0 20px ${macroBg(macroRec)}` }}>
                     <span style={{ fontSize: isMobile ? 14 : 18 }}>{macroIcon(macroRec)}</span>
                     <div>
-                      <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground/25">{t("macro.label")}</div>
+                      <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground/65">{t("macro.label")}</div>
                       <div className="font-mono font-bold tracking-[0.12em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 11 : 13 }}>{macroRecLabel}</div>
                     </div>
                   </div>
 
                   {/* Tactical summary */}
                   {tacticalSummary && (
-                    <p className="font-mono text-[10px] text-muted-foreground/45 leading-relaxed max-w-md" style={{ letterSpacing: "0.02em" }}>
+                    <p className="font-mono text-[10px] text-muted-foreground/70 leading-relaxed max-w-md" style={{ letterSpacing: "0.02em" }}>
                       {tacticalSummary}
                     </p>
                   )}
@@ -401,21 +400,25 @@ export default function CompassPage() {
             }
           />
           {verdictLoading ? (
-            <div className="py-10 text-center font-mono text-[10px] text-muted-foreground/20">{fr ? "Chargement…" : "Loading…"}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="rounded-xl h-48 animate-pulse" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }} />
+              ))}
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {sections.map(s => (
                 <div key={s.key} className="rounded-xl overflow-hidden" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
                   <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${s.border}` }}>
                     <span className="font-mono text-[10px] font-bold tracking-wider" style={{ color: s.color }}>{s.emoji} {s.title}</span>
-                    <span className="font-mono text-[8px] text-muted-foreground/25">{s.count}</span>
+                    <span className="font-mono text-[8px] text-muted-foreground/65">{s.count}</span>
                   </div>
                   {s.items.length > 0 ? s.items.slice(0, 5).map(v => (
                     <VerdictRow key={v.netuid} netuid={v.netuid} name={v.name} verdict={v.verdict} confidence={v.confidence}
                       mainScore={v.verdict === "SORS" ? v.exitRisk : v.verdict === "RENTRE" ? v.entryScore : v.holdScore}
                       positiveReasons={v.positiveReasons} negativeReasons={v.negativeReasons} />
                   )) : (
-                    <div className="py-4 text-center font-mono text-[10px] text-muted-foreground/15">{fr ? "Aucun" : "None"}</div>
+                    <div className="py-4 text-center font-mono text-[10px] text-muted-foreground/65">{fr ? "Aucun" : "None"}</div>
                   )}
                 </div>
               ))}
@@ -427,22 +430,22 @@ export default function CompassPage() {
         {watchlist.length > 0 && (
           <section>
             <SectionHeader title={fr ? "WATCHLIST ACTIVE" : "ACTIVE WATCHLIST"} icon="👁" badge={
-              <span className="font-mono text-[8px] text-muted-foreground/25">{fr ? "Top conviction" : "Top conviction"}</span>
+              <span className="font-mono text-[8px] text-muted-foreground/65">{fr ? "Top conviction" : "Top conviction"}</span>
             } />
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid hsla(0,0%,100%,0.05)" }}>
               {/* Header */}
-              <div className="grid font-mono text-[8px] tracking-wider text-muted-foreground/25 uppercase px-3 py-2" style={{ gridTemplateColumns: "50px 1fr 60px 50px 50px 50px 60px", background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.04)" }}>
+              <div className="grid font-mono text-[8px] tracking-wider text-muted-foreground/65 uppercase px-3 py-2" style={{ gridTemplateColumns: "52px 120px 70px 50px 44px 44px 56px", background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.04)" }}>
                 <span>SN</span><span>Nom</span><span>Action</span><span>Conv.</span><span>Risk</span><span>Mom.</span><span>7d</span>
               </div>
               {watchlist.map((s, idx) => (
                 <div
                   key={s.netuid}
                   className="grid items-center px-3 py-2 cursor-pointer hover:bg-white/[0.015] transition-colors"
-                  style={{ gridTemplateColumns: "50px 1fr 60px 50px 50px 50px 60px", borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }}
+                  style={{ gridTemplateColumns: "52px 120px 70px 50px 44px 44px 56px", borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }}
                   onClick={() => setPanelSignal(s)}
                 >
                   <span className="font-mono text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground/50 truncate pr-2">{s.name}</span>
+                  <span className="font-mono text-[10px] text-muted-foreground/70 truncate pr-2">{s.name}</span>
                   <span className="font-mono text-[9px] font-bold" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTER" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</span>
                   <span className="font-mono text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</span>
                   <span className="font-mono text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</span>
@@ -472,7 +475,7 @@ export default function CompassPage() {
                     style={{ borderBottom: idx < criticalRisks.length - 1 ? "1px solid hsla(var(--destructive), 0.06)" : "none" }}
                     onClick={() => setPanelSignal(s)}>
                     <span className="font-mono font-bold text-[11px]" style={{ color: "hsl(var(--gold))", minWidth: 48 }}>SN-{s.netuid}</span>
-                    <span className="font-mono text-[10px] truncate flex-1 text-muted-foreground/35">{s.name}</span>
+                    <span className="font-mono text-[10px] truncate flex-1 text-muted-foreground/65">{s.name}</span>
                     <div className="flex gap-1 flex-shrink-0">
                       {tags.map((tag, i) => (
                         <span key={i} className="font-mono text-[7px] px-1.5 py-0.5 rounded font-bold" style={{ background: `color-mix(in srgb, ${tag.color} 10%, transparent)`, color: tag.color, border: `1px solid color-mix(in srgb, ${tag.color} 25%, transparent)` }}>{tag.label}</span>
@@ -495,16 +498,16 @@ export default function CompassPage() {
                 <div className="px-3 py-2 flex items-center gap-1.5" style={{ borderBottom: `1px solid color-mix(in srgb, ${g.color} 10%, transparent)` }}>
                   <span style={{ fontSize: 11 }}>{g.icon}</span>
                   <span className="font-mono text-[9px] font-bold tracking-wider" style={{ color: g.color }}>{g.title}</span>
-                  <span className="ml-auto font-mono text-[8px] text-muted-foreground/20">{g.items.length}</span>
+                  <span className="ml-auto font-mono text-[8px] text-muted-foreground/65">{g.items.length}</span>
                 </div>
                 {g.items.length > 0 ? g.items.map(s => (
                   <div key={s.netuid} className="flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-white/[0.015] transition-colors" onClick={() => setPanelSignal(s)}>
                     <span className="font-mono text-[9px] font-bold" style={{ color: "hsl(var(--gold))", opacity: 0.7 }}>{s.netuid}</span>
-                    <span className="font-mono text-[9px] text-muted-foreground/40 truncate flex-1">{s.name}</span>
+                    <span className="font-mono text-[9px] text-muted-foreground/70 truncate flex-1">{s.name}</span>
                     <span className="font-mono text-[9px] font-bold" style={{ color: g.color }}>{s.opp}</span>
                   </div>
                 )) : (
-                  <div className="py-3 text-center font-mono text-[9px] text-muted-foreground/15">—</div>
+                  <div className="py-3 text-center font-mono text-[9px] text-muted-foreground/65">—</div>
                 )}
               </div>
             ))}
@@ -528,7 +531,7 @@ export default function CompassPage() {
                      portfolioAlignment.status === "partial" ? (fr ? "Partiellement aligné" : "Partially aligned") :
                      (fr ? "Désalignement détecté" : "Misalignment detected")}
                   </div>
-                  <div className="font-mono text-[9px] text-muted-foreground/35 mt-0.5">
+                  <div className="font-mono text-[9px] text-muted-foreground/70 mt-0.5">
                     {portfolioAlignment.total} position{portfolioAlignment.total !== 1 ? "s" : ""} · {portfolioAlignment.aligned} {fr ? "alignée" : "aligned"}{portfolioAlignment.aligned !== 1 ? "s" : ""} · {portfolioAlignment.misaligned} {fr ? "à risque" : "at risk"}
                   </div>
                 </div>
@@ -546,8 +549,8 @@ export default function CompassPage() {
             </div>
           ) : (
             <div className="rounded-xl p-6 flex flex-col items-center gap-2" style={{ background: "hsla(0,0%,100%,0.01)", border: "1px dashed hsla(0,0%,100%,0.06)" }}>
-              <span style={{ fontSize: 20, opacity: 0.25 }}>📂</span>
-              <span className="font-mono text-[10px] text-muted-foreground/25">{fr ? "Aucune position dans le portefeuille" : "No positions in portfolio"}</span>
+              <span style={{ fontSize: 20, opacity: 0.5 }}>📂</span>
+              <span className="font-mono text-[10px] text-muted-foreground/65">{fr ? "Aucune position dans le portefeuille" : "No positions in portfolio"}</span>
               <Link to="/subnets" className="font-mono text-[9px] tracking-wider px-3 py-1.5 rounded-lg mt-1" style={{ background: "hsla(var(--gold), 0.05)", color: "hsl(var(--gold))", border: "1px solid hsla(var(--gold), 0.1)" }}>
                 {fr ? "Explorer les subnets →" : "Explore subnets →"}
               </Link>
@@ -561,12 +564,12 @@ export default function CompassPage() {
             <Link to="/subnets" className="flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]" style={{ background: "hsla(var(--gold), 0.04)", border: "1px solid hsla(var(--gold), 0.1)" }}>
               <span style={{ fontSize: 16 }}>📋</span>
               <span className="text-[10px] tracking-wider font-bold" style={{ color: "hsl(var(--gold))" }}>{fr ? "Subnet Intelligence" : "Subnet Intelligence"}</span>
-              <span className="text-[8px] text-muted-foreground/25">{fr ? "Table de décision" : "Decision table"}</span>
+              <span className="text-[8px] text-muted-foreground/65">{fr ? "Table de décision" : "Decision table"}</span>
             </Link>
             <Link to="/lab" className="flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.06)" }}>
               <span style={{ fontSize: 16 }}>🔬</span>
-              <span className="text-[10px] tracking-wider font-bold text-muted-foreground/50">{fr ? "Laboratoire" : "Lab"}</span>
-              <span className="text-[8px] text-muted-foreground/25">{fr ? "Diagnostics avancés" : "Advanced diagnostics"}</span>
+              <span className="text-[10px] tracking-wider font-bold text-muted-foreground/70">{fr ? "Laboratoire" : "Lab"}</span>
+              <span className="text-[8px] text-muted-foreground/65">{fr ? "Diagnostics avancés" : "Advanced diagnostics"}</span>
             </Link>
           </div>
         </section>
@@ -581,7 +584,7 @@ export default function CompassPage() {
 function MiniMetric({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="font-mono text-muted-foreground/25 uppercase" style={{ fontSize: 7, letterSpacing: "0.12em" }}>{label}</span>
+      <span className="font-mono text-muted-foreground/65 uppercase" style={{ fontSize: 7, letterSpacing: "0.12em" }}>{label}</span>
       <span className="font-mono font-bold leading-none" style={{ color, fontSize: 13 }}>{value}</span>
     </div>
   );
