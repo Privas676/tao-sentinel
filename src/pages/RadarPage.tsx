@@ -15,7 +15,7 @@ import {
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/table";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import Sparkline from "@/components/radar/Sparkline";
 import TreemapHeatmap from "@/components/radar/TreemapHeatmap";
 import AMMPricingTable from "@/components/radar/AMMPricingTable";
