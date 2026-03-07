@@ -514,8 +514,8 @@ export default function PortfolioPage() {
             </div>
             <div className="rounded-lg p-3 space-y-1 bg-muted/10 border border-border">
               <div className="flex justify-between font-mono text-[10px]">
-                <span className="text-muted-foreground/30">{fr ? "Prix consensus" : "Consensus price"}</span>
-                <span className="text-muted-foreground/60">{addPrice.toFixed(6)} τ</span>
+                 <span className="text-muted-foreground">{fr ? "Prix consensus" : "Consensus price"}</span>
+                 <span className="text-muted-foreground">{addPrice.toFixed(6)} τ</span>
               </div>
               {portfolio.isOwned(addNetuid) && (
                 <div className="font-mono text-[10px] text-signal-hold">{fr ? "⚠ Déjà possédé — quantité ajoutée" : "⚠ Already owned — qty added"}</div>
