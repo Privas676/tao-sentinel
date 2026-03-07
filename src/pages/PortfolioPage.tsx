@@ -207,10 +207,10 @@ export default function PortfolioPage() {
   /* ── Action categories for executive summary ── */
   const actionCategories = useMemo(() => {
     if (!analytics) return null;
-    const exitRows = rows.filter(r => r.pAction === "EXIT").sort((a, b) => b.risk - a.risk);
-    const reduceRows = rows.filter(r => r.pAction === "REDUCE").sort((a, b) => b.risk - a.risk);
-    const reinforceRows = rows.filter(r => r.pAction === "REINFORCE").sort((a, b) => b.opp - a.opp);
-    const holdRows = rows.filter(r => r.pAction === "HOLD");
+    const exitRows = rows.filter(r => r.pAction === "SORTIR").sort((a, b) => b.risk - a.risk);
+    const reduceRows = rows.filter(r => r.pAction === "RÉDUIRE").sort((a, b) => b.risk - a.risk);
+    const reinforceRows = rows.filter(r => r.pAction === "RENFORCER").sort((a, b) => b.opp - a.opp);
+    const holdRows = rows.filter(r => r.pAction === "CONSERVER");
     return [
       { key: "exit", label: fr ? "À VENDRE" : "SELL NOW", icon: "🔴", color: BREAK, rows: exitRows, priority: exitRows.length > 0 },
       { key: "reduce", label: fr ? "À SURVEILLER" : "MONITOR", icon: "⚠", color: WARN, rows: reduceRows, priority: reduceRows.length > 0 },
