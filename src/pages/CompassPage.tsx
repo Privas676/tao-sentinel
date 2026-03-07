@@ -433,26 +433,30 @@ export default function CompassPage() {
               <span className="font-mono text-[8px] text-muted-foreground/65">{fr ? "Top conviction" : "Top conviction"}</span>
             } />
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid hsla(0,0%,100%,0.05)" }}>
-              {/* Header */}
-              <div className="grid font-mono text-[8px] tracking-wider text-muted-foreground/65 uppercase px-3 py-2" style={{ gridTemplateColumns: "52px 120px 70px 50px 44px 44px 56px", background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.04)" }}>
-                <span>SN</span><span>Nom</span><span>Action</span><span>Conv.</span><span>Risk</span><span>Mom.</span><span>7d</span>
+              <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+                <table className="w-full font-mono" style={{ minWidth: 480 }}>
+                  <thead>
+                    <tr style={{ background: "hsla(0,0%,100%,0.02)", borderBottom: "1px solid hsla(0,0%,100%,0.04)" }}>
+                      {["SN", fr ? "Nom" : "Name", "Action", "Conv.", "Risk", "Mom.", "7d"].map(h => (
+                        <th key={h} className="py-2 px-2.5 text-left text-[8px] tracking-wider text-muted-foreground uppercase whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {watchlist.map((s, idx) => (
+                      <tr key={s.netuid} className="cursor-pointer hover:bg-white/[0.015] transition-colors" style={{ borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }} onClick={() => setPanelSignal(s)}>
+                        <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</td>
+                        <td className="py-2 px-2.5 text-[10px] text-muted-foreground truncate" style={{ maxWidth: 120 }}>{s.name}</td>
+                        <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTER" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</td>
+                        <td className="py-2 px-2.5 text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</td>
+                        <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</td>
+                        <td className="py-2 px-2.5 text-[10px]" style={{ color: s.momentumScore >= 55 ? "hsl(145,65%,48%)" : s.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>{Math.round(s.momentumScore)}</td>
+                        <td className="py-2 px-2.5"><SparklineMini data={s.sparkline_7d} width={50} height={16} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              {watchlist.map((s, idx) => (
-                <div
-                  key={s.netuid}
-                  className="grid items-center px-3 py-2 cursor-pointer hover:bg-white/[0.015] transition-colors"
-                  style={{ gridTemplateColumns: "52px 120px 70px 50px 44px 44px 56px", borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }}
-                  onClick={() => setPanelSignal(s)}
-                >
-                  <span className="font-mono text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground/70 truncate pr-2">{s.name}</span>
-                  <span className="font-mono text-[9px] font-bold" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {s.action === "ENTER" ? (fr ? "Entrer" : "Enter") : s.action === "EXIT" ? (fr ? "Sortir" : "Exit") : "Hold"}</span>
-                  <span className="font-mono text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</span>
-                  <span className="font-mono text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</span>
-                  <span className="font-mono text-[10px]" style={{ color: s.momentumScore >= 55 ? "hsl(145,65%,48%)" : s.momentumScore >= 35 ? "hsl(38,92%,55%)" : "hsl(4,80%,50%)" }}>{Math.round(s.momentumScore)}</span>
-                  <SparklineMini data={s.sparkline_7d} width={50} height={16} />
-                </div>
-              ))}
             </div>
           </section>
         )}
