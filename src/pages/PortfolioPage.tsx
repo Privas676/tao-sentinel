@@ -522,7 +522,7 @@ export default function PortfolioPage() {
               )}
             </div>
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowAdd(false)} className="flex-1 font-mono text-[11px] py-2.5 rounded-lg border border-border text-muted-foreground/40">{fr ? "ANNULER" : "CANCEL"}</button>
+              <button onClick={() => setShowAdd(false)} className="flex-1 font-mono text-[11px] py-2.5 rounded-lg border border-border text-muted-foreground">{fr ? "ANNULER" : "CANCEL"}</button>
               <button onClick={handleAdd} disabled={addQty <= 0}
                 className="flex-1 font-mono text-[11px] py-2.5 rounded-lg border border-primary/30 text-primary/90 hover:bg-primary/10 transition-all disabled:opacity-30">
                 {fr ? "AJOUTER" : "ADD"}
