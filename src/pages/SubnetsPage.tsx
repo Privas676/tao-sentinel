@@ -490,7 +490,7 @@ export default function SubnetsPage() {
                 onChange={v => setStructureFilter(v as StructureFilter)}
               />
             </FilterGroup>
-            <span className="ml-auto font-mono text-[9px] text-muted-foreground/65 self-end pb-0.5">
+             <span className="ml-auto font-mono text-[9px] text-muted-foreground self-end pb-0.5">
               {rows.length} / {scoresList.length} {fr ? "résultats" : "results"}
             </span>
           </div>
