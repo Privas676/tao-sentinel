@@ -355,7 +355,7 @@ export default function PortfolioPage() {
                   <tr className="border-b border-border">
                     {[
                       "Subnet", fr ? "Position" : "Position", fr ? "Poids" : "Weight",
-                      "Conv.", "Risk", "Fit", "Action", "Mom.", ""
+                      "Conv.", "Risk", "Action", fr ? "Raison" : "Signal", "Mom.", ""
                     ].map((h, i) => (
                       <th key={i} className="py-2.5 px-3 font-mono text-[8px] tracking-[0.15em] uppercase text-muted-foreground font-normal whitespace-nowrap">{h}</th>
                     ))}
@@ -368,9 +368,20 @@ export default function PortfolioPage() {
                   }).map(r => {
                     const weight = analytics ? (analytics.totalTao > 0 ? (r.taoInvest / analytics.totalTao) * 100 : 0) : 0;
                     const conv = Math.max(0, r.opp - r.risk);
-                    const fit = (() => { let f = 50; if (r.opp > 50) f += 15; if (r.risk < 40) f += 10; if (r.stability > 50) f += 10; if (r.confianceScore > 60) f += 10; if (r.isOverridden) f -= 30; return Math.max(0, Math.min(100, f)); })();
                     const actionColor = portfolioActionColor(r.pAction);
                     const rowBorder = r.pAction === "EXIT" ? "border-l-2 border-l-destructive/40" : r.pAction === "REDUCE" ? "border-l-2 border-l-signal-hold/40" : "";
+
+                    // Generate brief signal reason
+                    const signalReason = (() => {
+                      if (r.isOverridden) return fr ? "Override actif" : "Active override";
+                      if (r.depegProbability >= 40) return `Depeg ${r.depegProbability}%`;
+                      if (r.pAction === "EXIT") return fr ? "Signal de sortie" : "Exit signal";
+                      if (r.pAction === "REDUCE") return fr ? `Risque ${r.risk}` : `Risk ${r.risk}`;
+                      if (r.pAction === "REINFORCE" && r.opp > 55) return fr ? `Opp. forte (${r.opp})` : `Strong opp. (${r.opp})`;
+                      if (r.pAction === "REINFORCE") return fr ? "Momentum +" : "Momentum +";
+                      if (r.stability > 60) return fr ? "Position stable" : "Stable position";
+                      return fr ? "En observation" : "Monitoring";
+                    })();
 
                     return (
                       <tr key={r.netuid} className={`border-b border-border hover:bg-muted/10 transition-colors ${rowBorder}`}>
@@ -380,7 +391,6 @@ export default function PortfolioPage() {
                            <span className="font-mono text-[11px] text-muted-foreground">SN-{r.netuid}</span>
                             <span className="font-mono text-[11px] text-foreground/80 ml-1.5 hidden sm:inline">{r.name}</span>
                           </Link>
-                          {/* Status badges inline on mobile */}
                           {r.isOverridden && <span className="sm:hidden ml-1.5 font-mono text-[7px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">OVR</span>}
                         </td>
                         {/* Position */}
@@ -394,8 +404,6 @@ export default function PortfolioPage() {
                         <td className="py-3 px-3 font-mono text-[11px] font-bold" style={{ color: conv > 20 ? GO : conv > 0 ? WARN : BREAK }}>{conv}</td>
                         {/* Risk */}
                         <td className="py-3 px-3 font-mono text-[11px] font-bold" style={{ color: r.risk > 60 ? BREAK : r.risk > 40 ? WARN : GO }}>{r.risk}</td>
-                        {/* Fit */}
-                        <td className="py-3 px-3 font-mono text-[10px]" style={{ color: healthColor(fit) }}>{fit}</td>
                         {/* Action */}
                         <td className="py-3 px-3">
                           <span className="font-mono text-[9px] font-bold tracking-wider px-2 py-1 rounded" style={{
