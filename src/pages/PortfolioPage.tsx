@@ -488,7 +488,8 @@ export default function PortfolioPage() {
           <table className="text-left border-collapse" style={{ minWidth: 1100 }}>
             <thead>
               <tr className="border-b border-white/[0.06]">
-                {["SN", fr ? "Nom" : "Name", fr ? "TAO investis" : "TAO Invested", "Alpha (qty)",
+                {["SN", fr ? "Nom" : "Name", "VERDICT",
+                  fr ? "TAO investis" : "TAO Invested", "Alpha (qty)",
                   fr ? "Prix α" : "Price α", fr ? "Valeur" : "Value",
                   fr ? "Prix 7j" : "Price 7d",
                   "Opp", fr ? "Risque" : "Risk", "AS", fr ? "Stabilité" : "Stability",
