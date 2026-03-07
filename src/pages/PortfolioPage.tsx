@@ -38,7 +38,7 @@ function SectionTitle({ icon, title, badge }: { icon: string; title: string; bad
 function KPIChip({ label, value, color, sub }: { label: string; value: string | number; color?: string; sub?: string }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2.5 bg-muted/25 border border-border min-w-0">
-      <span className="font-mono text-[6.5px] text-muted-foreground/45 tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
+      <span className="font-mono text-[7px] text-muted-foreground tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
       <span className="font-mono text-[14px] font-bold leading-none" style={{ color }}>{value}</span>
       {sub && <span className="font-mono text-[8px] text-muted-foreground/35 mt-0.5">{sub}</span>}
     </div>
