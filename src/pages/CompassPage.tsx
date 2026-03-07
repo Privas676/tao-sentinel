@@ -85,17 +85,17 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
           <div className="flex items-center justify-center gap-8">
             <div className="text-center">
               <div className="font-mono text-2xl font-bold" style={{ color: opportunityColor(signal.opp) }}>{signal.opp}</div>
-              <div className="font-mono text-[9px] text-muted-foreground/70 tracking-widest">{t("gauge.opportunity")}</div>
+              <div className="font-mono text-[9px] text-muted-foreground tracking-widest">{t("gauge.opportunity")}</div>
             </div>
             <div className="w-px h-8 bg-border" />
             <div className="text-center">
               <div className="font-mono text-2xl font-bold" style={{ color: riskColor(signal.risk) }}>{signal.risk}</div>
-              <div className="font-mono text-[9px] text-muted-foreground/70 tracking-widest">{t("gauge.risk")}</div>
+              <div className="font-mono text-[9px] text-muted-foreground tracking-widest">{t("gauge.risk")}</div>
             </div>
           </div>
           {signal.reasons.length > 0 && (
             <div className="rounded-lg p-3" style={{ background: "hsla(0,0%,100%,0.02)" }}>
-              <div className="font-mono text-[9px] text-muted-foreground/65 tracking-widest mb-2">RAISONS</div>
+              <div className="font-mono text-[9px] text-muted-foreground tracking-widest mb-2">RAISONS</div>
               {signal.reasons.map((r, i) => <div key={i} className="font-mono text-xs text-muted-foreground mb-1">• {r}</div>)}
             </div>
           )}
@@ -332,7 +332,7 @@ export default function CompassPage() {
                   <span className="font-mono font-bold leading-none mt-1" style={{ fontSize: isMobile ? 52 : 68, color: sentinelIndexColor(sentinelIndex), textShadow: "0 0 40px hsla(var(--gold), 0.1)" }}>
                     {sentinelIndex}
                   </span>
-                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 9 : 11, color: sentinelIndexColor(sentinelIndex), opacity: 0.75 }}>
+                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 9 : 11, color: sentinelIndexColor(sentinelIndex) }}>
                     {sentinelLabel}
                   </span>
                   {/* Confidence bar */}
@@ -572,7 +572,7 @@ export default function CompassPage() {
             </Link>
             <Link to="/lab" className="flex flex-col items-center gap-1.5 py-4 rounded-xl font-mono transition-all hover:scale-[1.01]" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.06)" }}>
               <span style={{ fontSize: 16 }}>🔬</span>
-              <span className="text-[10px] tracking-wider font-bold text-muted-foreground/70">{fr ? "Laboratoire" : "Lab"}</span>
+              <span className="text-[10px] tracking-wider font-bold text-muted-foreground">{fr ? "Laboratoire" : "Lab"}</span>
               <span className="text-[8px] text-muted-foreground">{fr ? "Diagnostics avancés" : "Advanced diagnostics"}</span>
             </Link>
           </div>

@@ -110,7 +110,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
           <SheetHeader>
             <div className="flex items-center justify-between">
               <SheetTitle className="font-mono tracking-wider text-sm text-foreground/90">
-                <span className="text-muted-foreground/50 mr-1.5">SN-{row.netuid}</span>
+                <span className="text-muted-foreground mr-1.5">SN-{row.netuid}</span>
                 {row.name}
               </SheetTitle>
               <StatusBadge type={row.statusLevel === "DANGER" ? "danger" : row.statusLevel === "WATCH" ? "warning" : "success"} label={row.statusLevel} />
@@ -142,7 +142,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
           {/* Sparkline */}
           {row.spark.length > 0 && (
             <div className="rounded-lg px-3 py-2 bg-muted/20 border border-border flex items-center gap-3">
-              <span className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase">7D</span>
+              <span className="font-mono text-[7px] text-muted-foreground tracking-widest uppercase">7D</span>
               <SparklineMini data={row.spark} width={120} height={24} />
             </div>
           )}
@@ -150,7 +150,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
           {/* Thesis */}
           {thesis.length > 0 && (
             <div className="rounded-lg p-3 bg-primary/[0.03] border border-primary/10">
-              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
+              <div className="font-mono text-[7px] text-muted-foreground tracking-widest uppercase mb-2">
                 {fr ? "THÈSE" : "THESIS"}
               </div>
               {thesis.map((r, i) => <div key={i} className="font-mono text-[11px] text-foreground/75 mb-1">+ {r}</div>)}
@@ -160,7 +160,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
           {/* Invalidation */}
           {invalidation.length > 0 && (
             <div className="rounded-lg p-3 bg-destructive/[0.03] border border-destructive/10">
-              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
+              <div className="font-mono text-[7px] text-muted-foreground tracking-widest uppercase mb-2">
                 INVALIDATION
               </div>
               {invalidation.map((r, i) => <div key={i} className="font-mono text-[11px] text-foreground/75 mb-1">− {r}</div>)}
@@ -170,7 +170,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
           {/* Active alerts */}
           {alerts.length > 0 && (
             <div className="rounded-lg p-3 border border-destructive/15 bg-destructive/[0.03]">
-              <div className="font-mono text-[7px] text-muted-foreground/50 tracking-widest uppercase mb-2">
+              <div className="font-mono text-[7px] text-muted-foreground tracking-widest uppercase mb-2">
                 {fr ? "ALERTES ACTIVES" : "ACTIVE ALERTS"}
               </div>
               {alerts.map((a, i) => (
@@ -201,7 +201,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
             </button>
           )}
           {row.owned && (
-            <div className="text-center font-mono text-[9px] text-muted-foreground/50 py-1">
+            <div className="text-center font-mono text-[9px] text-muted-foreground py-1">
               ★ {fr ? "Dans votre portefeuille" : "In your portfolio"}
             </div>
           )}
@@ -214,7 +214,7 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
 function MetricMini({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
     <div className="rounded-lg px-2.5 py-2 text-center bg-muted/30 border border-border">
-      <div className="font-mono text-[7px] text-muted-foreground/65 tracking-wider uppercase">{label}</div>
+      <div className="font-mono text-[7px] text-muted-foreground tracking-wider uppercase">{label}</div>
       <div className="font-mono text-sm font-bold mt-0.5" style={{ color }}>{value}</div>
     </div>
   );
@@ -224,7 +224,7 @@ function MetricMini({ label, value, color }: { label: string; value: string | nu
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground/40">{label}</span>
+      <span className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -393,7 +393,7 @@ export default function SubnetsPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder={fr ? "Rechercher un subnet…" : "Search subnet…"}
-                className="w-full font-mono text-[11px] px-3 py-1.5 rounded-lg bg-background text-foreground placeholder:text-muted-foreground/40 border border-border"
+                className="w-full font-mono text-[11px] px-3 py-1.5 rounded-lg bg-background text-foreground placeholder:text-muted-foreground border border-border"
               />
             </div>
             {hasActiveFilters && (
@@ -401,11 +401,11 @@ export default function SubnetsPage() {
                 ✕ {fr ? "Reset" : "Reset"}
               </button>
             )}
-            <button onClick={saveCurrentView} className="font-mono text-[9px] px-2.5 py-1 rounded-lg text-muted-foreground/65 hover:text-foreground transition-colors border border-border">
+            <button onClick={saveCurrentView} className="font-mono text-[9px] px-2.5 py-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors border border-border">
               💾 {fr ? "Sauvegarder" : "Save view"}
             </button>
             {savedViews.length > 0 && savedViews.map((v, i) => (
-              <button key={i} onClick={() => loadView(v)} className="font-mono text-[8px] px-2 py-1 rounded text-muted-foreground/65 hover:text-foreground transition-colors" style={{ background: "hsla(var(--gold), 0.04)", border: "1px solid hsla(var(--gold), 0.08)" }}>
+              <button key={i} onClick={() => loadView(v)} className="font-mono text-[8px] px-2 py-1 rounded text-muted-foreground hover:text-foreground transition-colors" style={{ background: "hsla(var(--gold), 0.04)", border: "1px solid hsla(var(--gold), 0.08)" }}>
                 {v.name}
               </button>
             ))}
@@ -545,7 +545,7 @@ export default function SubnetsPage() {
                       }}
                       onClick={() => setDrawerRow(r)}
                     >
-                      <td className="py-2 px-2.5 text-[10px] text-muted-foreground/80 sticky left-0 z-[5] bg-background">{r.netuid}</td>
+                      <td className="py-2 px-2.5 text-[10px] text-muted-foreground sticky left-0 z-[5] bg-background">{r.netuid}</td>
                       <td className="py-2 px-2.5 text-[10px] sticky left-[44px] z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
                         <span className="text-foreground/85 font-medium">{r.name}</span>
                         {SPECIAL_SUBNETS[r.netuid] && (
@@ -578,7 +578,7 @@ export default function SubnetsPage() {
                       <td className="py-2 px-2.5 text-center">
                         {r.owned ? <span className="text-[9px]" style={{ color: "hsl(var(--gold))" }}>★</span> : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground/70 truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
+                      <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
                       <td className="py-2 px-2.5 text-center">
                         <SparklineMini data={r.spark} width={44} height={14} />
                       </td>

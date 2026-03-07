@@ -6,29 +6,11 @@ import { Link } from "react-router-dom";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
-import { SectionCard, SectionTitle } from "@/components/settings/SettingsShared";
+import { SectionCard, SectionTitle, KPIChip, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   RISK & ALERTS — Decision Vigilance Center             */
 /* ═══════════════════════════════════════════════════════ */
-
-/* ── Design tokens ── */
-const GOLD = "hsl(var(--gold))";
-const GO = "hsl(var(--signal-go))";
-const WARN = "hsl(var(--signal-go-spec))";
-const BREAK = "hsl(var(--signal-break))";
-const MUTED = "hsl(var(--muted-foreground))";
-
-/* ── KPI chip ── */
-function KPIChip({ label, value, color, sub }: { label: string; value: string | number; color?: string; sub?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2.5 bg-muted/25 border border-border min-w-0">
-      <span className="font-mono text-[7px] text-muted-foreground tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
-      <span className="font-mono text-[14px] font-bold leading-none" style={{ color }}>{value}</span>
-      {sub && <span className="font-mono text-[8px] text-muted-foreground mt-0.5">{sub}</span>}
-    </div>
-  );
-}
 
 /* ── Types ── */
 type EventRow = {
@@ -606,7 +588,7 @@ export default function AlertsPage() {
         ) : (
           filteredByTab.length === 0 ? (
             <div className="py-16 text-center space-y-3">
-              <span className="text-3xl opacity-30">🔕</span>
+              <span className="text-3xl opacity-70">🔕</span>
               <p className="font-mono text-[11px] text-muted-foreground">{fr ? "Aucune alerte dans cette catégorie" : "No alerts in this category"}</p>
             </div>
           ) : (

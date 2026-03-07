@@ -9,74 +9,14 @@ import { opportunityColor, riskColor, stabilityColor, momentumColor } from "@/li
 import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
 import { ActionBadge } from "@/components/sentinel";
+import { SectionCard, SectionTitle, KPIChip, Metric, BarScore, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SUBNET COMMAND CENTER — Decision-First Architecture   */
 /* ═══════════════════════════════════════════════════════ */
 
-/* ── Design tokens ── */
-const GOLD = "hsl(var(--gold))";
-const GO = "hsl(var(--signal-go))";
-const WARN = "hsl(var(--signal-go-spec))";
-const BREAK = "hsl(var(--signal-break))";
-const MUTED = "hsl(var(--muted-foreground))";
-
-/* ── Reusable atoms ── */
-
-function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-xl border border-border bg-card/60 backdrop-blur-sm ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function SectionTitle({ icon, title }: { icon: string; title: string }) {
-  return (
-    <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border">
-      <span className="text-sm opacity-70">{icon}</span>
-      <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-[hsl(var(--gold))]">{title}</h2>
-    </div>
-  );
-}
-
-function Metric({ label, value, color, sub, mono = true }: { label: string; value: string | number; color?: string; sub?: string; mono?: boolean }) {
-  return (
-    <div className="flex justify-between items-center py-[5px]">
-      <span className="text-muted-foreground text-[11px] leading-tight">{label}</span>
-      <div className="flex items-center gap-1.5">
-        <span className={`text-[12px] font-medium ${mono ? "font-mono" : ""}`} style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
-        {sub && <span className="text-[9px] text-muted-foreground">{sub}</span>}
-      </div>
-    </div>
-  );
-}
-
-function BarScore({ label, value, color }: { label: string; value: number; color?: string }) {
-  const c = color || healthColor(value);
-  const pct = Math.min(100, Math.max(0, value));
-  return (
-    <div className="flex items-center gap-2.5 py-[3px]">
-      <span className="text-muted-foreground text-[10px] w-[90px] shrink-0">{label}</span>
-      <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/25">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: c }} />
-      </div>
-      <span className="font-mono text-[10px] w-7 text-right font-semibold" style={{ color: c }}>{Math.round(value)}</span>
-    </div>
-  );
-}
-
-function KPIChip({ label, value, color }: { label: string; value: string | number; color?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2 bg-muted/25 border border-border min-w-0">
-      <span className="font-mono text-[7px] text-muted-foreground tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
-      <span className="font-mono text-[13px] font-bold leading-none" style={{ color }}>{value}</span>
-    </div>
-  );
-}
-
-function Sparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number; h?: number }) {
-  if (data.length < 2) return <span className="text-muted-foreground/15 text-[9px] italic">no data</span>;
+function DetailSparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number; h?: number }) {
+  if (data.length < 2) return <span className="text-muted-foreground text-[9px] italic">no data</span>;
   const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
   const trend = data[data.length - 1] - data[0];
   const c = trend > 0 ? GO : trend < 0 ? BREAK : MUTED;
@@ -397,7 +337,7 @@ export default function SubnetDetailPage() {
               <Metric label="Capital Flow" value={rs?.capitalMomentum != null ? `${rs.capitalMomentum}` : "—"} color={healthColor(rs?.capitalMomentum ?? 50)} />
               {eco && <Metric label="Buy / Sell" value={`${eco.buyersCount} / ${eco.sellersCount}`} />}
               <Metric label="Trend" value={s.momentumLabel} color={momentumColor(s.momentumLabel)} />
-              <div className="pt-3 flex justify-center"><Sparkline data={spark} /></div>
+              <div className="pt-3 flex justify-center"><DetailSparkline data={spark} /></div>
             </div>
           </SectionCard>
 
@@ -483,7 +423,7 @@ export default function SubnetDetailPage() {
                 <span className="font-mono text-[13px] font-bold" style={{ color: profile.color }}>{fr ? profile.labelFr : profile.label}</span>
                 <span className="font-mono text-[10px] text-muted-foreground">— Fit {fitScore(s)}/100</span>
               </div>
-              <p className="font-mono text-[11px] text-foreground/65 leading-relaxed mb-4">
+              <p className="font-mono text-[11px] text-muted-foreground leading-relaxed mb-4">
                 {fr ? profile.descFr : profile.desc}
               </p>
 
@@ -500,7 +440,7 @@ export default function SubnetDetailPage() {
                   };
                   return (
                     <div key={p} className={`flex items-center gap-2.5 py-1 px-2.5 rounded-md transition-colors ${active ? "bg-muted/40" : ""}`}>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${active ? "" : "opacity-20"}`} style={{ background: active ? profile.color : MUTED }} />
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${active ? "" : "opacity-[0.35]"}`} style={{ background: active ? profile.color : MUTED }} />
                       <span className={`font-mono text-[10px] ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                         {fr ? labels[p].fr : labels[p].en}
                       </span>

@@ -7,61 +7,13 @@ import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
 import { toast } from "sonner";
+import { SectionCard, SectionTitle, KPIChip, Metric, Sparkline, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   PORTFOLIO COMMANDER — Strategic Cockpit               */
 /* ═══════════════════════════════════════════════════════ */
 
-/* ── Design tokens ── */
-const GOLD = "hsl(var(--gold))";
-const GO = "hsl(var(--signal-go))";
-const WARN = "hsl(var(--signal-go-spec))";
-const BREAK = "hsl(var(--signal-break))";
-const MUTED = "hsl(var(--muted-foreground))";
-
-/* ── Reusable atoms ── */
-
-function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-border bg-card ${className}`}>{children}</div>;
-}
-
-function SectionTitle({ icon, title, badge }: { icon: string; title: string; badge?: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2.5 px-5 py-3 border-b border-border">
-      <span className="text-sm opacity-70">{icon}</span>
-      <h2 className="font-mono text-[10px] tracking-[0.15em] uppercase text-gold">{title}</h2>
-      {badge && <div className="ml-auto">{badge}</div>}
-    </div>
-  );
-}
-
-function KPIChip({ label, value, color, sub }: { label: string; value: string | number; color?: string; sub?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg px-2 py-2.5 bg-muted/25 border border-border min-w-0">
-      <span className="font-mono text-[7px] text-muted-foreground tracking-[0.18em] uppercase leading-none mb-1">{label}</span>
-      <span className="font-mono text-[14px] font-bold leading-none" style={{ color }}>{value}</span>
-      {sub && <span className="font-mono text-[8px] text-muted-foreground mt-0.5">{sub}</span>}
-    </div>
-  );
-}
-
-function Metric({ label, value, color }: { label: string; value: string | number; color?: string }) {
-  return (
-    <div className="flex justify-between items-center py-[5px]">
-      <span className="text-muted-foreground text-[11px]">{label}</span>
-      <span className="font-mono text-[12px] font-medium" style={{ color: color || "hsl(var(--foreground))" }}>{value}</span>
-    </div>
-  );
-}
-
-function Sparkline({ data, width = 64, height = 20 }: { data: number[]; width?: number; height?: number }) {
-  if (data.length < 2) return <span className="text-muted-foreground text-[9px]">—</span>;
-  const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
-  const trend = data[data.length - 1] - data[0];
-  const c = trend > 0 ? GO : trend < 0 ? BREAK : MUTED;
-  const pts = data.map((v, i) => `${((i / (data.length - 1)) * width).toFixed(1)},${(height - 1 - ((v - min) / range) * (height - 2)).toFixed(1)}`).join(" ");
-  return <svg width={width} height={height}><polyline points={pts} fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-}
+/* Sparkline is now imported from Atoms */
 
 /* ── Currency ── */
 const CURRENCY_KEY = "portfolio_display_currency";
@@ -89,7 +41,7 @@ function InlineEditQty({ value, onSave }: { value: number; onSave: (v: number) =
         onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") { setDraft(String(value)); setEditing(false); } }}
         className="w-20 bg-muted/30 border border-border rounded px-1.5 py-0.5 font-mono text-sm text-foreground/80 outline-none focus:border-primary/40" />
       <button onClick={save} className="text-primary/80 hover:text-primary text-xs">✓</button>
-      <button onClick={() => { setDraft(String(value)); setEditing(false); }} className="text-muted-foreground/30 hover:text-muted-foreground/60 text-xs">✕</button>
+      <button onClick={() => { setDraft(String(value)); setEditing(false); }} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
     </span>
   );
 }
@@ -108,20 +60,20 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
     <div ref={ref} className="relative mt-1">
       <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between bg-muted/20 border border-border rounded-lg px-3 py-2.5 font-mono text-xs text-foreground/80 hover:border-muted-foreground/30 transition-colors">
         <span>{selected ? `SN-${selected.netuid} — ${selected.name}` : "..."}</span>
-        <svg className={`w-3.5 h-3.5 text-muted-foreground/30 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        <svg className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
       </button>
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-lg overflow-hidden shadow-2xl bg-popover border border-border">
           <div className="px-2 pt-2 pb-1">
             <input ref={inputRef} type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..."
-              className="w-full bg-muted/20 border border-border rounded px-2.5 py-1.5 font-mono text-[11px] text-foreground/80 placeholder:text-muted-foreground/30 outline-none focus:border-muted-foreground/40" />
+              className="w-full bg-muted/20 border border-border rounded px-2.5 py-1.5 font-mono text-[11px] text-foreground placeholder:text-muted-foreground outline-none focus:border-muted-foreground" />
           </div>
           <div className="max-h-52 overflow-y-auto">
-            {filtered.length === 0 && <div className="px-3 py-3 font-mono text-[10px] text-muted-foreground/20 text-center">—</div>}
+            {filtered.length === 0 && <div className="px-3 py-3 font-mono text-[10px] text-muted-foreground text-center">—</div>}
             {filtered.map(s => (
               <button key={s.netuid} type="button" onClick={() => { onChange(s.netuid); setOpen(false); setSearch(""); }}
                 className={`w-full text-left px-3 py-2 font-mono text-[11px] flex items-center gap-2 transition-colors ${s.netuid === value ? "bg-muted/40 text-foreground" : "text-foreground/65 hover:bg-muted/20"}`}>
-                <span className="text-muted-foreground/30 w-8 shrink-0">SN-{s.netuid}</span>
+                <span className="text-muted-foreground w-8 shrink-0">SN-{s.netuid}</span>
                 <span className="truncate flex-1">{s.name}</span>
                 {isOwned(s.netuid) && <span className="text-[8px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/15">✓</span>}
               </button>
@@ -390,7 +342,7 @@ export default function PortfolioPage() {
 
           {rows.length === 0 ? (
             <div className="py-16 text-center space-y-3">
-              <span className="text-3xl opacity-30">📊</span>
+              <span className="text-3xl opacity-70">📊</span>
               <p className="font-mono text-[11px] text-muted-foreground">{fr ? "Aucune position" : "No positions"}</p>
               <button onClick={() => setShowAdd(true)} className="font-mono text-[10px] text-primary/60 hover:text-primary transition-colors">
                 + {fr ? "Ajouter un subnet" : "Add a subnet"}
