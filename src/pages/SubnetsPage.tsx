@@ -285,17 +285,18 @@ export default function SubnetsPage() {
     return scoresList
       .map(s => {
         const verdict = verdicts.get(s.netuid);
-        const convictionScore = verdict ? Math.max(verdict.entryScore, verdict.holdScore) : Math.abs(s.opp - s.risk) * (s.conf / 100);
+        const decision = buildSubnetDecision(s, verdict, fr);
         return {
           ...s,
           owned: ownedNetuids.has(s.netuid),
           spark: sparklines?.get(s.netuid) || [],
           verdict,
-          convictionLevel: convictionFromScore(convictionScore),
-          liquidityLevel: liquidityFromHealth(s.healthScores.liquidityHealth),
-          structureLevel: structureFromStability(s.stability, s.isOverridden),
-          statusLevel: statusFromSystem(s),
-          signalPrincipal: mainSignal(s, fr),
+          decision,
+          convictionLevel: decision.conviction,
+          liquidityLevel: decision.liquidityLevel,
+          structureLevel: decision.structureLevel,
+          statusLevel: decision.statusLevel,
+          signalPrincipal: decision.signalPrincipal,
         } as TableRow;
       })
       .filter(r => {
