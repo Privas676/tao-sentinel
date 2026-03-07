@@ -76,9 +76,25 @@ export function VerdictBadge({ verdict, confidence, size = "sm" }: {
   );
 }
 
-/* ── Badge with tooltip (reasons) ── */
+/* ── Pillar bar (mini progress) ── */
 
-export function VerdictBadgeWithTooltip({ verdict, confidence, positiveReasons, negativeReasons, entryScore, holdScore, exitRisk, size = "sm" }: {
+function PillarBar({ label, score, icon }: { label: string; score: number; icon: string }) {
+  const color = score >= 70 ? "rgba(76,175,80,0.8)" : score >= 45 ? "rgba(255,193,7,0.7)" : "rgba(229,57,53,0.7)";
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[8px] w-3 text-center">{icon}</span>
+      <span className="text-[8px] text-white/40 w-[52px] truncate">{label}</span>
+      <div className="flex-1 h-[4px] rounded-full bg-white/5 overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, background: color }} />
+      </div>
+      <span className="text-[9px] font-bold w-5 text-right" style={{ color }}>{Math.round(score)}</span>
+    </div>
+  );
+}
+
+/* ── Badge with tooltip (reasons + pillars) ── */
+
+export function VerdictBadgeWithTooltip({ verdict, confidence, positiveReasons, negativeReasons, entryScore, holdScore, exitRisk, pillars, size = "sm" }: {
   verdict: Verdict;
   confidence: ConfidenceLevel;
   positiveReasons: string[];
@@ -86,6 +102,12 @@ export function VerdictBadgeWithTooltip({ verdict, confidence, positiveReasons, 
   entryScore: number;
   holdScore: number;
   exitRisk: number;
+  pillars?: {
+    momentum: { score: number; weight: number; label: string };
+    amm: { score: number; weight: number; label: string };
+    risk: { score: number; weight: number; label: string };
+    dataQuality: { score: number; weight: number; label: string };
+  };
   size?: "sm" | "md";
 }) {
   return (
@@ -95,14 +117,25 @@ export function VerdictBadgeWithTooltip({ verdict, confidence, positiveReasons, 
           <VerdictBadge verdict={verdict} confidence={confidence} size={size} />
         </span>
       </TooltipTrigger>
-      <TooltipContent side="bottom" className="font-mono text-[10px] max-w-[280px]">
+      <TooltipContent side="bottom" className="font-mono text-[10px] max-w-[300px]">
         <div className="space-y-2">
           <div className="flex items-center gap-2 font-bold text-[11px]" style={{ color: verdictColor(verdict) }}>
             {verdictIcon(verdict)} {verdict} — confiance {confidence}
           </div>
 
+          {/* v3: Pillar breakdown */}
+          {pillars && (
+            <div className="space-y-1 py-1.5 border-y border-white/10">
+              <div className="text-[7px] text-white/25 tracking-widest mb-1">PILIERS</div>
+              <PillarBar label="Momentum" score={pillars.momentum.score} icon="📈" />
+              <PillarBar label="AMM/Exec" score={pillars.amm.score} icon="💧" />
+              <PillarBar label="Risque" score={pillars.risk.score} icon="🛡" />
+              <PillarBar label="Data" score={pillars.dataQuality.score} icon="📡" />
+            </div>
+          )}
+
           {/* Sub-scores */}
-          <div className="grid grid-cols-3 gap-2 py-1 border-y border-white/10">
+          <div className="grid grid-cols-3 gap-2 py-1 border-b border-white/10">
             <div className="text-center">
               <div className="text-[8px] text-white/30 tracking-widest">ENTRY</div>
               <div className="font-bold" style={{ color: entryScore >= 70 ? "rgba(76,175,80,0.9)" : entryScore >= 50 ? "rgba(255,193,7,0.8)" : "rgba(255,255,255,0.4)" }}>{entryScore}</div>
@@ -139,7 +172,6 @@ export function VerdictBadgeWithTooltip({ verdict, confidence, positiveReasons, 
     </Tooltip>
   );
 }
-
 /* ── Compact verdict row for Dashboard lists ── */
 
 

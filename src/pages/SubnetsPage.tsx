@@ -473,6 +473,7 @@ export default function SubnetsPage() {
                         entryScore={r.verdict.entryScore}
                         holdScore={r.verdict.holdScore}
                         exitRisk={r.verdict.exitRisk}
+                        pillars={r.verdict.pillars}
                       />
                     ) : (
                       <span className="font-mono text-[9px] text-white/15">—</span>
