@@ -433,7 +433,7 @@ export default function CompassPage() {
               </div>
             }
           />
-          {verdictLoading ? (
+          {enrichedSignals.length === 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[0, 1, 2].map(i => (
                 <div key={i} className="rounded-xl h-48 animate-pulse" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.05)" }} />
@@ -447,10 +447,17 @@ export default function CompassPage() {
                     <span className="font-mono text-[10px] font-bold tracking-wider" style={{ color: s.color }}>{s.emoji} {s.title}</span>
                     <span className="font-mono text-[8px] text-muted-foreground">{s.count}</span>
                   </div>
-                  {s.items.length > 0 ? s.items.slice(0, 5).map(v => (
-                    <VerdictRow key={v.netuid} netuid={v.netuid} name={v.name} verdict={v.verdict} confidence={v.confidence}
-                      mainScore={v.verdict === "SORS" ? v.exitRisk : v.verdict === "RENTRE" ? v.entryScore : v.holdScore}
-                      positiveReasons={v.positiveReasons} negativeReasons={v.negativeReasons} />
+                  {s.items.length > 0 ? s.items.slice(0, 5).map((v, idx) => (
+                    <div key={v.netuid} className="flex items-center gap-2 py-2 px-3 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                      style={{ borderBottom: idx < Math.min(s.items.length, 5) - 1 ? `1px solid ${s.border}` : "none" }}
+                      onClick={() => setPanelSignal(v)}>
+                      <span className="font-mono text-[10px] font-bold" style={{ color: GOLD, minWidth: 36 }}>SN-{v.netuid}</span>
+                      <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(v.action) }}>{actionIcon(v.action)} {actionLabel(v.action, fr)}</span>
+                      <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{v.overrideReasons[0] || v.name}</span>
+                      <span className="font-mono text-[10px] font-bold" style={{ color: s.key === "exit" ? riskColor(v.risk) : opportunityColor(v.opp) }}>
+                        {s.key === "exit" ? v.risk : v.opp}
+                      </span>
+                    </div>
                   )) : (
                     <div className="py-4 text-center font-mono text-[10px] text-muted-foreground">{fr ? "Aucun" : "None"}</div>
                   )}
