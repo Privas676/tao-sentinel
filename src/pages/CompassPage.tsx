@@ -307,7 +307,7 @@ export default function CompassPage() {
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
-      <div className="px-4 sm:px-6 py-4 max-w-[1000px] mx-auto space-y-6 sm:space-y-8">
+      <div className="px-4 sm:px-6 py-5 max-w-[1000px] mx-auto space-y-7 sm:space-y-9">
 
         {/* ═══ 1. HERO DÉCISIONNEL ═══ */}
         <section>
