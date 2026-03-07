@@ -14,8 +14,21 @@ import {
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@/components/ui/table";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import Sparkline from "@/components/radar/Sparkline";
 import TreemapHeatmap from "@/components/radar/TreemapHeatmap";
+
+/* ─── Burn Ratio formatter: always show value even if tiny ─── */
+function formatBurnRatio(ratio: number): string {
+  if (ratio <= 0) return "—";
+  const pct = ratio * 100;
+  if (pct < 0.01) return "<0.01%";
+  if (pct < 0.1) return `${pct.toFixed(2)}%`;
+  if (pct < 10) return `${pct.toFixed(1)}%`;
+  return `${pct.toFixed(0)}%`;
+}
+
+const BURN_RATIO_TOOLTIP = "Burn Ratio = recyclePerDay ÷ emissionsPerDay\nMesure la part des émissions quotidiennes recyclée (brûlée) par le protocole. Plus le ratio est élevé, plus le subnet est déflationniste.";
 
 /* ─── Score Badge ─── */
 function ScoreBadge({ value, colorFn, label, suffix }: { value: number; colorFn: (v: number) => string; label: string; suffix?: string }) {
@@ -381,7 +394,14 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
             <TableHead className="font-mono text-[10px] text-right">UID Sat.</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Burn Ratio</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Burn Ratio</span></TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{BURN_RATIO_TOOLTIP}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
             <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
@@ -405,7 +425,7 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
                   {d.snapshot.uidMax > 0 && <span className="text-muted-foreground/40 text-[9px] ml-0.5">{d.snapshot.uidUsed}/{d.snapshot.uidMax}</span>}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-right text-muted-foreground">
-                  {dm.burnRatio > 0 ? `${(dm.burnRatio * 100).toFixed(1)}%` : "—"}
+                  {formatBurnRatio(dm.burnRatio)}
                 </TableCell>
                 <TableCell className="text-right hidden sm:table-cell">
                   <Sparkline data={(d.sparklineAdoption?.length ?? 0) >= 2 ? d.sparklineAdoption : generateAdoptionSparkline(d)} />
@@ -658,7 +678,14 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
             <TableHead className="font-mono text-[10px] text-right">Fair (MCap/Circ)</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Deviation</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Circ. Supply</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Burn Ratio</TableHead>
+            <TableHead className="font-mono text-[10px] text-right">
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Burn Ratio</span></TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{BURN_RATIO_TOOLTIP}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
@@ -686,7 +713,7 @@ function AlphaInefficiencyTable({ data }: { data: SubnetRadarData[] }) {
                   {eco.circulatingSupply > 0 ? formatTao(eco.circulatingSupply) : "—"}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-right text-muted-foreground">
-                  {dm.burnRatio > 0 ? `${(dm.burnRatio * 100).toFixed(1)}%` : "—"}
+                  {formatBurnRatio(dm.burnRatio)}
                 </TableCell>
                 <TableCell className="text-right">
                   {d.alerts.alphaUndervalued ? <SignalChip label="UNDERVALUED" color="green" /> :
