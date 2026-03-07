@@ -85,26 +85,11 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
   );
 }
 
-/* ── Action helpers ── */
-function portfolioAction(s: UnifiedSubnetScore | undefined): "REINFORCE" | "HOLD" | "REDUCE" | "EXIT" {
-  if (!s) return "HOLD";
-  if (s.isOverridden || s.action === "EXIT") return "EXIT";
-  if (s.risk > 65 || s.depegProbability >= 40) return "REDUCE";
-  if (s.action === "ENTER" || s.action === "STAKE") return "REINFORCE";
-  return "HOLD";
-}
-
-function portfolioActionLabel(a: string, fr: boolean): string {
-  if (a === "REINFORCE") return fr ? "RENFORCER" : "REINFORCE";
-  if (a === "EXIT") return fr ? "SORTIR" : "EXIT";
-  if (a === "REDUCE") return fr ? "RÉDUIRE" : "REDUCE";
-  return fr ? "CONSERVER" : "HOLD";
-}
-
+/* ── Action helpers — use unified decision source ── */
 function portfolioActionColor(a: string): string {
-  if (a === "REINFORCE") return GO;
-  if (a === "EXIT") return BREAK;
-  if (a === "REDUCE") return WARN;
+  if (a === "RENFORCER") return GO;
+  if (a === "SORTIR") return BREAK;
+  if (a === "REDUIRE" || a === "RÉDUIRE") return WARN;
   return MUTED;
 }
 
