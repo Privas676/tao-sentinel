@@ -583,7 +583,7 @@ export default function SubnetDetailPage() {
           >
             {inPortfolio ? "★" : "+"} Portfolio
           </button>
-          <Link to="/alerts" className="font-mono text-[9px] px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground/60 hover:text-foreground transition-colors">
+          <Link to="/alerts" className="font-mono text-[9px] px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
             🔔
           </Link>
         </div>
