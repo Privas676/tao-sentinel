@@ -435,12 +435,12 @@ export default function SubnetsPage() {
             <FilterSep />
             <FilterGroup label="ACTION">
               <FilterChipGroup
-                chips={[
-                  { key: "ALL", label: fr ? "Toutes" : "All" },
-                  { key: "ENTER", label: fr ? "Entrer" : "Enter", count: countRentre || undefined },
-                  { key: "HOLD", label: fr ? "Attendre" : "Hold", count: countHold || undefined },
-                  { key: "EXIT", label: fr ? "Sortir" : "Exit", count: countSors || undefined },
-                ]}
+                 chips={[
+                   { key: "ALL", label: fr ? "Toutes" : "All" },
+                   { key: "ENTER", label: fr ? "Entrer" : "Enter", count: actionCounts.enter || undefined },
+                   { key: "HOLD", label: fr ? "Attendre" : "Hold", count: actionCounts.hold || undefined },
+                   { key: "EXIT", label: fr ? "Sortir" : "Exit", count: actionCounts.exit || undefined },
+                 ]}
                 active={actionFilter}
                 onChange={v => setActionFilter(v as ActionFilter)}
               />
