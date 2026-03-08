@@ -109,6 +109,7 @@ export function usePushNotifications() {
     setError(null);
 
     try {
+      const { data: { session } } = await supabase.auth.refreshSession();
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
 
@@ -118,6 +119,9 @@ export function usePushNotifications() {
 
         await supabase.functions.invoke("manage-push", {
           body: { action: "unsubscribe", endpoint },
+          headers: session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : undefined,
         });
       }
 
