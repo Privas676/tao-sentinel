@@ -562,6 +562,7 @@ export default function SubnetsPage() {
                       style={{
                         borderBottom: "1px solid hsl(var(--border))",
                         ...(r.isOverridden ? { background: "hsla(var(--signal-break), 0.03)", borderLeft: "2px solid hsla(var(--signal-break), 0.4)" } : {}),
+                        ...(isSystemRow && !r.isOverridden ? { background: "hsla(var(--signal-system), 0.02)", borderLeft: "2px solid hsla(var(--signal-system), 0.25)" } : {}),
                       }}
                       onClick={() => setDrawerRow(r)}
                     >
