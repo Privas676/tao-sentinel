@@ -129,7 +129,7 @@ export default function SubnetDetailPage() {
   }, [goBack]);
 
   const { scores, sparklines } = useSubnetScores();
-  const { verdicts } = useSubnetVerdicts();
+  const { decisions } = useSubnetDecisions();
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
   const [flash, setFlash] = useState<string | null>(null);
