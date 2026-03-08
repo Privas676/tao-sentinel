@@ -50,6 +50,7 @@ function AppRoutes() {
         <Route path="/quant-diagnostics" element={<Navigate to="/lab" replace />} />
         <Route path="/radar" element={<Navigate to="/lab" replace />} />
       </Routes>
+      </ErrorBoundary>
     </AppShell>
   );
 }
