@@ -12,32 +12,21 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1. Authenticate caller
+    // ── SECURITY: Service-role only ──
+    // This endpoint is restricted to internal edge functions using the service_role key.
+    // No authenticated user can call this directly.
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const token = authHeader?.replace("Bearer ", "");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const { data: { user }, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !user) {
+    if (!token || token !== serviceRoleKey) {
       return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({ error: "Forbidden" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // 2. Parse & validate body
+    // Parse & validate body
     const body = await req.json();
     const { entries } = body;
 
@@ -72,7 +61,8 @@ Deno.serve(async (req: Request) => {
       };
     });
 
-    // 3. Write with service_role (bypasses RLS)
+    // Write with service_role (bypasses RLS)
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { error: insertErr } = await adminClient.from("audit_log").insert(rows);
 

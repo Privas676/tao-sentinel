@@ -1,83 +1,26 @@
 /* ═══════════════════════════════════════ */
 /*   USE-AUDIT-LOG HOOK                     */
-/*   Integrates audit logging into the      */
-/*   scoring pipeline + provides replay.    */
+/*   Read-only audit log access.            */
+/*   All writes are server-side only.       */
 /* ═══════════════════════════════════════ */
 
-import { useEffect, useRef, useCallback, useState } from "react";
-import type { UnifiedSubnetScore, UnifiedScoresResult } from "@/hooks/use-subnet-scores";
+import { useCallback, useState } from "react";
 import {
-  logScoringCycle,
-  logKillSwitchEvent,
-  logSubnetEvent,
   fetchAuditLog,
   auditToCsv,
   auditToJson,
   downloadFile,
   type AuditEventType,
 } from "@/lib/audit-log";
-import type { DataConfidenceScore } from "@/lib/data-confidence";
-import type { KillSwitchResult } from "@/lib/push-kill-switch";
-import type { FleetDistributionReport } from "@/lib/distribution-monitor";
 
-/* ── Audit integration for scoring cycles ── */
-
+/**
+ * No-op hook — audit writes are now server-side only.
+ * Kept as a stable API so callers don't need to change.
+ */
 export function useAuditLogger(
-  scoresList: UnifiedSubnetScore[],
-  scoreTimestamp: string,
-  alignmentStatus: string,
-  dataConfidence: DataConfidenceScore | null,
-  killSwitch: KillSwitchResult | null,
-  fleetDistribution: FleetDistributionReport | null,
-) {
-  const prevKillSwitchRef = useRef<boolean>(false);
-  const prevActionsRef = useRef<Map<number, string>>(new Map());
-
-  useEffect(() => {
-    if (scoresList.length === 0) return;
-
-    const snapshotIds = [`unified:${scoreTimestamp}`];
-
-    // 1. Log scoring cycle (throttled internally)
-    logScoringCycle(
-      scoresList,
-      snapshotIds,
-      alignmentStatus,
-      dataConfidence,
-      killSwitch,
-      fleetDistribution,
-    );
-
-    // 2. Detect kill switch state changes
-    if (killSwitch) {
-      const wasActive = prevKillSwitchRef.current;
-      if (killSwitch.active !== wasActive) {
-        logKillSwitchEvent(killSwitch, snapshotIds, dataConfidence);
-        prevKillSwitchRef.current = killSwitch.active;
-      }
-    }
-
-    // 3. Detect action changes (state transitions)
-    const prevActions = prevActionsRef.current;
-    for (const s of scoresList) {
-      const prev = prevActions.get(s.netuid);
-      if (prev && prev !== s.action) {
-        logSubnetEvent(
-          "STATE_CHANGE",
-          s,
-          `Action changed: ${prev} → ${s.action}`,
-          snapshotIds,
-          alignmentStatus,
-          dataConfidence,
-        );
-      }
-    }
-
-    // Update prev state
-    const newMap = new Map<number, string>();
-    for (const s of scoresList) newMap.set(s.netuid, s.action);
-    prevActionsRef.current = newMap;
-  }, [scoresList, scoreTimestamp, alignmentStatus, dataConfidence, killSwitch, fleetDistribution]);
+  ..._args: unknown[]
+): void {
+  // Intentional no-op: all audit writes happen server-side via Edge Functions.
 }
 
 /* ── Export hook for Settings page ── */
