@@ -1,10 +1,10 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts, type SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { opportunityColor, riskColor, stabilityColor, momentumColor } from "@/lib/gauge-engine";
 import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
