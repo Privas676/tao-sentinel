@@ -217,7 +217,7 @@ export default function CompassPage() {
 
   // ── Best opportunity & worst risk ──
   const bestOpp = useMemo(() => {
-    return [...enrichedSignals].filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp)[0] || null;
+    return [...enrichedSignals].filter(s => s.action === "ENTER" && !s.isOverridden && !SPECIAL_SUBNETS[s.netuid]?.isSystem).sort((a, b) => b.opp - a.opp)[0] || null;
   }, [enrichedSignals]);
 
   const worstRisk = useMemo(() => {
