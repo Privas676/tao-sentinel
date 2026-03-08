@@ -229,6 +229,8 @@ function suggestedAction(type: string | null, evidence: any, fr: boolean): strin
   if (type === "GO" || type === "EARLY") return fr ? "Opportunité" : "Opportunity";
   if (type === "GO_SPECULATIVE") return fr ? "Évaluer le risque" : "Evaluate risk";
   if (type === "PRE_HYPE" || type === "PRÉ-HYPE" || type === "SMART_ACCUMULATION") return fr ? "Surveiller de près" : "Watch closely";
+  if (type === "CONFIDENCE_DROP") return fr ? "Vérifier les données" : "Check data sources";
+  if (type === "POSITION_URGENT") return fr ? "Réévaluer la position" : "Reassess position";
   return fr ? "Aucune action" : "No action";
 }
 
