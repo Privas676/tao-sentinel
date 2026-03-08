@@ -106,12 +106,14 @@ const ENTRY_TYPES = new Set(["GO", "GO_SPECULATIVE", "EARLY"]);
 const EXIT_TYPES = new Set(["BREAK", "EXIT_FAST"]);
 const OVERRIDE_TYPES = new Set(["RISK_OVERRIDE"]);
 const DEPEG_TYPES = new Set(["DEPEG_CONFIRMED"]);
+const SYSTEM_ALERT_TYPES = new Set(["CONFIDENCE_DROP", "POSITION_URGENT"]);
 
 function isPushableEvent(ev: { type: string | null; evidence: any }): boolean {
   if (!ev.type) return false;
   if (ENTRY_TYPES.has(ev.type) || EXIT_TYPES.has(ev.type)) return true;
   if (OVERRIDE_TYPES.has(ev.type)) return ev.evidence?.level === "CRITICAL";
   if (DEPEG_TYPES.has(ev.type)) return true;
+  if (SYSTEM_ALERT_TYPES.has(ev.type)) return true;
   return false;
 }
 
