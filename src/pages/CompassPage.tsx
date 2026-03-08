@@ -205,12 +205,13 @@ export default function CompassPage() {
 
   // ── Engine-action-based priority groups (single source of truth) ──
   const priorityGroups = useMemo(() => {
-    const enterGroup = enrichedSignals.filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const holdGroup = enrichedSignals.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const exitGroup = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
-    const enterCount = enrichedSignals.filter(s => s.action === "ENTER" && !s.isOverridden).length;
-    const holdCount = enrichedSignals.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).length;
-    const exitCount = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
+    const enterGroup = nonSystem.filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const holdGroup = nonSystem.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const exitGroup = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const enterCount = nonSystem.filter(s => s.action === "ENTER" && !s.isOverridden).length;
+    const holdCount = nonSystem.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).length;
+    const exitCount = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).length;
     return { enterGroup, holdGroup, exitGroup, enterCount, holdCount, exitCount };
   }, [enrichedSignals]);
 
