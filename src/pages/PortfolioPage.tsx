@@ -238,6 +238,8 @@ export default function PortfolioPage() {
   /* ═══════════════════════════════════════ */
   /*   RENDER                                */
   /* ═══════════════════════════════════════ */
+  if (isLoading) return <PageLoadingState label={fr ? "Chargement portfolio..." : "Loading portfolio..."} />;
+
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
       <div className="px-4 sm:px-6 py-6 max-w-[1200px] mx-auto space-y-7">

@@ -578,6 +578,8 @@ export default function AlertsPage() {
     { value: "PORTFOLIO", label: "Portfolio", count: undismissed.filter(g => g.latest.netuid != null && portfolio.ownedNetuids.has(g.latest.netuid)).length },
   ];
 
+  if (!events) return <PageLoadingState label={fr ? "Chargement alertes..." : "Loading alerts..."} />;
+
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
       <div className="px-4 sm:px-6 py-6 max-w-[1200px] mx-auto space-y-7">
