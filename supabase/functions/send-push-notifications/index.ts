@@ -73,6 +73,8 @@ type Priority = 0 | 1 | 2 | 3;
 const PRIORITY_MAP: Record<string, Priority> = {
   DEPEG_CONFIRMED: 0,     // P0: depeg confirmed
   RISK_OVERRIDE: 1,       // P1: override critical
+  POSITION_URGENT: 1,     // P1: position needs immediate action
+  CONFIDENCE_DROP: 2,     // P2: global confidence alert
   DATA_UNSTABLE: 2,       // P2: system alert
   GO: 3,
   GO_SPECULATIVE: 3,
