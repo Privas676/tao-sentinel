@@ -2,6 +2,17 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+// ── Startup safeguard: clear stale caches ──
+if ("caches" in window) {
+  caches.keys().then((names) => {
+    for (const name of names) {
+      if (!name.includes("v0.1.15")) {
+        caches.delete(name);
+      }
+    }
+  });
+}
+
 // ── Force service worker update on load ──
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {
@@ -18,6 +29,17 @@ if ("serviceWorker" in navigator) {
     }
   });
 }
+
+// ── Startup redirect safeguard ──
+try {
+  const path = window.location.pathname;
+  const knownRoutes = ["/compass", "/subnets", "/portfolio", "/alerts", "/settings", "/lab", "/auth", "/reset-password", "/profile", "/install"];
+  const isKnown = path === "/" || knownRoutes.some((r) => path.startsWith(r));
+  if (!isKnown && !path.startsWith("/~")) {
+    console.warn("[startup] Unknown route, redirecting to /compass:", path);
+    window.history.replaceState(null, "", "/compass");
+  }
+} catch {}
 
 // Mount application
 createRoot(document.getElementById("root")!).render(<App />);
