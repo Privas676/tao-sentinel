@@ -584,8 +584,11 @@ export default function SubnetsPage() {
                         )}
                       </td>
                       <td className="py-2 px-2.5 text-center">
-                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{ color: actionColor(r.action), background: `color-mix(in srgb, ${actionColor(r.action)} 8%, transparent)` }}>
-                          {actionIcon(r.action)} {aLabel}
+                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{
+                          color: isSystemRow ? "hsl(var(--signal-system))" : actionColor(r.action),
+                          background: isSystemRow ? "hsla(var(--signal-system), 0.08)" : `color-mix(in srgb, ${actionColor(r.action)} 8%, transparent)`
+                        }}>
+                          {isSystemRow ? "🔷" : actionIcon(r.action)} {aLabel}
                         </span>
                       </td>
                       <td className="py-2 px-2.5 text-center">
