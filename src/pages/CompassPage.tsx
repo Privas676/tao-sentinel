@@ -122,8 +122,10 @@ export default function CompassPage() {
   const { positions } = useLocalPortfolio();
 
   // ── Data sources — useSubnetDecisions is the canonical decision source ──
-  const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence } = useSubnetScores();
+  const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence, isLoading } = useSubnetScores();
   const { decisions } = useSubnetDecisions();
+
+  if (isLoading || !scoresList.length) return <PageLoadingState label={fr ? "Chargement Compass..." : "Loading Compass..."} />;
 
   const { data: rawSignals } = useQuery({
     queryKey: ["unified-signals"],
