@@ -65,8 +65,39 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── SUBSCRIBE ──
+    // ── Helper: authenticate user for subscribe/unsubscribe ──
+    async function authenticateUser(req: Request): Promise<{ userId: string } | Response> {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Unauthorized — sign in required" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+      if (!token) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const userClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: { user }, error: userErr } = await userClient.auth.getUser(token);
+      if (userErr || !user) {
+        return new Response(JSON.stringify({ error: "Unauthorized — invalid session" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return { userId: user.id };
+    }
+
+    // ── SUBSCRIBE (requires auth) ──
     if (action === "subscribe") {
+      const authResult = await authenticateUser(req);
+      if (authResult instanceof Response) return authResult;
+
       const { endpoint, p256dh, auth } = body;
 
       // Validate endpoint is a valid HTTPS URL
@@ -94,7 +125,7 @@ Deno.serve(async (req) => {
       }
 
       const { error } = await sb.from("push_subscriptions").upsert(
-        { endpoint, p256dh, auth },
+        { endpoint, p256dh, auth, user_id: authResult.userId },
         { onConflict: "endpoint" }
       );
       if (error) throw error;
@@ -104,8 +135,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── UNSUBSCRIBE ──
+    // ── UNSUBSCRIBE (requires auth) ──
     if (action === "unsubscribe") {
+      const authResult = await authenticateUser(req);
+      if (authResult instanceof Response) return authResult;
+
       const { endpoint } = body;
       if (!endpoint || typeof endpoint !== "string" || !endpoint.startsWith("https://")) {
         return new Response(JSON.stringify({ error: "Invalid endpoint" }), {
@@ -113,7 +147,10 @@ Deno.serve(async (req) => {
         });
       }
 
-      await sb.from("push_subscriptions").delete().eq("endpoint", endpoint);
+      // Only delete if owned by authenticated user
+      await sb.from("push_subscriptions").delete()
+        .eq("endpoint", endpoint)
+        .eq("user_id", authResult.userId);
 
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
