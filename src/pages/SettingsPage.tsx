@@ -5,6 +5,7 @@ import { useDelistMode } from "@/hooks/use-delist-mode";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { SectionCard, SectionTitle, SettingRow, ToggleButtons } from "@/components/settings/SettingsShared";
 import type { DelistMode } from "@/lib/delist-risk";
+import { APP_VERSION, BUILD_TAG } from "@/lib/version";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SETTINGS — Clean User Preferences                     */
@@ -165,6 +166,11 @@ export default function SettingsPage() {
           {fr
             ? "TMC est affiché en lecture seule. Il n'influence ni le scoring, ni les alertes, ni les overrides."
             : "TMC is displayed read-only. It does not affect scoring, alerts, or overrides."}
+        </div>
+
+        {/* ── Build version indicator ── */}
+        <div className="font-mono text-[8px] text-muted-foreground text-center px-4 pt-2 pb-1" style={{ opacity: 0.35 }}>
+          {APP_VERSION} · {BUILD_TAG}
         </div>
       </div>
     </div>
