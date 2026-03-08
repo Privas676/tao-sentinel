@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════ */
 /*   SERVICE WORKER — Push Notifications   */
-/*   v0.1.14 — mobile-sync-fix             */
+/*   v0.1.15 — preview-fix                 */
 /* ═══════════════════════════════════════ */
 
-const CACHE_VERSION = "tao-sentinel-v0.1.14";
+const CACHE_VERSION = "tao-sentinel-v0.1.15";
 
 // ── Clear ALL old caches on activate ──
 self.addEventListener("activate", (event) => {
