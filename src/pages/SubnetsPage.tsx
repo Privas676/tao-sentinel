@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
-import { useSubnetVerdicts, type SubnetVerdictData } from "@/hooks/use-subnet-verdict";
+import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
+import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -17,7 +18,6 @@ import {
   actionColor, actionIcon, actionLabel,
 } from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
-import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
 
 /* ═══════════════════════════════════════════════ */
 /*   SUBNET INTELLIGENCE — Unified Master Table   */

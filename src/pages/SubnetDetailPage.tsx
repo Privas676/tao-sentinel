@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
-import { useSubnetVerdicts, type SubnetVerdictData } from "@/hooks/use-subnet-verdict";
+import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useMemo, useState, useEffect, useCallback } from "react";
@@ -10,7 +10,6 @@ import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
 import { ActionBadge } from "@/components/sentinel";
 import { SectionCard, SectionTitle, KPIChip, Metric, BarScore, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
-import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SUBNET COMMAND CENTER — Decision-First Architecture   */

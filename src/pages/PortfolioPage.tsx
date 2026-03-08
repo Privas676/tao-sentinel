@@ -3,8 +3,7 @@ import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
-import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
-import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
+import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { confianceColor } from "@/lib/data-fusion";
 import SwipeHint from "@/components/SwipeHint";
 
