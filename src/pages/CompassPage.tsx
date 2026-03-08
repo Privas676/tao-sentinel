@@ -120,8 +120,9 @@ export default function CompassPage() {
   const isMobile = useIsMobile();
   const { positions } = useLocalPortfolio();
 
-  // ── Data sources ──
+  // ── Data sources — useSubnetDecisions is the canonical decision source ──
   const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence } = useSubnetScores();
+  const { decisions } = useSubnetDecisions();
 
   const { data: rawSignals } = useQuery({
     queryKey: ["unified-signals"],
