@@ -5,6 +5,7 @@ import { useDelistMode } from "@/hooks/use-delist-mode";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { SectionCard, SectionTitle, SettingRow, ToggleButtons } from "@/components/settings/SettingsShared";
 import InstallSection from "@/components/settings/InstallSection";
+import SystemDiagnostics from "@/components/settings/SystemDiagnostics";
 import type { DelistMode } from "@/lib/delist-risk";
 import { APP_VERSION, BUILD_TAG } from "@/lib/version";
 
@@ -164,6 +165,9 @@ export default function SettingsPage() {
             ))}
           </div>
         </SectionCard>
+
+        {/* ── 5. SYSTEM DIAGNOSTICS ── */}
+        <SystemDiagnostics fr={fr} />
 
         {/* ── TMC context note ── */}
         <div className="font-mono text-[9px] text-muted-foreground text-center px-4 leading-relaxed">
