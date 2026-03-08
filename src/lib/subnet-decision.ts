@@ -37,7 +37,10 @@ export type SubnetDecision = {
   actionEn: string;
 
   /* ── ActionBadge key for the ActionBadge component ── */
-  badgeAction: "RENTRE" | "SORS" | "RENFORCER" | "HOLD" | "SURVEILLER" | "ATTENDRE";
+  badgeAction: "RENTRE" | "SORS" | "RENFORCER" | "HOLD" | "SURVEILLER" | "ATTENDRE" | "SYSTEME";
+
+  /* ── System subnet flag ── */
+  isSystem: boolean;
 
   /* ── Portfolio action (for held positions) ── */
   portfolioAction: PortfolioAction;
