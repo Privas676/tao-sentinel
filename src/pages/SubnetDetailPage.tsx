@@ -139,6 +139,7 @@ export default function SubnetDetailPage() {
   const verdict = decisionObj?.verdict;
   const spark = sparklines?.get(netuid) || [];
   const radar = useMemo(() => radarData?.find(r => r.netuid === netuid) || null, [radarData, netuid]);
+  const inPortfolio = isOwned(netuid);
   const isSpecial = !!SPECIAL_SUBNETS[netuid];
 
   const doFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(null), 1500); };
