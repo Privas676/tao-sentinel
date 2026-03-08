@@ -2,7 +2,7 @@
 /*   AUDIT LOG                              */
 /*   Records every scoring cycle & alert    */
 /*   for institutional traceability.        */
-/*   Writes to Supabase audit_log table.    */
+/*   Writes via Edge Function (service_role)*/
 /* ═══════════════════════════════════════ */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -45,7 +45,7 @@ export type AuditEntry = {
 
 let lastCycleLogAt = 0;
 
-/* ── Core write function ── */
+/* ── Core write function via Edge Function ── */
 
 async function writeEntries(entries: AuditEntry[]): Promise<void> {
   if (entries.length === 0) return;
@@ -53,28 +53,35 @@ async function writeEntries(entries: AuditEntry[]): Promise<void> {
   const batch = entries.slice(0, MAX_BATCH_SIZE);
 
   try {
-    const { error } = await supabase
-      .from("audit_log" as any)
-      .insert(batch.map(e => ({
-        engine_version: e.engine_version,
-        event_type: e.event_type,
-        snapshot_ids: e.snapshot_ids,
-        subnet_count: e.subnet_count ?? null,
-        netuid: e.netuid ?? null,
-        inputs: e.inputs,
-        outputs: e.outputs,
-        top_factors: e.top_factors,
-        decision_reason: e.decision_reason ?? null,
-        data_confidence: e.data_confidence ?? null,
-        alignment_status: e.alignment_status ?? null,
-        kill_switch_active: e.kill_switch_active ?? false,
-        kill_switch_triggers: e.kill_switch_triggers ?? [],
-      })));
+    // Get current session for auth header
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      console.warn("[AUDIT-LOG] No active session — skipping write");
+      return;
+    }
 
-    if (error) {
-      console.warn("[AUDIT-LOG] Write failed:", error.message);
+    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+    const res = await fetch(
+      `https://${projectId}.supabase.co/functions/v1/log-audit-event`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: anonKey,
+        },
+        body: JSON.stringify({ entries: batch }),
+      },
+    );
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn("[AUDIT-LOG] Edge Function write failed:", res.status, body);
     }
   } catch (err) {
+    // Silent fallback — never break the UI
     console.warn("[AUDIT-LOG] Write error:", err);
   }
 }
