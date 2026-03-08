@@ -118,7 +118,8 @@ function deriveActionFr(action: StrategicAction): DecisionAction {
   }
 }
 
-function deriveBadgeAction(action: StrategicAction): SubnetDecision["badgeAction"] {
+function deriveBadgeAction(action: StrategicAction, isSystem: boolean): SubnetDecision["badgeAction"] {
+  if (isSystem) return "SYSTEME";
   switch (action) {
     case "ENTER": return "RENTRE";
     case "EXIT": return "SORS";
