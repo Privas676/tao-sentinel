@@ -550,7 +550,8 @@ export default function SubnetsPage() {
                     </td>
                   </tr>
                 ) : rows.map((r) => {
-                  const aLabel = actionLabel(r.action, fr);
+                  const isSystemRow = !!SPECIAL_SUBNETS[r.netuid]?.isSystem;
+                  const aLabel = isSystemRow ? "SYSTÈME" : actionLabel(r.action, fr);
                   const convColor = r.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : r.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
                   const liqColor = r.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : r.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
                   const structColor = r.structureLevel === "HEALTHY" ? "hsl(var(--signal-go))" : r.structureLevel === "FRAGILE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
