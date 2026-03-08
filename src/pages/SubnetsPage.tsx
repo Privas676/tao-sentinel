@@ -229,9 +229,10 @@ export default function SubnetsPage() {
   const actionCounts = useMemo(() => {
     let enter = 0, hold = 0, exit = 0;
     for (const s of scoresList) {
+      if (SPECIAL_SUBNETS[s.netuid]?.isSystem) { hold++; continue; }
       if (s.action === "ENTER") enter++;
       else if (s.action === "EXIT") exit++;
-      else hold++; // HOLD, STAKE, NEUTRAL, WATCH all map to "Attendre" filter
+      else hold++;
     }
     return { enter, hold, exit };
   }, [scoresList]);
