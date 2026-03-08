@@ -152,8 +152,8 @@ function impactTierConfig(tier: ImpactTier, fr: boolean): { label: string; color
 }
 
 /* ── Classification ── */
-const CRITICAL_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE"]);
-const WARNING_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE"]);
+const CRITICAL_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE", "POSITION_URGENT"]);
+const WARNING_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE", "CONFIDENCE_DROP"]);
 
 function alertSeverityClass(type: string | null): "critical" | "warning" | "info" {
   if (CRITICAL_TYPES.has(type || "")) return "critical";
