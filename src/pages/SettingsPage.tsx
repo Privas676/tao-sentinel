@@ -168,10 +168,6 @@ export default function SettingsPage() {
             : "TMC is displayed read-only. It does not affect scoring, alerts, or overrides."}
         </div>
 
-        {/* ── Build version indicator ── */}
-        <div className="font-mono text-[8px] text-muted-foreground text-center px-4 pt-2 pb-1" style={{ opacity: 0.35 }}>
-          {APP_VERSION} · {BUILD_TAG}
-        </div>
       </div>
     </div>
   );

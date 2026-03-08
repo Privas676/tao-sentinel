@@ -247,15 +247,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </h1>
 
           {/* Right side */}
-          <div className="ml-auto flex items-center gap-2">
-            <span
-              className="font-mono text-[7px] tracking-[0.12em] text-muted-foreground"
-              style={{ opacity: 0.4 }}
-              title={`${APP_VERSION} · ${BUILD_TAG}`}
-            >
-              {APP_VERSION}
-            </span>
-          </div>
+          <div className="ml-auto flex items-center gap-2" />
         </header>
 
         {/* ─ CONTENT AREA ─ */}
