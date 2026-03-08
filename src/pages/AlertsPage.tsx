@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { useMemo, useState, useCallback } from "react";
+import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
@@ -576,6 +577,8 @@ export default function AlertsPage() {
     { value: "OVERRIDE", label: "Overrides", count: stats.overrides },
     { value: "PORTFOLIO", label: "Portfolio", count: undismissed.filter(g => g.latest.netuid != null && portfolio.ownedNetuids.has(g.latest.netuid)).length },
   ];
+
+  if (!events) return <PageLoadingState label={fr ? "Chargement alertes..." : "Loading alerts..."} />;
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">

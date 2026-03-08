@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -121,8 +122,9 @@ export default function CompassPage() {
   const { positions } = useLocalPortfolio();
 
   // ── Data sources — useSubnetDecisions is the canonical decision source ──
-  const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence } = useSubnetScores();
+  const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence, isLoading } = useSubnetScores();
   const { decisions } = useSubnetDecisions();
+
 
   const { data: rawSignals } = useQuery({
     queryKey: ["unified-signals"],
@@ -330,6 +332,8 @@ export default function CompassPage() {
     { key: "fragile", title: fr ? "Fragiles" : "Fragile", icon: "⚠", items: rotationMap.fragile, color: WARN },
     { key: "avoid", title: fr ? "À éviter" : "Avoid", icon: "🚫", items: rotationMap.avoid, color: BREAK },
   ];
+
+  if (isLoading || !scoresList.length) return <PageLoadingState label={fr ? "Chargement Compass..." : "Loading Compass..."} />;
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">

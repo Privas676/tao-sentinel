@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
+import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
@@ -105,7 +106,7 @@ export default function PortfolioPage() {
   const [addQty, setAddQty] = useState<number>(10);
   const { currency, toggle: toggleCurrency } = useCurrencyToggle();
 
-  const { scores, sparklines, subnetList, taoUsd } = useSubnetScores();
+  const { scores, sparklines, subnetList, taoUsd, isLoading } = useSubnetScores();
   const { decisions } = useSubnetDecisions();
 
   // ── Seed portfolio positions (one-time import) ──
@@ -237,6 +238,8 @@ export default function PortfolioPage() {
   /* ═══════════════════════════════════════ */
   /*   RENDER                                */
   /* ═══════════════════════════════════════ */
+  if (isLoading) return <PageLoadingState label={fr ? "Chargement portfolio..." : "Loading portfolio..."} />;
+
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
       <div className="px-4 sm:px-6 py-6 max-w-[1200px] mx-auto space-y-7">

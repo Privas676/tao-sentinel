@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback } from "react";
+import { PageLoadingState } from "@/components/PageLoadingState";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
@@ -241,7 +242,7 @@ export default function SubnetsPage() {
   const { ownedNetuids, addPosition } = useLocalPortfolio();
 
   // ── Data sources ──
-  const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug } = useSubnetScores();
+  const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug, isLoading } = useSubnetScores();
   const { decisions } = useSubnetDecisions();
 
   // ── Action counts from engine (single source of truth) ──
@@ -381,6 +382,8 @@ export default function SubnetsPage() {
   );
 
   const isCompact = viewMode === "compact";
+
+  if (isLoading || !scoresList.length) return <PageLoadingState label={fr ? "Chargement subnets..." : "Loading subnets..."} />;
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">

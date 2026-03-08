@@ -16,6 +16,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -24,17 +25,18 @@ function AppRoutes() {
 
   return (
     <AppShell>
+      <ErrorBoundary fallbackTitle="Erreur critique">
       <Routes>
         {/* ── Core decision pages ── */}
-        <Route path="/compass" element={<CompassPage />} />
-        <Route path="/subnets" element={<SubnetsPage />} />
-        <Route path="/subnets/:id" element={<SubnetDetailPage />} />
-        <Route path="/portfolio" element={<PortfolioPage />} />
-        <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/compass" element={<ErrorBoundary fallbackTitle="Compass"><CompassPage /></ErrorBoundary>} />
+        <Route path="/subnets" element={<ErrorBoundary fallbackTitle="Subnets"><SubnetsPage /></ErrorBoundary>} />
+        <Route path="/subnets/:id" element={<ErrorBoundary fallbackTitle="Subnet Detail"><SubnetDetailPage /></ErrorBoundary>} />
+        <Route path="/portfolio" element={<ErrorBoundary fallbackTitle="Portfolio"><PortfolioPage /></ErrorBoundary>} />
+        <Route path="/alerts" element={<ErrorBoundary fallbackTitle="Alerts"><AlertsPage /></ErrorBoundary>} />
 
         {/* ── Utility ── */}
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/lab" element={<LabPage />} />
+        <Route path="/settings" element={<ErrorBoundary fallbackTitle="Settings"><SettingsPage /></ErrorBoundary>} />
+        <Route path="/lab" element={<ErrorBoundary fallbackTitle="Lab"><LabPage /></ErrorBoundary>} />
 
         {/* ── Auth ── */}
         <Route path="/auth" element={user ? <Navigate to="/compass" replace /> : <AuthPage />} />
@@ -48,6 +50,7 @@ function AppRoutes() {
         <Route path="/quant-diagnostics" element={<Navigate to="/lab" replace />} />
         <Route path="/radar" element={<Navigate to="/lab" replace />} />
       </Routes>
+      </ErrorBoundary>
     </AppShell>
   );
 }
