@@ -155,7 +155,20 @@ export default function SubnetDetailPage() {
     );
   }
 
-  const decision = buildSubnetDecision(s, verdict, fr);
+  const decision = decisionObj ?? (s ? {
+    netuid: s.netuid, name: s.name, engineAction: s.action, actionFr: "ATTENDRE" as const,
+    actionEn: "HOLD", badgeAction: "HOLD" as const, isSystem: false,
+    portfolioAction: "CONSERVER" as const, portfolioActionFr: "CONSERVER", portfolioActionEn: "HOLD",
+    conviction: "LOW" as const, convictionScore: 0, opp: s.opp, risk: s.risk,
+    asymmetry: s.asymmetry, confidence: s.confianceScore, momentumScore: s.momentumScore,
+    momentumLabel: s.momentumLabel, stability: s.stability,
+    liquidityLevel: "LOW" as const, structureLevel: "FRAGILE" as const, statusLevel: "WATCH" as const,
+    signalPrincipal: "—", thesis: [], invalidation: [], conflictExplanation: null,
+    isOverridden: s.isOverridden, dataUncertain: s.dataUncertain,
+    depegProbability: s.depegProbability, delistCategory: s.delistCategory, delistScore: s.delistScore,
+    score: s, verdict: undefined,
+  } as SubnetDecision : null);
+  if (!decision) return null;
   const urg = urgency(decision, fr);
   const eco = radar?.economicContext;
   const dm = radar?.derivedMetrics;
