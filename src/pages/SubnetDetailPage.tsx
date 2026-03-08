@@ -175,7 +175,7 @@ export default function SubnetDetailPage() {
                   <span className="font-mono text-[9px] text-muted-foreground">SN-{netuid} · {s.assetType}</span>
                   {isSpecial && (
                     <span className="font-mono text-[7px] px-1.5 py-0.5 rounded font-bold"
-                      style={{ background: "hsla(210,60%,55%,0.08)", color: "hsl(210,60%,55%)", border: "1px solid hsla(210,60%,55%,0.2)" }}>
+                      style={{ background: "hsla(var(--signal-system), 0.08)", color: "hsl(var(--signal-system))", border: "1px solid hsla(var(--signal-system), 0.2)" }}>
                       🔷 {fr ? SPECIAL_SUBNETS[netuid].label : SPECIAL_SUBNETS[netuid].labelEn}
                     </span>
                   )}
