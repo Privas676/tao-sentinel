@@ -28,6 +28,60 @@ export default function SettingsPage() {
     try { return (localStorage.getItem("display_density") as "compact" | "normal") || "normal"; } catch { return "normal"; }
   });
 
+  // Push alert preferences
+  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(() => {
+    try { return Number(localStorage.getItem("push_confidence_threshold")) || 50; } catch { return 50; }
+  });
+
+  type AlertType = "GO" | "BREAK" | "EXIT_FAST" | "EARLY" | "DEPEG_WARNING" | "DEPEG_CRITICAL" | "RISK_OVERRIDE" | "CONFIDENCE_DROP" | "POSITION_URGENT" | "WHALE_MOVE" | "SMART_ACCUMULATION";
+  const ALL_ALERT_TYPES: { key: AlertType; label: string; labelEn: string; icon: string }[] = [
+    { key: "GO", label: "Signal GO", labelEn: "GO Signal", icon: "🟢" },
+    { key: "BREAK", label: "Zone critique", labelEn: "Critical zone", icon: "🔴" },
+    { key: "EXIT_FAST", label: "Sortie urgente", labelEn: "Urgent exit", icon: "🚨" },
+    { key: "EARLY", label: "Signal précoce", labelEn: "Early signal", icon: "🌱" },
+    { key: "DEPEG_WARNING", label: "Alerte depeg", labelEn: "Depeg warning", icon: "⚠️" },
+    { key: "DEPEG_CRITICAL", label: "Depeg critique", labelEn: "Critical depeg", icon: "💀" },
+    { key: "RISK_OVERRIDE", label: "Override risque", labelEn: "Risk override", icon: "🛡" },
+    { key: "CONFIDENCE_DROP", label: "Chute confiance", labelEn: "Confidence drop", icon: "📉" },
+    { key: "POSITION_URGENT", label: "Position urgente", labelEn: "Urgent position", icon: "🎯" },
+    { key: "WHALE_MOVE", label: "Mouvement whale", labelEn: "Whale move", icon: "🐋" },
+    { key: "SMART_ACCUMULATION", label: "Accumulation smart", labelEn: "Smart accumulation", icon: "🧠" },
+  ];
+
+  const [enabledAlerts, setEnabledAlerts] = useState<Set<AlertType>>(() => {
+    try {
+      const stored = localStorage.getItem("push_enabled_alerts");
+      if (stored) return new Set(JSON.parse(stored) as AlertType[]);
+    } catch { /* fallback */ }
+    return new Set(ALL_ALERT_TYPES.map(a => a.key));
+  });
+
+  const handleThresholdChange = (val: number) => {
+    setConfidenceThreshold(val);
+    localStorage.setItem("push_confidence_threshold", String(val));
+  };
+
+  const toggleAlert = (key: AlertType) => {
+    setEnabledAlerts(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      localStorage.setItem("push_enabled_alerts", JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  const allEnabled = enabledAlerts.size === ALL_ALERT_TYPES.length;
+  const toggleAll = () => {
+    if (allEnabled) {
+      setEnabledAlerts(new Set());
+      localStorage.setItem("push_enabled_alerts", "[]");
+    } else {
+      const all = new Set(ALL_ALERT_TYPES.map(a => a.key));
+      setEnabledAlerts(all);
+      localStorage.setItem("push_enabled_alerts", JSON.stringify([...all]));
+    }
+  };
+
   const handleDensity = (d: "compact" | "normal") => {
     setDensity(d);
     localStorage.setItem("display_density", d);
@@ -109,6 +163,69 @@ export default function SettingsPage() {
             )}
           </SettingRow>
         </SectionCard>
+
+        {/* ── 2a. PUSH ALERT CONFIG ── */}
+        <SectionCard>
+          <SectionTitle icon="⚙" title={fr ? "Configuration alertes push" : "Push alert config"}
+            badge={<span className="font-mono text-[8px] text-muted-foreground">{enabledAlerts.size}/{ALL_ALERT_TYPES.length}</span>}
+          />
+
+          {/* Confidence threshold slider */}
+          <SettingRow
+            label={fr ? "Seuil de confiance critique" : "Critical confidence threshold"}
+            description={fr
+              ? `Alerte si la confiance globale descend sous ${confidenceThreshold}%`
+              : `Alert when global confidence drops below ${confidenceThreshold}%`}
+          >
+            <div className="flex items-center gap-3">
+              <input
+                type="range" min={20} max={80} step={5}
+                value={confidenceThreshold}
+                onChange={e => handleThresholdChange(Number(e.target.value))}
+                className="w-24 sm:w-32 h-1.5 accent-gold cursor-pointer"
+                style={{ accentColor: "hsl(var(--gold))" }}
+              />
+              <span className="font-mono text-[11px] font-bold min-w-[3ch] text-right" style={{ color: "hsl(var(--gold))" }}>
+                {confidenceThreshold}%
+              </span>
+            </div>
+          </SettingRow>
+
+          {/* Alert type toggles */}
+          <div className="px-5 py-3 border-b border-border last:border-0">
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-mono text-[11px] text-foreground/70 font-medium">
+                {fr ? "Types d'alertes à recevoir" : "Alert types to receive"}
+              </span>
+              <button onClick={toggleAll}
+                className="font-mono text-[9px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-gold transition-all">
+                {allEnabled ? (fr ? "Tout désactiver" : "Disable all") : (fr ? "Tout activer" : "Enable all")}
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {ALL_ALERT_TYPES.map(at => {
+                const on = enabledAlerts.has(at.key);
+                return (
+                  <button key={at.key} onClick={() => toggleAlert(at.key)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all font-mono text-[10px]"
+                    style={{
+                      background: on ? "hsla(var(--gold), 0.06)" : "transparent",
+                      color: on ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+                      opacity: on ? 1 : 0.45,
+                      border: `1px solid ${on ? "hsla(var(--gold), 0.15)" : "hsla(var(--border), 0.5)"}`,
+                    }}>
+                    <span style={{ fontSize: 12 }}>{at.icon}</span>
+                    <span className="flex-1 truncate">{fr ? at.label : at.labelEn}</span>
+                    <span className="text-[8px]" style={{ color: on ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}>
+                      {on ? "ON" : "OFF"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </SectionCard>
+
         {/* ── 2b. INSTALL ── */}
         <InstallSection fr={fr} />
 
