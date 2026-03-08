@@ -163,6 +163,69 @@ export default function SettingsPage() {
             )}
           </SettingRow>
         </SectionCard>
+
+        {/* ── 2a. PUSH ALERT CONFIG ── */}
+        <SectionCard>
+          <SectionTitle icon="⚙" title={fr ? "Configuration alertes push" : "Push alert config"}
+            badge={<span className="font-mono text-[8px] text-muted-foreground">{enabledAlerts.size}/{ALL_ALERT_TYPES.length}</span>}
+          />
+
+          {/* Confidence threshold slider */}
+          <SettingRow
+            label={fr ? "Seuil de confiance critique" : "Critical confidence threshold"}
+            description={fr
+              ? `Alerte si la confiance globale descend sous ${confidenceThreshold}%`
+              : `Alert when global confidence drops below ${confidenceThreshold}%`}
+          >
+            <div className="flex items-center gap-3">
+              <input
+                type="range" min={20} max={80} step={5}
+                value={confidenceThreshold}
+                onChange={e => handleThresholdChange(Number(e.target.value))}
+                className="w-24 sm:w-32 h-1.5 accent-gold cursor-pointer"
+                style={{ accentColor: "hsl(var(--gold))" }}
+              />
+              <span className="font-mono text-[11px] font-bold min-w-[3ch] text-right" style={{ color: "hsl(var(--gold))" }}>
+                {confidenceThreshold}%
+              </span>
+            </div>
+          </SettingRow>
+
+          {/* Alert type toggles */}
+          <div className="px-5 py-3 border-b border-border last:border-0">
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-mono text-[11px] text-foreground/70 font-medium">
+                {fr ? "Types d'alertes à recevoir" : "Alert types to receive"}
+              </span>
+              <button onClick={toggleAll}
+                className="font-mono text-[9px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-gold transition-all">
+                {allEnabled ? (fr ? "Tout désactiver" : "Disable all") : (fr ? "Tout activer" : "Enable all")}
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {ALL_ALERT_TYPES.map(at => {
+                const on = enabledAlerts.has(at.key);
+                return (
+                  <button key={at.key} onClick={() => toggleAlert(at.key)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all font-mono text-[10px]"
+                    style={{
+                      background: on ? "hsla(var(--gold), 0.06)" : "transparent",
+                      color: on ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+                      opacity: on ? 1 : 0.45,
+                      border: `1px solid ${on ? "hsla(var(--gold), 0.15)" : "hsla(var(--border), 0.5)"}`,
+                    }}>
+                    <span style={{ fontSize: 12 }}>{at.icon}</span>
+                    <span className="flex-1 truncate">{fr ? at.label : at.labelEn}</span>
+                    <span className="text-[8px]" style={{ color: on ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}>
+                      {on ? "ON" : "OFF"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </SectionCard>
+
         {/* ── 2b. INSTALL ── */}
         <InstallSection fr={fr} />
 
