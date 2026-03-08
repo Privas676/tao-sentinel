@@ -242,7 +242,7 @@ export default function SubnetsPage() {
 
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug } = useSubnetScores();
-  const { verdicts, isLoading: verdictLoading } = useSubnetVerdicts();
+  const { decisions } = useSubnetDecisions();
 
   // ── Action counts from engine (single source of truth) ──
   const actionCounts = useMemo(() => {
