@@ -170,11 +170,17 @@ export default function SubnetDetailPage() {
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-24">
       <div className="px-4 sm:px-6 py-6 max-w-[1100px] mx-auto space-y-7">
 
-        {/* ── Breadcrumb ── */}
-        <nav className="flex items-center gap-2">
-          <Link to="/subnets" className="font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors">← Subnets</Link>
+        {/* ── Back button + Breadcrumb ── */}
+        <nav className="flex items-center gap-3">
+          <button
+            onClick={goBack}
+            className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded-md border border-border hover:border-foreground/20 hover:bg-muted/20"
+          >
+            ← {fr ? "Retour" : "Back"}
+          </button>
           <span className="text-muted-foreground text-[10px]">/</span>
           <span className="font-mono text-[10px] text-muted-foreground">SN-{netuid}</span>
+          <span className="ml-auto font-mono text-[8px] text-muted-foreground/50 hidden sm:block">ESC</span>
         </nav>
 
         {/* ══════════════════════════════════════════ */}
