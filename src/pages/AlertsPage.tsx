@@ -114,8 +114,8 @@ function passesStrictGating(ev: EventRow, scores: Map<number, any> | undefined):
 }
 
 /* ── Impact tier classification ── */
-const BLOQUANT_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE"]);
-const SURVEILLANCE_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE"]);
+const BLOQUANT_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE", "POSITION_URGENT"]);
+const SURVEILLANCE_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE", "CONFIDENCE_DROP"]);
 
 function alertImpactTier(type: string | null, portfolioNetuids: Set<number>, netuid: number | null): ImpactTier {
   if (BLOQUANT_TYPES.has(type || "")) return "BLOQUANT";
@@ -152,8 +152,8 @@ function impactTierConfig(tier: ImpactTier, fr: boolean): { label: string; color
 }
 
 /* ── Classification ── */
-const CRITICAL_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE"]);
-const WARNING_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE"]);
+const CRITICAL_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE", "POSITION_URGENT"]);
+const WARNING_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE", "CONFIDENCE_DROP"]);
 
 function alertSeverityClass(type: string | null): "critical" | "warning" | "info" {
   if (CRITICAL_TYPES.has(type || "")) return "critical";
@@ -196,6 +196,10 @@ function typeDisplayInfo(type: string | null, fr: boolean): { label: string; ico
       return { label: "SMART ACCUM.", icon: "🧠", color: "hsl(187, 100%, 42%)" };
     case "CREATED":
       return { label: fr ? "NOUVEAU" : "NEW", icon: "✨", color: "hsl(210, 80%, 55%)" };
+    case "CONFIDENCE_DROP":
+      return { label: fr ? "CONFIANCE ↓" : "CONFIDENCE ↓", icon: "📉", color: WARN };
+    case "POSITION_URGENT":
+      return { label: fr ? "POSITION URGENTE" : "URGENT POSITION", icon: "🎯", color: BREAK };
     default:
       return { label: type || "—", icon: "•", color: MUTED };
   }
@@ -225,6 +229,8 @@ function suggestedAction(type: string | null, evidence: any, fr: boolean): strin
   if (type === "GO" || type === "EARLY") return fr ? "Opportunité" : "Opportunity";
   if (type === "GO_SPECULATIVE") return fr ? "Évaluer le risque" : "Evaluate risk";
   if (type === "PRE_HYPE" || type === "PRÉ-HYPE" || type === "SMART_ACCUMULATION") return fr ? "Surveiller de près" : "Watch closely";
+  if (type === "CONFIDENCE_DROP") return fr ? "Vérifier les données" : "Check data sources";
+  if (type === "POSITION_URGENT") return fr ? "Réévaluer la position" : "Reassess position";
   return fr ? "Aucune action" : "No action";
 }
 
@@ -235,6 +241,8 @@ function alertImpact(type: string | null, fr: boolean): string {
   if (type === "RISK_OVERRIDE") return fr ? "Blocage engine" : "Engine block";
   if (type === "WHALE_MOVE") return fr ? "Pression prix" : "Price pressure";
   if (type === "GO" || type === "EARLY") return fr ? "Signal d'entrée" : "Entry signal";
+  if (type === "CONFIDENCE_DROP") return fr ? "Fiabilité dégradée" : "Degraded reliability";
+  if (type === "POSITION_URGENT") return fr ? "Risque portefeuille" : "Portfolio risk";
   return "—";
 }
 
