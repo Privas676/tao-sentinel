@@ -19,6 +19,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export function usePushNotifications() {
+  const { user } = useAuth();
   const [state, setState] = useState<PushState>("loading");
   const [error, setError] = useState<string | null>(null);
 
