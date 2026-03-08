@@ -166,6 +166,9 @@ export default function SettingsPage() {
           </div>
         </SectionCard>
 
+        {/* ── 5. SYSTEM DIAGNOSTICS ── */}
+        <SystemDiagnostics fr={fr} />
+
         {/* ── TMC context note ── */}
         <div className="font-mono text-[9px] text-muted-foreground text-center px-4 leading-relaxed">
           {fr
