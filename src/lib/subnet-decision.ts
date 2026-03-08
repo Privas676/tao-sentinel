@@ -159,6 +159,8 @@ function portfolioActionLabelEn(a: PortfolioAction): string {
  * Build the main signal text — single source, used everywhere.
  */
 function deriveSignalPrincipal(s: UnifiedSubnetScore, fr: boolean): string {
+  const special = SPECIAL_SUBNETS[s.netuid];
+  if (special?.isSystem) return fr ? "Infrastructure réseau" : "Network infrastructure";
   if (s.isOverridden) return s.overrideReasons[0] || (fr ? "Zone critique" : "Critical zone");
   if (s.depegProbability >= 50) return `Depeg ${s.depegProbability}%`;
   if (s.delistCategory !== "NORMAL") return fr ? "Risque delist" : "Delist risk";
