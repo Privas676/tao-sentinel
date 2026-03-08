@@ -4,6 +4,7 @@ import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useDelistMode } from "@/hooks/use-delist-mode";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { SectionCard, SectionTitle, SettingRow, ToggleButtons } from "@/components/settings/SettingsShared";
+import InstallSection from "@/components/settings/InstallSection";
 import type { DelistMode } from "@/lib/delist-risk";
 import { APP_VERSION, BUILD_TAG } from "@/lib/version";
 
@@ -107,6 +108,8 @@ export default function SettingsPage() {
             )}
           </SettingRow>
         </SectionCard>
+        {/* ── 2b. INSTALL ── */}
+        <InstallSection fr={fr} />
 
         {/* ── 3. ENGINE BEHAVIOR ── */}
         <SectionCard>
