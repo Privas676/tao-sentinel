@@ -321,7 +321,113 @@ export default function PortfolioPage() {
         )}
 
         {/* ══════════════════════════════════ */}
-        {/*   2B. EXECUTIVE ACTION SUMMARY      */}
+        {/*   2B. TOP 3 ACTIONS IMMÉDIATES      */}
+        {/* ══════════════════════════════════ */}
+        {top3Actions.length > 0 && (
+          <div className="rounded-xl overflow-hidden border border-primary/15" style={{ background: "color-mix(in srgb, hsl(var(--primary)) 3%, transparent)" }}>
+            <div className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: "1px solid color-mix(in srgb, hsl(var(--primary)) 10%, transparent)" }}>
+              <span className="text-sm">⚡</span>
+              <span className="font-mono text-[10px] font-bold tracking-[0.15em] uppercase text-gold">
+                {fr ? "Actions immédiates" : "Immediate actions"}
+              </span>
+            </div>
+            <div className="divide-y divide-border">
+              {top3Actions.map((a, i) => {
+                const aColor = portfolioActionColor(a.pAction);
+                return (
+                  <Link key={a.netuid} to={`/subnets/${a.netuid}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/10 transition-colors">
+                    <span className="font-mono text-[11px] font-bold w-5 text-muted-foreground/40">{i + 1}</span>
+                    <span className="font-mono text-[9px] font-bold tracking-wider px-2 py-0.5 rounded" style={{
+                      color: aColor,
+                      background: `color-mix(in srgb, ${aColor} 10%, transparent)`,
+                      border: `1px solid color-mix(in srgb, ${aColor} 20%, transparent)`,
+                    }}>
+                      {a.pAction}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-mono text-[11px] text-foreground/80">
+                        SN-{a.netuid} <span className="text-muted-foreground ml-1">{a.name}</span>
+                      </div>
+                      <div className="font-mono text-[9px] text-muted-foreground/70 mt-0.5">{a.reason}</div>
+                    </div>
+                    <span className="font-mono text-[10px] text-muted-foreground">{fmtVal(a.taoInvest)}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════ */}
+        {/*   2C. RISK SYNTHESIS                 */}
+        {/* ══════════════════════════════════ */}
+        {analytics && (
+          <SectionCard>
+            <SectionTitle icon="🛡" title={fr ? "Synthèse risque" : "Risk synthesis"} badge={
+              <span className="font-mono text-[10px] font-bold px-2.5 py-1 rounded-md" style={{
+                color: analytics.alignment === "aligned" ? GO : analytics.alignment === "partial" ? WARN : BREAK,
+                background: `color-mix(in srgb, ${analytics.alignment === "aligned" ? GO : analytics.alignment === "partial" ? WARN : BREAK} 8%, transparent)`,
+              }}>
+                {analytics.alignment === "aligned" ? (fr ? "✓ Aligné" : "✓ Aligned")
+                  : analytics.alignment === "partial" ? (fr ? "~ Partiel" : "~ Partial")
+                  : (fr ? "✕ Désaligné" : "✕ Misaligned")}
+              </span>
+            } />
+            <div className="px-5 py-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <div className="font-mono text-[8px] tracking-wider uppercase text-muted-foreground">{fr ? "Risque pondéré" : "Weighted risk"}</div>
+                  <div className="font-mono text-lg font-bold mt-0.5" style={{ color: analytics.weightedRisk > 60 ? BREAK : analytics.weightedRisk > 40 ? WARN : GO }}>
+                    {Math.round(analytics.weightedRisk)}
+                  </div>
+                </div>
+                <div>
+                  <div className="font-mono text-[8px] tracking-wider uppercase text-muted-foreground">{fr ? "Expo. fragile" : "Fragile expo."}</div>
+                  <div className="font-mono text-lg font-bold mt-0.5" style={{ color: analytics.fragileExposure > 30 ? BREAK : analytics.fragileExposure > 15 ? WARN : GO }}>
+                    {analytics.fragileExposure.toFixed(0)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="font-mono text-[8px] tracking-wider uppercase text-muted-foreground">{fr ? "Pire position" : "Worst position"}</div>
+                  <div className="font-mono text-sm font-bold mt-0.5" style={{ color: (analytics.worstPosition?.risk ?? 0) > 60 ? BREAK : WARN }}>
+                    {analytics.worstPosition ? `SN-${analytics.worstPosition.netuid}` : "—"}
+                  </div>
+                  <div className="font-mono text-[8px] text-muted-foreground">R{analytics.worstPosition?.risk ?? 0}</div>
+                </div>
+                <div>
+                  <div className="font-mono text-[8px] tracking-wider uppercase text-muted-foreground">{fr ? "Opps manquées" : "Missed opps"}</div>
+                  <div className="font-mono text-lg font-bold mt-0.5" style={{ color: analytics.missed.length > 0 ? GOLD : MUTED }}>
+                    {analytics.missed.length}
+                  </div>
+                  {analytics.missed.length > 0 && (
+                    <div className="font-mono text-[8px] text-muted-foreground">{analytics.missed.map(m => `SN-${m.netuid}`).join(", ")}</div>
+                  )}
+                </div>
+              </div>
+              {analytics.fragilePositions.length > 0 && (
+                <div className="rounded-lg p-3 mt-1" style={{ background: `color-mix(in srgb, ${BREAK} 4%, transparent)`, border: `1px solid color-mix(in srgb, ${BREAK} 12%, transparent)` }}>
+                  <div className="font-mono text-[9px] font-bold tracking-wider mb-1.5" style={{ color: BREAK }}>
+                    ⚠ {fr ? "Positions à risque" : "At-risk positions"} ({analytics.fragilePositions.length})
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {analytics.fragilePositions.map(p => (
+                      <Link key={p.netuid} to={`/subnets/${p.netuid}`} className="font-mono text-[9px] px-2 py-1 rounded transition-colors hover:bg-muted/20" style={{
+                        color: BREAK,
+                        background: `color-mix(in srgb, ${BREAK} 6%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${BREAK} 15%, transparent)`,
+                      }}>
+                        SN-{p.netuid} · R{p.risk} {p.isOverridden ? "· OVR" : ""}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        )}
+
+        {/* ══════════════════════════════════ */}
+        {/*   2D. EXECUTIVE ACTION SUMMARY      */}
         {/* ══════════════════════════════════ */}
         {actionCategories && (
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
@@ -357,69 +463,55 @@ export default function PortfolioPage() {
         )}
 
         {/* ══════════════════════════════════ */}
-        {/*   3. DIAGNOSTIC + ALERTS (merged)   */}
-        {/* ══════════════════════════════════ */}
-        {analytics && (
-          <SectionCard>
-            <SectionTitle icon="🩺" title={fr ? "Diagnostic & Alertes" : "Diagnostic & Alerts"} badge={
-              <span className="font-mono text-[10px] font-bold px-2.5 py-1 rounded-md" style={{
-                color: analytics.alignment === "aligned" ? GO : analytics.alignment === "partial" ? WARN : BREAK,
-                background: `color-mix(in srgb, ${analytics.alignment === "aligned" ? GO : analytics.alignment === "partial" ? WARN : BREAK} 8%, transparent)`,
-              }}>
-                {analytics.alignment === "aligned" ? (fr ? "✓ Aligné" : "✓ Aligned")
-                  : analytics.alignment === "partial" ? (fr ? "~ Partiel" : "~ Partial")
-                  : (fr ? "✕ Désaligné" : "✕ Misaligned")}
-              </span>
-            } />
-            <div className="px-5 py-4 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
-                {analytics.exitCount > 0 && (
-                  <Metric label={fr ? `Sortie${analytics.exitCount > 1 ? "s" : ""} recommandée${analytics.exitCount > 1 ? "s" : ""}` : `Exit${analytics.exitCount > 1 ? "s" : ""} recommended`}
-                    value={rows.filter(r => r.pAction === "EXIT").map(r => `SN-${r.netuid}`).join(", ")} color={BREAK} />
-                )}
-                {analytics.reduceCount > 0 && (
-                  <Metric label={fr ? `Réduction${analytics.reduceCount > 1 ? "s" : ""}` : `Reduction${analytics.reduceCount > 1 ? "s" : ""}`}
-                    value={rows.filter(r => r.pAction === "REDUCE").map(r => `SN-${r.netuid}`).join(", ")} color={WARN} />
-                )}
-                {analytics.fragilePositions.length > 0 && analytics.fragilePositions.some(p => p.pAction !== "EXIT" && p.pAction !== "REDUCE") && (
-                  <Metric label={fr ? "Positions fragiles" : "Fragile positions"}
-                    value={analytics.fragilePositions.filter(p => p.pAction !== "EXIT" && p.pAction !== "REDUCE").map(p => `SN-${p.netuid}`).join(", ")} color={BREAK} />
-                )}
-                {analytics.maxWeight > 35 && (
-                  <Metric label={fr ? "Surexposition" : "Overexposure"} value={`Top: ${analytics.maxWeight.toFixed(0)}%`} color={WARN} />
-                )}
-                {analytics.reinforceCount > 0 && (
-                  <Metric label={fr ? "Renforts cohérents" : "Coherent reinforcements"}
-                    value={rows.filter(r => r.pAction === "REINFORCE").map(r => `SN-${r.netuid}`).join(", ")} color={GO} />
-                )}
-                {analytics.missed.length > 0 && (
-                  <Metric label={fr ? "Opportunités manquées" : "Missed opportunities"} value={analytics.missed.map(m => `SN-${m.netuid}`).join(", ")} color={GOLD} />
-                )}
-              </div>
-              {analytics.alignment === "aligned" && analytics.exitCount === 0 && analytics.reduceCount === 0 && analytics.fragilePositions.length === 0 && (
-                <p className="font-mono text-[10px] text-muted-foreground italic">{fr ? "Aucune alerte — portefeuille cohérent." : "No alerts — portfolio is coherent."}</p>
-              )}
-            </div>
-          </SectionCard>
-        )}
-
-        {/* ══════════════════════════════════ */}
-        {/*   4. ALLOCATION TARGET              */}
+        {/*   3. EXPOSITION CIBLE vs RÉELLE     */}
         {/* ══════════════════════════════════ */}
         {analytics && analytics.weights.length > 0 && (
           <SectionCard>
-            <SectionTitle icon="⚖️" title={fr ? "Allocation & Cible" : "Allocation & Target"} badge={
+            <SectionTitle icon="⚖️" title={fr ? "Exposition cible vs réelle" : "Target vs actual exposure"} badge={
               <button onClick={() => setShowAlloc(!showAlloc)} className="font-mono text-[8px] text-muted-foreground hover:text-foreground transition-colors">
-                {showAlloc ? "▲" : "▼"} {analytics.weights.length} pos.
+                {showAlloc ? (fr ? "Masquer" : "Hide") : (fr ? "Afficher" : "Show")} · {analytics.weights.length} pos.
               </button>
             } />
+            {/* Summary bar always visible */}
+            <div className="px-5 py-3 flex items-center gap-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-mono text-[8px] text-muted-foreground tracking-wider uppercase">{fr ? "Réelle" : "Actual"}</span>
+                  <div className="flex-1 h-2 rounded-full overflow-hidden bg-muted/20 flex">
+                    {analytics.weights.sort((a, b) => b.weight - a.weight).slice(0, 8).map(w => (
+                      <div key={w.netuid} className="h-full" style={{
+                        width: `${w.weight}%`,
+                        background: portfolioActionColor(w.pAction),
+                        opacity: 0.6,
+                      }} title={`SN-${w.netuid}: ${w.weight.toFixed(1)}%`} />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[8px] text-muted-foreground tracking-wider uppercase">{fr ? "Cible" : "Target"}</span>
+                  <div className="flex-1 h-2 rounded-full overflow-hidden bg-muted/20 flex">
+                    {analytics.weights.sort((a, b) => b.weight - a.weight).slice(0, 8).map(w => {
+                      const target = w.pAction === "SORTIR" ? 0
+                        : w.pAction === "RÉDUIRE" ? Math.max(0, w.weight * 0.5)
+                        : w.pAction === "RENFORCER" ? Math.min(15, w.weight * 1.5)
+                        : w.weight;
+                      return <div key={w.netuid} className="h-full" style={{
+                        width: `${target}%`,
+                        background: portfolioActionColor(w.pAction),
+                        opacity: 0.9,
+                      }} title={`SN-${w.netuid}: ${target.toFixed(1)}%`} />;
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
             {showAlloc && (
-              <div className="px-5 py-4">
+              <div className="px-5 py-3 border-t border-border">
                 <div className="space-y-2">
                   {analytics.weights.sort((a, b) => b.weight - a.weight).map(w => {
-                    const targetWeight = w.pAction === "EXIT" ? 0
-                      : w.pAction === "REDUCE" ? Math.max(0, w.weight * 0.5)
-                      : w.pAction === "REINFORCE" ? Math.min(15, w.weight * 1.5)
+                    const targetWeight = w.pAction === "SORTIR" ? 0
+                      : w.pAction === "RÉDUIRE" ? Math.max(0, w.weight * 0.5)
+                      : w.pAction === "RENFORCER" ? Math.min(15, w.weight * 1.5)
                       : w.weight;
                     const delta = targetWeight - w.weight;
                     return (
@@ -429,7 +521,11 @@ export default function PortfolioPage() {
                         </Link>
                         <div className="flex-1 flex items-center gap-1.5">
                           <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-muted/20 relative">
-                            <div className="h-full rounded-full bg-muted-foreground/25" style={{ width: `${Math.min(100, w.weight)}%` }} />
+                            <div className="h-full rounded-full" style={{
+                              width: `${Math.min(100, w.weight)}%`,
+                              background: portfolioActionColor(w.pAction),
+                              opacity: 0.4,
+                            }} />
                           </div>
                           <span className="font-mono text-[9px] text-muted-foreground w-10 text-right">{w.weight.toFixed(1)}%</span>
                         </div>
