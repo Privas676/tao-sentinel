@@ -311,8 +311,9 @@ export default function SubnetsPage() {
     const searchLower = search.toLowerCase();
     return scoresList
       .map(s => {
-        const verdict = verdicts.get(s.netuid);
-        const decision = buildSubnetDecision(s, verdict, fr);
+        const decision = decisions.get(s.netuid) ?? null;
+        const verdict = decision?.verdict;
+        if (!decision) return null;
         return {
           ...s,
           owned: ownedNetuids.has(s.netuid),
