@@ -173,7 +173,12 @@ export default function SubnetDetailPage() {
                 <h1 className="font-mono text-lg sm:text-xl tracking-wide text-[hsl(var(--gold))] leading-tight">{s.name}</h1>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="font-mono text-[9px] text-muted-foreground">SN-{netuid} · {s.assetType}</span>
-                  {isSpecial && <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">{SPECIAL_SUBNETS[netuid].label}</span>}
+                  {isSpecial && (
+                    <span className="font-mono text-[7px] px-1.5 py-0.5 rounded font-bold"
+                      style={{ background: "hsla(210,60%,55%,0.08)", color: "hsl(210,60%,55%)", border: "1px solid hsla(210,60%,55%,0.2)" }}>
+                      🔷 {fr ? SPECIAL_SUBNETS[netuid].label : SPECIAL_SUBNETS[netuid].labelEn}
+                    </span>
+                  )}
                 </div>
               </div>
               <ActionBadge action={decision.badgeAction} />
