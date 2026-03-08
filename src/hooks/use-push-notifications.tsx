@@ -42,10 +42,19 @@ export function usePushNotifications() {
   }, []);
 
   const subscribe = useCallback(async () => {
+    if (!user) {
+      setError("Sign in required to enable push notifications");
+      return;
+    }
+
     setState("loading");
     setError(null);
 
     try {
+      // Refresh session to get a valid token
+      const { data: { session } } = await supabase.auth.refreshSession();
+      if (!session?.access_token) throw new Error("Session expired");
+
       // 1. Register the push service worker
       const reg = await navigator.serviceWorker.register("/sw-push.js", { scope: "/" });
       await navigator.serviceWorker.ready;
@@ -73,13 +82,16 @@ export function usePushNotifications() {
 
       const subJson = subscription.toJSON();
 
-      // 4. Store subscription in backend
+      // 4. Store subscription in backend (with auth)
       const { error: subErr } = await supabase.functions.invoke("manage-push", {
         body: {
           action: "subscribe",
           endpoint: subJson.endpoint,
           p256dh: subJson.keys?.p256dh,
           auth: subJson.keys?.auth,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
       if (subErr) throw new Error(subErr.message);
@@ -90,7 +102,7 @@ export function usePushNotifications() {
       setError(err instanceof Error ? err.message : String(err));
       setState("unsubscribed");
     }
-  }, []);
+  }, [user]);
 
   const unsubscribe = useCallback(async () => {
     setState("loading");
