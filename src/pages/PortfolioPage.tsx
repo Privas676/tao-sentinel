@@ -596,10 +596,10 @@ export default function PortfolioPage() {
                     const signalReason = (() => {
                       if (r.isOverridden) return fr ? "Override actif" : "Active override";
                       if (r.depegProbability >= 40) return `Depeg ${r.depegProbability}%`;
-                      if (r.pAction === "EXIT") return fr ? "Signal de sortie" : "Exit signal";
-                      if (r.pAction === "REDUCE") return fr ? `Risque ${r.risk}` : `Risk ${r.risk}`;
-                      if (r.pAction === "REINFORCE" && r.opp > 55) return fr ? `Opp. forte (${r.opp})` : `Strong opp. (${r.opp})`;
-                      if (r.pAction === "REINFORCE") return fr ? "Momentum +" : "Momentum +";
+                      if (r.pAction === "SORTIR") return fr ? "Signal de sortie" : "Exit signal";
+                      if (r.pAction === "RÉDUIRE") return fr ? `Risque ${r.risk}` : `Risk ${r.risk}`;
+                      if (r.pAction === "RENFORCER" && r.opp > 55) return fr ? `Opp. forte (${r.opp})` : `Strong opp. (${r.opp})`;
+                      if (r.pAction === "RENFORCER") return fr ? "Momentum +" : "Momentum +";
                       if (r.stability > 60) return fr ? "Position stable" : "Stable position";
                       return fr ? "En observation" : "Monitoring";
                     })();
