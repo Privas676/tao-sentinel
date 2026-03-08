@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
       sb.from("events")
         .select("type, netuid, evidence, ts")
         .gte("ts", twoMinAgo)
-        .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST", "RISK_OVERRIDE", "DEPEG_CONFIRMED"]),
+        .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST", "RISK_OVERRIDE", "DEPEG_CONFIRMED", "CONFIDENCE_DROP", "POSITION_URGENT"]),
       sb.from("signals")
         .select("netuid, confidence_pct, quality_score, state"),
       sb.from("events")
