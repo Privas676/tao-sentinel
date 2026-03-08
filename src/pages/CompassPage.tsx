@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
-import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
+import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import {
   clamp, opportunityColor, riskColor, computeSmartCapital, computeASMicro, stabilityColor,
