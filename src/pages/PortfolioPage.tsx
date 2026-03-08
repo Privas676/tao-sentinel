@@ -146,8 +146,8 @@ export default function PortfolioPage() {
   const rows = useMemo(() => portfolio.positions.map(pos => {
     const netuid = pos.subnet_id;
     const s = scores.get(netuid);
-    const v = verdicts.get(netuid);
-    const decision = s ? buildSubnetDecision(s, v, fr) : null;
+    const decision = decisions.get(netuid) ?? null;
+    const v = decision?.verdict;
     const alphaPriceTao = s?.consensusPrice ?? 0;
     const alphaQty = alphaPriceTao > 0 ? pos.quantity_tao / alphaPriceTao : 0;
     const pAction = decision?.portfolioActionFr ?? "CONSERVER";
@@ -164,7 +164,7 @@ export default function PortfolioPage() {
       healthScores: s?.healthScores ?? { liquidityHealth: 50, activityHealth: 50, emissionPressure: 50, dilutionRisk: 50, concentrationRisk: 50 },
       verdict: v, score: s, decision,
     };
-  }), [portfolio.positions, scores, verdicts, fr]);
+  }), [portfolio.positions, scores, decisions, fr]);
 
   /* ── Portfolio analytics ── */
   const analytics = useMemo(() => {
