@@ -106,7 +106,7 @@ export default function PortfolioPage() {
   const { currency, toggle: toggleCurrency } = useCurrencyToggle();
 
   const { scores, sparklines, subnetList, taoUsd } = useSubnetScores();
-  const { verdicts } = useSubnetVerdicts();
+  const { decisions } = useSubnetDecisions();
 
   // ── Seed portfolio positions (one-time import) ──
   useEffect(() => {
