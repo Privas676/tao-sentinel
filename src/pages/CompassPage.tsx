@@ -333,6 +333,8 @@ export default function CompassPage() {
     { key: "avoid", title: fr ? "À éviter" : "Avoid", icon: "🚫", items: rotationMap.avoid, color: BREAK },
   ];
 
+  if (isLoading || !scoresList.length) return <PageLoadingState label={fr ? "Chargement Compass..." : "Loading Compass..."} />;
+
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
       <div className="px-4 sm:px-6 py-5 max-w-[1000px] mx-auto space-y-7 sm:space-y-9">
