@@ -71,7 +71,10 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[380px] border-l border-border bg-background text-foreground overflow-y-auto">
         <SheetHeader>
-          <SheetTitle className="font-mono tracking-wider text-lg">SN-{signal.netuid}</SheetTitle>
+          <div className="flex items-center justify-between">
+            <SheetTitle className="font-mono tracking-wider text-lg">SN-{signal.netuid}</SheetTitle>
+            <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors text-sm">✕</button>
+          </div>
         </SheetHeader>
         <div className="mt-4 space-y-5">
           <div className="text-center">

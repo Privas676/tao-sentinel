@@ -169,6 +169,13 @@ export default function SettingsPage() {
             : "TMC is displayed read-only. It does not affect scoring, alerts, or overrides."}
         </div>
 
+        {/* ── Version footer ── */}
+        <div className="text-center pt-2">
+          <span className="font-mono text-[8px] text-muted-foreground/40 tracking-wider">
+            TAO Sentinel {APP_VERSION} · {BUILD_TAG}
+          </span>
+        </div>
+
       </div>
     </div>
   );

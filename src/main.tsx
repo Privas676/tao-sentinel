@@ -6,7 +6,7 @@ import "./index.css";
 if ("caches" in window) {
   caches.keys().then((names) => {
     for (const name of names) {
-      if (!name.includes("v0.1.15")) {
+      if (!name.includes("v0.2.0")) {
         caches.delete(name);
       }
     }
