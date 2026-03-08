@@ -177,12 +177,19 @@ export default function PortfolioPage() {
       return a + c;
     }, 0) / rows.length;
     const avgRisk = rows.reduce((a, r) => a + r.risk, 0) / rows.length;
+    // Weighted risk (by TAO allocation)
+    const weightedRisk = totalTao > 0
+      ? rows.reduce((a, r) => a + r.risk * r.taoInvest, 0) / totalTao
+      : avgRisk;
     const maxWeight = Math.max(...weights.map(w => w.weight));
     const reinforceCount = rows.filter(r => r.pAction === "RENFORCER").length;
     const reduceCount = rows.filter(r => r.pAction === "RÉDUIRE").length;
     const exitCount = rows.filter(r => r.pAction === "SORTIR").length;
     const holdCount = rows.filter(r => r.pAction === "CONSERVER").length;
     const fragilePositions = rows.filter(r => r.isOverridden || r.depegProbability >= 30 || r.risk > 70);
+    const fragileExposure = totalTao > 0
+      ? fragilePositions.reduce((a, r) => a + r.taoInvest, 0) / totalTao * 100
+      : 0;
 
     // Alignment score
     let alignment: "aligned" | "partial" | "misaligned" = "aligned";
@@ -197,10 +204,13 @@ export default function PortfolioPage() {
       .slice(0, 3)
       .map(([nid, sc]) => ({ netuid: nid, name: sc.name, opp: sc.opp }));
 
+    // Worst position
+    const worstPosition = rows.length > 0 ? rows.reduce((w, r) => r.risk > w.risk ? r : w, rows[0]) : null;
+
     return {
-      totalTao, weights, avgConviction, avgRisk, maxWeight,
+      totalTao, weights, avgConviction, avgRisk, weightedRisk, maxWeight,
       reinforceCount, reduceCount, exitCount, holdCount,
-      fragilePositions, alignment, missed,
+      fragilePositions, fragileExposure, alignment, missed, worstPosition,
     };
   }, [rows, scores]);
 
