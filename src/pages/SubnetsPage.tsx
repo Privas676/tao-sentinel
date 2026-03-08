@@ -327,6 +327,7 @@ export default function SubnetsPage() {
           signalPrincipal: decision.signalPrincipal,
         } as TableRow;
       })
+      .filter((r): r is TableRow => r !== null)
       .filter(r => {
         if (search && !r.name.toLowerCase().includes(searchLower) && !String(r.netuid).includes(searchLower)) return false;
         if (scope === "PORTFOLIO" && !r.owned) return false;
