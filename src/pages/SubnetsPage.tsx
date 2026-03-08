@@ -242,7 +242,7 @@ export default function SubnetsPage() {
   const { ownedNetuids, addPosition } = useLocalPortfolio();
 
   // ── Data sources ──
-  const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug } = useSubnetScores();
+  const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug, isLoading } = useSubnetScores();
   const { decisions } = useSubnetDecisions();
 
   // ── Action counts from engine (single source of truth) ──
