@@ -5,6 +5,7 @@
 /* ═══════════════════════════════════════════════════════ */
 
 import type { UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
+import { SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import type { StrategicAction } from "@/lib/strategy-subnet";
 import { actionLabelFr, actionLabelEn } from "@/lib/strategy-colors";
