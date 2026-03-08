@@ -107,9 +107,27 @@ function watchPoints(s: UnifiedSubnetScore, eco: any, sn: any, fr: boolean): { i
 /* ═══════════════════════════════════════════════ */
 export default function SubnetDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { lang } = useI18n();
   const fr = lang === "fr";
   const netuid = parseInt(id || "0", 10);
+
+  /* ── Escape key → back to /subnets (preserves browser history state) ── */
+  const goBack = useCallback(() => {
+    if (window.history.length > 2) {
+      navigate(-1);
+    } else {
+      navigate("/subnets");
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); goBack(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [goBack]);
 
   const { scores, sparklines } = useSubnetScores();
   const { verdicts } = useSubnetVerdicts();
