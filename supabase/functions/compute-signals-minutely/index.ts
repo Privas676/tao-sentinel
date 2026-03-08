@@ -491,6 +491,90 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============= GLOBAL CONFIDENCE ALERT =============
+    const avgConfidence = normalizedConfs.length > 0
+      ? Math.round(normalizedConfs.reduce((a, b) => a + b, 0) / normalizedConfs.length)
+      : 50;
+
+    const CONFIDENCE_THRESHOLD = 50;
+    if (avgConfidence < CONFIDENCE_THRESHOLD) {
+      // Check cooldown: only emit once per hour
+      const { data: recentConfEvents } = await sb.from("events")
+        .select("ts")
+        .eq("type", "CONFIDENCE_DROP")
+        .gte("ts", new Date(now.getTime() - 60 * 60000).toISOString())
+        .limit(1);
+
+      if (!recentConfEvents?.length) {
+        const lowConfSubnets = subnetRaws
+          .map((s, i) => ({ netuid: s.netuid, conf: normalizedConfs[i] }))
+          .filter(s => s.conf < 40)
+          .sort((a, b) => a.conf - b.conf)
+          .slice(0, 5);
+
+        eventInserts.push({
+          netuid: null, ts: nowIso, type: "CONFIDENCE_DROP", severity: 3,
+          evidence: {
+            avg_confidence: avgConfidence,
+            threshold: CONFIDENCE_THRESHOLD,
+            subnet_count: subnetRaws.length,
+            worst_subnets: lowConfSubnets,
+            reasons: [`Confiance globale ${avgConfidence}% < seuil ${CONFIDENCE_THRESHOLD}%`],
+          },
+        });
+        console.log(`[ALERT] CONFIDENCE_DROP: avg=${avgConfidence}% < ${CONFIDENCE_THRESHOLD}%`);
+      }
+    }
+
+    // ============= POSITION URGENT ALERTS =============
+    // Check open positions against EXIT/BREAK signals
+    const { data: openPositions } = await sb.from("positions")
+      .select("netuid, user_id, capital")
+      .eq("status", "open");
+
+    if (openPositions?.length) {
+      const positionNetuids = new Set(openPositions.map(p => p.netuid));
+      const exitStates = new Set(["BREAK", "EXIT_FAST"]);
+
+      // Check cooldown per netuid
+      const { data: recentUrgentEvents } = await sb.from("events")
+        .select("netuid")
+        .eq("type", "POSITION_URGENT")
+        .gte("ts", new Date(now.getTime() - 30 * 60000).toISOString());
+
+      const recentUrgentNetuids = new Set((recentUrgentEvents || []).map((e: any) => e.netuid));
+
+      for (let i = 0; i < subnetRaws.length; i++) {
+        const s = subnetRaws[i];
+        if (!positionNetuids.has(s.netuid)) continue;
+        if (recentUrgentNetuids.has(s.netuid)) continue;
+
+        const state = signalUpserts[i]?.state;
+        const mpi = normalizedMpis[i];
+        const isUrgent = exitStates.has(state) || s.gatingFail || mpi < 30;
+
+        if (isUrgent) {
+          const affectedPositions = openPositions.filter(p => p.netuid === s.netuid);
+          const totalCapital = affectedPositions.reduce((a, p) => a + Number(p.capital), 0);
+
+          eventInserts.push({
+            netuid: s.netuid, ts: nowIso, type: "POSITION_URGENT", severity: 3,
+            evidence: {
+              state, mpi, gatingFail: s.gatingFail,
+              positions_count: affectedPositions.length,
+              total_capital: totalCapital,
+              reasons: [
+                `Position ouverte sur SN-${s.netuid} en état ${state}`,
+                s.gatingFail ? "Gating fail détecté" : `MPI ${mpi}`,
+                `Capital exposé: ${totalCapital.toFixed(1)}τ`,
+              ],
+            },
+          });
+          console.log(`[ALERT] POSITION_URGENT: SN-${s.netuid} state=${state} capital=${totalCapital.toFixed(1)}τ`);
+        }
+      }
+    }
+
     // ============= PIPELINE SNAPSHOT (for backtest) =============
     const snapshotData = subnetRaws.map((s, i) => ({
       netuid: s.netuid,

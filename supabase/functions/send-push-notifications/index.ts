@@ -73,6 +73,8 @@ type Priority = 0 | 1 | 2 | 3;
 const PRIORITY_MAP: Record<string, Priority> = {
   DEPEG_CONFIRMED: 0,     // P0: depeg confirmed
   RISK_OVERRIDE: 1,       // P1: override critical
+  POSITION_URGENT: 1,     // P1: position needs immediate action
+  CONFIDENCE_DROP: 2,     // P2: global confidence alert
   DATA_UNSTABLE: 2,       // P2: system alert
   GO: 3,
   GO_SPECULATIVE: 3,
@@ -104,12 +106,14 @@ const ENTRY_TYPES = new Set(["GO", "GO_SPECULATIVE", "EARLY"]);
 const EXIT_TYPES = new Set(["BREAK", "EXIT_FAST"]);
 const OVERRIDE_TYPES = new Set(["RISK_OVERRIDE"]);
 const DEPEG_TYPES = new Set(["DEPEG_CONFIRMED"]);
+const SYSTEM_ALERT_TYPES = new Set(["CONFIDENCE_DROP", "POSITION_URGENT"]);
 
 function isPushableEvent(ev: { type: string | null; evidence: any }): boolean {
   if (!ev.type) return false;
   if (ENTRY_TYPES.has(ev.type) || EXIT_TYPES.has(ev.type)) return true;
   if (OVERRIDE_TYPES.has(ev.type)) return ev.evidence?.level === "CRITICAL";
   if (DEPEG_TYPES.has(ev.type)) return true;
+  if (SYSTEM_ALERT_TYPES.has(ev.type)) return true;
   return false;
 }
 
@@ -117,11 +121,25 @@ function isPushableEvent(ev: { type: string | null; evidence: any }): boolean {
  *  Notification content builder
  * ═══════════════════════════════════════════════════ */
 
-function eventToNotification(ev: { type: string; netuid: number; evidence: any }) {
+function eventToNotification(ev: { type: string; netuid: number | null; evidence: any }) {
   const e = ev.evidence || {};
-  const sn = `SN-${ev.netuid}`;
+  const sn = ev.netuid != null ? `SN-${ev.netuid}` : "Global";
   const reasons = (e.reasons as string[] || []).slice(0, 2).join(", ");
 
+  if (ev.type === "CONFIDENCE_DROP") {
+    return {
+      title: `⚠️ CONFIANCE BASSE — ${e.avg_confidence ?? "?"}%`,
+      body: reasons || `La confiance globale est descendue sous le seuil critique`,
+      tag: `confidence-drop`,
+    };
+  }
+  if (ev.type === "POSITION_URGENT") {
+    return {
+      title: `🚨 ACTION REQUISE — ${sn}`,
+      body: reasons || `Votre position sur ${sn} nécessite une action immédiate`,
+      tag: `position-urgent-${ev.netuid}`,
+    };
+  }
   if (ENTRY_TYPES.has(ev.type)) {
     const label = ev.type === "GO" ? "🟢 GO" : ev.type === "GO_SPECULATIVE" ? "🔶 SPÉCULATIF" : "🌱 EARLY";
     return { title: `${label} — ${sn}`, body: reasons || `Signal d'entrée détecté sur ${sn}`, tag: `state-${ev.netuid}` };
@@ -158,7 +176,7 @@ Deno.serve(async (req) => {
       sb.from("events")
         .select("type, netuid, evidence, ts")
         .gte("ts", twoMinAgo)
-        .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST", "RISK_OVERRIDE", "DEPEG_CONFIRMED"]),
+        .in("type", ["GO", "GO_SPECULATIVE", "EARLY", "BREAK", "EXIT_FAST", "RISK_OVERRIDE", "DEPEG_CONFIRMED", "CONFIDENCE_DROP", "POSITION_URGENT"]),
       sb.from("signals")
         .select("netuid, confidence_pct, quality_score, state"),
       sb.from("events")
