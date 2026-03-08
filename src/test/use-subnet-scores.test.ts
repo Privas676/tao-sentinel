@@ -24,11 +24,13 @@ function makeScore(overrides: Partial<UnifiedSubnetScore> = {}): UnifiedSubnetSc
 }
 
 describe("SPECIAL_SUBNETS", () => {
-  it("SN-0 (Root) is whitelisted", () => {
+  it("SN-0 (Root) is whitelisted as system subnet", () => {
     expect(SPECIAL_SUBNETS[0]).toBeDefined();
     expect(SPECIAL_SUBNETS[0].forceAction).toBe("HOLD");
     expect(SPECIAL_SUBNETS[0].forceStatus).toBe("OK");
     expect(SPECIAL_SUBNETS[0].forceRiskMax).toBe(20);
+    expect(SPECIAL_SUBNETS[0].isSystem).toBe(true);
+    expect(SPECIAL_SUBNETS[0].label).toContain("ROOT");
   });
 
   it("non-special subnets are undefined", () => {
