@@ -564,9 +564,14 @@ export default function SubnetsPage() {
                       <td className="py-2 px-2.5 text-[10px] text-muted-foreground sticky left-0 z-[5] bg-background">{r.netuid}</td>
                       <td className="py-2 px-2.5 text-[10px] sticky left-[44px] z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
                         <span className="text-foreground/85 font-medium">{r.name}</span>
-                        {SPECIAL_SUBNETS[r.netuid] && (
+                        {SPECIAL_SUBNETS[r.netuid]?.isSystem && (
+                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(210,60%,55%,0.08)", color: "hsl(210,60%,55%)", border: "1px solid hsla(210,60%,55%,0.2)" }}>
+                            🔷 {fr ? SPECIAL_SUBNETS[r.netuid].label : SPECIAL_SUBNETS[r.netuid].labelEn}
+                          </span>
+                        )}
+                        {!SPECIAL_SUBNETS[r.netuid]?.isSystem && SPECIAL_SUBNETS[r.netuid] && (
                           <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-hold), 0.08)", color: "hsl(var(--signal-hold))", border: "1px solid hsla(var(--signal-hold), 0.2)" }}>
-                            {SPECIAL_SUBNETS[r.netuid].label}
+                            {fr ? SPECIAL_SUBNETS[r.netuid].label : SPECIAL_SUBNETS[r.netuid].labelEn}
                           </span>
                         )}
                         {r.isOverridden && (
