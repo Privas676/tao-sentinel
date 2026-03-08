@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
-import { useSubnetVerdicts, type SubnetVerdictData } from "@/hooks/use-subnet-verdict";
+import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
+import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -17,7 +18,6 @@ import {
   actionColor, actionIcon, actionLabel,
 } from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
-import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
 
 /* ═══════════════════════════════════════════════ */
 /*   SUBNET INTELLIGENCE — Unified Master Table   */
@@ -242,7 +242,7 @@ export default function SubnetsPage() {
 
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug } = useSubnetScores();
-  const { verdicts, isLoading: verdictLoading } = useSubnetVerdicts();
+  const { decisions } = useSubnetDecisions();
 
   // ── Action counts from engine (single source of truth) ──
   const actionCounts = useMemo(() => {
@@ -311,8 +311,9 @@ export default function SubnetsPage() {
     const searchLower = search.toLowerCase();
     return scoresList
       .map(s => {
-        const verdict = verdicts.get(s.netuid);
-        const decision = buildSubnetDecision(s, verdict, fr);
+        const decision = decisions.get(s.netuid) ?? null;
+        const verdict = decision?.verdict;
+        if (!decision) return null;
         return {
           ...s,
           owned: ownedNetuids.has(s.netuid),
@@ -326,6 +327,7 @@ export default function SubnetsPage() {
           signalPrincipal: decision.signalPrincipal,
         } as TableRow;
       })
+      .filter((r): r is TableRow => r !== null)
       .filter(r => {
         if (search && !r.name.toLowerCase().includes(searchLower) && !String(r.netuid).includes(searchLower)) return false;
         if (scope === "PORTFOLIO" && !r.owned) return false;
@@ -365,7 +367,7 @@ export default function SubnetsPage() {
         }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, sparklines, verdicts, ownedNetuids, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, sortCol, sortDir, fr]);
+  }, [scoresList, sparklines, decisions, ownedNetuids, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, sortCol, sortDir, fr]);
 
   // ── Column header helper ──
   const SortHeader = ({ col, label, align = "left" }: { col: SortCol; label: string; align?: "left" | "center" | "right" }) => (

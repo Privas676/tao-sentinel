@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
-import { useSubnetVerdicts, type SubnetVerdictData } from "@/hooks/use-subnet-verdict";
+import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useMemo, useState, useEffect, useCallback } from "react";
@@ -10,7 +10,6 @@ import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
 import { ActionBadge } from "@/components/sentinel";
 import { SectionCard, SectionTitle, KPIChip, Metric, BarScore, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
-import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SUBNET COMMAND CENTER — Decision-First Architecture   */
@@ -130,13 +129,14 @@ export default function SubnetDetailPage() {
   }, [goBack]);
 
   const { scores, sparklines } = useSubnetScores();
-  const { verdicts } = useSubnetVerdicts();
+  const { decisions } = useSubnetDecisions();
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
   const [flash, setFlash] = useState<string | null>(null);
   const [showDeepDive, setShowDeepDive] = useState(false);
   const s = scores.get(netuid);
-  const verdict = verdicts.get(netuid);
+  const decisionObj = decisions.get(netuid);
+  const verdict = decisionObj?.verdict;
   const spark = sparklines?.get(netuid) || [];
   const radar = useMemo(() => radarData?.find(r => r.netuid === netuid) || null, [radarData, netuid]);
   const inPortfolio = isOwned(netuid);
@@ -155,7 +155,20 @@ export default function SubnetDetailPage() {
     );
   }
 
-  const decision = buildSubnetDecision(s, verdict, fr);
+  const decision = decisionObj ?? (s ? {
+    netuid: s.netuid, name: s.name, engineAction: s.action, actionFr: "ATTENDRE" as const,
+    actionEn: "HOLD", badgeAction: "HOLD" as const, isSystem: false,
+    portfolioAction: "CONSERVER" as const, portfolioActionFr: "CONSERVER", portfolioActionEn: "HOLD",
+    conviction: "LOW" as const, convictionScore: 0, opp: s.opp, risk: s.risk,
+    asymmetry: s.asymmetry, confidence: s.confianceScore, momentumScore: s.momentumScore,
+    momentumLabel: s.momentumLabel, stability: s.stability,
+    liquidityLevel: "LOW" as const, structureLevel: "FRAGILE" as const, statusLevel: "WATCH" as const,
+    signalPrincipal: "—", thesis: [], invalidation: [], conflictExplanation: null,
+    isOverridden: s.isOverridden, dataUncertain: s.dataUncertain,
+    depegProbability: s.depegProbability, delistCategory: s.delistCategory, delistScore: s.delistScore,
+    score: s, verdict: undefined,
+  } as SubnetDecision : null);
+  if (!decision) return null;
   const urg = urgency(decision, fr);
   const eco = radar?.economicContext;
   const dm = radar?.derivedMetrics;

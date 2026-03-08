@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
+import { useSubnetDecisions } from "@/hooks/use-subnet-decisions";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import {
   clamp, opportunityColor, riskColor, computeSmartCapital, computeASMicro, stabilityColor,
@@ -119,8 +120,9 @@ export default function CompassPage() {
   const isMobile = useIsMobile();
   const { positions } = useLocalPortfolio();
 
-  // ── Data sources ──
+  // ── Data sources — useSubnetDecisions is the canonical decision source ──
   const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence } = useSubnetScores();
+  const { decisions } = useSubnetDecisions();
 
   const { data: rawSignals } = useQuery({
     queryKey: ["unified-signals"],
