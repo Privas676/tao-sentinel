@@ -114,8 +114,8 @@ function passesStrictGating(ev: EventRow, scores: Map<number, any> | undefined):
 }
 
 /* ── Impact tier classification ── */
-const BLOQUANT_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE"]);
-const SURVEILLANCE_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE"]);
+const BLOQUANT_TYPES = new Set(["BREAK", "EXIT_FAST", "DEPEG_CRITICAL", "RISK_OVERRIDE", "POSITION_URGENT"]);
+const SURVEILLANCE_TYPES = new Set(["DEPEG_WARNING", "WHALE_MOVE", "GO_SPECULATIVE", "DATA_DIVERGENCE", "CONFIDENCE_DROP"]);
 
 function alertImpactTier(type: string | null, portfolioNetuids: Set<number>, netuid: number | null): ImpactTier {
   if (BLOQUANT_TYPES.has(type || "")) return "BLOQUANT";
