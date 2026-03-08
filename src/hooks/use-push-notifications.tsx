@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./use-auth";
 
 // Extend ServiceWorkerRegistration for Push API (not in all TS libs)
 declare global {
