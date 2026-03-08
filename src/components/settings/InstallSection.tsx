@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SectionCard, SectionTitle, SettingRow } from "./SettingsShared";
 import { APP_VERSION, BUILD_TAG } from "@/lib/version";
 
@@ -8,7 +8,6 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 type Platform = "ios" | "android" | "desktop";
-type InstallStatus = "installable" | "not-installable" | "installed";
 
 function detectPlatform(): Platform {
   const ua = navigator.userAgent.toLowerCase();
@@ -26,39 +25,41 @@ function isStandalone(): boolean {
 
 const GOLD = "hsl(var(--gold))";
 const GO = "hsl(var(--signal-go))";
+const BREAK = "hsl(var(--signal-break))";
 
 export default function InstallSection({ fr }: { fr: boolean }) {
   const [platform] = useState<Platform>(detectPlatform);
   const [standalone, setStandalone] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [justInstalled, setJustInstalled] = useState(false);
-  const [swStatus, setSwStatus] = useState<string>("—");
+  const [swInfo, setSwInfo] = useState<{ status: string; color: string }>({ status: "—", color: "hsl(var(--muted-foreground))" });
+  const [cacheCount, setCacheCount] = useState<number | null>(null);
+  const [purged, setPurged] = useState(false);
 
   useEffect(() => {
     setStandalone(isStandalone());
 
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-    const onInstalled = () => {
-      setJustInstalled(true);
-      setDeferredPrompt(null);
-    };
+    const onPrompt = (e: Event) => { e.preventDefault(); setDeferredPrompt(e as BeforeInstallPromptEvent); };
+    const onInstalled = () => { setJustInstalled(true); setDeferredPrompt(null); };
 
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
 
-    // SW status
+    // SW diagnostic
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.getRegistration().then((reg) => {
-        if (!reg) setSwStatus(fr ? "Non enregistré" : "Not registered");
-        else if (reg.waiting) setSwStatus(fr ? "Mise à jour prête" : "Update ready");
-        else if (reg.active) setSwStatus(fr ? "Actif ✓" : "Active ✓");
-        else setSwStatus(fr ? "En cours…" : "Pending…");
+        if (!reg) setSwInfo({ status: fr ? "Non enregistré" : "Not registered", color: "hsl(var(--muted-foreground))" });
+        else if (reg.waiting) setSwInfo({ status: fr ? "⬆ Mise à jour prête" : "⬆ Update ready", color: GOLD });
+        else if (reg.active) setSwInfo({ status: fr ? "Actif ✓" : "Active ✓", color: GO });
+        else setSwInfo({ status: fr ? "En cours…" : "Pending…", color: GOLD });
       });
     } else {
-      setSwStatus(fr ? "Non supporté" : "Not supported");
+      setSwInfo({ status: fr ? "Non supporté" : "Not supported", color: BREAK });
+    }
+
+    // Cache count
+    if ("caches" in window) {
+      caches.keys().then((names) => setCacheCount(names.length));
     }
 
     return () => {
@@ -67,11 +68,9 @@ export default function InstallSection({ fr }: { fr: boolean }) {
     };
   }, [fr]);
 
-  const installStatus: InstallStatus = standalone || justInstalled
-    ? "installed"
-    : deferredPrompt
-      ? "installable"
-      : "not-installable";
+  const isInstalled = standalone || justInstalled;
+  const isInstallable = !isInstalled && !!deferredPrompt;
+  const needsManual = !isInstalled && !deferredPrompt && platform === "ios";
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
@@ -81,73 +80,110 @@ export default function InstallSection({ fr }: { fr: boolean }) {
     setDeferredPrompt(null);
   };
 
-  const platformLabel: Record<Platform, string> = {
-    ios: "iPhone / iPad",
-    android: "Android",
-    desktop: "Desktop",
+  const handlePurgeCache = useCallback(async () => {
+    if ("caches" in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map((n) => caches.delete(n)));
+      setCacheCount(0);
+    }
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) {
+        if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        await reg.update().catch(() => {});
+      }
+    }
+    setPurged(true);
+    setTimeout(() => window.location.reload(), 800);
+  }, []);
+
+  const platformLabels: Record<Platform, { icon: string; label: string }> = {
+    ios: { icon: "🍎", label: "iPhone / iPad" },
+    android: { icon: "🤖", label: "Android" },
+    desktop: { icon: "🖥", label: "Desktop" },
   };
 
-  const statusConfig: Record<InstallStatus, { label: string; color: string; icon: string }> = {
-    installed: { label: fr ? "Installée ✓" : "Installed ✓", color: GO, icon: "✅" },
-    installable: { label: fr ? "Installable" : "Installable", color: GOLD, icon: "📲" },
-    "not-installable": {
-      label: platform === "ios"
-        ? (fr ? "Via Safari" : "Via Safari")
-        : (fr ? "Non disponible" : "Not available"),
-      color: "hsl(var(--muted-foreground))",
-      icon: platform === "ios" ? "🍎" : "—",
-    },
-  };
-
-  const status = statusConfig[installStatus];
+  const pl = platformLabels[platform];
 
   return (
     <SectionCard>
       <SectionTitle icon="📲" title={fr ? "Installation mobile" : "Mobile install"} />
 
-      {/* Status */}
-      <SettingRow label={fr ? "Statut" : "Status"} description={fr ? "État d'installation de l'application" : "App installation state"}>
-        <span className="font-mono text-[10px] font-medium" style={{ color: status.color }}>
-          {status.icon} {status.label}
+      {/* Installable */}
+      <SettingRow label={fr ? "Installable" : "Installable"} description={fr ? "Le navigateur supporte l'installation directe" : "Browser supports direct install"}>
+        <span className="font-mono text-[10px] font-medium" style={{ color: isInstallable || isInstalled ? GO : (needsManual ? GOLD : "hsl(var(--muted-foreground))") }}>
+          {isInstallable ? (fr ? "✓ Oui" : "✓ Yes")
+            : isInstalled ? (fr ? "✓ Oui" : "✓ Yes")
+            : needsManual ? (fr ? "Manuel (Safari)" : "Manual (Safari)")
+            : (fr ? "✗ Non" : "✗ No")}
+        </span>
+      </SettingRow>
+
+      {/* Already installed */}
+      <SettingRow label={fr ? "Déjà installée" : "Already installed"} description={fr ? "Mode standalone détecté" : "Standalone mode detected"}>
+        <span className="font-mono text-[10px] font-medium" style={{ color: isInstalled ? GO : "hsl(var(--muted-foreground))" }}>
+          {isInstalled ? (fr ? "✓ Oui" : "✓ Yes") : (fr ? "✗ Non" : "✗ No")}
         </span>
       </SettingRow>
 
       {/* Platform */}
       <SettingRow label={fr ? "Plateforme" : "Platform"} description={fr ? "Appareil détecté" : "Detected device"}>
-        <span className="font-mono text-[10px] text-muted-foreground">{platformLabel[platform]}</span>
+        <span className="font-mono text-[10px] text-muted-foreground">{pl.icon} {pl.label}</span>
       </SettingRow>
 
-      {/* Version */}
-      <SettingRow label="Build" description={fr ? "Version et tag de build" : "Version and build tag"}>
+      {/* Build */}
+      <SettingRow label="Build" description={fr ? "Version et tag" : "Version and tag"}>
         <span className="font-mono text-[10px] text-muted-foreground">{APP_VERSION} · {BUILD_TAG}</span>
       </SettingRow>
 
       {/* Service Worker */}
-      <SettingRow label="Service Worker" description={fr ? "Cache et mises à jour" : "Cache and updates"}>
-        <span className="font-mono text-[10px] text-muted-foreground">{swStatus}</span>
+      <SettingRow label="Service Worker" description={fr ? "État du worker de cache" : "Cache worker state"}>
+        <span className="font-mono text-[10px] font-medium" style={{ color: swInfo.color }}>{swInfo.status}</span>
+      </SettingRow>
+
+      {/* Cache */}
+      <SettingRow label="Cache" description={fr ? "Caches navigateur actifs" : "Active browser caches"}>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] text-muted-foreground">
+            {cacheCount !== null ? `${cacheCount} ${cacheCount === 1 ? "cache" : "caches"}` : "—"}
+          </span>
+          {!purged ? (
+            <button
+              onClick={handlePurgeCache}
+              className="font-mono text-[9px] px-2 py-1 rounded-md border border-border text-muted-foreground hover:text-gold hover:border-gold/30 transition-all"
+            >
+              {fr ? "Purger" : "Purge"}
+            </button>
+          ) : (
+            <span className="font-mono text-[9px]" style={{ color: GO }}>✓</span>
+          )}
+        </div>
       </SettingRow>
 
       {/* Install button (Android/Chrome) */}
-      {installStatus === "installable" && (
-        <div className="px-5 pb-4 pt-1">
+      {isInstallable && (
+        <div className="px-5 pb-4 pt-2">
           <button
             onClick={handleInstall}
-            className="w-full font-mono text-[11px] tracking-wider py-3 rounded-xl transition-all duration-200 hover:scale-[1.01] active:scale-95"
+            className="w-full font-mono text-[11px] tracking-wider py-3 rounded-xl transition-all duration-200 hover:scale-[1.01] active:scale-95 border"
             style={{
-              background: "linear-gradient(135deg, hsla(var(--gold), 0.15), hsla(var(--gold), 0.05))",
-              border: "1px solid hsla(var(--gold), 0.3)",
+              background: `linear-gradient(135deg, color-mix(in srgb, ${GOLD} 15%, transparent), color-mix(in srgb, ${GOLD} 5%, transparent))`,
+              borderColor: `color-mix(in srgb, ${GOLD} 30%, transparent)`,
               color: GOLD,
-              boxShadow: "0 0 20px hsla(var(--gold), 0.06)",
+              boxShadow: `0 0 20px color-mix(in srgb, ${GOLD} 6%, transparent)`,
             }}
           >
             {fr ? "⬇ Installer l'application" : "⬇ Install App"}
           </button>
+          <p className="font-mono text-[9px] text-muted-foreground/50 text-center mt-2">
+            {fr ? "Installation rapide — aucun store requis" : "Quick install — no app store needed"}
+          </p>
         </div>
       )}
 
       {/* iOS instructions */}
-      {platform === "ios" && installStatus !== "installed" && (
-        <div className="mx-5 mb-4 rounded-xl p-4 space-y-3" style={{ background: "hsla(var(--muted), 0.3)", border: "1px solid hsl(var(--border))" }}>
+      {needsManual && (
+        <div className="mx-5 mb-4 rounded-xl p-4 space-y-3" style={{ background: "hsl(var(--muted) / 0.3)", border: "1px solid hsl(var(--border))" }}>
           <p className="font-mono text-[10px] text-gold tracking-wider font-medium">
             {fr ? "INSTRUCTIONS IPHONE / IPAD" : "IPHONE / IPAD INSTRUCTIONS"}
           </p>
@@ -160,7 +196,7 @@ export default function InstallSection({ fr }: { fr: boolean }) {
             <div key={s.n} className="flex items-start gap-3">
               <span
                 className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center font-mono text-[9px] font-bold"
-                style={{ background: "hsla(var(--gold), 0.1)", color: GOLD }}
+                style={{ background: `color-mix(in srgb, ${GOLD} 10%, transparent)`, color: GOLD }}
               >
                 {s.n}
               </span>
@@ -173,10 +209,10 @@ export default function InstallSection({ fr }: { fr: boolean }) {
       )}
 
       {/* Installed confirmation */}
-      {installStatus === "installed" && (
+      {isInstalled && (
         <div className="mx-5 mb-4 py-3 rounded-xl text-center" style={{ background: `color-mix(in srgb, ${GO} 6%, transparent)`, border: `1px solid color-mix(in srgb, ${GO} 20%, transparent)` }}>
           <span className="font-mono text-[10px]" style={{ color: GO }}>
-            {fr ? "Vous utilisez TAO Sentinel en mode application." : "You are using TAO Sentinel as an app."}
+            {fr ? "✓ TAO Sentinel fonctionne en mode application." : "✓ TAO Sentinel is running as an app."}
           </span>
         </div>
       )}
