@@ -241,6 +241,8 @@ function alertImpact(type: string | null, fr: boolean): string {
   if (type === "RISK_OVERRIDE") return fr ? "Blocage engine" : "Engine block";
   if (type === "WHALE_MOVE") return fr ? "Pression prix" : "Price pressure";
   if (type === "GO" || type === "EARLY") return fr ? "Signal d'entrée" : "Entry signal";
+  if (type === "CONFIDENCE_DROP") return fr ? "Fiabilité dégradée" : "Degraded reliability";
+  if (type === "POSITION_URGENT") return fr ? "Risque portefeuille" : "Portfolio risk";
   return "—";
 }
 

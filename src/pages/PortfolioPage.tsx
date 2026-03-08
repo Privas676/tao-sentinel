@@ -584,8 +584,8 @@ export default function PortfolioPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.sort((a, b) => {
-                    const order = { EXIT: 0, REDUCE: 1, REINFORCE: 2, HOLD: 3 };
+                {rows.sort((a, b) => {
+                    const order: Record<string, number> = { SORTIR: 0, "RÉDUIRE": 1, RENFORCER: 2, CONSERVER: 3 };
                     return (order[a.pAction] ?? 3) - (order[b.pAction] ?? 3);
                   }).map(r => {
                     const weight = analytics ? (analytics.totalTao > 0 ? (r.taoInvest / analytics.totalTao) * 100 : 0) : 0;
