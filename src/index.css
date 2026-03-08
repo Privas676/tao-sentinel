@@ -53,6 +53,7 @@
     --signal-exit: 4 80% 50%;
     --signal-watch: 220 10% 50%;
     --signal-no: 220 10% 35%;
+    --signal-system: 210 60% 55%;
 
     /* Chart colors */
     --chart-1: 145 65% 48%;

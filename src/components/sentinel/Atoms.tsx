@@ -11,6 +11,7 @@ export const GO = "hsl(var(--signal-go))";
 export const WARN = "hsl(var(--signal-go-spec))";
 export const BREAK = "hsl(var(--signal-break))";
 export const MUTED = "hsl(var(--muted-foreground))";
+export const SYSTEM = "hsl(var(--signal-system))";
 
 /* ── SectionCard ── */
 export function SectionCard({ children, className = "" }: { children: ReactNode; className?: string }) {

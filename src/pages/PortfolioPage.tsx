@@ -282,7 +282,7 @@ export default function PortfolioPage() {
         {/*   2B. EXECUTIVE ACTION SUMMARY      */}
         {/* ══════════════════════════════════ */}
         {actionCategories && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
             {actionCategories.map(cat => (
               <div key={cat.key} className="rounded-xl overflow-hidden" style={{
                 border: `1px solid color-mix(in srgb, ${cat.color} ${cat.priority ? "20%" : "10%"}, transparent)`,

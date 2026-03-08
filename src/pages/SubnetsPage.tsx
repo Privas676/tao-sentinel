@@ -68,17 +68,19 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
 
   const verdict = row.verdict;
   const decision = row.decision;
+  const isSystemSubnet = decision.isSystem;
   const thesis = decision.thesis;
   const invalidation = decision.invalidation;
 
   /* Alerts */
   const alerts: { icon: string; text: string; color: string }[] = [];
-  if (row.isOverridden) alerts.push({ icon: "⛔", text: fr ? "Override actif — sortie forcée" : "Active override — forced exit", color: "hsl(var(--destructive))" });
-  if (row.depegProbability >= 50) alerts.push({ icon: "⚠", text: `Depeg ${row.depegProbability}%`, color: "hsl(var(--signal-go-spec))" });
-  if (row.delistCategory !== "NORMAL") alerts.push({ icon: "🔴", text: fr ? `Risque delist (${row.delistCategory})` : `Delist risk (${row.delistCategory})`, color: "hsl(var(--destructive))" });
-  if (row.dataUncertain) alerts.push({ icon: "❓", text: fr ? "Données incertaines" : "Uncertain data", color: "hsl(var(--muted-foreground))" });
-  // Conflict explanation as an info alert
-  if (decision.conflictExplanation) alerts.push({ icon: "⚖️", text: decision.conflictExplanation, color: "hsl(var(--signal-go-spec))" });
+  if (!isSystemSubnet) {
+    if (row.isOverridden) alerts.push({ icon: "⛔", text: fr ? "Override actif — sortie forcée" : "Active override — forced exit", color: "hsl(var(--destructive))" });
+    if (row.depegProbability >= 50) alerts.push({ icon: "⚠", text: `Depeg ${row.depegProbability}%`, color: "hsl(var(--signal-go-spec))" });
+    if (row.delistCategory !== "NORMAL") alerts.push({ icon: "🔴", text: fr ? `Risque delist (${row.delistCategory})` : `Delist risk (${row.delistCategory})`, color: "hsl(var(--destructive))" });
+    if (row.dataUncertain) alerts.push({ icon: "❓", text: fr ? "Données incertaines" : "Uncertain data", color: "hsl(var(--muted-foreground))" });
+    if (decision.conflictExplanation) alerts.push({ icon: "⚖️", text: decision.conflictExplanation, color: "hsl(var(--signal-go-spec))" });
+  }
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -105,6 +107,23 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
 
         {/* ── Body ── */}
         <div className="px-5 py-4 space-y-4">
+
+          {/* System subnet info */}
+          {isSystemSubnet && (
+            <div className="rounded-lg p-3 border border-border" style={{ background: "hsla(var(--signal-system), 0.03)", borderColor: "hsla(var(--signal-system), 0.15)" }}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-sm">🔷</span>
+                <span className="font-mono text-[8px] tracking-widest uppercase font-bold" style={{ color: "hsl(var(--signal-system))" }}>
+                  {fr ? "SUBNET SYSTÈME" : "SYSTEM SUBNET"}
+                </span>
+              </div>
+              <p className="font-mono text-[10px] text-foreground/60 leading-relaxed">
+                {fr
+                  ? "Infrastructure réseau — pas une opportunité d'investissement classique. Métriques plafonnées."
+                  : "Network infrastructure — not a standard investment opportunity. Metrics capped."}
+              </p>
+            </div>
+          )}
 
           {/* Primary decision metrics — 2x2 */}
           <div className="grid grid-cols-2 gap-2">
@@ -550,7 +569,8 @@ export default function SubnetsPage() {
                     </td>
                   </tr>
                 ) : rows.map((r) => {
-                  const aLabel = actionLabel(r.action, fr);
+                  const isSystemRow = !!SPECIAL_SUBNETS[r.netuid]?.isSystem;
+                  const aLabel = isSystemRow ? "SYSTÈME" : actionLabel(r.action, fr);
                   const convColor = r.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : r.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
                   const liqColor = r.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : r.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
                   const structColor = r.structureLevel === "HEALTHY" ? "hsl(var(--signal-go))" : r.structureLevel === "FRAGILE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
@@ -561,6 +581,7 @@ export default function SubnetsPage() {
                       style={{
                         borderBottom: "1px solid hsl(var(--border))",
                         ...(r.isOverridden ? { background: "hsla(var(--signal-break), 0.03)", borderLeft: "2px solid hsla(var(--signal-break), 0.4)" } : {}),
+                        ...(isSystemRow && !r.isOverridden ? { background: "hsla(var(--signal-system), 0.02)", borderLeft: "2px solid hsla(var(--signal-system), 0.25)" } : {}),
                       }}
                       onClick={() => setDrawerRow(r)}
                     >
@@ -568,7 +589,7 @@ export default function SubnetsPage() {
                       <td className="py-2 px-2.5 text-[10px] sticky left-[44px] z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
                         <span className="text-foreground/85 font-medium">{r.name}</span>
                         {SPECIAL_SUBNETS[r.netuid]?.isSystem && (
-                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(210,60%,55%,0.08)", color: "hsl(210,60%,55%)", border: "1px solid hsla(210,60%,55%,0.2)" }}>
+                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-system), 0.08)", color: "hsl(var(--signal-system))", border: "1px solid hsla(var(--signal-system), 0.2)" }}>
                             🔷 {fr ? SPECIAL_SUBNETS[r.netuid].label : SPECIAL_SUBNETS[r.netuid].labelEn}
                           </span>
                         )}
@@ -582,8 +603,11 @@ export default function SubnetsPage() {
                         )}
                       </td>
                       <td className="py-2 px-2.5 text-center">
-                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{ color: actionColor(r.action), background: `color-mix(in srgb, ${actionColor(r.action)} 8%, transparent)` }}>
-                          {actionIcon(r.action)} {aLabel}
+                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{
+                          color: isSystemRow ? "hsl(var(--signal-system))" : actionColor(r.action),
+                          background: isSystemRow ? "hsla(var(--signal-system), 0.08)" : `color-mix(in srgb, ${actionColor(r.action)} 8%, transparent)`
+                        }}>
+                          {isSystemRow ? "🔷" : actionIcon(r.action)} {aLabel}
                         </span>
                       </td>
                       <td className="py-2 px-2.5 text-center">

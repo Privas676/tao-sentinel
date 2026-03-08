@@ -301,8 +301,9 @@ export default function CompassPage() {
   // ── Tactical summary — more directive ──
   const tacticalSummary = useMemo(() => {
     if (!enrichedSignals.length) return "";
-    const entryCount = enrichedSignals.filter(s => s.action === "ENTER").length;
-    const exitCount = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
+    const entryCount = nonSystem.filter(s => s.action === "ENTER").length;
+    const exitCount = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).length;
     const bestName = bestOpp ? `SN-${bestOpp.netuid} ${bestOpp.name}` : "";
     const worstName = worstRisk ? `SN-${worstRisk.netuid}` : "";
     if (fr) {
