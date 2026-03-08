@@ -238,7 +238,7 @@ export default function CompassPage() {
   // ── Watchlist: top conviction signals ──
   const watchlist = useMemo(() => {
     return [...enrichedSignals]
-      .filter(s => !s.isOverridden && s.conf >= 40)
+      .filter(s => !s.isOverridden && s.conf >= 40 && !SPECIAL_SUBNETS[s.netuid]?.isSystem)
       .sort((a, b) => {
         const score = (x: DashSignal) => Math.abs(x.opp - x.risk) * (x.conf / 100) * (x.momentumScore / 50);
         return score(b) - score(a);
