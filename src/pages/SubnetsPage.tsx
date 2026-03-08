@@ -108,6 +108,23 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
         {/* ── Body ── */}
         <div className="px-5 py-4 space-y-4">
 
+          {/* System subnet info */}
+          {isSystemSubnet && (
+            <div className="rounded-lg p-3 border border-border" style={{ background: "hsla(var(--signal-system), 0.03)", borderColor: "hsla(var(--signal-system), 0.15)" }}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-sm">🔷</span>
+                <span className="font-mono text-[8px] tracking-widest uppercase font-bold" style={{ color: "hsl(var(--signal-system))" }}>
+                  {fr ? "SUBNET SYSTÈME" : "SYSTEM SUBNET"}
+                </span>
+              </div>
+              <p className="font-mono text-[10px] text-foreground/60 leading-relaxed">
+                {fr
+                  ? "Infrastructure réseau — pas une opportunité d'investissement classique. Métriques plafonnées."
+                  : "Network infrastructure — not a standard investment opportunity. Metrics capped."}
+              </p>
+            </div>
+          )}
+
           {/* Primary decision metrics — 2x2 */}
           <div className="grid grid-cols-2 gap-2">
             <MetricMini label="CONVICTION" value={row.convictionLevel} color={row.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : row.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))"} />
