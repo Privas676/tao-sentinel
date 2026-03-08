@@ -232,6 +232,36 @@ export default function PortfolioPage() {
     ];
   }, [analytics, rows, fr]);
 
+  /* ── Top 3 urgent actions ── */
+  const top3Actions = useMemo(() => {
+    if (!analytics) return [];
+    const priorityOrder = { SORTIR: 0, "RÉDUIRE": 1, RENFORCER: 2, CONSERVER: 3 };
+    const nonSystem = rows.filter(r => !SPECIAL_SUBNETS[r.netuid]?.isSystem);
+    return nonSystem
+      .filter(r => r.pAction !== "CONSERVER")
+      .sort((a, b) => {
+        const pa = priorityOrder[a.pAction as keyof typeof priorityOrder] ?? 3;
+        const pb = priorityOrder[b.pAction as keyof typeof priorityOrder] ?? 3;
+        if (pa !== pb) return pa - pb;
+        if (pa === 0) return b.risk - a.risk; // EXIT: highest risk first
+        return b.opp - a.opp; // REINFORCE: highest opp first
+      })
+      .slice(0, 3)
+      .map(r => {
+        const reason = (() => {
+          if (r.pAction === "SORTIR") {
+            if (r.isOverridden) return fr ? "Override critique actif" : "Critical override active";
+            if (r.depegProbability >= 40) return fr ? `Dépeg probable (${r.depegProbability}%)` : `Likely depeg (${r.depegProbability}%)`;
+            return fr ? `Risque ${r.risk} — sortie recommandée` : `Risk ${r.risk} — exit recommended`;
+          }
+          if (r.pAction === "RÉDUIRE") return fr ? `Risque élevé (${r.risk}) — réduire l'exposition` : `High risk (${r.risk}) — reduce exposure`;
+          if (r.pAction === "RENFORCER") return fr ? `Opportunité ${r.opp} + momentum favorable` : `Opportunity ${r.opp} + positive momentum`;
+          return "";
+        })();
+        return { ...r, reason };
+      });
+  }, [analytics, rows, fr]);
+
   /* ── Handlers ── */
   const addPrice = scores.get(addNetuid)?.consensusPrice ?? 0;
   const handleAdd = () => {
