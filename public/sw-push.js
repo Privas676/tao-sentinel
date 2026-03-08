@@ -1,9 +1,29 @@
 /* ═══════════════════════════════════════ */
 /*   SERVICE WORKER — Push Notifications   */
-/*   Handles incoming push events and      */
-/*   notification click navigation         */
+/*   v0.1.14 — mobile-sync-fix             */
 /* ═══════════════════════════════════════ */
 
+const CACHE_VERSION = "tao-sentinel-v0.1.14";
+
+// ── Clear ALL old caches on activate ──
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((names) =>
+      Promise.all(
+        names
+          .filter((name) => name !== CACHE_VERSION)
+          .map((name) => caches.delete(name))
+      )
+    ).then(() => self.clients.claim())
+  );
+});
+
+// ── Skip waiting — take control immediately ──
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+});
+
+// ── Push handling ──
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
@@ -43,14 +63,12 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if available
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
           client.navigate(url);
           return client.focus();
         }
       }
-      // Open new window
       return clients.openWindow(url);
     })
   );

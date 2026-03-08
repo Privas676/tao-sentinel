@@ -249,10 +249,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
           {/* Right side */}
           <div className="ml-auto flex items-center gap-2">
             <span
-              className="font-mono text-[7px] tracking-[0.12em] text-muted-foreground hidden sm:inline"
+              className="font-mono text-[7px] tracking-[0.12em] text-muted-foreground"
               style={{ opacity: 0.4 }}
+              title={`${APP_VERSION} · ${BUILD_TAG}`}
             >
-              v4.0
+              {APP_VERSION}
             </span>
           </div>
         </header>
