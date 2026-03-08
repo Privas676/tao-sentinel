@@ -28,6 +28,60 @@ export default function SettingsPage() {
     try { return (localStorage.getItem("display_density") as "compact" | "normal") || "normal"; } catch { return "normal"; }
   });
 
+  // Push alert preferences
+  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(() => {
+    try { return Number(localStorage.getItem("push_confidence_threshold")) || 50; } catch { return 50; }
+  });
+
+  type AlertType = "GO" | "BREAK" | "EXIT_FAST" | "EARLY" | "DEPEG_WARNING" | "DEPEG_CRITICAL" | "RISK_OVERRIDE" | "CONFIDENCE_DROP" | "POSITION_URGENT" | "WHALE_MOVE" | "SMART_ACCUMULATION";
+  const ALL_ALERT_TYPES: { key: AlertType; label: string; labelEn: string; icon: string }[] = [
+    { key: "GO", label: "Signal GO", labelEn: "GO Signal", icon: "🟢" },
+    { key: "BREAK", label: "Zone critique", labelEn: "Critical zone", icon: "🔴" },
+    { key: "EXIT_FAST", label: "Sortie urgente", labelEn: "Urgent exit", icon: "🚨" },
+    { key: "EARLY", label: "Signal précoce", labelEn: "Early signal", icon: "🌱" },
+    { key: "DEPEG_WARNING", label: "Alerte depeg", labelEn: "Depeg warning", icon: "⚠️" },
+    { key: "DEPEG_CRITICAL", label: "Depeg critique", labelEn: "Critical depeg", icon: "💀" },
+    { key: "RISK_OVERRIDE", label: "Override risque", labelEn: "Risk override", icon: "🛡" },
+    { key: "CONFIDENCE_DROP", label: "Chute confiance", labelEn: "Confidence drop", icon: "📉" },
+    { key: "POSITION_URGENT", label: "Position urgente", labelEn: "Urgent position", icon: "🎯" },
+    { key: "WHALE_MOVE", label: "Mouvement whale", labelEn: "Whale move", icon: "🐋" },
+    { key: "SMART_ACCUMULATION", label: "Accumulation smart", labelEn: "Smart accumulation", icon: "🧠" },
+  ];
+
+  const [enabledAlerts, setEnabledAlerts] = useState<Set<AlertType>>(() => {
+    try {
+      const stored = localStorage.getItem("push_enabled_alerts");
+      if (stored) return new Set(JSON.parse(stored) as AlertType[]);
+    } catch { /* fallback */ }
+    return new Set(ALL_ALERT_TYPES.map(a => a.key));
+  });
+
+  const handleThresholdChange = (val: number) => {
+    setConfidenceThreshold(val);
+    localStorage.setItem("push_confidence_threshold", String(val));
+  };
+
+  const toggleAlert = (key: AlertType) => {
+    setEnabledAlerts(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      localStorage.setItem("push_enabled_alerts", JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  const allEnabled = enabledAlerts.size === ALL_ALERT_TYPES.length;
+  const toggleAll = () => {
+    if (allEnabled) {
+      setEnabledAlerts(new Set());
+      localStorage.setItem("push_enabled_alerts", "[]");
+    } else {
+      const all = new Set(ALL_ALERT_TYPES.map(a => a.key));
+      setEnabledAlerts(all);
+      localStorage.setItem("push_enabled_alerts", JSON.stringify([...all]));
+    }
+  };
+
   const handleDensity = (d: "compact" | "normal") => {
     setDensity(d);
     localStorage.setItem("display_density", d);
