@@ -5,6 +5,7 @@ import { useDelistMode } from "@/hooks/use-delist-mode";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { SectionCard, SectionTitle, SettingRow, ToggleButtons } from "@/components/settings/SettingsShared";
 import type { DelistMode } from "@/lib/delist-risk";
+import { APP_VERSION, BUILD_TAG } from "@/lib/version";
 
 
 /* ═══════════════════════════════════════════════════════ */
@@ -166,6 +167,13 @@ export default function SettingsPage() {
           {fr
             ? "TMC est affiché en lecture seule. Il n'influence ni le scoring, ni les alertes, ni les overrides."
             : "TMC is displayed read-only. It does not affect scoring, alerts, or overrides."}
+        </div>
+
+        {/* ── Version footer ── */}
+        <div className="text-center pt-2">
+          <span className="font-mono text-[8px] text-muted-foreground/40 tracking-wider">
+            TAO Sentinel {APP_VERSION} · {BUILD_TAG}
+          </span>
         </div>
 
       </div>

@@ -27,14 +27,14 @@ export default defineConfig(({ mode }) => ({
         cleanupOutdatedCaches: true,
       },
       manifest: {
-        name: "Alien Gauge — Bittensor Pressure Detector",
-        short_name: "Alien Gauge",
-        description: "Premium instrument detecting Bittensor subnet investment pressure in real-time.",
+        name: "TAO Sentinel — Bittensor Intelligence",
+        short_name: "TAO Sentinel",
+        description: "Strategic intelligence platform for Bittensor subnet investment decisions.",
         theme_color: "#000000",
         background_color: "#000000",
         display: "standalone",
         orientation: "portrait",
-        start_url: "/",
+        start_url: "/compass",
         icons: [
           { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
           { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" },

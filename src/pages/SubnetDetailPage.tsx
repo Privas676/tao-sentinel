@@ -173,7 +173,12 @@ export default function SubnetDetailPage() {
                 <h1 className="font-mono text-lg sm:text-xl tracking-wide text-[hsl(var(--gold))] leading-tight">{s.name}</h1>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="font-mono text-[9px] text-muted-foreground">SN-{netuid} · {s.assetType}</span>
-                  {isSpecial && <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">{SPECIAL_SUBNETS[netuid].label}</span>}
+                  {isSpecial && (
+                    <span className="font-mono text-[7px] px-1.5 py-0.5 rounded font-bold"
+                      style={{ background: "hsla(210,60%,55%,0.08)", color: "hsl(210,60%,55%)", border: "1px solid hsla(210,60%,55%,0.2)" }}>
+                      🔷 {fr ? SPECIAL_SUBNETS[netuid].label : SPECIAL_SUBNETS[netuid].labelEn}
+                    </span>
+                  )}
                 </div>
               </div>
               <ActionBadge action={decision.badgeAction} />
@@ -196,6 +201,28 @@ export default function SubnetDetailPage() {
             </div>
           </div>
         </SectionCard>
+
+        {/* ── System subnet explanation ── */}
+        {isSpecial && SPECIAL_SUBNETS[netuid]?.isSystem && (
+          <SectionCard>
+            <div className="px-5 py-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🔷</span>
+                <span className="font-mono text-[10px] tracking-wider font-bold" style={{ color: "hsl(210,60%,55%)" }}>
+                  {fr ? "SUBNET SYSTÈME" : "SYSTEM SUBNET"}
+                </span>
+              </div>
+              <p className="font-mono text-[11px] text-foreground/70 leading-relaxed">
+                {fr ? SPECIAL_SUBNETS[netuid].description : SPECIAL_SUBNETS[netuid].descriptionEn}
+              </p>
+              <p className="font-mono text-[9px] text-muted-foreground mt-2">
+                {fr
+                  ? "Les métriques d'opportunité et de risque sont plafonnées. Ce subnet est traité comme une position d'infrastructure, pas comme une opportunité alpha."
+                  : "Opportunity and risk metrics are capped. This subnet is treated as an infrastructure position, not as an alpha opportunity."}
+              </p>
+            </div>
+          </SectionCard>
+        )}
 
         {/* ══════════════════════════════════════════ */}
         {/*   WATCH NOW — What to monitor               */}

@@ -5,13 +5,14 @@
 /* ═══════════════════════════════════════════════════════ */
 
 import type { UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
+import { SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import type { StrategicAction } from "@/lib/strategy-subnet";
 import { actionLabelFr, actionLabelEn } from "@/lib/strategy-colors";
 
 /* ── Types ── */
 
-export type DecisionAction = "ENTRER" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SORTIR";
+export type DecisionAction = "ENTRER" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SORTIR" | "SYSTÈME" | "SYSTEM";
 
 export type ConvictionLevel = "HIGH" | "MEDIUM" | "LOW";
 export type LiquidityLevel = "HIGH" | "MEDIUM" | "LOW";
@@ -37,7 +38,10 @@ export type SubnetDecision = {
   actionEn: string;
 
   /* ── ActionBadge key for the ActionBadge component ── */
-  badgeAction: "RENTRE" | "SORS" | "RENFORCER" | "HOLD" | "SURVEILLER" | "ATTENDRE";
+  badgeAction: "RENTRE" | "SORS" | "RENFORCER" | "HOLD" | "SURVEILLER" | "ATTENDRE" | "SYSTEME";
+
+  /* ── System subnet flag ── */
+  isSystem: boolean;
 
   /* ── Portfolio action (for held positions) ── */
   portfolioAction: PortfolioAction;
@@ -114,7 +118,8 @@ function deriveActionFr(action: StrategicAction): DecisionAction {
   }
 }
 
-function deriveBadgeAction(action: StrategicAction): SubnetDecision["badgeAction"] {
+function deriveBadgeAction(action: StrategicAction, isSystem: boolean): SubnetDecision["badgeAction"] {
+  if (isSystem) return "SYSTEME";
   switch (action) {
     case "ENTER": return "RENTRE";
     case "EXIT": return "SORS";
@@ -154,6 +159,8 @@ function portfolioActionLabelEn(a: PortfolioAction): string {
  * Build the main signal text — single source, used everywhere.
  */
 function deriveSignalPrincipal(s: UnifiedSubnetScore, fr: boolean): string {
+  const special = SPECIAL_SUBNETS[s.netuid];
+  if (special?.isSystem) return fr ? "Infrastructure réseau" : "Network infrastructure";
   if (s.isOverridden) return s.overrideReasons[0] || (fr ? "Zone critique" : "Critical zone");
   if (s.depegProbability >= 50) return `Depeg ${s.depegProbability}%`;
   if (s.delistCategory !== "NORMAL") return fr ? "Risque delist" : "Delist risk";
@@ -224,15 +231,18 @@ export function buildSubnetDecision(
 ): SubnetDecision {
   const conv = deriveConviction(s, v);
   const pAction = derivePortfolioAction(s);
+  const special = SPECIAL_SUBNETS[s.netuid];
+  const isSystem = !!special?.isSystem;
 
   return {
     netuid: s.netuid,
     name: s.name,
 
     engineAction: s.action,
-    actionFr: deriveActionFr(s.action),
-    actionEn: actionLabelEn(s.action),
-    badgeAction: deriveBadgeAction(s.action),
+    actionFr: isSystem ? (fr ? "SYSTÈME" : "SYSTEM") as DecisionAction : deriveActionFr(s.action),
+    actionEn: isSystem ? "SYSTEM" : actionLabelEn(s.action),
+    badgeAction: deriveBadgeAction(s.action, isSystem),
+    isSystem,
 
     portfolioAction: pAction,
     portfolioActionFr: portfolioActionLabelFr(pAction),

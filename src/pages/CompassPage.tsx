@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
-import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
+import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import {
   clamp, opportunityColor, riskColor, computeSmartCapital, computeASMicro, stabilityColor,
@@ -71,7 +71,10 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[380px] border-l border-border bg-background text-foreground overflow-y-auto">
         <SheetHeader>
-          <SheetTitle className="font-mono tracking-wider text-lg">SN-{signal.netuid}</SheetTitle>
+          <div className="flex items-center justify-between">
+            <SheetTitle className="font-mono tracking-wider text-lg">SN-{signal.netuid}</SheetTitle>
+            <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors text-sm">✕</button>
+          </div>
         </SheetHeader>
         <div className="mt-4 space-y-5">
           <div className="text-center">
@@ -205,18 +208,19 @@ export default function CompassPage() {
 
   // ── Engine-action-based priority groups (single source of truth) ──
   const priorityGroups = useMemo(() => {
-    const enterGroup = enrichedSignals.filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const holdGroup = enrichedSignals.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const exitGroup = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
-    const enterCount = enrichedSignals.filter(s => s.action === "ENTER" && !s.isOverridden).length;
-    const holdCount = enrichedSignals.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).length;
-    const exitCount = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
+    const enterGroup = nonSystem.filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const holdGroup = nonSystem.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const exitGroup = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const enterCount = nonSystem.filter(s => s.action === "ENTER" && !s.isOverridden).length;
+    const holdCount = nonSystem.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).length;
+    const exitCount = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).length;
     return { enterGroup, holdGroup, exitGroup, enterCount, holdCount, exitCount };
   }, [enrichedSignals]);
 
   // ── Best opportunity & worst risk ──
   const bestOpp = useMemo(() => {
-    return [...enrichedSignals].filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp)[0] || null;
+    return [...enrichedSignals].filter(s => s.action === "ENTER" && !s.isOverridden && !SPECIAL_SUBNETS[s.netuid]?.isSystem).sort((a, b) => b.opp - a.opp)[0] || null;
   }, [enrichedSignals]);
 
   const worstRisk = useMemo(() => {
@@ -237,7 +241,7 @@ export default function CompassPage() {
   // ── Watchlist: top conviction signals ──
   const watchlist = useMemo(() => {
     return [...enrichedSignals]
-      .filter(s => !s.isOverridden && s.conf >= 40)
+      .filter(s => !s.isOverridden && s.conf >= 40 && !SPECIAL_SUBNETS[s.netuid]?.isSystem)
       .sort((a, b) => {
         const score = (x: DashSignal) => Math.abs(x.opp - x.risk) * (x.conf / 100) * (x.momentumScore / 50);
         return score(b) - score(a);
@@ -247,10 +251,11 @@ export default function CompassPage() {
 
   // ── Rotation map ──
   const rotationMap = useMemo(() => {
-    const leaders = enrichedSignals.filter(s => s.action === "ENTER" && s.momentumScore >= 55 && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const accumulating = enrichedSignals.filter(s => s.sc === "ACCUMULATION" && s.action !== "EXIT" && !s.isOverridden && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
-    const fragile = enrichedSignals.filter(s => s.risk > 60 && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
-    const avoid = enrichedSignals.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
+    const leaders = nonSystem.filter(s => s.action === "ENTER" && s.momentumScore >= 55 && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const accumulating = nonSystem.filter(s => s.sc === "ACCUMULATION" && s.action !== "EXIT" && !s.isOverridden && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
+    const fragile = nonSystem.filter(s => s.risk > 60 && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const avoid = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
     return { leaders, accumulating, fragile, avoid };
   }, [enrichedSignals]);
 

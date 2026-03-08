@@ -91,7 +91,10 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
                 <span className="text-muted-foreground mr-1.5">SN-{row.netuid}</span>
                 {row.name}
               </SheetTitle>
-              <StatusBadge type={row.statusLevel === "DANGER" ? "danger" : row.statusLevel === "WATCH" ? "warning" : "success"} label={row.statusLevel} />
+              <div className="flex items-center gap-2">
+                <StatusBadge type={row.statusLevel === "DANGER" ? "danger" : row.statusLevel === "WATCH" ? "warning" : "success"} label={row.statusLevel} />
+                <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors text-sm">✕</button>
+              </div>
             </div>
           </SheetHeader>
           <div className="flex items-center justify-between mt-3">
@@ -229,9 +232,10 @@ export default function SubnetsPage() {
   const actionCounts = useMemo(() => {
     let enter = 0, hold = 0, exit = 0;
     for (const s of scoresList) {
+      if (SPECIAL_SUBNETS[s.netuid]?.isSystem) { hold++; continue; }
       if (s.action === "ENTER") enter++;
       else if (s.action === "EXIT") exit++;
-      else hold++; // HOLD, STAKE, NEUTRAL, WATCH all map to "Attendre" filter
+      else hold++;
     }
     return { enter, hold, exit };
   }, [scoresList]);
@@ -563,9 +567,14 @@ export default function SubnetsPage() {
                       <td className="py-2 px-2.5 text-[10px] text-muted-foreground sticky left-0 z-[5] bg-background">{r.netuid}</td>
                       <td className="py-2 px-2.5 text-[10px] sticky left-[44px] z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
                         <span className="text-foreground/85 font-medium">{r.name}</span>
-                        {SPECIAL_SUBNETS[r.netuid] && (
+                        {SPECIAL_SUBNETS[r.netuid]?.isSystem && (
+                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(210,60%,55%,0.08)", color: "hsl(210,60%,55%)", border: "1px solid hsla(210,60%,55%,0.2)" }}>
+                            🔷 {fr ? SPECIAL_SUBNETS[r.netuid].label : SPECIAL_SUBNETS[r.netuid].labelEn}
+                          </span>
+                        )}
+                        {!SPECIAL_SUBNETS[r.netuid]?.isSystem && SPECIAL_SUBNETS[r.netuid] && (
                           <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-hold), 0.08)", color: "hsl(var(--signal-hold))", border: "1px solid hsla(var(--signal-hold), 0.2)" }}>
-                            {SPECIAL_SUBNETS[r.netuid].label}
+                            {fr ? SPECIAL_SUBNETS[r.netuid].label : SPECIAL_SUBNETS[r.netuid].labelEn}
                           </span>
                         )}
                         {r.isOverridden && (
