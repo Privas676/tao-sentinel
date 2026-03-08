@@ -196,6 +196,10 @@ function typeDisplayInfo(type: string | null, fr: boolean): { label: string; ico
       return { label: "SMART ACCUM.", icon: "🧠", color: "hsl(187, 100%, 42%)" };
     case "CREATED":
       return { label: fr ? "NOUVEAU" : "NEW", icon: "✨", color: "hsl(210, 80%, 55%)" };
+    case "CONFIDENCE_DROP":
+      return { label: fr ? "CONFIANCE ↓" : "CONFIDENCE ↓", icon: "📉", color: WARN };
+    case "POSITION_URGENT":
+      return { label: fr ? "POSITION URGENTE" : "URGENT POSITION", icon: "🎯", color: BREAK };
     default:
       return { label: type || "—", icon: "•", color: MUTED };
   }
