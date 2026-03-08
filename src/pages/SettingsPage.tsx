@@ -108,6 +108,8 @@ export default function SettingsPage() {
             )}
           </SettingRow>
         </SectionCard>
+        {/* ── 2b. INSTALL ── */}
+        <InstallSection fr={fr} />
 
         {/* ── 3. ENGINE BEHAVIOR ── */}
         <SectionCard>
