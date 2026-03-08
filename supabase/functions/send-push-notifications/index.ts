@@ -121,11 +121,25 @@ function isPushableEvent(ev: { type: string | null; evidence: any }): boolean {
  *  Notification content builder
  * ═══════════════════════════════════════════════════ */
 
-function eventToNotification(ev: { type: string; netuid: number; evidence: any }) {
+function eventToNotification(ev: { type: string; netuid: number | null; evidence: any }) {
   const e = ev.evidence || {};
-  const sn = `SN-${ev.netuid}`;
+  const sn = ev.netuid != null ? `SN-${ev.netuid}` : "Global";
   const reasons = (e.reasons as string[] || []).slice(0, 2).join(", ");
 
+  if (ev.type === "CONFIDENCE_DROP") {
+    return {
+      title: `⚠️ CONFIANCE BASSE — ${e.avg_confidence ?? "?"}%`,
+      body: reasons || `La confiance globale est descendue sous le seuil critique`,
+      tag: `confidence-drop`,
+    };
+  }
+  if (ev.type === "POSITION_URGENT") {
+    return {
+      title: `🚨 ACTION REQUISE — ${sn}`,
+      body: reasons || `Votre position sur ${sn} nécessite une action immédiate`,
+      tag: `position-urgent-${ev.netuid}`,
+    };
+  }
   if (ENTRY_TYPES.has(ev.type)) {
     const label = ev.type === "GO" ? "🟢 GO" : ev.type === "GO_SPECULATIVE" ? "🔶 SPÉCULATIF" : "🌱 EARLY";
     return { title: `${label} — ${sn}`, body: reasons || `Signal d'entrée détecté sur ${sn}`, tag: `state-${ev.netuid}` };
