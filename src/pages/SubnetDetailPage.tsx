@@ -208,7 +208,7 @@ export default function SubnetDetailPage() {
             <div className="px-5 py-4">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-lg">🔷</span>
-                <span className="font-mono text-[10px] tracking-wider font-bold" style={{ color: "hsl(210,60%,55%)" }}>
+                <span className="font-mono text-[10px] tracking-wider font-bold" style={{ color: "hsl(var(--signal-system))" }}>
                   {fr ? "SUBNET SYSTÈME" : "SYSTEM SUBNET"}
                 </span>
               </div>
