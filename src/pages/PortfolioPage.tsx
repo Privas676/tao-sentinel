@@ -106,7 +106,7 @@ export default function PortfolioPage() {
   const [addQty, setAddQty] = useState<number>(10);
   const { currency, toggle: toggleCurrency } = useCurrencyToggle();
 
-  const { scores, sparklines, subnetList, taoUsd } = useSubnetScores();
+  const { scores, sparklines, subnetList, taoUsd, isLoading } = useSubnetScores();
   const { decisions } = useSubnetDecisions();
 
   // ── Seed portfolio positions (one-time import) ──
