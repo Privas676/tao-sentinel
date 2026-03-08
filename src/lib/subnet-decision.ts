@@ -229,15 +229,18 @@ export function buildSubnetDecision(
 ): SubnetDecision {
   const conv = deriveConviction(s, v);
   const pAction = derivePortfolioAction(s);
+  const special = SPECIAL_SUBNETS[s.netuid];
+  const isSystem = !!special?.isSystem;
 
   return {
     netuid: s.netuid,
     name: s.name,
 
     engineAction: s.action,
-    actionFr: deriveActionFr(s.action),
-    actionEn: actionLabelEn(s.action),
-    badgeAction: deriveBadgeAction(s.action),
+    actionFr: isSystem ? (fr ? "SYSTÈME" : "SYSTEM") as DecisionAction : deriveActionFr(s.action),
+    actionEn: isSystem ? "SYSTEM" : actionLabelEn(s.action),
+    badgeAction: deriveBadgeAction(s.action, isSystem),
+    isSystem,
 
     portfolioAction: pAction,
     portfolioActionFr: portfolioActionLabelFr(pAction),

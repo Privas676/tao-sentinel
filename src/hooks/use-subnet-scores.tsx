@@ -116,11 +116,24 @@ export type UnifiedScoresResult = {
  */
 export const SPECIAL_SUBNETS: Record<number, {
   label: string;
+  labelEn: string;
   forceStatus: SystemStatus;
   forceAction: StrategicAction;
   forceRiskMax: number;
+  isSystem: boolean;
+  description: string;
+  descriptionEn: string;
 }> = {
-  0: { label: "ROOT (system)", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20 },
+  0: {
+    label: "ROOT · SYSTÈME",
+    labelEn: "ROOT · SYSTEM",
+    forceStatus: "OK",
+    forceAction: "HOLD",
+    forceRiskMax: 20,
+    isSystem: true,
+    description: "SN-0 est le root subnet — la couche d'infrastructure fondamentale de Bittensor. Ce n'est pas un subnet d'investissement classique mais le backbone système qui sécurise le réseau.",
+    descriptionEn: "SN-0 is the root subnet — the foundational infrastructure layer of Bittensor. It is not a standard investment subnet but the system backbone securing the network.",
+  },
 };
 
 /* deriveSubnetSC moved to engine-strategic.ts */

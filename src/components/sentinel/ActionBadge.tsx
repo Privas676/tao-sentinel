@@ -1,4 +1,4 @@
-type ActionType = "RENTRE" | "HOLD" | "SORS" | "RENFORCER" | "ATTENDRE" | "SURVEILLER";
+type ActionType = "RENTRE" | "HOLD" | "SORS" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SYSTEME";
 
 interface ActionBadgeProps {
   action: ActionType;
@@ -12,6 +12,7 @@ const actionMap: Record<ActionType, { icon: string; label: string; color: string
   ATTENDRE:   { icon: "🟡", label: "ATTENDRE",   color: "hsl(38,92%,55%)",   bg: "hsla(38,92%,55%,0.06)",   border: "hsla(38,92%,55%,0.15)" },
   SURVEILLER: { icon: "👁",  label: "SURVEILLER", color: "hsl(38,60%,50%)",   bg: "hsla(38,60%,50%,0.06)",   border: "hsla(38,60%,50%,0.15)" },
   SORS:       { icon: "🔴", label: "SORTIR",     color: "hsl(4,80%,50%)",    bg: "hsla(4,80%,50%,0.06)",    border: "hsla(4,80%,50%,0.15)" },
+  SYSTEME:    { icon: "🔷", label: "SYSTÈME",    color: "hsl(210,60%,55%)",  bg: "hsla(210,60%,55%,0.06)",  border: "hsla(210,60%,55%,0.15)" },
 };
 
 export function ActionBadge({ action, size = "md" }: ActionBadgeProps) {
