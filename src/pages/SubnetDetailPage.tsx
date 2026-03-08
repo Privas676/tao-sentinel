@@ -1,10 +1,10 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts, type SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { opportunityColor, riskColor, stabilityColor, momentumColor } from "@/lib/gauge-engine";
 import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
@@ -107,9 +107,27 @@ function watchPoints(s: UnifiedSubnetScore, eco: any, sn: any, fr: boolean): { i
 /* ═══════════════════════════════════════════════ */
 export default function SubnetDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { lang } = useI18n();
   const fr = lang === "fr";
   const netuid = parseInt(id || "0", 10);
+
+  /* ── Escape key → back to /subnets (preserves browser history state) ── */
+  const goBack = useCallback(() => {
+    if (window.history.length > 2) {
+      navigate(-1);
+    } else {
+      navigate("/subnets");
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); goBack(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [goBack]);
 
   const { scores, sparklines } = useSubnetScores();
   const { verdicts } = useSubnetVerdicts();
@@ -152,11 +170,17 @@ export default function SubnetDetailPage() {
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-24">
       <div className="px-4 sm:px-6 py-6 max-w-[1100px] mx-auto space-y-7">
 
-        {/* ── Breadcrumb ── */}
-        <nav className="flex items-center gap-2">
-          <Link to="/subnets" className="font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors">← Subnets</Link>
+        {/* ── Back button + Breadcrumb ── */}
+        <nav className="flex items-center gap-3">
+          <button
+            onClick={goBack}
+            className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded-md border border-border hover:border-foreground/20 hover:bg-muted/20"
+          >
+            ← {fr ? "Retour" : "Back"}
+          </button>
           <span className="text-muted-foreground text-[10px]">/</span>
           <span className="font-mono text-[10px] text-muted-foreground">SN-{netuid}</span>
+          <span className="ml-auto font-mono text-[8px] text-muted-foreground/50 hidden sm:block">ESC</span>
         </nav>
 
         {/* ══════════════════════════════════════════ */}
