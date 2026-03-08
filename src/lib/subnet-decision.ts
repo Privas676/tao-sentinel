@@ -12,7 +12,7 @@ import { actionLabelFr, actionLabelEn } from "@/lib/strategy-colors";
 
 /* ── Types ── */
 
-export type DecisionAction = "ENTRER" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SORTIR";
+export type DecisionAction = "ENTRER" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SORTIR" | "SYSTÈME" | "SYSTEM";
 
 export type ConvictionLevel = "HIGH" | "MEDIUM" | "LOW";
 export type LiquidityLevel = "HIGH" | "MEDIUM" | "LOW";
