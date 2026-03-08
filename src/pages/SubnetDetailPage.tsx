@@ -135,10 +135,10 @@ export default function SubnetDetailPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [showDeepDive, setShowDeepDive] = useState(false);
   const s = scores.get(netuid);
-  const decision = decisions.get(netuid);
-  const verdict = decision?.verdict;
+  const decisionObj = decisions.get(netuid);
+  const verdict = decisionObj?.verdict;
   const spark = sparklines?.get(netuid) || [];
-  const inPortfolio = isOwned(netuid);
+  const radar = useMemo(() => radarData?.find(r => r.netuid === netuid) || null, [radarData, netuid]);
   const isSpecial = !!SPECIAL_SUBNETS[netuid];
 
   const doFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(null), 1500); };
