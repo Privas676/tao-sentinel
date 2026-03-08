@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { useMemo, useState, useCallback } from "react";
+import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useOverrideMode } from "@/hooks/use-override-mode";
