@@ -5,6 +5,7 @@ import { useDelistMode } from "@/hooks/use-delist-mode";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { SectionCard, SectionTitle, SettingRow, ToggleButtons } from "@/components/settings/SettingsShared";
 import type { DelistMode } from "@/lib/delist-risk";
+import { APP_VERSION, BUILD_TAG } from "@/lib/version";
 
 
 /* ═══════════════════════════════════════════════════════ */
