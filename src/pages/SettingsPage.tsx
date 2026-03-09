@@ -18,6 +18,17 @@ const GO = "hsl(var(--signal-go))";
 const WARN = "hsl(var(--signal-go-spec))";
 const BREAK = "hsl(var(--signal-break))";
 
+function PushDiagRow({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <span className="font-mono text-[10px] text-muted-foreground">{label}</span>
+      <span className={`font-mono text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground"}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { lang, setLang } = useI18n();
   const fr = lang === "fr";
