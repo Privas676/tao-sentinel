@@ -183,10 +183,11 @@ function computeAMMPillar(
   components.push({ name: "Spread", value: spread, max: 20 });
 
   // B4. Pool balance — closer to 1.0 = healthier (0-15)
+  // Widened healthy range: Bittensor pools are structurally alpha-heavy, 0.5-2.0 is normal
   let balance = 0;
-  if (dm.poolBalance > 0.7 && dm.poolBalance < 1.5) balance = 15;
-  else if (dm.poolBalance > 0.4 && dm.poolBalance < 2.5) balance = 10;
-  else if (dm.poolBalance > 0.2 && dm.poolBalance < 5) balance = 5;
+  if (dm.poolBalance > 0.5 && dm.poolBalance < 2.0) balance = 15;
+  else if (dm.poolBalance > 0.3 && dm.poolBalance < 3.0) balance = 10;
+  else if (dm.poolBalance > 0.15 && dm.poolBalance < 5) balance = 5;
   else balance = 0;
   components.push({ name: "Pool balance", value: balance, max: 15 });
 
