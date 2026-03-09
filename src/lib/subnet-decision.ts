@@ -130,10 +130,11 @@ function deriveBadgeAction(action: StrategicAction, isSystem: boolean): SubnetDe
   }
 }
 
-function derivePortfolioAction(s: UnifiedSubnetScore): PortfolioAction {
-  if (s.isOverridden || s.action === "EXIT") return "SORTIR";
+function derivePortfolioAction(s: UnifiedSubnetScore, reconciledAction?: StrategicAction): PortfolioAction {
+  const action = reconciledAction || s.action;
+  if (s.isOverridden || action === "EXIT") return "SORTIR";
   if (s.risk > 65 || s.depegProbability >= 40) return "REDUIRE";
-  if (s.action === "ENTER" || s.action === "STAKE") return "RENFORCER";
+  if (action === "ENTER" || action === "STAKE") return "RENFORCER";
   return "CONSERVER";
 }
 
