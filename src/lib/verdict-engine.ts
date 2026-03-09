@@ -262,10 +262,11 @@ function computeRiskPillar(
   components.push({ name: "Risque liquidité", value: liqRisk, max: 15 });
 
   // C5. UID saturation stagnation (0-10)
+  // Growth neutralizes saturation risk: active demand proves the subnet isn't stagnant
   let satRisk = 0;
   if (dm.uidSaturation > 0.95 && d.minersGrowth7d <= 0) satRisk = 10;
   else if (dm.uidSaturation > 0.90 && d.minersGrowth7d <= 0) satRisk = 6;
-  else if (dm.uidSaturation > 0.95 && d.minersGrowth7d > 0) satRisk = 3; // full but growing
+  else if (dm.uidSaturation > 0.95 && d.minersGrowth7d > 0) satRisk = 0; // full but growing = healthy demand
   else satRisk = 0;
   components.push({ name: "Saturation UID", value: satRisk, max: 10 });
 
