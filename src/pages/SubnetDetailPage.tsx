@@ -421,7 +421,7 @@ export default function SubnetDetailPage() {
                     <>
                       <Metric label={fr ? "Validateurs" : "Validators"} value={sn.validatorsActive} />
                       <Metric label={fr ? "Mineurs" : "Miners"} value={sn.minersActive} sub={`/ ${sn.minersTotal}`} />
-                      <Metric label="Holders" value={sn.holdersCount} />
+                      <Metric label="Holders" value={sn.holdersCount > 0 ? sn.holdersCount : "N/A"} color={sn.holdersCount <= 0 ? MUTED : undefined} />
                       <Metric label="Concentration" value={`${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(1)}%`} color={sn.stakeConcentration > 50 ? BREAK : sn.stakeConcentration > 30 ? WARN : GO} />
                     </>
                   )}
