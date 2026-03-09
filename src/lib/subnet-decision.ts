@@ -257,7 +257,7 @@ export function buildSubnetDecision(
     badgeAction: deriveBadgeAction(reconciledAction, isSystem),
     isSystem,
 
-    portfolioAction: pAction,
+    portfolioAction: derivePortfolioAction(s, reconciledAction),
     portfolioActionFr: portfolioActionLabelFr(pAction),
     portfolioActionEn: portfolioActionLabelEn(pAction),
 
