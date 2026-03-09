@@ -130,10 +130,11 @@ function deriveBadgeAction(action: StrategicAction, isSystem: boolean): SubnetDe
   }
 }
 
-function derivePortfolioAction(s: UnifiedSubnetScore): PortfolioAction {
-  if (s.isOverridden || s.action === "EXIT") return "SORTIR";
+function derivePortfolioAction(s: UnifiedSubnetScore, reconciledAction?: StrategicAction): PortfolioAction {
+  const action = reconciledAction || s.action;
+  if (s.isOverridden || action === "EXIT") return "SORTIR";
   if (s.risk > 65 || s.depegProbability >= 40) return "REDUIRE";
-  if (s.action === "ENTER" || s.action === "STAKE") return "RENFORCER";
+  if (action === "ENTER" || action === "STAKE") return "RENFORCER";
   return "CONSERVER";
 }
 
@@ -230,18 +231,27 @@ export function buildSubnetDecision(
   fr: boolean,
 ): SubnetDecision {
   const conv = deriveConviction(s, v);
-  const pAction = derivePortfolioAction(s);
   const special = SPECIAL_SUBNETS[s.netuid];
   const isSystem = !!special?.isSystem;
+
+  // ── Verdict-engine reconciliation ──
+  let reconciledAction = s.action;
+  if (v && !isSystem && !s.isOverridden && s.depegProbability < 50 && s.delistCategory === "NORMAL") {
+    if (s.action === "EXIT" && v.verdict !== "SORS") {
+      reconciledAction = v.verdict === "RENTRE" ? "WATCH" : "HOLD";
+    }
+  }
+
+  const pAction = derivePortfolioAction(s, reconciledAction);
 
   return {
     netuid: s.netuid,
     name: s.name,
 
-    engineAction: s.action,
-    actionFr: isSystem ? (fr ? "SYSTÈME" : "SYSTEM") as DecisionAction : deriveActionFr(s.action),
-    actionEn: isSystem ? "SYSTEM" : actionLabelEn(s.action),
-    badgeAction: deriveBadgeAction(s.action, isSystem),
+    engineAction: reconciledAction,
+    actionFr: isSystem ? (fr ? "SYSTÈME" : "SYSTEM") as DecisionAction : deriveActionFr(reconciledAction),
+    actionEn: isSystem ? "SYSTEM" : actionLabelEn(reconciledAction),
+    badgeAction: deriveBadgeAction(reconciledAction, isSystem),
     isSystem,
 
     portfolioAction: pAction,
