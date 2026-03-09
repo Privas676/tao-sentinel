@@ -578,8 +578,11 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
   }
 
   // G2: UID saturated + no growth → block RENTRE
+  // Exception: strong momentum (>55) overrides — the subnet is attracting capital despite saturation
   if (input.derivedMetrics.uidSaturation > 0.95 && input.deltas.minersGrowth7d <= 0 && verdict === "RENTRE") {
-    verdict = "HOLD";
+    if (momentum.score <= 55) {
+      verdict = "HOLD";
+    }
   }
 
   // G3: High sell pressure + low liquidity → force SORS
