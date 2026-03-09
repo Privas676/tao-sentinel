@@ -231,21 +231,18 @@ export function buildSubnetDecision(
   fr: boolean,
 ): SubnetDecision {
   const conv = deriveConviction(s, v);
-  const reconciledPAction = derivePortfolioAction(s, reconciledAction);
   const special = SPECIAL_SUBNETS[s.netuid];
   const isSystem = !!special?.isSystem;
 
   // ── Verdict-engine reconciliation ──
-  // When the verdict engine (newer, 4-pillar) disagrees with the old engine,
-  // the verdict wins IF it has strong momentum backing.
-  // This prevents false EXIT on high-growth subnets with moderate structural risk.
   let reconciledAction = s.action;
   if (v && !isSystem && !s.isOverridden && s.depegProbability < 50 && s.delistCategory === "NORMAL") {
     if (s.action === "EXIT" && v.verdict !== "SORS") {
-      // Verdict says not SORS → downgrade EXIT to WATCH (never upgrade to ENTER from here)
       reconciledAction = v.verdict === "RENTRE" ? "WATCH" : "HOLD";
     }
   }
+
+  const pAction = derivePortfolioAction(s, reconciledAction);
 
   return {
     netuid: s.netuid,
@@ -257,7 +254,7 @@ export function buildSubnetDecision(
     badgeAction: deriveBadgeAction(reconciledAction, isSystem),
     isSystem,
 
-    portfolioAction: derivePortfolioAction(s, reconciledAction),
+    portfolioAction: pAction,
     portfolioActionFr: portfolioActionLabelFr(pAction),
     portfolioActionEn: portfolioActionLabelEn(pAction),
 
