@@ -18,6 +18,17 @@ const GO = "hsl(var(--signal-go))";
 const WARN = "hsl(var(--signal-go-spec))";
 const BREAK = "hsl(var(--signal-break))";
 
+function PushDiagRow({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <span className="font-mono text-[10px] text-muted-foreground">{label}</span>
+      <span className={`font-mono text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground"}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { lang, setLang } = useI18n();
   const fr = lang === "fr";
@@ -152,7 +163,7 @@ export default function SettingsPage() {
             ) : pushState === "denied" ? (
               <span className="font-mono text-[10px] text-destructive">🔇 {fr ? "Bloqué par le navigateur" : "Blocked by browser"}</span>
             ) : pushState === "unsupported" ? (
-              <span className="font-mono text-[10px] text-muted-foreground">{fr ? "Non supporté" : "Not supported"}</span>
+              <span className="font-mono text-[10px] text-muted-foreground">{fr ? "Non supporté sur ce navigateur" : "Not supported on this browser"}</span>
             ) : pushState === "loading" ? (
               <span className="font-mono text-[10px] text-muted-foreground animate-pulse">…</span>
             ) : (
@@ -162,6 +173,46 @@ export default function SettingsPage() {
               </button>
             )}
           </SettingRow>
+
+          {/* Push Diagnostics Status */}
+          <div className="px-5 py-3 border-b border-border last:border-0">
+            <div className="font-mono text-[9px] tracking-widest uppercase text-muted-foreground mb-2">
+              {fr ? "DIAGNOSTIC PUSH" : "PUSH DIAGNOSTICS"}
+            </div>
+            <div className="space-y-1.5">
+              <PushDiagRow
+                label={fr ? "Permission navigateur" : "Browser permission"}
+                value={
+                  typeof Notification !== "undefined"
+                    ? Notification.permission === "granted" ? "✅ granted"
+                      : Notification.permission === "denied" ? "❌ denied"
+                      : "⏳ prompt"
+                    : "❌ unavailable"
+                }
+                ok={typeof Notification !== "undefined" && Notification.permission === "granted"}
+              />
+              <PushDiagRow
+                label="Service Worker"
+                value={"serviceWorker" in navigator ? "✅ supported" : "❌ unsupported"}
+                ok={"serviceWorker" in navigator}
+              />
+              <PushDiagRow
+                label={fr ? "Abonnement push" : "Push subscription"}
+                value={pushState === "subscribed" ? "✅ active" : pushState === "unsubscribed" ? "⚪ inactive" : pushState === "denied" ? "❌ blocked" : pushState === "unsupported" ? "❌ unavailable" : "⏳ checking"}
+                ok={pushState === "subscribed"}
+              />
+              <PushDiagRow
+                label={fr ? "Statut global" : "Overall status"}
+                value={
+                  pushState === "subscribed" ? (fr ? "✅ Opérationnel" : "✅ Operational")
+                  : pushState === "unsupported" ? (fr ? "❌ Indisponible" : "❌ Unavailable")
+                  : pushState === "denied" ? (fr ? "❌ Bloqué" : "❌ Blocked")
+                  : (fr ? "⚠️ Non activé" : "⚠️ Not enabled")
+                }
+                ok={pushState === "subscribed"}
+              />
+            </div>
+          </div>
         </SectionCard>
 
         {/* ── 2a. PUSH ALERT CONFIG ── */}

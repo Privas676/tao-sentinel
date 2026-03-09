@@ -196,6 +196,29 @@ export default function SubnetDetailPage() {
           <span className="ml-auto font-mono text-[8px] text-muted-foreground/50 hidden sm:block">ESC</span>
         </nav>
 
+        {/* ── EXIT/SORTIR WARNING BANNER — decision coherence ── */}
+        {(decision.engineAction === "EXIT" || decision.isOverridden) && (
+          <div className="rounded-xl px-5 py-4 flex items-start gap-3" style={{ background: "hsla(4,80%,50%,0.08)", border: "1.5px solid hsla(4,80%,50%,0.2)", boxShadow: "0 0 24px hsla(4,80%,50%,0.1)" }}>
+            <span className="text-xl shrink-0 mt-0.5">🚨</span>
+            <div>
+              <div className="font-mono text-[8px] tracking-[0.2em] uppercase text-muted-foreground mb-1">{fr ? "VERDICT : SORTIE RECOMMANDÉE" : "VERDICT: EXIT RECOMMENDED"}</div>
+              <div className="font-mono text-sm font-bold" style={{ color: BREAK }}>
+                {decision.isOverridden
+                  ? (s.overrideReasons[0] || (fr ? "Zone critique — override de protection actif" : "Critical zone — protection override active"))
+                  : decision.signalPrincipal}
+              </div>
+              {decision.conflictExplanation && (
+                <div className="font-mono text-[10px] text-foreground/60 mt-1">{decision.conflictExplanation}</div>
+              )}
+              {decision.invalidation.length > 0 && (
+                <div className="font-mono text-[10px] text-foreground/50 mt-1">
+                  {decision.invalidation.map((r, i) => <span key={i}>• {r} </span>)}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ══════════════════════════════════════════ */}
         {/*   HERO — Identity + Primary Decision       */}
         {/* ══════════════════════════════════════════ */}
@@ -421,7 +444,7 @@ export default function SubnetDetailPage() {
                     <>
                       <Metric label={fr ? "Validateurs" : "Validators"} value={sn.validatorsActive} />
                       <Metric label={fr ? "Mineurs" : "Miners"} value={sn.minersActive} sub={`/ ${sn.minersTotal}`} />
-                      <Metric label="Holders" value={sn.holdersCount} />
+                      <Metric label="Holders" value={sn.holdersCount > 0 ? sn.holdersCount : "N/A"} color={sn.holdersCount <= 0 ? MUTED : undefined} />
                       <Metric label="Concentration" value={`${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(1)}%`} color={sn.stakeConcentration > 50 ? BREAK : sn.stakeConcentration > 30 ? WARN : GO} />
                     </>
                   )}

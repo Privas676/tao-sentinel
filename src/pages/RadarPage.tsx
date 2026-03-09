@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import { useStakeAnalytics, type SubnetRadarData } from "@/hooks/use-stake-analytics";
 import {
   healthIndexColor,
@@ -56,6 +56,7 @@ function ScoreBadge({ value, colorFn, label, suffix }: { value: number; colorFn:
 
 /* ─── Pct Change ─── */
 function PctChange({ value }: { value: number }) {
+  if (!isFinite(value)) return <span className="font-mono text-xs text-muted-foreground/40">—</span>;
   const color = value > 0 ? "rgba(76,175,80,0.8)" : value < 0 ? "rgba(229,57,53,0.7)" : "rgba(255,255,255,0.3)";
   return <span className="font-mono text-xs" style={{ color }}>{value > 0 ? "+" : ""}{value.toFixed(1)}%</span>;
 }
@@ -108,16 +109,23 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
 
 /* ─── Helpers ─── */
 function formatTao(v: number): string {
+  if (!isFinite(v) || v < 0) return "—";
   if (v >= 1e6) return `${(v / 1e6).toFixed(1)}Mτ`;
   if (v >= 1e3) return `${(v / 1e3).toFixed(0)}Kτ`;
   return `${Math.round(v)}τ`;
 }
 
 function formatMcap(v: number): string {
+  if (!isFinite(v) || v < 0) return "—";
   if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
   if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
   if (v > 0) return v.toFixed(0);
   return "—";
+}
+
+function formatHolders(v: number): string {
+  if (v <= 0) return "N/A";
+  return String(v);
 }
 
 function generateCapitalSparkline(d: SubnetRadarData): number[] {
@@ -133,6 +141,52 @@ function generateAdoptionSparkline(d: SubnetRadarData): number[] {
   return Array.from({ length: 7 }, (_, i) => base - trend / 2 + step * i + (Math.cos(i * 0.8) * 1.5));
 }
 
+/* ─── SORTABLE COLUMN HEADER ─── */
+type SortDir = "asc" | "desc";
+type SortState<K extends string> = { key: K; dir: SortDir } | null;
+
+function SortableHead<K extends string>({
+  label, sortKey, sort, onSort, className = "",
+}: { label: React.ReactNode; sortKey: K; sort: SortState<K>; onSort: (k: K) => void; className?: string }) {
+  const active = sort?.key === sortKey;
+  return (
+    <TableHead
+      className={`font-mono text-[10px] cursor-pointer select-none hover:text-foreground transition-colors ${className}`}
+      onClick={() => onSort(sortKey)}
+    >
+      <span className="inline-flex items-center gap-0.5">
+        {label}
+        <span className="text-[8px]" style={{ opacity: active ? 1 : 0.25 }}>
+          {active ? (sort!.dir === "desc" ? "▼" : "▲") : "⇅"}
+        </span>
+      </span>
+    </TableHead>
+  );
+}
+
+function useSortState<K extends string>(defaultKey: K, defaultDir: SortDir = "desc") {
+  const [sort, setSort] = useState<SortState<K>>({ key: defaultKey, dir: defaultDir });
+  const toggle = useCallback((key: K) => {
+    setSort(prev => {
+      if (prev?.key === key) return { key, dir: prev.dir === "desc" ? "asc" : "desc" };
+      return { key, dir: "desc" };
+    });
+  }, []);
+  return { sort, toggle };
+}
+
+function sortData<K extends string>(
+  data: SubnetRadarData[],
+  sort: SortState<K>,
+  accessor: Record<K, (d: SubnetRadarData) => number>,
+): SubnetRadarData[] {
+  if (!sort) return data;
+  const fn = accessor[sort.key];
+  if (!fn) return data;
+  const dir = sort.dir === "desc" ? -1 : 1;
+  return [...data].sort((a, b) => (fn(a) - fn(b)) * dir);
+}
+
 /* ═══════════════════════════════════════ */
 /*        RADAR PAGE                       */
 /* ═══════════════════════════════════════ */
@@ -141,35 +195,35 @@ export default function RadarPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("capital");
   const [search, setSearch] = useState("");
 
-  const avgScores = useMemo(() => {
-    if (!radarData?.length) return { health: 0, momentum: 0, dumpRisk: 0, radar: 0, narrative: 0, smartMoney: 0, bubble: 0, manipulation: 0 };
-    const n = radarData.length;
-    return {
-      health: Math.round(radarData.reduce((s, d) => s + d.scores.healthIndex, 0) / n),
-      momentum: Math.round(radarData.reduce((s, d) => s + d.scores.capitalMomentum, 0) / n),
-      dumpRisk: Math.round(radarData.reduce((s, d) => s + d.scores.dumpRisk, 0) / n),
-      radar: Math.round(radarData.reduce((s, d) => s + d.scores.subnetRadarScore, 0) / n),
-      narrative: Math.round(radarData.reduce((s, d) => s + d.scores.narrativeScore, 0) / n),
-      smartMoney: Math.round(radarData.reduce((s, d) => s + d.scores.smartMoneyScore, 0) / n),
-      bubble: Math.round(radarData.reduce((s, d) => s + d.scores.bubbleScore, 0) / n),
-      manipulation: Math.round(radarData.reduce((s, d) => s + d.scores.manipulationScore, 0) / n),
-    };
+  // Filter out SN-0 from speculative radar
+  const specData = useMemo(() => {
+    if (!radarData?.length) return [];
+    return radarData.filter(d => d.netuid !== 0);
   }, [radarData]);
 
+  const avgScores = useMemo(() => {
+    if (!specData.length) return { health: 0, momentum: 0, dumpRisk: 0, radar: 0, narrative: 0, smartMoney: 0, bubble: 0, manipulation: 0 };
+    const n = specData.length;
+    return {
+      health: Math.round(specData.reduce((s, d) => s + d.scores.healthIndex, 0) / n),
+      momentum: Math.round(specData.reduce((s, d) => s + d.scores.capitalMomentum, 0) / n),
+      dumpRisk: Math.round(specData.reduce((s, d) => s + d.scores.dumpRisk, 0) / n),
+      radar: Math.round(specData.reduce((s, d) => s + d.scores.subnetRadarScore, 0) / n),
+      narrative: Math.round(specData.reduce((s, d) => s + d.scores.narrativeScore, 0) / n),
+      smartMoney: Math.round(specData.reduce((s, d) => s + d.scores.smartMoneyScore, 0) / n),
+      bubble: Math.round(specData.reduce((s, d) => s + d.scores.bubbleScore, 0) / n),
+      manipulation: Math.round(specData.reduce((s, d) => s + d.scores.manipulationScore, 0) / n),
+    };
+  }, [specData]);
+
   const filtered = useMemo(() => {
-    if (!radarData?.length) return [];
-    if (!search.trim()) return radarData;
+    if (!specData.length) return [];
+    if (!search.trim()) return specData;
     const q = search.trim().toLowerCase();
-    return radarData.filter(
+    return specData.filter(
       (d) => d.subnetName.toLowerCase().includes(q) || String(d.netuid).includes(q)
     );
-  }, [radarData, search]);
-
-  const capitalFlow = useMemo(() => [...filtered].sort((a, b) => b.scores.capitalMomentum - a.scores.capitalMomentum), [filtered]);
-  const adoptionRadar = useMemo(() => [...filtered].sort((a, b) => b.scores.subnetRadarScore - a.scores.subnetRadarScore), [filtered]);
-  const dumpRiskSorted = useMemo(() => [...filtered].sort((a, b) => b.scores.dumpRisk - a.scores.dumpRisk), [filtered]);
-  const validatorSorted = useMemo(() => [...filtered].sort((a, b) => b.scores.manipulationScore - a.scores.manipulationScore), [filtered]);
-  const economicsSorted = useMemo(() => [...filtered].sort((a, b) => b.economicContext.emissionsPerDay - a.economicContext.emissionsPerDay), [filtered]);
+  }, [specData, search]);
 
   if (isLoading) {
     return (
@@ -199,7 +253,7 @@ export default function RadarPage() {
         <div className="space-y-1">
           <h1 className="font-mono text-xl font-bold text-foreground tracking-tight">📡 Radar Intelligence</h1>
           <p className="font-mono text-[11px] text-muted-foreground">
-            Capital · Risk · AMM · Economics · Smart Money · {search ? `${filtered.length}/` : ""}{radarData.length} subnets
+            Capital · Risk · AMM · Economics · Smart Money · {search ? `${filtered.length}/` : ""}{specData.length} subnets
           </p>
         </div>
 
@@ -216,7 +270,7 @@ export default function RadarPage() {
         </div>
 
         {/* Active Alerts */}
-        <ActiveAlerts data={radarData} />
+        <ActiveAlerts data={specData} />
 
         {/* Tab Navigation + Search */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -253,12 +307,12 @@ export default function RadarPage() {
 
         {/* Tab Content */}
         <div className="rounded-lg overflow-hidden" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
-          {activeTab === "capital" && <CapitalFlowTable data={capitalFlow} />}
-          {activeTab === "adoption" && <AdoptionTable data={adoptionRadar} />}
-          {activeTab === "risk" && <RiskMonitorTable data={dumpRiskSorted} />}
+          {activeTab === "capital" && <CapitalFlowTable data={filtered} />}
+          {activeTab === "adoption" && <AdoptionTable data={filtered} />}
+          {activeTab === "risk" && <RiskMonitorTable data={filtered} />}
           {activeTab === "amm" && <AMMPricingTable data={filtered} />}
-          {activeTab === "validator" && <ValidatorTable data={validatorSorted} />}
-          {activeTab === "economics" && <EconomicsTable data={economicsSorted} />}
+          {activeTab === "validator" && <ValidatorTable data={filtered} />}
+          {activeTab === "economics" && <EconomicsTable data={filtered} />}
           {activeTab === "heatmap" && <TreemapHeatmap data={filtered} />}
           {activeTab === "smartmoney" && <SmartMoneyPanel data={filtered} />}
         </div>
@@ -328,25 +382,36 @@ function ActiveAlerts({ data }: { data: SubnetRadarData[] }) {
 /* ═══════════════════════════════════════ */
 /*        CAPITAL FLOW TABLE               */
 /* ═══════════════════════════════════════ */
+type CapitalSortKey = "sn" | "mcap" | "momentum" | "narrative" | "stakeFlow";
+const CAPITAL_ACCESSORS: Record<CapitalSortKey, (d: SubnetRadarData) => number> = {
+  sn: d => d.netuid,
+  mcap: d => d.priceContext.marketCap,
+  momentum: d => d.scores.capitalMomentum,
+  narrative: d => d.scores.narrativeScore,
+  stakeFlow: d => d.stakeChange7dPct,
+};
+
 function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
+  const { sort, toggle } = useSortState<CapitalSortKey>("momentum");
+  const sorted = useMemo(() => sortData(data, sort, CAPITAL_ACCESSORS), [data, sort]);
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="font-mono text-[10px]">SN</TableHead>
+            <SortableHead label="SN" sortKey="sn" sort={sort} onSort={toggle} />
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">MCap τ</TableHead>
+            <SortableHead label="MCap τ" sortKey="mcap" sort={sort} onSort={toggle} className="text-right" />
             <TableHead className="font-mono text-[10px] text-right">Buy/Sell</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Stake Flow</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Momentum</TableHead>
+            <SortableHead label="Stake Flow" sortKey="stakeFlow" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="Momentum" sortKey="momentum" sort={sort} onSort={toggle} className="text-right" />
             <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Narrative</TableHead>
+            <SortableHead label="Narrative" sortKey="narrative" sort={sort} onSort={toggle} className="text-right" />
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 30).map((d) => {
+          {sorted.slice(0, 30).map((d) => {
             const eco = d.economicContext;
             const totalVol = eco.buyVolume + eco.sellVolume;
             const buyPct = totalVol > 0 ? (eco.buyVolume / totalVol * 100).toFixed(0) : "—";
@@ -393,30 +458,45 @@ function CapitalFlowTable({ data }: { data: SubnetRadarData[] }) {
 /* ═══════════════════════════════════════ */
 /*        ADOPTION RADAR TABLE             */
 /* ═══════════════════════════════════════ */
+type AdoptionSortKey = "sn" | "radar" | "validators" | "holders" | "uidSat" | "burn";
+const ADOPTION_ACCESSORS: Record<AdoptionSortKey, (d: SubnetRadarData) => number> = {
+  sn: d => d.netuid,
+  radar: d => d.scores.subnetRadarScore,
+  validators: d => d.snapshot.validatorsActive,
+  holders: d => d.snapshot.holdersCount,
+  uidSat: d => d.derivedMetrics.uidSaturation,
+  burn: d => d.derivedMetrics.burnRatio,
+};
+
 function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
+  const { sort, toggle } = useSortState<AdoptionSortKey>("radar");
+  const sorted = useMemo(() => sortData(data, sort, ADOPTION_ACCESSORS), [data, sort]);
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="font-mono text-[10px]">SN</TableHead>
+            <SortableHead label="SN" sortKey="sn" sort={sort} onSort={toggle} />
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Radar</TableHead>
+            <SortableHead label="Radar" sortKey="radar" sort={sort} onSort={toggle} className="text-right" />
             <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">UID Sat.</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">
+            <SortableHead label="Validators" sortKey="validators" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="UID Sat." sortKey="uidSat" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead
+              label={
                 <Tooltip>
                   <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Burn Ratio</span></TooltipTrigger>
                   <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{BURN_RATIO_TOOLTIP}</TooltipContent>
                 </Tooltip>
-            </TableHead>
+              }
+              sortKey="burn" sort={sort} onSort={toggle} className="text-right"
+            />
             <TableHead className="font-mono text-[10px] text-right hidden sm:table-cell">Trend</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 30).map((d) => {
+          {sorted.slice(0, 30).map((d) => {
             const dm = d.derivedMetrics;
             return (
               <TableRow key={d.netuid}>
@@ -458,25 +538,36 @@ function AdoptionTable({ data }: { data: SubnetRadarData[] }) {
 /* ═══════════════════════════════════════ */
 /*        RISK MONITOR (Dump + Bubble)     */
 /* ═══════════════════════════════════════ */
+type RiskSortKey = "sn" | "dumpRisk" | "bubble" | "concentration" | "price7d";
+const RISK_ACCESSORS: Record<RiskSortKey, (d: SubnetRadarData) => number> = {
+  sn: d => d.netuid,
+  dumpRisk: d => d.scores.dumpRisk,
+  bubble: d => d.scores.bubbleScore,
+  concentration: d => d.snapshot.stakeConcentration,
+  price7d: d => d.priceContext.priceChange7d,
+};
+
 function RiskMonitorTable({ data }: { data: SubnetRadarData[] }) {
+  const { sort, toggle } = useSortState<RiskSortKey>("dumpRisk");
+  const sorted = useMemo(() => sortData(data, sort, RISK_ACCESSORS), [data, sort]);
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="font-mono text-[10px]">SN</TableHead>
+            <SortableHead label="SN" sortKey="sn" sort={sort} onSort={toggle} />
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Dump Risk</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Bubble</TableHead>
+            <SortableHead label="Dump Risk" sortKey="dumpRisk" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="Bubble" sortKey="bubble" sort={sort} onSort={toggle} className="text-right" />
             <TableHead className="font-mono text-[10px] text-right">Sell Press.</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Conc.</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Price Δ7d</TableHead>
+            <SortableHead label="Conc." sortKey="concentration" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="Price Δ7d" sortKey="price7d" sort={sort} onSort={toggle} className="text-right" />
             <TableHead className="font-mono text-[10px] text-right">Vol/MCap</TableHead>
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 30).map((d) => {
+          {sorted.slice(0, 30).map((d) => {
             const eco = d.economicContext;
             const totalVol = eco.buyVolume + eco.sellVolume;
             const sellPressure = totalVol > 0 ? (eco.sellVolume / totalVol * 100) : 0;
@@ -525,30 +616,46 @@ function RiskMonitorTable({ data }: { data: SubnetRadarData[] }) {
 /* ═══════════════════════════════════════ */
 /*        ECONOMICS TABLE                  */
 /* ═══════════════════════════════════════ */
+type EcoSortKey = "sn" | "emDay" | "emPct" | "burn" | "supply" | "uidSat" | "deviation";
+const ECO_ACCESSORS: Record<EcoSortKey, (d: SubnetRadarData) => number> = {
+  sn: d => d.netuid,
+  emDay: d => d.economicContext.emissionsPerDay,
+  emPct: d => d.priceContext.emissionShare,
+  burn: d => d.derivedMetrics.burnRatio,
+  supply: d => d.economicContext.circulatingSupply,
+  uidSat: d => d.derivedMetrics.uidSaturation,
+  deviation: d => d.scores.alphaInefficiency,
+};
+
 function EconomicsTable({ data }: { data: SubnetRadarData[] }) {
+  const { sort, toggle } = useSortState<EcoSortKey>("emDay");
+  const sorted = useMemo(() => sortData(data, sort, ECO_ACCESSORS), [data, sort]);
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="font-mono text-[10px]">SN</TableHead>
+            <SortableHead label="SN" sortKey="sn" sort={sort} onSort={toggle} />
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Em./day</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">
-              <Tooltip>
-                <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Burn Ratio</span></TooltipTrigger>
-                <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{BURN_RATIO_TOOLTIP}</TooltipContent>
-              </Tooltip>
-            </TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Circ. Supply</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">UID Sat.</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Deviation</TableHead>
+            <SortableHead label="Em./day" sortKey="emDay" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="Em.%" sortKey="emPct" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead
+              label={
+                <Tooltip>
+                  <TooltipTrigger asChild><span className="cursor-help border-b border-dotted border-muted-foreground/30">Burn Ratio</span></TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[260px] whitespace-pre-line text-[10px]">{BURN_RATIO_TOOLTIP}</TooltipContent>
+                </Tooltip>
+              }
+              sortKey="burn" sort={sort} onSort={toggle} className="text-right"
+            />
+            <SortableHead label="Circ. Supply" sortKey="supply" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="UID Sat." sortKey="uidSat" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="Deviation" sortKey="deviation" sort={sort} onSort={toggle} className="text-right" />
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 30).map((d) => {
+          {sorted.slice(0, 30).map((d) => {
             const eco = d.economicContext;
             const dm = d.derivedMetrics;
             const deviation = d.scores.alphaInefficiency;
@@ -595,24 +702,36 @@ function EconomicsTable({ data }: { data: SubnetRadarData[] }) {
 /* ═══════════════════════════════════════ */
 /*        VALIDATOR TABLE                  */
 /* ═══════════════════════════════════════ */
+type ValSortKey = "sn" | "validators" | "miners" | "concentration" | "emPct" | "manipulation";
+const VAL_ACCESSORS: Record<ValSortKey, (d: SubnetRadarData) => number> = {
+  sn: d => d.netuid,
+  validators: d => d.snapshot.validatorsActive,
+  miners: d => d.snapshot.minersActive,
+  concentration: d => d.snapshot.stakeConcentration,
+  emPct: d => d.priceContext.emissionShare,
+  manipulation: d => d.scores.manipulationScore,
+};
+
 function ValidatorTable({ data }: { data: SubnetRadarData[] }) {
+  const { sort, toggle } = useSortState<ValSortKey>("manipulation");
+  const sorted = useMemo(() => sortData(data, sort, VAL_ACCESSORS), [data, sort]);
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="font-mono text-[10px]">SN</TableHead>
+            <SortableHead label="SN" sortKey="sn" sort={sort} onSort={toggle} />
             <TableHead className="font-mono text-[10px]">Nom</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Validators</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Miners</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Conc. %</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
-            <TableHead className="font-mono text-[10px] text-right">Manip. Score</TableHead>
+            <SortableHead label="Validators" sortKey="validators" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="Miners" sortKey="miners" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="Conc. %" sortKey="concentration" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="Em.%" sortKey="emPct" sort={sort} onSort={toggle} className="text-right" />
+            <SortableHead label="Manip. Score" sortKey="manipulation" sort={sort} onSort={toggle} className="text-right" />
             <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.slice(0, 30).map((d) => (
+          {sorted.slice(0, 30).map((d) => (
             <TableRow key={d.netuid}>
               <TableCell className="font-mono text-xs font-semibold text-muted-foreground">{d.netuid}</TableCell>
               <TableCell className="font-mono text-xs truncate max-w-[120px]">{d.subnetName}</TableCell>
@@ -645,21 +764,23 @@ function ValidatorTable({ data }: { data: SubnetRadarData[] }) {
 /* ═══════════════════════════════════════ */
 /*        SMART MONEY PANEL                */
 /* ═══════════════════════════════════════ */
-function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
-  const whaleActive = data
-    .filter((d) => d.snapshot.largeWalletInflow > 0 || d.snapshot.largeWalletOutflow > 0)
-    .sort((a, b) => (b.snapshot.largeWalletInflow - b.snapshot.largeWalletOutflow) - (a.snapshot.largeWalletInflow - a.snapshot.largeWalletOutflow));
+type SmartSortKey = "sn" | "score" | "buyers" | "sellers" | "emPct";
+const SMART_ACCESSORS: Record<SmartSortKey, (d: SubnetRadarData) => number> = {
+  sn: d => d.netuid,
+  score: d => d.scores.smartMoneyScore,
+  buyers: d => d.economicContext.buyersCount,
+  sellers: d => d.economicContext.sellersCount,
+  emPct: d => d.priceContext.emissionShare,
+};
 
-  const smartMoneySignals = data
-    .filter((d) => d.alerts.smartMoneySignal)
-    .sort((a, b) => b.scores.smartMoneyScore - a.scores.smartMoneyScore);
+function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
+  const { sort, toggle } = useSortState<SmartSortKey>("score");
+  const sorted = useMemo(() => sortData(data, sort, SMART_ACCESSORS), [data, sort]);
 
   const topConcentrated = [...data]
     .filter((d) => d.snapshot.top10Stake?.length > 0)
     .sort((a, b) => b.snapshot.stakeConcentration - a.snapshot.stakeConcentration)
     .slice(0, 10);
-
-  const smartMoneySorted = [...data].sort((a, b) => b.scores.smartMoneyScore - a.scores.smartMoneyScore);
 
   return (
     <div className="p-4 space-y-6">
@@ -668,18 +789,18 @@ function SmartMoneyPanel({ data }: { data: SubnetRadarData[] }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="font-mono text-[10px]">SN</TableHead>
+              <SortableHead label="SN" sortKey="sn" sort={sort} onSort={toggle} />
               <TableHead className="font-mono text-[10px]">Nom</TableHead>
-              <TableHead className="font-mono text-[10px] text-right">Score</TableHead>
+              <SortableHead label="Score" sortKey="score" sort={sort} onSort={toggle} className="text-right" />
               <TableHead className="font-mono text-[10px] text-right">Buy/Sell</TableHead>
-              <TableHead className="font-mono text-[10px] text-right">Buyers</TableHead>
-              <TableHead className="font-mono text-[10px] text-right">Sellers</TableHead>
-              <TableHead className="font-mono text-[10px] text-right">Em.%</TableHead>
+              <SortableHead label="Buyers" sortKey="buyers" sort={sort} onSort={toggle} className="text-right" />
+              <SortableHead label="Sellers" sortKey="sellers" sort={sort} onSort={toggle} className="text-right" />
+              <SortableHead label="Em.%" sortKey="emPct" sort={sort} onSort={toggle} className="text-right" />
               <TableHead className="font-mono text-[10px] text-right">Signal</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {smartMoneySorted.slice(0, 20).map((d) => {
+            {sorted.slice(0, 20).map((d) => {
               const eco = d.economicContext;
               const totalVol = eco.buyVolume + eco.sellVolume;
               return (
