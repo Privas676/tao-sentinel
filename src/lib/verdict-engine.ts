@@ -613,8 +613,9 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
   if (input.systemStatus === "DEPEG") verdict = "SORS";
 
   // G7: Old engine high risk cross-check (transitional safety net)
+  // Exception: strong momentum (>60) overrides — the old engine may not account for recent capital inflow
   if (input.oldEngineRisk != null && input.oldEngineRisk >= 70 && verdict !== "SORS") {
-    verdict = "SORS";
+    if (momentum.score <= 60) verdict = "SORS";
   }
 
   // ── Slice top 3 reasons per polarity ──
