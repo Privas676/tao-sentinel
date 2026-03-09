@@ -547,12 +547,19 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
 
   let verdict: Verdict;
 
+  // Momentum-adjusted exit threshold:
+  // Strong momentum (>60) raises the bar for triggering SORS — capital inflow
+  // signals the market disagrees with structural risk alone.
+  // Base threshold: 55. With momentum 80 → 55 + 10 = 65.
+  const momentumDampening = momentum.score > 60 ? Math.round((momentum.score - 60) * 0.25) : 0;
+  const effectiveExitThreshold = 55 + momentumDampening; // max ~65 at momentum=100
+
   // Rule 1: Insufficient data → prudent HOLD
   if (dataReliability === "stale" || dataReliability === "suspect") {
     verdict = "HOLD"; // prudent, will show "données insuffisantes" in UI
   }
-  // Rule 2: High risk → SORS
-  else if (exitRisk >= 55) {
+  // Rule 2: High risk → SORS (momentum-dampened)
+  else if (exitRisk >= effectiveExitThreshold) {
     verdict = "SORS";
   }
   // Rule 3: Strong entry conditions → RENTRE
