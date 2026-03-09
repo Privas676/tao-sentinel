@@ -254,7 +254,7 @@ export function useStakeAnalytics() {
 
         const snapshot: StakeSnapshot = {
           netuid,
-          holdersCount: row.holders_count || 0,
+          holdersCount: (row.holders_count != null && row.holders_count > 0) ? row.holders_count : -1, // -1 = unknown, display as N/A
           stakeTotal: alphaStaked,
           stakeConcentration: Number(row.stake_concentration) || 0,
           top10Stake: [],
