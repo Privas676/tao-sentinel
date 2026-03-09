@@ -99,7 +99,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
+    <div className="min-h-full w-full bg-background text-foreground pb-8">
       <div className="px-4 sm:px-6 py-5 max-w-[700px] mx-auto space-y-6">
 
         {/* Header */}
