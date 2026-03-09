@@ -183,10 +183,11 @@ function computeAMMPillar(
   components.push({ name: "Spread", value: spread, max: 20 });
 
   // B4. Pool balance — closer to 1.0 = healthier (0-15)
+  // Widened healthy range: Bittensor pools are structurally alpha-heavy, 0.5-2.0 is normal
   let balance = 0;
-  if (dm.poolBalance > 0.7 && dm.poolBalance < 1.5) balance = 15;
-  else if (dm.poolBalance > 0.4 && dm.poolBalance < 2.5) balance = 10;
-  else if (dm.poolBalance > 0.2 && dm.poolBalance < 5) balance = 5;
+  if (dm.poolBalance > 0.5 && dm.poolBalance < 2.0) balance = 15;
+  else if (dm.poolBalance > 0.3 && dm.poolBalance < 3.0) balance = 10;
+  else if (dm.poolBalance > 0.15 && dm.poolBalance < 5) balance = 5;
   else balance = 0;
   components.push({ name: "Pool balance", value: balance, max: 15 });
 
@@ -262,10 +263,11 @@ function computeRiskPillar(
   components.push({ name: "Risque liquidité", value: liqRisk, max: 15 });
 
   // C5. UID saturation stagnation (0-10)
+  // Growth neutralizes saturation risk: active demand proves the subnet isn't stagnant
   let satRisk = 0;
   if (dm.uidSaturation > 0.95 && d.minersGrowth7d <= 0) satRisk = 10;
   else if (dm.uidSaturation > 0.90 && d.minersGrowth7d <= 0) satRisk = 6;
-  else if (dm.uidSaturation > 0.95 && d.minersGrowth7d > 0) satRisk = 3; // full but growing
+  else if (dm.uidSaturation > 0.95 && d.minersGrowth7d > 0) satRisk = 0; // full but growing = healthy demand
   else satRisk = 0;
   components.push({ name: "Saturation UID", value: satRisk, max: 10 });
 
@@ -576,8 +578,11 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
   }
 
   // G2: UID saturated + no growth → block RENTRE
+  // Exception: strong momentum (>55) overrides — the subnet is attracting capital despite saturation
   if (input.derivedMetrics.uidSaturation > 0.95 && input.deltas.minersGrowth7d <= 0 && verdict === "RENTRE") {
-    verdict = "HOLD";
+    if (momentum.score <= 55) {
+      verdict = "HOLD";
+    }
   }
 
   // G3: High sell pressure + low liquidity → force SORS
