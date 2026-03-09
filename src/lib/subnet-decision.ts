@@ -231,7 +231,7 @@ export function buildSubnetDecision(
   fr: boolean,
 ): SubnetDecision {
   const conv = deriveConviction(s, v);
-  const pAction = derivePortfolioAction(s);
+  const reconciledPAction = derivePortfolioAction(s, reconciledAction);
   const special = SPECIAL_SUBNETS[s.netuid];
   const isSystem = !!special?.isSystem;
 
