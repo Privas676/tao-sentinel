@@ -287,6 +287,58 @@ export default function SubnetDetailPage() {
         )}
 
         {/* ══════════════════════════════════════════ */}
+        {/*   DECISION TRANSPARENCY — Engine Arbiter    */}
+        {/* ══════════════════════════════════════════ */}
+        {!isSpecial && (
+          <SectionCard>
+            <SectionTitle icon="🔬" title={fr ? "Transparence décision" : "Decision Transparency"} />
+            <div className="px-5 py-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-lg px-3 py-2.5 bg-muted/20 border border-border text-center">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "SIGNAL BRUT" : "RAW SIGNAL"}</div>
+                  <div className="font-mono text-[12px] font-bold" style={{
+                    color: decision.rawSignal === "opportunity" ? GO : decision.rawSignal === "exit" ? BREAK : WARN
+                  }}>
+                    {decision.rawSignal === "opportunity" ? (fr ? "Opportunité" : "Opportunity") : decision.rawSignal === "exit" ? (fr ? "Sortie" : "Exit") : (fr ? "Neutre" : "Neutral")}
+                  </div>
+                </div>
+                <div className="rounded-lg px-3 py-2.5 bg-muted/20 border border-border text-center">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "BLOCAGE" : "BLOCKED"}</div>
+                  <div className="font-mono text-[12px] font-bold" style={{
+                    color: decision.isBlocked ? BREAK : GO
+                  }}>
+                    {decision.isBlocked ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")}
+                  </div>
+                </div>
+                <div className="rounded-lg px-3 py-2.5 bg-muted/20 border border-border text-center">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "ACTION FINALE" : "FINAL ACTION"}</div>
+                  <div className="font-mono text-[12px] font-bold" style={{
+                    color: decision.finalAction === "ENTRER" ? GO : decision.finalAction === "SORTIR" ? BREAK : WARN
+                  }}>
+                    {decision.finalAction}
+                  </div>
+                </div>
+                <div className="rounded-lg px-3 py-2.5 bg-muted/20 border border-border text-center">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "MOTIF" : "REASON"}</div>
+                  <div className="font-mono text-[10px] font-medium text-foreground/70 leading-snug">{decision.primaryReason}</div>
+                </div>
+              </div>
+              {decision.blockReasons.length > 0 && (
+                <div className="mt-3 rounded-lg px-4 py-2.5 border border-border bg-destructive/[0.03]">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1.5">{fr ? "GARDE-FOUS ACTIFS" : "ACTIVE SAFETY GUARDS"}</div>
+                  <div className="space-y-1">
+                    {decision.blockReasons.map((r, i) => (
+                      <div key={i} className="font-mono text-[10px] text-foreground/60 flex items-center gap-2">
+                        <span className="text-[8px]">⛔</span> {r}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        )}
+
         {/*   WATCH NOW — What to monitor               */}
         {/* ══════════════════════════════════════════ */}
         {watches.length > 0 && (
