@@ -74,8 +74,8 @@ function portfolioProfile(s: UnifiedSubnetScore): { profile: ProfileType; label:
   return { profile: "tactical", label: "Tactical", labelFr: "Tactique", color: WARN, desc: "Moderate conviction. Position 2-5%, active monitoring.", descFr: "Conviction modérée. Position 2-5%, suivi actif." };
 }
 
-/* ── Watch points generator ── */
-function watchPoints(s: UnifiedSubnetScore, eco: any, sn: any, fr: boolean): { icon: string; text: string; urgency: "high" | "medium" | "low" }[] {
+/* ── Watch points generator — RESPECTS final decision ── */
+function watchPoints(s: UnifiedSubnetScore, d: SubnetDecision, eco: any, sn: any, fr: boolean): { icon: string; text: string; urgency: "high" | "medium" | "low" }[] {
   const pts: { icon: string; text: string; urgency: "high" | "medium" | "low" }[] = [];
 
   if (s.depegProbability >= 30)
@@ -92,8 +92,11 @@ function watchPoints(s: UnifiedSubnetScore, eco: any, sn: any, fr: boolean): { i
     pts.push({ icon: "🐻", text: fr ? "Pression vendeuse dominante — surveiller les sorties de capital" : "Dominant sell pressure — monitor capital outflows", urgency: "medium" });
   if (s.healthScores.liquidityHealth < 35)
     pts.push({ icon: "💧", text: fr ? "Liquidité critique — slippage élevé probable" : "Critical liquidity — high slippage likely", urgency: "medium" });
-  if (s.opp > 60 && s.momentumScore > 55)
-    pts.push({ icon: "🎯", text: fr ? "Fenêtre d'entrée potentielle — volume et momentum alignés" : "Potential entry window — volume and momentum aligned", urgency: "low" });
+  // FIXED: Only show entry window hint if final action allows it
+  if (d.finalAction === "ENTRER" && s.opp > 60 && s.momentumScore > 55)
+    pts.push({ icon: "🎯", text: fr ? "Fenêtre d'entrée ouverte — volume et momentum alignés" : "Entry window open — volume and momentum aligned", urgency: "low" });
+  else if (d.rawSignal === "opportunity" && d.isBlocked)
+    pts.push({ icon: "⚖️", text: fr ? "Opportunité brute détectée mais bloquée par garde-fous" : "Raw opportunity detected but blocked by safety guards", urgency: "medium" });
   if (sn?.stakeConcentration > 50)
     pts.push({ icon: "🏗", text: fr ? `Concentration élevée (${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(0)}%) — risque de dump coordonné` : `High concentration (${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(0)}%) — coordinated dump risk`, urgency: "medium" });
 
