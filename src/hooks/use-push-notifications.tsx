@@ -18,6 +18,16 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from(rawData, (char) => char.charCodeAt(0));
 }
 
+/** Promise that rejects after `ms` milliseconds */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout: ${label} (${ms}ms)`)), ms)
+    ),
+  ]);
+}
+
 export function usePushNotifications() {
   const { user } = useAuth();
   const [state, setState] = useState<PushState>("loading");
@@ -31,13 +41,11 @@ export function usePushNotifications() {
       return;
     }
 
-    // Check current permission
     if (typeof Notification !== "undefined" && Notification.permission === "denied") {
       setState("denied");
       return;
     }
 
-    // If permission is "default" (not yet asked), show as unsubscribed
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       setState("unsubscribed");
       return;
@@ -45,10 +53,11 @@ export function usePushNotifications() {
 
     // Permission is "granted" — check if actively subscribed
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await withTimeout(navigator.serviceWorker.ready, 5000, "SW ready");
       const sub = await reg.pushManager.getSubscription();
       setState(sub ? "subscribed" : "unsubscribed");
-    } catch {
+    } catch (err) {
+      console.warn("[Push] detectState error:", err);
       setState("unsubscribed");
     }
   }, []);
@@ -67,66 +76,113 @@ export function usePushNotifications() {
     setError(null);
 
     try {
-      // Refresh session to get a valid token
+      console.log("[Push] Starting subscription flow…");
+
+      // 1. Refresh session to get a valid token
       const { data: { session } } = await supabase.auth.refreshSession();
-      if (!session?.access_token) throw new Error("Session expired");
+      if (!session?.access_token) throw new Error("Session expired — please sign in again");
+      console.log("[Push] Session refreshed ✓");
 
-      // 1. Register the push service worker
-      const reg = await navigator.serviceWorker.register("/sw-push.js", { scope: "/" });
-      await navigator.serviceWorker.ready;
+      // 2. Register the push service worker (with timeout)
+      let reg: ServiceWorkerRegistration;
+      try {
+        reg = await withTimeout(
+          navigator.serviceWorker.register("/sw-push.js", { scope: "/" }),
+          10000,
+          "SW register"
+        );
+        console.log("[Push] SW registered ✓");
+      } catch (regErr) {
+        throw new Error(`Service Worker registration failed: ${regErr instanceof Error ? regErr.message : regErr}`);
+      }
 
-      // 2. Get VAPID public key from edge function
+      // 3. Wait for SW to be ready (with timeout)
+      try {
+        reg = await withTimeout(navigator.serviceWorker.ready, 10000, "SW ready");
+        console.log("[Push] SW ready ✓");
+      } catch {
+        throw new Error("Service Worker not ready — try reloading the page");
+      }
+
+      // 4. Get VAPID public key from edge function
+      console.log("[Push] Fetching VAPID key…");
       const { data: vapidData, error: vapidErr } = await supabase.functions.invoke("manage-push", {
         body: { action: "get-vapid-key" },
       });
-      if (vapidErr) throw new Error(vapidErr.message);
+      if (vapidErr) throw new Error(`VAPID key error: ${vapidErr.message}`);
+      const vapidPublicKey = vapidData?.vapidPublicKey;
+      if (!vapidPublicKey) throw new Error("No VAPID key returned from server");
+      console.log("[Push] VAPID key received ✓");
 
-      const vapidPublicKey = vapidData.vapidPublicKey;
-      if (!vapidPublicKey) throw new Error("No VAPID key returned");
-
-      // 3. Request permission and subscribe
+      // 5. Request notification permission
       const permission = await Notification.requestPermission();
+      console.log("[Push] Permission result:", permission);
       if (permission !== "granted") {
         setState("denied");
-        setError(permission === "denied"
-          ? "Permission refusée. Ouvrez les paramètres de votre navigateur pour autoriser les notifications sur ce site."
-          : "Permission non accordée.");
+        setError(
+          permission === "denied"
+            ? "Permission refusée. Ouvrez les paramètres de votre navigateur pour autoriser les notifications."
+            : "Permission non accordée."
+        );
         return;
       }
 
-      // 4. Clean up any stale subscription before creating new one
+      // 6. Clean up any stale subscription before creating new one
       const existingSub = await reg.pushManager.getSubscription();
       if (existingSub) {
+        console.log("[Push] Cleaning stale subscription…");
         try { await existingSub.unsubscribe(); } catch { /* ignore */ }
       }
 
-      // 5. Create fresh subscription
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
-      });
+      // 7. Create fresh push subscription
+      console.log("[Push] Subscribing to push manager…");
+      let subscription: PushSubscription;
+      try {
+        subscription = await withTimeout(
+          reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+          }),
+          15000,
+          "pushManager.subscribe"
+        );
+      } catch (subErr) {
+        throw new Error(`Push subscribe failed: ${subErr instanceof Error ? subErr.message : subErr}`);
+      }
+      console.log("[Push] Push subscription created ✓", subscription.endpoint.slice(0, 60));
 
       const subJson = subscription.toJSON();
+      if (!subJson.keys?.p256dh || !subJson.keys?.auth) {
+        throw new Error("Push subscription missing encryption keys");
+      }
 
-      // 6. Store subscription in backend (with auth)
-      const { error: subErr } = await supabase.functions.invoke("manage-push", {
+      // 8. Store subscription in backend (with auth)
+      console.log("[Push] Persisting subscription to backend…");
+      const { data: persistData, error: subErr } = await supabase.functions.invoke("manage-push", {
         body: {
           action: "subscribe",
           endpoint: subJson.endpoint,
-          p256dh: subJson.keys?.p256dh,
-          auth: subJson.keys?.auth,
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth,
         },
       });
-      if (subErr) throw new Error(subErr.message);
 
+      if (subErr) {
+        throw new Error(`Backend persist error: ${subErr.message}`);
+      }
+
+      // Check if the response itself contains an error
+      if (persistData?.error) {
+        throw new Error(`Backend error: ${persistData.error}`);
+      }
+
+      console.log("[Push] Subscription persisted ✓");
       setState("subscribed");
       setError(null);
     } catch (err) {
-      console.error("Push subscribe error:", err);
-      setError(err instanceof Error ? err.message : String(err));
+      console.error("[Push] Subscribe error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
       // Re-detect actual state
       await detectState();
     }
@@ -137,8 +193,7 @@ export function usePushNotifications() {
     setError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.refreshSession();
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await withTimeout(navigator.serviceWorker.ready, 5000, "SW ready");
       const sub = await reg.pushManager.getSubscription();
 
       if (sub) {
@@ -147,18 +202,16 @@ export function usePushNotifications() {
 
         await supabase.functions.invoke("manage-push", {
           body: { action: "unsubscribe", endpoint },
-          headers: session?.access_token
-            ? { Authorization: `Bearer ${session.access_token}` }
-            : undefined,
         });
       }
 
       setState("unsubscribed");
     } catch (err) {
-      console.error("Push unsubscribe error:", err);
+      console.error("[Push] Unsubscribe error:", err);
       setError(err instanceof Error ? err.message : String(err));
+      await detectState();
     }
-  }, []);
+  }, [detectState]);
 
   const sendTest = useCallback(async () => {
     if (state !== "subscribed") {
@@ -174,18 +227,16 @@ export function usePushNotifications() {
 
       const { data, error: testErr } = await supabase.functions.invoke("manage-push", {
         body: { action: "send-test" },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
       });
 
       if (testErr) throw new Error(testErr.message);
+      if (data?.error) throw new Error(data.error);
       setTestResult(data?.ok ? "sent" : "failed");
 
       // Auto-clear after 8s
       setTimeout(() => setTestResult(null), 8000);
     } catch (err) {
-      console.error("Push test error:", err);
+      console.error("[Push] Test error:", err);
       setError(err instanceof Error ? err.message : String(err));
       setTestResult("failed");
       setTimeout(() => setTestResult(null), 8000);
