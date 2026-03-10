@@ -32,9 +32,13 @@ vi.mock("@/hooks/use-delist-mode", () => ({
 
 vi.mock("@/hooks/use-push-notifications", () => ({
   usePushNotifications: () => ({
-    state: "idle",
+    state: "unsubscribed",
+    error: null,
+    testResult: null,
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
+    sendTest: vi.fn(),
+    detectState: vi.fn(),
   }),
 }));
 

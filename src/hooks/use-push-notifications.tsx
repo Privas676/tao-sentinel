@@ -22,24 +22,40 @@ export function usePushNotifications() {
   const { user } = useAuth();
   const [state, setState] = useState<PushState>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Detect actual state on mount and when permission changes
+  const detectState = useCallback(async () => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       setState("unsupported");
       return;
     }
 
-    if (Notification.permission === "denied") {
+    // Check current permission
+    if (typeof Notification !== "undefined" && Notification.permission === "denied") {
       setState("denied");
       return;
     }
 
-    // Check if already subscribed
-    navigator.serviceWorker.ready.then(async (reg) => {
+    // If permission is "default" (not yet asked), show as unsubscribed
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      setState("unsubscribed");
+      return;
+    }
+
+    // Permission is "granted" — check if actively subscribed
+    try {
+      const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       setState(sub ? "subscribed" : "unsubscribed");
-    }).catch(() => setState("unsubscribed"));
+    } catch {
+      setState("unsubscribed");
+    }
   }, []);
+
+  useEffect(() => {
+    detectState();
+  }, [detectState]);
 
   const subscribe = useCallback(async () => {
     if (!user) {
@@ -72,9 +88,19 @@ export function usePushNotifications() {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setState("denied");
+        setError(permission === "denied"
+          ? "Permission refusée. Ouvrez les paramètres de votre navigateur pour autoriser les notifications sur ce site."
+          : "Permission non accordée.");
         return;
       }
 
+      // 4. Clean up any stale subscription before creating new one
+      const existingSub = await reg.pushManager.getSubscription();
+      if (existingSub) {
+        try { await existingSub.unsubscribe(); } catch { /* ignore */ }
+      }
+
+      // 5. Create fresh subscription
       const subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
@@ -82,7 +108,7 @@ export function usePushNotifications() {
 
       const subJson = subscription.toJSON();
 
-      // 4. Store subscription in backend (with auth)
+      // 6. Store subscription in backend (with auth)
       const { error: subErr } = await supabase.functions.invoke("manage-push", {
         body: {
           action: "subscribe",
@@ -97,12 +123,14 @@ export function usePushNotifications() {
       if (subErr) throw new Error(subErr.message);
 
       setState("subscribed");
+      setError(null);
     } catch (err) {
       console.error("Push subscribe error:", err);
       setError(err instanceof Error ? err.message : String(err));
-      setState("unsubscribed");
+      // Re-detect actual state
+      await detectState();
     }
-  }, [user]);
+  }, [user, detectState]);
 
   const unsubscribe = useCallback(async () => {
     setState("loading");
@@ -132,5 +160,37 @@ export function usePushNotifications() {
     }
   }, []);
 
-  return { state, error, subscribe, unsubscribe };
+  const sendTest = useCallback(async () => {
+    if (state !== "subscribed") {
+      setTestResult("not_subscribed");
+      return;
+    }
+    setTestResult("sending");
+    setError(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession();
+      if (!session?.access_token) throw new Error("Session expired");
+
+      const { data, error: testErr } = await supabase.functions.invoke("manage-push", {
+        body: { action: "send-test" },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (testErr) throw new Error(testErr.message);
+      setTestResult(data?.ok ? "sent" : "failed");
+
+      // Auto-clear after 8s
+      setTimeout(() => setTestResult(null), 8000);
+    } catch (err) {
+      console.error("Push test error:", err);
+      setError(err instanceof Error ? err.message : String(err));
+      setTestResult("failed");
+      setTimeout(() => setTestResult(null), 8000);
+    }
+  }, [state]);
+
+  return { state, error, testResult, subscribe, unsubscribe, sendTest, detectState };
 }
