@@ -136,32 +136,35 @@ export default function CompassPage() {
     refetchInterval: 60_000,
   });
 
-  // ── Global metrics ──
+  // ── Exclude system subnets from all speculative aggregations ──
+  const specScoresList = useMemo(() => scoresList.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem), [scoresList]);
+
+  // ── Global metrics (speculative only) ──
   const globalOpp = useMemo(() => {
-    if (!scoresList.length) return 0;
-    const sorted = [...scoresList].sort((a, b) => b.opp - a.opp);
+    if (!specScoresList.length) return 0;
+    const sorted = [...specScoresList].sort((a, b) => b.opp - a.opp);
     const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
-    return Math.round(top25.reduce((a, s) => a + s.opp, 0) / top25.length * 0.6 + scoresList.reduce((a, s) => a + s.opp, 0) / scoresList.length * 0.4);
-  }, [scoresList]);
+    return Math.round(top25.reduce((a, s) => a + s.opp, 0) / top25.length * 0.6 + specScoresList.reduce((a, s) => a + s.opp, 0) / specScoresList.length * 0.4);
+  }, [specScoresList]);
 
   const globalRisk = useMemo(() => {
-    if (!scoresList.length) return 0;
-    const sorted = [...scoresList].sort((a, b) => b.risk - a.risk);
+    if (!specScoresList.length) return 0;
+    const sorted = [...specScoresList].sort((a, b) => b.risk - a.risk);
     const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
-    return Math.round(top25.reduce((a, s) => a + s.risk, 0) / top25.length * 0.5 + scoresList.reduce((a, s) => a + s.risk, 0) / scoresList.length * 0.5);
-  }, [scoresList]);
+    return Math.round(top25.reduce((a, s) => a + s.risk, 0) / top25.length * 0.5 + specScoresList.reduce((a, s) => a + s.risk, 0) / specScoresList.length * 0.5);
+  }, [specScoresList]);
 
   const smartCapital = useMemo(() => computeSmartCapital(rawSignals ?? []), [rawSignals]);
 
   const enrichedSignals = useMemo<DashSignal[]>(() => {
     const flowDominance = (() => {
-      const oppSignals = scoresList.filter(s => s.opp > s.risk + 15).length;
-      const riskSignals = scoresList.filter(s => s.risk > s.opp + 15).length;
+      const oppSignals = specScoresList.filter(s => s.opp > s.risk + 15).length;
+      const riskSignals = specScoresList.filter(s => s.risk > s.opp + 15).length;
       return oppSignals > riskSignals + 1 ? "up" as const : riskSignals > oppSignals + 1 ? "down" as const : "stable" as const;
     })();
-    const avgMomentum = scoresList.length ? scoresList.reduce((a, s) => a + s.momentum, 0) / scoresList.length : 50;
+    const avgMomentum = specScoresList.length ? specScoresList.reduce((a, s) => a + s.momentum, 0) / specScoresList.length : 50;
     const flowEmission = avgMomentum > 55 ? "up" as const : avgMomentum < 35 ? "down" as const : "stable" as const;
-    return scoresList.map(s => {
+    return specScoresList.map(s => {
       const spark7d = (sparklines?.get(s.netuid) ?? []).slice(-7);
       const dominant = s.isOverridden ? "risk" as const : s.opp > s.risk + 15 ? "opportunity" as const : s.risk > s.opp + 15 ? "risk" as const : "neutral" as const;
       const isMicroCap = s.displayedCap > 0 && s.displayedCap < 500_000;
@@ -180,20 +183,20 @@ export default function CompassPage() {
       }
       return { ...s, sparkline_7d: spark7d, dominant, isMicroCap, asMicro, preHype, preHypeIntensity, reasons: s.overrideReasons.length > 0 ? s.overrideReasons : [] };
     });
-  }, [scoresList, sparklines, smartCapital.state]);
+  }, [specScoresList, sparklines, smartCapital.state]);
 
   const sentinelIndex = useMemo(() => computeSentinelIndex(globalOpp, globalRisk, smartCapital.score), [globalOpp, globalRisk, smartCapital.score]);
   const sentinelLabel = sentinelIndexLabel(sentinelIndex, lang);
 
   const globalStability = useMemo(() => {
-    if (!scoresList.length) return 50;
-    return Math.round(scoresList.reduce((a, s) => a + s.stability, 0) / scoresList.length);
-  }, [scoresList]);
+    if (!specScoresList.length) return 50;
+    return Math.round(specScoresList.reduce((a, s) => a + s.stability, 0) / specScoresList.length);
+  }, [specScoresList]);
 
   const confianceScore = useMemo(() => {
-    if (!scoresList.length) return 50;
-    return Math.round(scoresList.reduce((a, s) => a + s.confianceScore, 0) / scoresList.length);
-  }, [scoresList]);
+    if (!specScoresList.length) return 50;
+    return Math.round(specScoresList.reduce((a, s) => a + s.confianceScore, 0) / specScoresList.length);
+  }, [specScoresList]);
 
   const macroRec = useMemo(() => deriveMacroRecommendation(sentinelIndex, smartCapital.state, globalStability, confianceScore), [sentinelIndex, smartCapital.state, globalStability, confianceScore]);
 
@@ -349,7 +352,7 @@ export default function CompassPage() {
                 🛡 SAFE MODE
               </span>
             )}
-            <span className="ml-auto font-mono text-[8px] text-muted-foreground">{scoresList.length} subnets</span>
+            <span className="ml-auto font-mono text-[8px] text-muted-foreground">{specScoresList.length} subnets</span>
           </div>
 
           <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.03) 0%, transparent 100%)", border: "1px solid hsla(var(--gold), 0.08)", boxShadow: "0 4px 24px -4px hsla(var(--gold), 0.06)" }}>

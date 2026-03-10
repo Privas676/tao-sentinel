@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
-import { useSubnetScores, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
+import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import {
   clamp,
   opportunityColor, riskColor,
@@ -578,50 +578,52 @@ export default function AlienGauge() {
     refetchInterval: 60_000,
   });
 
-  // Global metrics derived from UNIFIED scores
+  // ── Exclude system subnets from speculative aggregations ──
+  const specScoresList = useMemo(() => scoresList.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem), [scoresList]);
+
+  // Global metrics derived from UNIFIED scores (speculative only)
   const globalOpp = useMemo(() => {
-    if (!scoresList.length) return 0;
-    const sorted = [...scoresList].sort((a, b) => b.opp - a.opp);
+    if (!specScoresList.length) return 0;
+    const sorted = [...specScoresList].sort((a, b) => b.opp - a.opp);
     const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
     const topAvg = top25.reduce((a, s) => a + s.opp, 0) / top25.length;
-    const allAvg = scoresList.reduce((a, s) => a + s.opp, 0) / scoresList.length;
+    const allAvg = specScoresList.reduce((a, s) => a + s.opp, 0) / specScoresList.length;
     return Math.round(topAvg * 0.6 + allAvg * 0.4);
-  }, [scoresList]);
+  }, [specScoresList]);
 
   const globalRisk = useMemo(() => {
-    if (!scoresList.length) return 0;
-    const sorted = [...scoresList].sort((a, b) => b.risk - a.risk);
+    if (!specScoresList.length) return 0;
+    const sorted = [...specScoresList].sort((a, b) => b.risk - a.risk);
     const top25 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.25)));
     const topAvg = top25.reduce((a, s) => a + s.risk, 0) / top25.length;
-    const allAvg = scoresList.reduce((a, s) => a + s.risk, 0) / scoresList.length;
+    const allAvg = specScoresList.reduce((a, s) => a + s.risk, 0) / specScoresList.length;
     return Math.round(topAvg * 0.5 + allAvg * 0.5);
-  }, [scoresList]);
+  }, [specScoresList]);
 
   const globalConf = useMemo(() => {
-    if (!scoresList.length) return 0;
-    const confs = scoresList.map(s => s.conf).filter(c => c > 0);
+    if (!specScoresList.length) return 0;
+    const confs = specScoresList.map(s => s.conf).filter(c => c > 0);
     return confs.length ? Math.round(confs.reduce((a, b) => a + b, 0) / confs.length) : 0;
-  }, [scoresList]);
+  }, [specScoresList]);
 
   const smartCapital = useMemo(() => computeSmartCapital(rawSignals ?? []), [rawSignals]);
 
-  // Build DashSignal[] from unified scores
+  // Build DashSignal[] from unified scores (speculative only)
   const enrichedSignals = useMemo<DashSignal[]>(() => {
     const flowDominance = (() => {
-      const oppSignals = scoresList.filter(s => s.opp > s.risk + 15).length;
-      const riskSignals = scoresList.filter(s => s.risk > s.opp + 15).length;
+      const oppSignals = specScoresList.filter(s => s.opp > s.risk + 15).length;
+      const riskSignals = specScoresList.filter(s => s.risk > s.opp + 15).length;
       return oppSignals > riskSignals + 1 ? "up" as const : riskSignals > oppSignals + 1 ? "down" as const : "stable" as const;
     })();
-    const avgMomentum = scoresList.length ? scoresList.reduce((a, s) => a + s.momentum, 0) / scoresList.length : 50;
+    const avgMomentum = specScoresList.length ? specScoresList.reduce((a, s) => a + s.momentum, 0) / specScoresList.length : 50;
     const flowEmission = avgMomentum > 55 ? "up" as const : avgMomentum < 35 ? "down" as const : "stable" as const;
 
-    return scoresList.map(s => {
+    return specScoresList.map(s => {
       const spark7d = (sparklines?.get(s.netuid) ?? []).slice(-7);
       const dominant = s.isOverridden ? "risk" as const :
         s.opp > s.risk + 15 ? "opportunity" as const :
         s.risk > s.opp + 15 ? "risk" as const : "neutral" as const;
       
-      // Micro-cap detection (simplified: cap < $500k USD)
       const isMicroCap = s.displayedCap > 0 && s.displayedCap < 500_000;
       
       let asMicro = s.asymmetry;
@@ -630,11 +632,9 @@ export default function AlienGauge() {
 
       if (!s.isOverridden) {
         if (isMicroCap) {
-          // Micro AS bonus
           const microSignal = { opportunity: s.opp, risk: s.risk, confidence: s.conf, momentumScore: s.momentumScore, isMicroCap: true } as any;
           asMicro = computeASMicro(microSignal, smartCapital.state, flowDominance, flowEmission);
         }
-        // Pre-hype detection
         if (s.psi > 50 && s.quality > 40 && s.sc === "ACCUMULATION") {
           preHype = true;
           preHypeIntensity = clamp(s.psi - 30, 0, 70);
@@ -654,21 +654,21 @@ export default function AlienGauge() {
         reasons,
       };
     });
-  }, [scoresList, sparklines, smartCapital.state]);
+  }, [specScoresList, sparklines, smartCapital.state]);
 
   const sentinelIndex = useMemo(() => computeSentinelIndex(globalOpp, globalRisk, smartCapital.score), [globalOpp, globalRisk, smartCapital.score]);
   const sentinelLabel = sentinelIndexLabel(sentinelIndex, lang);
 
   const globalStability = useMemo(() => {
-    if (!scoresList.length) return 50;
-    return Math.round(scoresList.reduce((a, s) => a + s.stability, 0) / scoresList.length);
-  }, [scoresList]);
+    if (!specScoresList.length) return 50;
+    return Math.round(specScoresList.reduce((a, s) => a + s.stability, 0) / specScoresList.length);
+  }, [specScoresList]);
 
   const confianceData = useMemo(() => {
-    if (!scoresList.length) return { score: 50 };
-    const avg = Math.round(scoresList.reduce((a, s) => a + s.confianceScore, 0) / scoresList.length);
+    if (!specScoresList.length) return { score: 50 };
+    const avg = Math.round(specScoresList.reduce((a, s) => a + s.confianceScore, 0) / specScoresList.length);
     return { score: avg };
-  }, [scoresList]);
+  }, [specScoresList]);
 
   const macroRec = useMemo(() => deriveMacroRecommendation(sentinelIndex, smartCapital.state, globalStability, confianceData.score), [sentinelIndex, smartCapital.state, globalStability, confianceData.score]);
 
