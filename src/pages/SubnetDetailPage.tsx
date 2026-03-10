@@ -584,16 +584,29 @@ export default function SubnetDetailPage() {
         </div>
 
         {/* ══════════════════════════════════════════ */}
-        {/*   SCENARIOS                                 */}
+        {/*   SCENARIOS — informational, never contradictory */}
         {/* ══════════════════════════════════════════ */}
         <SectionCard>
           <SectionTitle icon="🔮" title={fr ? "Scénarios" : "Scenarios"} />
+          {/* Disclaimer when final action is SORTIR but bull scenario exists */}
+          {decision.finalAction === "SORTIR" && (
+            <div className="mx-5 mt-2 rounded-lg px-3 py-2 border border-border bg-destructive/[0.03]">
+              <div className="font-mono text-[9px] text-foreground/50">
+                {fr ? "⚠ Scénarios exploratoires — le verdict actuel est SORTIR. Consulter la section Transparence ci-dessus." : "⚠ Exploratory scenarios — current verdict is EXIT. See Transparency section above."}
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-border">
             <ScenarioBlock
               title="Bull"
               color={GO}
               items={[
-                s.opp > 50 ? (fr ? `Opportunité confirmée (${s.opp})` : `Opportunity confirms (${s.opp})`) : (fr ? "Momentum accélère" : "Momentum accelerates"),
+                // FIXED: Never say "Opportunité confirmée" if action is SORTIR
+                decision.finalAction === "SORTIR"
+                  ? (fr ? `Opportunité brute (${s.opp}) — non actionnable` : `Raw opportunity (${s.opp}) — not actionable`)
+                  : s.opp > 50
+                    ? (fr ? `Opportunité détectée (${s.opp})` : `Opportunity detected (${s.opp})`)
+                    : (fr ? "Momentum accélère" : "Momentum accelerates"),
                 eco?.sentiment != null && eco.sentiment > 0.5 ? (fr ? "Achat soutenu" : "Sustained buying") : (fr ? "Adoption croissante" : "Growing adoption"),
                 fr ? "Breakout prix + volume" : "Price + volume breakout",
               ]}
