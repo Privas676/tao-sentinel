@@ -665,10 +665,10 @@ export default function AlienGauge() {
   }, [specScoresList]);
 
   const confianceData = useMemo(() => {
-    if (!scoresList.length) return { score: 50 };
-    const avg = Math.round(scoresList.reduce((a, s) => a + s.confianceScore, 0) / scoresList.length);
+    if (!specScoresList.length) return { score: 50 };
+    const avg = Math.round(specScoresList.reduce((a, s) => a + s.confianceScore, 0) / specScoresList.length);
     return { score: avg };
-  }, [scoresList]);
+  }, [specScoresList]);
 
   const macroRec = useMemo(() => deriveMacroRecommendation(sentinelIndex, smartCapital.state, globalStability, confianceData.score), [sentinelIndex, smartCapital.state, globalStability, confianceData.score]);
 
