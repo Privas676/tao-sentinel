@@ -34,14 +34,14 @@ function DetailSparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number
 function urgency(d: SubnetDecision, fr: boolean): { text: string; color: string } {
   if (d.isOverridden) return { text: fr ? "Immédiate — sortie forcée" : "Immediate — forced exit", color: BREAK };
   if (d.depegProbability >= 50) return { text: fr ? "Haute — risque depeg" : "High — depeg risk", color: BREAK };
-  if (d.engineAction === "EXIT") return { text: fr ? "Haute" : "High", color: BREAK };
-  if (d.engineAction === "ENTER" && d.opp > 65) return { text: fr ? "Haute — fenêtre ouverte" : "High — window open", color: GO };
+  if (d.finalAction === "SORTIR") return { text: fr ? "Haute" : "High", color: BREAK };
+  if (d.finalAction === "ENTRER" && d.opp > 65) return { text: fr ? "Haute — fenêtre ouverte" : "High — window open", color: GO };
   return { text: fr ? "Normale" : "Normal", color: MUTED };
 }
 
 function horizon(d: SubnetDecision, fr: boolean): string {
-  if (d.engineAction === "ENTER") return fr ? "Court à moyen terme" : "Short to medium term";
-  if (d.engineAction === "HOLD" || d.engineAction === "STAKE") return fr ? "Moyen terme" : "Medium term";
+  if (d.finalAction === "ENTRER") return fr ? "Court à moyen terme" : "Short to medium term";
+  if (d.finalAction === "SURVEILLER") return fr ? "Moyen terme" : "Medium term";
   return fr ? "Court terme" : "Short term";
 }
 
