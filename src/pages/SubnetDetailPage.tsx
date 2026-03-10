@@ -180,7 +180,7 @@ export default function SubnetDetailPage() {
   const rs = radar?.scores;
   const amm = radar?.ammMetrics;
   const profile = portfolioProfile(s);
-  const watches = watchPoints(s, eco, sn, fr);
+  const watches = watchPoints(s, decision, eco, sn, fr);
   const pctChange = spark.length >= 2 && spark[0] > 0 ? ((spark[spark.length - 1] - spark[0]) / spark[0]) * 100 : null;
 
   return (
