@@ -160,8 +160,11 @@ export default function SubnetDetailPage() {
   }
 
   const decision = decisionObj ?? (s ? {
-    netuid: s.netuid, name: s.name, engineAction: s.action, actionFr: "ATTENDRE" as const,
-    actionEn: "HOLD", badgeAction: "HOLD" as const, isSystem: false,
+    netuid: s.netuid, name: s.name,
+    finalAction: "SURVEILLER" as const,
+    engineAction: s.action, actionFr: "SURVEILLER" as const,
+    actionEn: "MONITOR", badgeAction: "SURVEILLER" as const, isSystem: false,
+    rawSignal: "neutral" as const, isBlocked: false, blockReasons: [], primaryReason: "—",
     portfolioAction: "CONSERVER" as const, portfolioActionFr: "CONSERVER", portfolioActionEn: "HOLD",
     conviction: "LOW" as const, convictionScore: 0, opp: s.opp, risk: s.risk,
     asymmetry: s.asymmetry, confidence: s.confianceScore, momentumScore: s.momentumScore,
