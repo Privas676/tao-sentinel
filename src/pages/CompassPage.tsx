@@ -165,6 +165,38 @@ export default function CompassPage() {
     const avgMomentum = specScoresList.length ? specScoresList.reduce((a, s) => a + s.momentum, 0) / specScoresList.length : 50;
     const flowEmission = avgMomentum > 55 ? "up" as const : avgMomentum < 35 ? "down" as const : "stable" as const;
     return specScoresList.map(s => {
+      const spark7d = (sparklines?.get(s.netuid) ?? []).slice(-7);
+      const dominant = s.isOverridden ? "risk" as const : s.opp > s.risk + 15 ? "opportunity" as const : s.risk > s.opp + 15 ? "risk" as const : "neutral" as const;
+      const isMicroCap = s.displayedCap > 0 && s.displayedCap < 500_000;
+      let asMicro = s.asymmetry;
+      let preHype = false;
+      let preHypeIntensity = 0;
+      if (!s.isOverridden) {
+        if (isMicroCap) {
+          const microSignal = { opportunity: s.opp, risk: s.risk, confidence: s.conf, momentumScore: s.momentumScore, isMicroCap: true } as any;
+          asMicro = computeASMicro(microSignal, smartCapital.state, flowDominance, flowEmission);
+        }
+        if (s.psi > 50 && s.quality > 40 && s.sc === "ACCUMULATION") {
+          preHype = true;
+          preHypeIntensity = clamp(s.psi - 30, 0, 70);
+        }
+      }
+      return { ...s, sparkline_7d: spark7d, dominant, isMicroCap, asMicro, preHype, preHypeIntensity, reasons: s.overrideReasons.length > 0 ? s.overrideReasons : [] };
+    });
+  }, [specScoresList, sparklines, smartCapital.state]);
+
+  const sentinelIndex = useMemo(() => computeSentinelIndex(globalOpp, globalRisk, smartCapital.score), [globalOpp, globalRisk, smartCapital.score]);
+  const sentinelLabel = sentinelIndexLabel(sentinelIndex, lang);
+
+  const globalStability = useMemo(() => {
+    if (!specScoresList.length) return 50;
+    return Math.round(specScoresList.reduce((a, s) => a + s.stability, 0) / specScoresList.length);
+  }, [specScoresList]);
+
+  const confianceScore = useMemo(() => {
+    if (!specScoresList.length) return 50;
+    return Math.round(specScoresList.reduce((a, s) => a + s.confianceScore, 0) / specScoresList.length);
+  }, [specScoresList]);
 
   const macroRec = useMemo(() => deriveMacroRecommendation(sentinelIndex, smartCapital.state, globalStability, confianceScore), [sentinelIndex, smartCapital.state, globalStability, confianceScore]);
 
