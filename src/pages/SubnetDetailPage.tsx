@@ -6,6 +6,7 @@ import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { opportunityColor, riskColor, stabilityColor, momentumColor } from "@/lib/gauge-engine";
+import type { FinalAction } from "@/lib/subnet-decision";
 import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
 import { ActionBadge } from "@/components/sentinel";
