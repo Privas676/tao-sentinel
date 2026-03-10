@@ -29,12 +29,51 @@ function PushDiagRow({ label, value, ok }: { label: string; value: string; ok: b
   );
 }
 
+function BrowserDeniedHelp({ fr }: { fr: boolean }) {
+  return (
+    <div className="mt-2 px-3 py-2 rounded-lg border border-destructive/20 bg-destructive/5">
+      <p className="font-mono text-[10px] text-destructive/90 leading-relaxed mb-2">
+        {fr
+          ? "🔒 Les notifications sont bloquées par votre navigateur. Ce n'est pas un problème de l'application."
+          : "🔒 Notifications are blocked by your browser. This is not an app issue."}
+      </p>
+      <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+        {fr ? "Pour débloquer :" : "To unblock:"}
+      </p>
+      <ul className="font-mono text-[9px] text-muted-foreground leading-relaxed list-disc pl-4 mt-1 space-y-0.5">
+        <li>{fr
+          ? "Chrome / Edge : cliquez sur l'icône 🔒 dans la barre d'adresse → Autorisations → Notifications → Autoriser"
+          : "Chrome / Edge: click the 🔒 icon in the address bar → Permissions → Notifications → Allow"}</li>
+        <li>{fr
+          ? "Safari : Préférences → Sites web → Notifications → Autoriser ce site"
+          : "Safari: Preferences → Websites → Notifications → Allow this site"}</li>
+        <li>{fr
+          ? "Firefox : cliquez sur l'icône 🔒 → Permissions → Notifications → Autoriser"
+          : "Firefox: click the 🔒 icon → Permissions → Notifications → Allow"}</li>
+        <li>{fr
+          ? "Mobile : Paramètres du téléphone → Applications → Navigateur → Notifications"
+          : "Mobile: Phone Settings → Apps → Browser → Notifications"}</li>
+      </ul>
+      <p className="font-mono text-[9px] text-muted-foreground mt-2">
+        {fr ? "Puis rechargez cette page." : "Then reload this page."}
+      </p>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { lang, setLang } = useI18n();
   const fr = lang === "fr";
   const { mode, setMode } = useOverrideMode();
   const { delistMode, setDelistMode } = useDelistMode();
-  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
+  const {
+    state: pushState,
+    error: pushError,
+    testResult,
+    subscribe: pushSubscribe,
+    unsubscribe: pushUnsubscribe,
+    sendTest: pushSendTest,
+  } = usePushNotifications();
   const [density, setDensity] = useState<"compact" | "normal">(() => {
     try { return (localStorage.getItem("display_density") as "compact" | "normal") || "normal"; } catch { return "normal"; }
   });
@@ -98,6 +137,14 @@ export default function SettingsPage() {
     localStorage.setItem("display_density", d);
   };
 
+  // Permission display
+  const permissionValue = typeof Notification !== "undefined"
+    ? Notification.permission === "granted" ? "✅ granted"
+      : Notification.permission === "denied" ? "❌ denied"
+      : "⏳ prompt"
+    : "❌ unavailable";
+  const permissionOk = typeof Notification !== "undefined" && Notification.permission === "granted";
+
   return (
     <div className="min-h-full w-full bg-background text-foreground pb-8">
       <div className="px-4 sm:px-6 py-5 max-w-[700px] mx-auto space-y-6">
@@ -154,25 +201,57 @@ export default function SettingsPage() {
             label={fr ? "Notifications push" : "Push notifications"}
             description={fr ? "Alertes critiques en temps réel sur votre appareil" : "Real-time critical alerts on your device"}
           >
-            {pushState === "subscribed" ? (
-              <button onClick={pushUnsubscribe}
-                className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-all border"
-                style={{ borderColor: `color-mix(in srgb, ${GO} 25%, transparent)`, color: GO, background: `color-mix(in srgb, ${GO} 8%, transparent)` }}>
-                🔔 {fr ? "Activé" : "Enabled"} ✓
-              </button>
-            ) : pushState === "denied" ? (
-              <span className="font-mono text-[10px] text-destructive">🔇 {fr ? "Bloqué par le navigateur" : "Blocked by browser"}</span>
-            ) : pushState === "unsupported" ? (
-              <span className="font-mono text-[10px] text-muted-foreground">{fr ? "Non supporté sur ce navigateur" : "Not supported on this browser"}</span>
-            ) : pushState === "loading" ? (
-              <span className="font-mono text-[10px] text-muted-foreground animate-pulse">…</span>
-            ) : (
-              <button onClick={pushSubscribe}
-                className="font-mono text-[10px] px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-gold transition-all">
-                🔕 {fr ? "Activer" : "Enable"}
-              </button>
-            )}
+            <div className="flex flex-col items-end gap-1.5">
+              {pushState === "subscribed" ? (
+                <div className="flex items-center gap-2">
+                  <button onClick={pushSendTest}
+                    className="font-mono text-[9px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-gold transition-all"
+                    disabled={testResult === "sending"}
+                  >
+                    {testResult === "sending" ? "⏳" : testResult === "sent" ? "✅" : testResult === "failed" ? "❌" : "🧪"} Test
+                  </button>
+                  <button onClick={pushUnsubscribe}
+                    className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-all border"
+                    style={{ borderColor: `color-mix(in srgb, ${GO} 25%, transparent)`, color: GO, background: `color-mix(in srgb, ${GO} 8%, transparent)` }}>
+                    🔔 {fr ? "Activé" : "Enabled"} ✓
+                  </button>
+                </div>
+              ) : pushState === "denied" ? (
+                <span className="font-mono text-[10px] text-destructive">🔇 {fr ? "Bloqué par le navigateur" : "Blocked by browser"}</span>
+              ) : pushState === "unsupported" ? (
+                <span className="font-mono text-[10px] text-muted-foreground">{fr ? "Non supporté sur ce navigateur" : "Not supported on this browser"}</span>
+              ) : pushState === "loading" ? (
+                <span className="font-mono text-[10px] text-muted-foreground animate-pulse">…</span>
+              ) : (
+                <button onClick={pushSubscribe}
+                  className="font-mono text-[10px] px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-gold transition-all">
+                  🔕 {fr ? "Activer" : "Enable"}
+                </button>
+              )}
+              {pushError && (
+                <span className="font-mono text-[9px] text-destructive/80 max-w-[280px] text-right leading-tight">
+                  {pushError}
+                </span>
+              )}
+              {testResult === "sent" && (
+                <span className="font-mono text-[9px]" style={{ color: GO }}>
+                  {fr ? "✅ Notification de test envoyée" : "✅ Test notification sent"}
+                </span>
+              )}
+              {testResult === "failed" && (
+                <span className="font-mono text-[9px] text-destructive">
+                  {fr ? "❌ Échec de l'envoi test" : "❌ Test send failed"}
+                </span>
+              )}
+            </div>
           </SettingRow>
+
+          {/* Browser denied help block */}
+          {pushState === "denied" && (
+            <div className="px-5 py-2 border-b border-border last:border-0">
+              <BrowserDeniedHelp fr={fr} />
+            </div>
+          )}
 
           {/* Push Diagnostics Status */}
           <div className="px-5 py-3 border-b border-border last:border-0">
@@ -182,14 +261,8 @@ export default function SettingsPage() {
             <div className="space-y-1.5">
               <PushDiagRow
                 label={fr ? "Permission navigateur" : "Browser permission"}
-                value={
-                  typeof Notification !== "undefined"
-                    ? Notification.permission === "granted" ? "✅ granted"
-                      : Notification.permission === "denied" ? "❌ denied"
-                      : "⏳ prompt"
-                    : "❌ unavailable"
-                }
-                ok={typeof Notification !== "undefined" && Notification.permission === "granted"}
+                value={permissionValue}
+                ok={permissionOk}
               />
               <PushDiagRow
                 label="Service Worker"
@@ -206,7 +279,7 @@ export default function SettingsPage() {
                 value={
                   pushState === "subscribed" ? (fr ? "✅ Opérationnel" : "✅ Operational")
                   : pushState === "unsupported" ? (fr ? "❌ Indisponible" : "❌ Unavailable")
-                  : pushState === "denied" ? (fr ? "❌ Bloqué" : "❌ Blocked")
+                  : pushState === "denied" ? (fr ? "🔒 Bloqué — voir instructions ci-dessus" : "🔒 Blocked — see instructions above")
                   : (fr ? "⚠️ Non activé" : "⚠️ Not enabled")
                 }
                 ok={pushState === "subscribed"}
