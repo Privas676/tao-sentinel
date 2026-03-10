@@ -6,6 +6,7 @@ import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { opportunityColor, riskColor, stabilityColor, momentumColor } from "@/lib/gauge-engine";
+import type { FinalAction } from "@/lib/subnet-decision";
 import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
 import { ActionBadge } from "@/components/sentinel";
@@ -33,14 +34,14 @@ function DetailSparkline({ data, w = 200, h = 44 }: { data: number[]; w?: number
 function urgency(d: SubnetDecision, fr: boolean): { text: string; color: string } {
   if (d.isOverridden) return { text: fr ? "Immédiate — sortie forcée" : "Immediate — forced exit", color: BREAK };
   if (d.depegProbability >= 50) return { text: fr ? "Haute — risque depeg" : "High — depeg risk", color: BREAK };
-  if (d.engineAction === "EXIT") return { text: fr ? "Haute" : "High", color: BREAK };
-  if (d.engineAction === "ENTER" && d.opp > 65) return { text: fr ? "Haute — fenêtre ouverte" : "High — window open", color: GO };
+  if (d.finalAction === "SORTIR") return { text: fr ? "Haute" : "High", color: BREAK };
+  if (d.finalAction === "ENTRER" && d.opp > 65) return { text: fr ? "Haute — fenêtre ouverte" : "High — window open", color: GO };
   return { text: fr ? "Normale" : "Normal", color: MUTED };
 }
 
 function horizon(d: SubnetDecision, fr: boolean): string {
-  if (d.engineAction === "ENTER") return fr ? "Court à moyen terme" : "Short to medium term";
-  if (d.engineAction === "HOLD" || d.engineAction === "STAKE") return fr ? "Moyen terme" : "Medium term";
+  if (d.finalAction === "ENTRER") return fr ? "Court à moyen terme" : "Short to medium term";
+  if (d.finalAction === "SURVEILLER") return fr ? "Moyen terme" : "Medium term";
   return fr ? "Court terme" : "Short term";
 }
 
@@ -73,8 +74,8 @@ function portfolioProfile(s: UnifiedSubnetScore): { profile: ProfileType; label:
   return { profile: "tactical", label: "Tactical", labelFr: "Tactique", color: WARN, desc: "Moderate conviction. Position 2-5%, active monitoring.", descFr: "Conviction modérée. Position 2-5%, suivi actif." };
 }
 
-/* ── Watch points generator ── */
-function watchPoints(s: UnifiedSubnetScore, eco: any, sn: any, fr: boolean): { icon: string; text: string; urgency: "high" | "medium" | "low" }[] {
+/* ── Watch points generator — RESPECTS final decision ── */
+function watchPoints(s: UnifiedSubnetScore, d: SubnetDecision, eco: any, sn: any, fr: boolean): { icon: string; text: string; urgency: "high" | "medium" | "low" }[] {
   const pts: { icon: string; text: string; urgency: "high" | "medium" | "low" }[] = [];
 
   if (s.depegProbability >= 30)
@@ -91,8 +92,11 @@ function watchPoints(s: UnifiedSubnetScore, eco: any, sn: any, fr: boolean): { i
     pts.push({ icon: "🐻", text: fr ? "Pression vendeuse dominante — surveiller les sorties de capital" : "Dominant sell pressure — monitor capital outflows", urgency: "medium" });
   if (s.healthScores.liquidityHealth < 35)
     pts.push({ icon: "💧", text: fr ? "Liquidité critique — slippage élevé probable" : "Critical liquidity — high slippage likely", urgency: "medium" });
-  if (s.opp > 60 && s.momentumScore > 55)
-    pts.push({ icon: "🎯", text: fr ? "Fenêtre d'entrée potentielle — volume et momentum alignés" : "Potential entry window — volume and momentum aligned", urgency: "low" });
+  // FIXED: Only show entry window hint if final action allows it
+  if (d.finalAction === "ENTRER" && s.opp > 60 && s.momentumScore > 55)
+    pts.push({ icon: "🎯", text: fr ? "Fenêtre d'entrée ouverte — volume et momentum alignés" : "Entry window open — volume and momentum aligned", urgency: "low" });
+  else if (d.rawSignal === "opportunity" && d.isBlocked)
+    pts.push({ icon: "⚖️", text: fr ? "Opportunité brute détectée mais bloquée par garde-fous" : "Raw opportunity detected but blocked by safety guards", urgency: "medium" });
   if (sn?.stakeConcentration > 50)
     pts.push({ icon: "🏗", text: fr ? `Concentration élevée (${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(0)}%) — risque de dump coordonné` : `High concentration (${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(0)}%) — coordinated dump risk`, urgency: "medium" });
 
@@ -156,8 +160,11 @@ export default function SubnetDetailPage() {
   }
 
   const decision = decisionObj ?? (s ? {
-    netuid: s.netuid, name: s.name, engineAction: s.action, actionFr: "ATTENDRE" as const,
-    actionEn: "HOLD", badgeAction: "HOLD" as const, isSystem: false,
+    netuid: s.netuid, name: s.name,
+    finalAction: "SURVEILLER" as const,
+    engineAction: s.action, actionFr: "SURVEILLER" as const,
+    actionEn: "MONITOR", badgeAction: "SURVEILLER" as const, isSystem: false,
+    rawSignal: "neutral" as const, isBlocked: false, blockReasons: [], primaryReason: "—",
     portfolioAction: "CONSERVER" as const, portfolioActionFr: "CONSERVER", portfolioActionEn: "HOLD",
     conviction: "LOW" as const, convictionScore: 0, opp: s.opp, risk: s.risk,
     asymmetry: s.asymmetry, confidence: s.confianceScore, momentumScore: s.momentumScore,
@@ -176,7 +183,7 @@ export default function SubnetDetailPage() {
   const rs = radar?.scores;
   const amm = radar?.ammMetrics;
   const profile = portfolioProfile(s);
-  const watches = watchPoints(s, eco, sn, fr);
+  const watches = watchPoints(s, decision, eco, sn, fr);
   const pctChange = spark.length >= 2 && spark[0] > 0 ? ((spark[spark.length - 1] - spark[0]) / spark[0]) * 100 : null;
 
   return (
@@ -197,15 +204,13 @@ export default function SubnetDetailPage() {
         </nav>
 
         {/* ── EXIT/SORTIR WARNING BANNER — decision coherence ── */}
-        {(decision.engineAction === "EXIT" || decision.isOverridden) && (
+        {(decision.finalAction === "SORTIR") && (
           <div className="rounded-xl px-5 py-4 flex items-start gap-3" style={{ background: "hsla(4,80%,50%,0.08)", border: "1.5px solid hsla(4,80%,50%,0.2)", boxShadow: "0 0 24px hsla(4,80%,50%,0.1)" }}>
             <span className="text-xl shrink-0 mt-0.5">🚨</span>
             <div>
               <div className="font-mono text-[8px] tracking-[0.2em] uppercase text-muted-foreground mb-1">{fr ? "VERDICT : SORTIE RECOMMANDÉE" : "VERDICT: EXIT RECOMMENDED"}</div>
               <div className="font-mono text-sm font-bold" style={{ color: BREAK }}>
-                {decision.isOverridden
-                  ? (s.overrideReasons[0] || (fr ? "Zone critique — override de protection actif" : "Critical zone — protection override active"))
-                  : decision.signalPrincipal}
+                {decision.primaryReason}
               </div>
               {decision.conflictExplanation && (
                 <div className="font-mono text-[10px] text-foreground/60 mt-1">{decision.conflictExplanation}</div>
@@ -285,6 +290,58 @@ export default function SubnetDetailPage() {
         )}
 
         {/* ══════════════════════════════════════════ */}
+        {/*   DECISION TRANSPARENCY — Engine Arbiter    */}
+        {/* ══════════════════════════════════════════ */}
+        {!isSpecial && (
+          <SectionCard>
+            <SectionTitle icon="🔬" title={fr ? "Transparence décision" : "Decision Transparency"} />
+            <div className="px-5 py-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-lg px-3 py-2.5 bg-muted/20 border border-border text-center">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "SIGNAL BRUT" : "RAW SIGNAL"}</div>
+                  <div className="font-mono text-[12px] font-bold" style={{
+                    color: decision.rawSignal === "opportunity" ? GO : decision.rawSignal === "exit" ? BREAK : WARN
+                  }}>
+                    {decision.rawSignal === "opportunity" ? (fr ? "Opportunité" : "Opportunity") : decision.rawSignal === "exit" ? (fr ? "Sortie" : "Exit") : (fr ? "Neutre" : "Neutral")}
+                  </div>
+                </div>
+                <div className="rounded-lg px-3 py-2.5 bg-muted/20 border border-border text-center">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "BLOCAGE" : "BLOCKED"}</div>
+                  <div className="font-mono text-[12px] font-bold" style={{
+                    color: decision.isBlocked ? BREAK : GO
+                  }}>
+                    {decision.isBlocked ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")}
+                  </div>
+                </div>
+                <div className="rounded-lg px-3 py-2.5 bg-muted/20 border border-border text-center">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "ACTION FINALE" : "FINAL ACTION"}</div>
+                  <div className="font-mono text-[12px] font-bold" style={{
+                    color: decision.finalAction === "ENTRER" ? GO : decision.finalAction === "SORTIR" ? BREAK : WARN
+                  }}>
+                    {decision.finalAction}
+                  </div>
+                </div>
+                <div className="rounded-lg px-3 py-2.5 bg-muted/20 border border-border text-center">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "MOTIF" : "REASON"}</div>
+                  <div className="font-mono text-[10px] font-medium text-foreground/70 leading-snug">{decision.primaryReason}</div>
+                </div>
+              </div>
+              {decision.blockReasons.length > 0 && (
+                <div className="mt-3 rounded-lg px-4 py-2.5 border border-border bg-destructive/[0.03]">
+                  <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1.5">{fr ? "GARDE-FOUS ACTIFS" : "ACTIVE SAFETY GUARDS"}</div>
+                  <div className="space-y-1">
+                    {decision.blockReasons.map((r, i) => (
+                      <div key={i} className="font-mono text-[10px] text-foreground/60 flex items-center gap-2">
+                        <span className="text-[8px]">⛔</span> {r}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        )}
+
         {/*   WATCH NOW — What to monitor               */}
         {/* ══════════════════════════════════════════ */}
         {watches.length > 0 && (
@@ -530,16 +587,29 @@ export default function SubnetDetailPage() {
         </div>
 
         {/* ══════════════════════════════════════════ */}
-        {/*   SCENARIOS                                 */}
+        {/*   SCENARIOS — informational, never contradictory */}
         {/* ══════════════════════════════════════════ */}
         <SectionCard>
           <SectionTitle icon="🔮" title={fr ? "Scénarios" : "Scenarios"} />
+          {/* Disclaimer when final action is SORTIR but bull scenario exists */}
+          {decision.finalAction === "SORTIR" && (
+            <div className="mx-5 mt-2 rounded-lg px-3 py-2 border border-border bg-destructive/[0.03]">
+              <div className="font-mono text-[9px] text-foreground/50">
+                {fr ? "⚠ Scénarios exploratoires — le verdict actuel est SORTIR. Consulter la section Transparence ci-dessus." : "⚠ Exploratory scenarios — current verdict is EXIT. See Transparency section above."}
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-border">
             <ScenarioBlock
               title="Bull"
               color={GO}
               items={[
-                s.opp > 50 ? (fr ? `Opportunité confirmée (${s.opp})` : `Opportunity confirms (${s.opp})`) : (fr ? "Momentum accélère" : "Momentum accelerates"),
+                // FIXED: Never say "Opportunité confirmée" if action is SORTIR
+                decision.finalAction === "SORTIR"
+                  ? (fr ? `Opportunité brute (${s.opp}) — non actionnable` : `Raw opportunity (${s.opp}) — not actionable`)
+                  : s.opp > 50
+                    ? (fr ? `Opportunité détectée (${s.opp})` : `Opportunity detected (${s.opp})`)
+                    : (fr ? "Momentum accélère" : "Momentum accelerates"),
                 eco?.sentiment != null && eco.sentiment > 0.5 ? (fr ? "Achat soutenu" : "Sustained buying") : (fr ? "Adoption croissante" : "Growing adoption"),
                 fr ? "Breakout prix + volume" : "Price + volume breakout",
               ]}

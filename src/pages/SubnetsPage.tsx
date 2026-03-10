@@ -15,17 +15,15 @@ import {
   opportunityColor, riskColor, stabilityColor,
   type SmartCapitalState,
 } from "@/lib/gauge-engine";
-import {
-  actionColor, actionIcon, actionLabel,
-} from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
+import type { FinalAction } from "@/lib/subnet-decision";
 
 /* ═══════════════════════════════════════════════ */
 /*   SUBNET INTELLIGENCE — Unified Master Table   */
 /* ═══════════════════════════════════════════════ */
 
 /* ─── Filter types ─── */
-type ActionFilter = "ALL" | "ENTER" | "HOLD" | "EXIT";
+type ActionFilter = "ALL" | "ENTRER" | "SURVEILLER" | "SORTIR";
 type StatusFilter = "ALL" | "OK" | "WATCH" | "DANGER";
 type ConvictionFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type ScopeFilter = "ALL" | "PORTFOLIO" | "WATCHLIST";
@@ -120,6 +118,19 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
                   ? "Infrastructure réseau — pas une opportunité d'investissement classique. Métriques plafonnées."
                   : "Network infrastructure — not a standard investment opportunity. Metrics capped."}
               </p>
+            </div>
+          )}
+
+          {/* Decision transparency block — NEW */}
+          {!isSystemSubnet && decision.isBlocked && (
+            <div className="rounded-lg p-3 border border-border bg-accent/10">
+              <div className="font-mono text-[7px] tracking-widest uppercase text-muted-foreground mb-1.5">{fr ? "ARBITRAGE MOTEUR" : "ENGINE ARBITRAGE"}</div>
+              <div className="font-mono text-[10px] text-foreground/75 leading-relaxed mb-1">
+                {fr ? "Signal brut :" : "Raw signal:"} <span className="font-bold text-foreground/90">{decision.rawSignal === "opportunity" ? (fr ? "Opportunité" : "Opportunity") : decision.rawSignal === "exit" ? (fr ? "Sortie" : "Exit") : (fr ? "Neutre" : "Neutral")}</span>
+              </div>
+              <div className="font-mono text-[10px] text-foreground/75 leading-relaxed">
+                {fr ? "Non actionnable :" : "Not actionable:"} {decision.blockReasons.slice(0, 3).map((r, i) => <span key={i} className="text-foreground/60">• {r} </span>)}
+              </div>
             </div>
           )}
 
@@ -218,6 +229,51 @@ function MetricMini({ label, value, color }: { label: string; value: string | nu
   );
 }
 
+/* ─── Final action color/icon helpers ─── */
+function finalActionColor(fa: FinalAction): string {
+  switch (fa) {
+    case "ENTRER": return "hsl(var(--signal-go))";
+    case "SURVEILLER": return "hsl(var(--signal-go-spec))";
+    case "SORTIR": return "hsl(var(--signal-break))";
+    case "SYSTÈME": return "hsl(var(--signal-system))";
+  }
+}
+
+function finalActionBg(fa: FinalAction): string {
+  switch (fa) {
+    case "ENTRER": return "hsla(var(--signal-go), 0.08)";
+    case "SURVEILLER": return "hsla(var(--signal-go-spec), 0.06)";
+    case "SORTIR": return "hsla(var(--signal-break), 0.08)";
+    case "SYSTÈME": return "hsla(var(--signal-system), 0.08)";
+  }
+}
+
+function finalActionIcon(fa: FinalAction): string {
+  switch (fa) {
+    case "ENTRER": return "🟢";
+    case "SURVEILLER": return "👁";
+    case "SORTIR": return "🔴";
+    case "SYSTÈME": return "🔷";
+  }
+}
+
+function finalActionLabel(fa: FinalAction, fr: boolean): string {
+  if (fr) {
+    switch (fa) {
+      case "ENTRER": return "ENTRER";
+      case "SURVEILLER": return "SURVEILLER";
+      case "SORTIR": return "SORTIR";
+      case "SYSTÈME": return "SYSTÈME";
+    }
+  }
+  switch (fa) {
+    case "ENTRER": return "ENTER";
+    case "SURVEILLER": return "MONITOR";
+    case "SORTIR": return "EXIT";
+    case "SYSTÈME": return "SYSTEM";
+  }
+}
+
 /* ─── Filter label helpers ─── */
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -243,19 +299,19 @@ export default function SubnetsPage() {
 
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug, isLoading } = useSubnetScores();
-  const { decisions } = useSubnetDecisions();
+  const { decisions, decisionsList } = useSubnetDecisions();
 
-  // ── Action counts from engine (single source of truth) ──
+  // ── Action counts from DECISIONS (single source of truth) ──
   const actionCounts = useMemo(() => {
-    let enter = 0, hold = 0, exit = 0;
-    for (const s of scoresList) {
-      if (SPECIAL_SUBNETS[s.netuid]?.isSystem) { hold++; continue; }
-      if (s.action === "ENTER") enter++;
-      else if (s.action === "EXIT") exit++;
-      else hold++;
+    let enter = 0, monitor = 0, exit = 0;
+    for (const d of decisionsList) {
+      if (d.isSystem) { monitor++; continue; }
+      if (d.finalAction === "ENTRER") enter++;
+      else if (d.finalAction === "SORTIR") exit++;
+      else monitor++;
     }
-    return { enter, hold, exit };
-  }, [scoresList]);
+    return { enter, monitor, exit };
+  }, [decisionsList]);
 
   // ── Filters ──
   const [scope, setScope] = useState<ScopeFilter>("ALL");
@@ -291,7 +347,7 @@ export default function SubnetsPage() {
   }, [scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, savedViews, fr]);
 
   const loadView = useCallback((view: SavedView) => {
-    setScope(view.filters.scope); setActionFilter(view.filters.action); setStatusFilter(view.filters.status);
+    setScope(view.filters.scope); setActionFilter(view.filters.action as ActionFilter); setStatusFilter(view.filters.status);
     setConvictionFilter(view.filters.conviction); setLiquidityFilter(view.filters.liquidity); setStructureFilter(view.filters.structure);
   }, []);
 
@@ -307,7 +363,7 @@ export default function SubnetsPage() {
     localStorage.setItem("subnet-view-mode", mode);
   }, []);
 
-  // ── Build enriched rows ──
+  // ── Build enriched rows — ALL derived from decision, never raw action ──
   const rows = useMemo<TableRow[]>(() => {
     const searchLower = search.toLowerCase();
     return scoresList
@@ -332,9 +388,10 @@ export default function SubnetsPage() {
       .filter(r => {
         if (search && !r.name.toLowerCase().includes(searchLower) && !String(r.netuid).includes(searchLower)) return false;
         if (scope === "PORTFOLIO" && !r.owned) return false;
-        if (actionFilter === "ENTER" && r.action !== "ENTER") return false;
-        if (actionFilter === "HOLD" && r.action !== "HOLD" && r.action !== "STAKE" && r.action !== "NEUTRAL" && r.action !== "WATCH") return false;
-        if (actionFilter === "EXIT" && r.action !== "EXIT") return false;
+        // ── ACTION FILTER: uses decision.finalAction (single source of truth) ──
+        if (actionFilter === "ENTRER" && r.decision.finalAction !== "ENTRER") return false;
+        if (actionFilter === "SURVEILLER" && r.decision.finalAction !== "SURVEILLER" && r.decision.finalAction !== "SYSTÈME") return false;
+        if (actionFilter === "SORTIR" && r.decision.finalAction !== "SORTIR") return false;
         if (statusFilter === "OK" && r.statusLevel !== "OK") return false;
         if (statusFilter === "WATCH" && r.statusLevel !== "WATCH") return false;
         if (statusFilter === "DANGER" && r.statusLevel !== "DANGER") return false;
@@ -350,8 +407,8 @@ export default function SubnetsPage() {
             case "netuid": av = a.netuid; bv = b.netuid; break;
             case "name": return sortDir === "desc" ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
             case "action": {
-              const rank = (x: string) => ["EXIT","NEUTRAL","WATCH","HOLD","STAKE","ENTER"].indexOf(x);
-              av = rank(a.action); bv = rank(b.action); break;
+              const rank = (fa: FinalAction) => ({ "SORTIR": 0, "SURVEILLER": 1, "SYSTÈME": 1, "ENTRER": 2 }[fa] ?? 1);
+              av = rank(a.decision.finalAction); bv = rank(b.decision.finalAction); break;
             }
             case "conviction": {
               const rank = (x: string) => x === "HIGH" ? 3 : x === "MEDIUM" ? 2 : 1;
@@ -385,6 +442,10 @@ export default function SubnetsPage() {
 
   if (isLoading || !scoresList.length) return <PageLoadingState label={fr ? "Chargement subnets..." : "Loading subnets..."} />;
 
+  // Count non-system subnets
+  const specSubnets = scoresList.filter(s => SPECIAL_SUBNETS[s.netuid]?.isSystem).length;
+  const exploitableCount = scoresList.length - specSubnets;
+
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
       <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto space-y-5">
@@ -411,7 +472,7 @@ export default function SubnetsPage() {
                 </button>
               </div>
               <span className="font-mono text-[8px] text-muted-foreground">
-                {scoresList.length} subnets · {new Date(scoreTimestamp).toLocaleTimeString()}
+                {exploitableCount} subnets{specSubnets > 0 ? ` + ${specSubnets} sys.` : ""} · {new Date(scoreTimestamp).toLocaleTimeString()}
               </span>
             </div>
           }
@@ -445,7 +506,7 @@ export default function SubnetsPage() {
             ))}
           </div>
 
-          {/* Filter chips — labeled groups */}
+          {/* Filter chips — labeled groups — NOW uses finalAction values */}
           <div className="flex items-start gap-4 flex-wrap">
             <FilterGroup label="SCOPE">
               <FilterChipGroup
@@ -462,9 +523,9 @@ export default function SubnetsPage() {
               <FilterChipGroup
                  chips={[
                    { key: "ALL", label: fr ? "Toutes" : "All" },
-                   { key: "ENTER", label: fr ? "Entrer" : "Enter", count: actionCounts.enter || undefined },
-                   { key: "HOLD", label: fr ? "Attendre" : "Hold", count: actionCounts.hold || undefined },
-                   { key: "EXIT", label: fr ? "Sortir" : "Exit", count: actionCounts.exit || undefined },
+                   { key: "ENTRER", label: fr ? "Entrer" : "Enter", count: actionCounts.enter || undefined },
+                   { key: "SURVEILLER", label: fr ? "Surveiller" : "Monitor", count: actionCounts.monitor || undefined },
+                   { key: "SORTIR", label: fr ? "Sortir" : "Exit", count: actionCounts.exit || undefined },
                  ]}
                 active={actionFilter}
                 onChange={v => setActionFilter(v as ActionFilter)}
@@ -571,8 +632,8 @@ export default function SubnetsPage() {
                     </td>
                   </tr>
                 ) : rows.map((r) => {
-                  const isSystemRow = !!SPECIAL_SUBNETS[r.netuid]?.isSystem;
-                  const aLabel = isSystemRow ? "SYSTÈME" : actionLabel(r.action, fr);
+                  const fa = r.decision.finalAction;
+                  const isSystemRow = r.decision.isSystem;
                   const convColor = r.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : r.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
                   const liqColor = r.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : r.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
                   const structColor = r.structureLevel === "HEALTHY" ? "hsl(var(--signal-go))" : r.structureLevel === "FRAGILE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
@@ -604,12 +665,13 @@ export default function SubnetsPage() {
                           <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-break), 0.08)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.2)" }}>⛔</span>
                         )}
                       </td>
+                      {/* ── ACTION COLUMN: uses finalAction (single source of truth) ── */}
                       <td className="py-2 px-2.5 text-center">
                         <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{
-                          color: isSystemRow ? "hsl(var(--signal-system))" : actionColor(r.action),
-                          background: isSystemRow ? "hsla(var(--signal-system), 0.08)" : `color-mix(in srgb, ${actionColor(r.action)} 8%, transparent)`
+                          color: finalActionColor(fa),
+                          background: finalActionBg(fa),
                         }}>
-                          {isSystemRow ? "🔷" : actionIcon(r.action)} {aLabel}
+                          {finalActionIcon(fa)} {finalActionLabel(fa, fr)}
                         </span>
                       </td>
                       <td className="py-2 px-2.5 text-center">
