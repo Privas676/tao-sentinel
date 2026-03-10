@@ -589,7 +589,7 @@ export default function SubnetsPage() {
             </div>
           )}
           <span className="font-mono text-[9px] text-muted-foreground">
-            {rows.length} / {scoresList.length} {fr ? "résultats" : "results"}
+            {rows.filter(r => !SPECIAL_SUBNETS[r.netuid]?.isSystem).length} / {exploitableCount} {fr ? "résultats" : "results"}
           </span>
         </div>
 
