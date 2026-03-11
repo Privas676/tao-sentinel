@@ -228,12 +228,12 @@ export default function CompassPage() {
 
   // ── Best opportunity & worst risk ──
   const bestOpp = useMemo(() => {
-    return [...enrichedSignals].filter(s => s.action === "ENTER" && !s.isOverridden && !SPECIAL_SUBNETS[s.netuid]?.isSystem).sort((a, b) => b.opp - a.opp)[0] || null;
-  }, [enrichedSignals]);
+    return [...enrichedSignals].filter(s => decisions.get(s.netuid)?.finalAction === "ENTRER").sort((a, b) => b.opp - a.opp)[0] || null;
+  }, [enrichedSignals, decisions]);
 
   const worstRisk = useMemo(() => {
-    return [...enrichedSignals].filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk)[0] || null;
-  }, [enrichedSignals]);
+    return [...enrichedSignals].filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").sort((a, b) => b.risk - a.risk)[0] || null;
+  }, [enrichedSignals, decisions]);
 
   // ── Critical risks ──
   const criticalRisks = useMemo(() => {
