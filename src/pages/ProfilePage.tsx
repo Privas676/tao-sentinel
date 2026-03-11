@@ -63,6 +63,12 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
+    const allowedMimes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+    if (!allowedMimes.includes(file.type)) {
+      toast.error("Format non supporté (PNG, JPG, GIF, WebP uniquement)");
+      return;
+    }
+
     if (file.size > 2 * 1024 * 1024) {
       toast.error("L'image doit faire moins de 2 Mo");
       return;
