@@ -502,14 +502,18 @@ export default function CompassPage() {
                   </thead>
                   <tbody>
                     {watchlist.map((s, idx) => {
-                      const convScore = Math.abs(s.opp - s.risk) * (s.conf / 100);
+                      const d = decisions.get(s.netuid);
+                      const fa = d?.finalAction ?? "SURVEILLER";
+                      const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : WARN;
+                      const faLabel = fa === "ENTRER" ? (fr ? "🟢 ENTRER" : "🟢 ENTER") : fa === "SORTIR" ? (fr ? "🔴 SORTIR" : "🔴 EXIT") : (fr ? "👁 SURVEILLER" : "👁 MONITOR");
+                      const convScore = d?.convictionScore ?? Math.abs(s.opp - s.risk) * (s.conf / 100);
                       const convLevel = convScore >= 70 ? "HIGH" : convScore >= 40 ? "MED" : "LOW";
                       const convLevelColor = convScore >= 70 ? GO : convScore >= 40 ? WARN : MUTED;
                       return (
                         <tr key={s.netuid} className="cursor-pointer hover:bg-white/[0.015] transition-colors" style={{ borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }} onClick={() => setPanelSignal(s)}>
                           <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</td>
                           <td className="py-2 px-2.5 text-[10px] text-muted-foreground truncate" style={{ maxWidth: 120 }}>{s.name}</td>
-                          <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {actionLabel(s.action, fr)}</td>
+                          <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: faColor }}>{faLabel}</td>
                           <td className="py-2 px-2.5 text-[9px] font-bold" style={{ color: convLevelColor }}>{convLevel}</td>
                           <td className="py-2 px-2.5 text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</td>
                           <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</td>

@@ -376,39 +376,49 @@ export default function SubnetDetailPage() {
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
-            <QuadrantBlock
-              title={fr ? "Thèse (pourquoi entrer)" : "Thesis (why enter)"}
-              tone="go"
-              items={[
-                ...decision.thesis,
-                s.opp > 55 && !decision.thesis.length ? (fr ? `Opportunité ${s.opp}/100` : `Opportunity ${s.opp}/100`) : null,
-                s.momentumScore >= 55 && !decision.thesis.length ? (fr ? `Momentum haussier (${Math.round(s.momentumScore)})` : `Bullish momentum (${Math.round(s.momentumScore)})`) : null,
-                s.asymmetry > 20 && !decision.thesis.length ? (fr ? `Asymétrie +${s.asymmetry}` : `Asymmetry +${s.asymmetry}`) : null,
-              ].filter(Boolean) as string[]}
-              position="tl"
-            />
-            <QuadrantBlock
-              title={fr ? "Pourquoi attendre" : "Why wait"}
-              tone="warn"
-              items={[
-                s.risk > 40 && s.risk < 65 ? (fr ? `Risque modéré (${s.risk})` : `Moderate risk (${s.risk})`) : null,
-                s.confianceScore < 60 ? (fr ? `Données ${s.confianceScore}%` : `Data ${s.confianceScore}%`) : null,
-                s.momentumScore < 40 ? (fr ? "Momentum faible" : "Weak momentum") : null,
-                s.stability < 40 ? (fr ? "Structure instable" : "Unstable structure") : null,
-              ].filter(Boolean) as string[]}
-              position="tr"
-            />
-            <QuadrantBlock
-              title={fr ? "Ce qui doit s'améliorer" : "Needs improvement"}
-              tone="neutral"
-              items={[
-                s.risk > 50 ? (fr ? `Risque ${s.risk} → <40` : `Risk ${s.risk} → <40`) : null,
-                s.healthScores.liquidityHealth < 40 ? (fr ? "Liquidité" : "Liquidity") : null,
-                s.healthScores.activityHealth < 40 ? (fr ? "Activité réseau" : "Network activity") : null,
-                sn && sn.stakeConcentration > 50 ? (fr ? "Concentration" : "Concentration") : null,
-              ].filter(Boolean) as string[]}
-              position="bl"
-            />
+            {/* Thesis: only show when finalAction is NOT SORTIR */}
+            {decision.finalAction !== "SORTIR" && (
+              <QuadrantBlock
+                title={fr ? "Thèse (pourquoi entrer)" : "Thesis (why enter)"}
+                tone="go"
+                items={[
+                  ...decision.thesis,
+                  s.opp > 55 && !decision.thesis.length ? (fr ? `Opportunité ${s.opp}/100` : `Opportunity ${s.opp}/100`) : null,
+                  s.momentumScore >= 55 && !decision.thesis.length ? (fr ? `Momentum haussier (${Math.round(s.momentumScore)})` : `Bullish momentum (${Math.round(s.momentumScore)})`) : null,
+                  s.asymmetry > 20 && !decision.thesis.length ? (fr ? `Asymétrie +${s.asymmetry}` : `Asymmetry +${s.asymmetry}`) : null,
+                ].filter(Boolean) as string[]}
+                position="tl"
+              />
+            )}
+            {/* Why wait: only show when finalAction is SURVEILLER */}
+            {decision.finalAction === "SURVEILLER" && (
+              <QuadrantBlock
+                title={fr ? "Pourquoi attendre" : "Why wait"}
+                tone="warn"
+                items={[
+                  s.risk > 40 && s.risk < 65 ? (fr ? `Risque modéré (${s.risk})` : `Moderate risk (${s.risk})`) : null,
+                  s.confianceScore < 60 ? (fr ? `Données ${s.confianceScore}%` : `Data ${s.confianceScore}%`) : null,
+                  s.momentumScore < 40 ? (fr ? "Momentum faible" : "Weak momentum") : null,
+                  s.stability < 40 ? (fr ? "Structure instable" : "Unstable structure") : null,
+                ].filter(Boolean) as string[]}
+                position="tr"
+              />
+            )}
+            {/* Needs improvement: only show when NOT SORTIR */}
+            {decision.finalAction !== "SORTIR" && (
+              <QuadrantBlock
+                title={fr ? "Ce qui doit s'améliorer" : "Needs improvement"}
+                tone="neutral"
+                items={[
+                  s.risk > 50 ? (fr ? `Risque ${s.risk} → <40` : `Risk ${s.risk} → <40`) : null,
+                  s.healthScores.liquidityHealth < 40 ? (fr ? "Liquidité" : "Liquidity") : null,
+                  s.healthScores.activityHealth < 40 ? (fr ? "Activité réseau" : "Network activity") : null,
+                  sn && sn.stakeConcentration > 50 ? (fr ? "Concentration" : "Concentration") : null,
+                ].filter(Boolean) as string[]}
+                position="bl"
+              />
+            )}
+            {/* Invalidation: always show */}
             <QuadrantBlock
               title={fr ? "Invalidation" : "Invalidation"}
               tone="break"
