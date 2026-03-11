@@ -238,13 +238,13 @@ export default function CompassPage() {
   // ── Critical risks ──
   const criticalRisks = useMemo(() => {
     return enrichedSignals
-      .filter(s => s.isOverridden || s.delistCategory !== "NORMAL" || s.depegProbability >= 50)
+      .filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR")
       .sort((a, b) => {
         const sev = (x: DashSignal) => (x.isOverridden ? 100 : 0) + x.depegProbability + (x.delistCategory !== "NORMAL" ? x.delistScore : 0);
         return sev(b) - sev(a);
       })
       .slice(0, 6);
-  }, [enrichedSignals]);
+  }, [enrichedSignals, decisions]);
 
   // ── Watchlist: top conviction signals ──
   const watchlist = useMemo(() => {
