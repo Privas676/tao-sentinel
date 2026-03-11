@@ -274,16 +274,16 @@ export default function CompassPage() {
     const held = positions.map(p => p.subnet_id);
     let aligned = 0, misaligned = 0, watching = 0;
     for (const netuid of held) {
-      const sig = enrichedSignals.find(s => s.netuid === netuid);
-      if (!sig) { watching++; continue; }
-      if (sig.action === "EXIT" || sig.isOverridden) misaligned++;
-      else if (sig.action === "ENTER" || sig.action === "HOLD") aligned++;
+      const fa = decisions.get(netuid)?.finalAction;
+      if (!fa) { watching++; continue; }
+      if (fa === "SORTIR") misaligned++;
+      else if (fa === "ENTRER" || fa === "SURVEILLER") aligned++;
       else watching++;
     }
     const total = held.length;
     const status: "aligned" | "partial" | "misaligned" = misaligned === 0 ? "aligned" : misaligned / total >= 0.4 ? "misaligned" : "partial";
     return { aligned, misaligned, watching, total, status };
-  }, [positions, enrichedSignals]);
+  }, [positions, decisions]);
 
   // ── Derived values ──
   const scLabel = t(`sc.${smartCapital.state.toLowerCase()}` as any);
