@@ -13,7 +13,6 @@ import {
   type RawSignal,
 } from "@/lib/gauge-engine";
 import {
-  actionColor, actionBg, actionBorder, actionIcon, actionLabel,
   computeSentinelIndex, sentinelIndexColor, sentinelIndexLabel,
   deriveMacroRecommendation, macroColor, macroBg, macroBorder, macroIcon,
 } from "@/lib/strategy-engine";
