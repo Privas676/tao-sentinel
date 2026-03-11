@@ -469,7 +469,13 @@ export default function CompassPage() {
                       style={{ borderBottom: idx < Math.min(s.items.length, 5) - 1 ? `1px solid ${s.border}` : "none" }}
                       onClick={() => setPanelSignal(v)}>
                       <span className="font-mono text-[10px] font-bold" style={{ color: GOLD, minWidth: 36 }}>SN-{v.netuid}</span>
-                      <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(v.action) }}>{actionIcon(v.action)} {actionLabel(v.action, fr)}</span>
+                      {(() => {
+                        const fa = decisions.get(v.netuid)?.finalAction ?? "SURVEILLER";
+                        const faC = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : WARN;
+                        const faI = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : "👁";
+                        const faL = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : (fr ? "SURVEILLER" : "MONITOR");
+                        return <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: faC }}>{faI} {faL}</span>;
+                      })()}
                       <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{v.overrideReasons[0] || v.name}</span>
                       <span className="font-mono text-[10px] font-bold" style={{ color: s.key === "exit" ? riskColor(v.risk) : opportunityColor(v.opp) }}>
                         {s.key === "exit" ? v.risk : v.opp}

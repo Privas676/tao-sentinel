@@ -11,6 +11,7 @@ import { confianceColor } from "@/lib/data-fusion";
 import { healthColor } from "@/lib/subnet-health";
 import { ActionBadge } from "@/components/sentinel";
 import { SectionCard, SectionTitle, KPIChip, Metric, BarScore, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
+import DecisionDebugBadge from "@/components/DecisionDebugBadge";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SUBNET COMMAND CENTER — Decision-First Architecture   */
