@@ -260,12 +260,13 @@ export default function CompassPage() {
   // ── Rotation map ──
   const rotationMap = useMemo(() => {
     const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
-    const leaders = nonSystem.filter(s => s.action === "ENTER" && s.momentumScore >= 55 && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const accumulating = nonSystem.filter(s => s.sc === "ACCUMULATION" && s.action !== "EXIT" && !s.isOverridden && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
-    const fragile = nonSystem.filter(s => s.risk > 60 && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
-    const avoid = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const getFa = (s: DashSignal) => decisions.get(s.netuid)?.finalAction;
+    const leaders = nonSystem.filter(s => getFa(s) === "ENTRER" && s.momentumScore >= 55).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const accumulating = nonSystem.filter(s => s.sc === "ACCUMULATION" && getFa(s) !== "SORTIR" && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
+    const fragile = nonSystem.filter(s => s.risk > 60 && getFa(s) !== "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const avoid = nonSystem.filter(s => getFa(s) === "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
     return { leaders, accumulating, fragile, avoid };
-  }, [enrichedSignals]);
+  }, [enrichedSignals, decisions]);
 
   // ── Portfolio alignment ──
   const portfolioAlignment = useMemo(() => {
