@@ -182,6 +182,13 @@ function deriveFinalAction(
   // 4. If strategic engine says EXIT and no verdict contradicts → SORTIR
   if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) return "SORTIR";
 
+  // 4b. HIGH_RISK_NEAR_DELIST — NEVER allow ENTRER, force SURVEILLER or SORTIR
+  //     If depeg probability is significant (>=30%) → SORTIR, otherwise → SURVEILLER
+  if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") {
+    if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
+    return "SURVEILLER";
+  }
+
   // 5. If verdict engine says RENTRE and no blocking conditions → ENTRER
   if (v && v.verdict === "RENTRE" && s.action !== "EXIT") {
     // Additional sanity: entry only if risk is manageable
