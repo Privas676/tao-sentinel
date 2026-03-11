@@ -66,9 +66,14 @@ function TaoPriceTicker({ taoUsd, scoreTimestamp }: { taoUsd: number | null; sco
 }
 
 /* ─── Subnet Side Panel ─── */
-function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | null; open: boolean; onClose: () => void; fr: boolean }) {
+function SubnetQuickPanel({ signal, open, onClose, fr, decisions }: { signal: DashSignal | null; open: boolean; onClose: () => void; fr: boolean; decisions: Map<number, import("@/lib/subnet-decision").SubnetDecision> }) {
   const { t } = useI18n();
   if (!signal) return null;
+  const d = decisions.get(signal.netuid);
+  const fa = d?.finalAction ?? "SURVEILLER";
+  const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : fa === "SYSTÈME" ? MUTED : WARN;
+  const faIcon = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : fa === "SYSTÈME" ? "🔷" : "👁";
+  const faLabel = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "SYSTÈME" ? (fr ? "SYSTÈME" : "SYSTEM") : (fr ? "SURVEILLER" : "MONITOR");
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[380px] border-l border-border bg-background text-foreground overflow-y-auto">
@@ -81,9 +86,9 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
         <div className="mt-4 space-y-5">
           <div className="text-center">
             <div className="font-mono text-sm text-muted-foreground">{signal.name}</div>
-            <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: actionBg(signal.action), border: `1px solid ${actionBorder(signal.action)}` }}>
-              <span>{actionIcon(signal.action)}</span>
-              <span className="font-mono font-bold tracking-wider text-xs" style={{ color: actionColor(signal.action) }}>{actionLabel(signal.action, fr)}</span>
+            <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: `color-mix(in srgb, ${faColor} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${faColor} 20%, transparent)` }}>
+              <span>{faIcon}</span>
+              <span className="font-mono font-bold tracking-wider text-xs" style={{ color: faColor }}>{faLabel}</span>
             </div>
           </div>
           <div className="flex items-center justify-center gap-8">
