@@ -13,7 +13,6 @@ import {
   type RawSignal,
 } from "@/lib/gauge-engine";
 import {
-  actionColor, actionBg, actionBorder, actionIcon, actionLabel,
   computeSentinelIndex, sentinelIndexColor, sentinelIndexLabel,
   deriveMacroRecommendation, macroColor, macroBg, macroBorder, macroIcon,
 } from "@/lib/strategy-engine";
@@ -66,9 +65,14 @@ function TaoPriceTicker({ taoUsd, scoreTimestamp }: { taoUsd: number | null; sco
 }
 
 /* ─── Subnet Side Panel ─── */
-function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | null; open: boolean; onClose: () => void; fr: boolean }) {
+function SubnetQuickPanel({ signal, open, onClose, fr, decisions }: { signal: DashSignal | null; open: boolean; onClose: () => void; fr: boolean; decisions: Map<number, import("@/lib/subnet-decision").SubnetDecision> }) {
   const { t } = useI18n();
   if (!signal) return null;
+  const d = decisions.get(signal.netuid);
+  const fa = d?.finalAction ?? "SURVEILLER";
+  const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : fa === "SYSTÈME" ? MUTED : WARN;
+  const faIcon = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : fa === "SYSTÈME" ? "🔷" : "👁";
+  const faLabel = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "SYSTÈME" ? (fr ? "SYSTÈME" : "SYSTEM") : (fr ? "SURVEILLER" : "MONITOR");
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[380px] border-l border-border bg-background text-foreground overflow-y-auto">
@@ -81,9 +85,9 @@ function SubnetQuickPanel({ signal, open, onClose, fr }: { signal: DashSignal | 
         <div className="mt-4 space-y-5">
           <div className="text-center">
             <div className="font-mono text-sm text-muted-foreground">{signal.name}</div>
-            <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: actionBg(signal.action), border: `1px solid ${actionBorder(signal.action)}` }}>
-              <span>{actionIcon(signal.action)}</span>
-              <span className="font-mono font-bold tracking-wider text-xs" style={{ color: actionColor(signal.action) }}>{actionLabel(signal.action, fr)}</span>
+            <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: `color-mix(in srgb, ${faColor} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${faColor} 20%, transparent)` }}>
+              <span>{faIcon}</span>
+              <span className="font-mono font-bold tracking-wider text-xs" style={{ color: faColor }}>{faLabel}</span>
             </div>
           </div>
           <div className="flex items-center justify-center gap-8">
@@ -213,37 +217,38 @@ export default function CompassPage() {
 
   useAuditLogger(enrichedSignals, scoreTimestamp, dataAlignment ?? "UNKNOWN", dataConfidence, killSwitch, fleetDistribution);
 
-  // ── Engine-action-based priority groups (single source of truth) ──
+  // ── Decision-based priority groups (single source of truth via finalAction) ──
   const priorityGroups = useMemo(() => {
     const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
-    const enterGroup = nonSystem.filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const holdGroup = nonSystem.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const exitGroup = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
-    const enterCount = nonSystem.filter(s => s.action === "ENTER" && !s.isOverridden).length;
-    const holdCount = nonSystem.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).length;
-    const exitCount = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    const getFa = (s: DashSignal) => decisions.get(s.netuid)?.finalAction;
+    const enterGroup = nonSystem.filter(s => getFa(s) === "ENTRER").sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const holdGroup = nonSystem.filter(s => getFa(s) === "SURVEILLER").sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const exitGroup = nonSystem.filter(s => getFa(s) === "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const enterCount = nonSystem.filter(s => getFa(s) === "ENTRER").length;
+    const holdCount = nonSystem.filter(s => getFa(s) === "SURVEILLER").length;
+    const exitCount = nonSystem.filter(s => getFa(s) === "SORTIR").length;
     return { enterGroup, holdGroup, exitGroup, enterCount, holdCount, exitCount };
-  }, [enrichedSignals]);
+  }, [enrichedSignals, decisions]);
 
   // ── Best opportunity & worst risk ──
   const bestOpp = useMemo(() => {
-    return [...enrichedSignals].filter(s => s.action === "ENTER" && !s.isOverridden && !SPECIAL_SUBNETS[s.netuid]?.isSystem).sort((a, b) => b.opp - a.opp)[0] || null;
-  }, [enrichedSignals]);
+    return [...enrichedSignals].filter(s => decisions.get(s.netuid)?.finalAction === "ENTRER").sort((a, b) => b.opp - a.opp)[0] || null;
+  }, [enrichedSignals, decisions]);
 
   const worstRisk = useMemo(() => {
-    return [...enrichedSignals].filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk)[0] || null;
-  }, [enrichedSignals]);
+    return [...enrichedSignals].filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").sort((a, b) => b.risk - a.risk)[0] || null;
+  }, [enrichedSignals, decisions]);
 
   // ── Critical risks ──
   const criticalRisks = useMemo(() => {
     return enrichedSignals
-      .filter(s => s.isOverridden || s.delistCategory !== "NORMAL" || s.depegProbability >= 50)
+      .filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR")
       .sort((a, b) => {
         const sev = (x: DashSignal) => (x.isOverridden ? 100 : 0) + x.depegProbability + (x.delistCategory !== "NORMAL" ? x.delistScore : 0);
         return sev(b) - sev(a);
       })
       .slice(0, 6);
-  }, [enrichedSignals]);
+  }, [enrichedSignals, decisions]);
 
   // ── Watchlist: top conviction signals ──
   const watchlist = useMemo(() => {
@@ -259,12 +264,13 @@ export default function CompassPage() {
   // ── Rotation map ──
   const rotationMap = useMemo(() => {
     const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
-    const leaders = nonSystem.filter(s => s.action === "ENTER" && s.momentumScore >= 55 && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const accumulating = nonSystem.filter(s => s.sc === "ACCUMULATION" && s.action !== "EXIT" && !s.isOverridden && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
-    const fragile = nonSystem.filter(s => s.risk > 60 && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
-    const avoid = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const getFa = (s: DashSignal) => decisions.get(s.netuid)?.finalAction;
+    const leaders = nonSystem.filter(s => getFa(s) === "ENTRER" && s.momentumScore >= 55).sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const accumulating = nonSystem.filter(s => s.sc === "ACCUMULATION" && getFa(s) !== "SORTIR" && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
+    const fragile = nonSystem.filter(s => s.risk > 60 && getFa(s) !== "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const avoid = nonSystem.filter(s => getFa(s) === "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
     return { leaders, accumulating, fragile, avoid };
-  }, [enrichedSignals]);
+  }, [enrichedSignals, decisions]);
 
   // ── Portfolio alignment ──
   const portfolioAlignment = useMemo(() => {
@@ -272,16 +278,16 @@ export default function CompassPage() {
     const held = positions.map(p => p.subnet_id);
     let aligned = 0, misaligned = 0, watching = 0;
     for (const netuid of held) {
-      const sig = enrichedSignals.find(s => s.netuid === netuid);
-      if (!sig) { watching++; continue; }
-      if (sig.action === "EXIT" || sig.isOverridden) misaligned++;
-      else if (sig.action === "ENTER" || sig.action === "HOLD") aligned++;
+      const fa = decisions.get(netuid)?.finalAction;
+      if (!fa) { watching++; continue; }
+      if (fa === "SORTIR") misaligned++;
+      else if (fa === "ENTRER" || fa === "SURVEILLER") aligned++;
       else watching++;
     }
     const total = held.length;
     const status: "aligned" | "partial" | "misaligned" = misaligned === 0 ? "aligned" : misaligned / total >= 0.4 ? "misaligned" : "partial";
     return { aligned, misaligned, watching, total, status };
-  }, [positions, enrichedSignals]);
+  }, [positions, decisions]);
 
   // ── Derived values ──
   const scLabel = t(`sc.${smartCapital.state.toLowerCase()}` as any);
@@ -294,8 +300,8 @@ export default function CompassPage() {
   const drivers = useMemo(() => {
     const avgMom = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + s.momentumScore, 0) / enrichedSignals.length) : 0;
     const avgLiqEff = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + (s.quality || 50), 0) / enrichedSignals.length) : 50;
-    const sellPressure = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => s.action === "EXIT" || s.risk > 70).length / enrichedSignals.length * 100) : 0;
-    const entryRatio = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => s.action === "ENTER").length / enrichedSignals.length * 100) : 0;
+    const sellPressure = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").length / enrichedSignals.length * 100) : 0;
+    const entryRatio = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => decisions.get(s.netuid)?.finalAction === "ENTRER").length / enrichedSignals.length * 100) : 0;
     return [
       { icon: "💰", label: fr ? "Smart Capital" : "Smart Capital", value: smartCapital.state === "ACCUMULATION" ? "Accum." : smartCapital.state === "DISTRIBUTION" ? "Distrib." : "Stable", num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? GO : smartCapital.state === "DISTRIBUTION" ? BREAK : MUTED },
       { icon: "📈", label: "Momentum", value: `${avgMom}`, num: avgMom, color: avgMom >= 55 ? GO : avgMom >= 35 ? WARN : BREAK },
@@ -309,8 +315,8 @@ export default function CompassPage() {
   const tacticalSummary = useMemo(() => {
     if (!enrichedSignals.length) return "";
     const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
-    const entryCount = nonSystem.filter(s => s.action === "ENTER").length;
-    const exitCount = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    const entryCount = nonSystem.filter(s => decisions.get(s.netuid)?.finalAction === "ENTRER").length;
+    const exitCount = nonSystem.filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").length;
     const bestName = bestOpp ? `SN-${bestOpp.netuid} ${bestOpp.name}` : "";
     const worstName = worstRisk ? `SN-${worstRisk.netuid}` : "";
     if (fr) {
@@ -467,7 +473,13 @@ export default function CompassPage() {
                       style={{ borderBottom: idx < Math.min(s.items.length, 5) - 1 ? `1px solid ${s.border}` : "none" }}
                       onClick={() => setPanelSignal(v)}>
                       <span className="font-mono text-[10px] font-bold" style={{ color: GOLD, minWidth: 36 }}>SN-{v.netuid}</span>
-                      <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(v.action) }}>{actionIcon(v.action)} {actionLabel(v.action, fr)}</span>
+                      {(() => {
+                        const fa = decisions.get(v.netuid)?.finalAction ?? "SURVEILLER";
+                        const faC = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : WARN;
+                        const faI = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : "👁";
+                        const faL = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : (fr ? "SURVEILLER" : "MONITOR");
+                        return <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: faC }}>{faI} {faL}</span>;
+                      })()}
                       <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{v.overrideReasons[0] || v.name}</span>
                       <span className="font-mono text-[10px] font-bold" style={{ color: s.key === "exit" ? riskColor(v.risk) : opportunityColor(v.opp) }}>
                         {s.key === "exit" ? v.risk : v.opp}
@@ -500,14 +512,18 @@ export default function CompassPage() {
                   </thead>
                   <tbody>
                     {watchlist.map((s, idx) => {
-                      const convScore = Math.abs(s.opp - s.risk) * (s.conf / 100);
+                      const d = decisions.get(s.netuid);
+                      const fa = d?.finalAction ?? "SURVEILLER";
+                      const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : WARN;
+                      const faLabel = fa === "ENTRER" ? (fr ? "🟢 ENTRER" : "🟢 ENTER") : fa === "SORTIR" ? (fr ? "🔴 SORTIR" : "🔴 EXIT") : (fr ? "👁 SURVEILLER" : "👁 MONITOR");
+                      const convScore = d?.convictionScore ?? Math.abs(s.opp - s.risk) * (s.conf / 100);
                       const convLevel = convScore >= 70 ? "HIGH" : convScore >= 40 ? "MED" : "LOW";
                       const convLevelColor = convScore >= 70 ? GO : convScore >= 40 ? WARN : MUTED;
                       return (
                         <tr key={s.netuid} className="cursor-pointer hover:bg-white/[0.015] transition-colors" style={{ borderBottom: idx < watchlist.length - 1 ? "1px solid hsla(0,0%,100%,0.03)" : "none" }} onClick={() => setPanelSignal(s)}>
                           <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: "hsl(var(--gold))" }}>SN-{s.netuid}</td>
                           <td className="py-2 px-2.5 text-[10px] text-muted-foreground truncate" style={{ maxWidth: 120 }}>{s.name}</td>
-                          <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: actionColor(s.action) }}>{actionIcon(s.action)} {actionLabel(s.action, fr)}</td>
+                          <td className="py-2 px-2.5 text-[9px] font-bold whitespace-nowrap" style={{ color: faColor }}>{faLabel}</td>
                           <td className="py-2 px-2.5 text-[9px] font-bold" style={{ color: convLevelColor }}>{convLevel}</td>
                           <td className="py-2 px-2.5 text-[10px]" style={{ color: confianceColor(s.conf) }}>{s.conf}%</td>
                           <td className="py-2 px-2.5 text-[10px] font-bold" style={{ color: riskColor(s.risk) }}>{s.risk}</td>
@@ -641,7 +657,7 @@ export default function CompassPage() {
         </section>
       </div>
 
-      <SubnetQuickPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} fr={fr} />
+      <SubnetQuickPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} fr={fr} decisions={decisions} />
     </div>
   );
 }
