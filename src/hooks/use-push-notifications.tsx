@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./use-auth";
+import { toast } from "@/hooks/use-toast";
 
 // Extend ServiceWorkerRegistration for Push API (not in all TS libs)
 declare global {
@@ -67,6 +68,9 @@ export function usePushNotifications() {
   }, [detectState]);
 
   const subscribe = useCallback(async () => {
+    toast({ title: "🔔 Push", description: user ? "Activation en cours…" : "⚠️ Connexion requise" });
+    console.log("[Push] subscribe() called, user:", user?.id ?? "null");
+
     if (!user) {
       setError("Sign in required to enable push notifications");
       return;
