@@ -68,6 +68,9 @@ export function usePushNotifications() {
   }, [detectState]);
 
   const subscribe = useCallback(async () => {
+    toast({ title: "🔔 Push", description: user ? "Activation en cours…" : "⚠️ Connexion requise" });
+    console.log("[Push] subscribe() called, user:", user?.id ?? "null");
+
     if (!user) {
       setError("Sign in required to enable push notifications");
       return;
