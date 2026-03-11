@@ -302,10 +302,11 @@ export default function SubnetsPage() {
   const { decisions, decisionsList } = useSubnetDecisions();
 
   // ── Action counts from DECISIONS (single source of truth) ──
+  // Exclude system subnets from counts (same as Compass)
   const actionCounts = useMemo(() => {
     let enter = 0, monitor = 0, exit = 0;
     for (const d of decisionsList) {
-      if (d.isSystem) { monitor++; continue; }
+      if (d.isSystem) continue;
       if (d.finalAction === "ENTRER") enter++;
       else if (d.finalAction === "SORTIR") exit++;
       else monitor++;
