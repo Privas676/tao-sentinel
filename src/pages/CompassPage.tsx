@@ -213,17 +213,18 @@ export default function CompassPage() {
 
   useAuditLogger(enrichedSignals, scoreTimestamp, dataAlignment ?? "UNKNOWN", dataConfidence, killSwitch, fleetDistribution);
 
-  // ── Engine-action-based priority groups (single source of truth) ──
+  // ── Decision-based priority groups (single source of truth via finalAction) ──
   const priorityGroups = useMemo(() => {
     const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
-    const enterGroup = nonSystem.filter(s => s.action === "ENTER" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const holdGroup = nonSystem.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const exitGroup = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).sort((a, b) => b.risk - a.risk).slice(0, 5);
-    const enterCount = nonSystem.filter(s => s.action === "ENTER" && !s.isOverridden).length;
-    const holdCount = nonSystem.filter(s => s.action !== "ENTER" && s.action !== "EXIT" && !s.isOverridden).length;
-    const exitCount = nonSystem.filter(s => s.action === "EXIT" || s.isOverridden).length;
+    const getFa = (s: DashSignal) => decisions.get(s.netuid)?.finalAction;
+    const enterGroup = nonSystem.filter(s => getFa(s) === "ENTRER").sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const holdGroup = nonSystem.filter(s => getFa(s) === "SURVEILLER").sort((a, b) => b.opp - a.opp).slice(0, 5);
+    const exitGroup = nonSystem.filter(s => getFa(s) === "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const enterCount = nonSystem.filter(s => getFa(s) === "ENTRER").length;
+    const holdCount = nonSystem.filter(s => getFa(s) === "SURVEILLER").length;
+    const exitCount = nonSystem.filter(s => getFa(s) === "SORTIR").length;
     return { enterGroup, holdGroup, exitGroup, enterCount, holdCount, exitCount };
-  }, [enrichedSignals]);
+  }, [enrichedSignals, decisions]);
 
   // ── Best opportunity & worst risk ──
   const bestOpp = useMemo(() => {
