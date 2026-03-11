@@ -348,6 +348,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const body = await req.json().catch(() => ({}));
+    const forceMode = body.force === true;
+
     const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -415,7 +418,11 @@ Deno.serve(async (req) => {
     type PushEvent = typeof strategic[0] & { eventId: string; priority: Priority };
     const deduped = new Map<string, PushEvent>();
     for (const ev of strategic) {
-      const eventId = computeEventId(ev.type!, ev.netuid, ev.ts);
+      let eventId = computeEventId(ev.type!, ev.netuid, ev.ts);
+      // In force mode, append a unique nonce to bypass dedup
+      if (forceMode) {
+        eventId += `:force-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      }
       if (!deduped.has(eventId)) {
         deduped.set(eventId, { ...ev, eventId, priority: getPriority(ev.type!) });
       }
