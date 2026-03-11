@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════ */
 /*   SERVICE WORKER — Push Notifications   */
-/*   v0.2.0 — sentinel-core                */
+/*   v0.3.0 — sentinel-core                */
 /* ═══════════════════════════════════════ */
 
-const CACHE_VERSION = "tao-sentinel-v0.2.0";
+const CACHE_VERSION = "tao-sentinel-v0.3.0";
 
 // ── Clear ALL old caches on activate ──
 self.addEventListener("activate", (event) => {
@@ -25,23 +25,40 @@ self.addEventListener("install", (event) => {
 
 // ── Push handling ──
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
+  console.log("[SW-Push] push event received", event.data ? "with data" : "empty");
+
+  if (!event.data) {
+    // Empty push — show a generic notification
+    event.waitUntil(
+      self.registration.showNotification("TAO Sentinel", {
+        body: "Nouvelle alerte disponible",
+        icon: "/pwa-192x192.png",
+        badge: "/pwa-192x192.png",
+        tag: "tao-sentinel-generic",
+      })
+    );
+    return;
+  }
 
   let data;
   try {
     data = event.data.json();
-  } catch {
-    data = { title: "Tao Sentinel", body: event.data.text() };
+    console.log("[SW-Push] parsed payload:", JSON.stringify(data));
+  } catch (e) {
+    console.warn("[SW-Push] Failed to parse JSON, using text:", e);
+    data = { title: "TAO Sentinel", body: event.data.text() };
   }
 
-  const title = data.title || "Tao Sentinel";
+  const title = data.title || "TAO Sentinel";
   const options = {
     body: data.body || "",
     icon: "/pwa-192x192.png",
     badge: "/pwa-192x192.png",
     tag: data.tag || "tao-sentinel",
     renotify: true,
-    vibrate: [200, 100, 200],
+    requireInteraction: true,
+    vibrate: [200, 100, 200, 100, 200],
+    silent: false,
     data: {
       url: data.url || "/alerts",
     },

@@ -6,6 +6,137 @@ const corsHeaders = {
 };
 
 /* ═══════════════════════════════════════════════════
+ *  RFC 8291 Web Push Encryption (aes128gcm)
+ *  Using Web Crypto API — no external dependencies
+ * ═══════════════════════════════════════════════════ */
+
+function base64urlDecode(str: string): Uint8Array {
+  const b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+  return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
+}
+
+function base64urlEncode(buf: Uint8Array): string {
+  return btoa(String.fromCharCode(...buf))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+async function hkdfExtract(salt: Uint8Array, ikm: Uint8Array): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    "raw", salt, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, ikm));
+}
+
+async function hkdfExpand(prk: Uint8Array, info: Uint8Array, length: number): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    "raw", prk, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const input = new Uint8Array(info.length + 1);
+  input.set(info, 0);
+  input[info.length] = 1; // Counter = 1 (we only need one block)
+  const output = new Uint8Array(await crypto.subtle.sign("HMAC", key, input));
+  return output.slice(0, length);
+}
+
+/**
+ * Encrypt a push payload per RFC 8291 (aes128gcm content encoding).
+ * Returns the encrypted body ready to POST to the push endpoint.
+ */
+async function encryptPayload(
+  payload: string,
+  p256dhB64url: string,
+  authB64url: string,
+): Promise<Uint8Array> {
+  // 1. Decode subscriber keys
+  const authSecret = base64urlDecode(authB64url);         // 16 bytes
+  const subscriberPubRaw = base64urlDecode(p256dhB64url); // 65 bytes (uncompressed P-256)
+
+  // Import subscriber public key for ECDH
+  const subscriberKey = await crypto.subtle.importKey(
+    "raw", subscriberPubRaw,
+    { name: "ECDH", namedCurve: "P-256" },
+    false, []
+  );
+
+  // 2. Generate ephemeral local key pair
+  const localKeyPair = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" },
+    true, ["deriveBits"]
+  );
+  const localPublicKeyRaw = new Uint8Array(
+    await crypto.subtle.exportKey("raw", localKeyPair.publicKey)
+  ); // 65 bytes
+
+  // 3. ECDH shared secret
+  const sharedSecret = new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: "ECDH", public: subscriberKey },
+      localKeyPair.privateKey,
+      256
+    )
+  ); // 32 bytes
+
+  // 4. Derive IKM using RFC 8291 Section 3.4
+  // PRK_key = HKDF-Extract(salt=auth_secret, ikm=shared_secret)
+  const prkKey = await hkdfExtract(authSecret, sharedSecret);
+
+  // key_info = "WebPush: info\0" + ua_public(65) + as_public(65)
+  const keyInfoPrefix = new TextEncoder().encode("WebPush: info\0");
+  const keyInfo = new Uint8Array(keyInfoPrefix.length + 65 + 65);
+  keyInfo.set(keyInfoPrefix, 0);
+  keyInfo.set(subscriberPubRaw, keyInfoPrefix.length);
+  keyInfo.set(localPublicKeyRaw, keyInfoPrefix.length + 65);
+
+  const ikm = await hkdfExpand(prkKey, keyInfo, 32);
+
+  // 5. Generate random salt for this message
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+
+  // 6. Derive CEK and nonce per RFC 8188
+  const prk = await hkdfExtract(salt, ikm);
+  const cekInfo = new TextEncoder().encode("Content-Encoding: aes128gcm\0");
+  const nonceInfo = new TextEncoder().encode("Content-Encoding: nonce\0");
+  const cek = await hkdfExpand(prk, cekInfo, 16);
+  const nonce = await hkdfExpand(prk, nonceInfo, 12);
+
+  // 7. Pad plaintext: content + 0x02 delimiter (last record)
+  const plaintextBytes = new TextEncoder().encode(payload);
+  const padded = new Uint8Array(plaintextBytes.length + 1);
+  padded.set(plaintextBytes, 0);
+  padded[plaintextBytes.length] = 0x02; // Last record delimiter
+
+  // 8. Encrypt with AES-128-GCM
+  const aesKey = await crypto.subtle.importKey(
+    "raw", cek, { name: "AES-GCM" }, false, ["encrypt"]
+  );
+  const encrypted = new Uint8Array(
+    await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: nonce, tagLength: 128 },
+      aesKey,
+      padded
+    )
+  );
+
+  // 9. Build aes128gcm body: header || encrypted_record
+  // Header: salt(16) || rs(4) || idlen(1) || keyid(65)
+  const rs = 4096; // Record size (standard)
+  const header = new Uint8Array(16 + 4 + 1 + 65); // 86 bytes
+  header.set(salt, 0);
+  new DataView(header.buffer).setUint32(16, rs, false); // big-endian
+  header[20] = 65; // idlen = length of local public key
+  header.set(localPublicKeyRaw, 21);
+
+  const body = new Uint8Array(header.length + encrypted.length);
+  body.set(header, 0);
+  body.set(encrypted, header.length);
+
+  return body;
+}
+
+/* ═══════════════════════════════════════════════════
  *  VAPID JWT signing (ECDSA P-256)
  * ═══════════════════════════════════════════════════ */
 
@@ -15,13 +146,14 @@ async function createVapidJwt(
   privateKeyB64url: string,
   publicKeyB64url: string
 ): Promise<string> {
-  const pubRawB64 = publicKeyB64url.replace(/-/g, "+").replace(/_/g, "/");
-  const pubRaw = Uint8Array.from(atob(pubRawB64 + "=".repeat((4 - pubRawB64.length % 4) % 4)), c => c.charCodeAt(0));
-  const x = btoa(String.fromCharCode(...pubRaw.slice(1, 33))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  const y = btoa(String.fromCharCode(...pubRaw.slice(33, 65))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const pubRaw = base64urlDecode(publicKeyB64url);
+  const x = base64urlEncode(pubRaw.slice(1, 33));
+  const y = base64urlEncode(pubRaw.slice(33, 65));
 
   const jwk = { kty: "EC", crv: "P-256", x, y, d: privateKeyB64url };
-  const key = await crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const key = await crypto.subtle.importKey(
+    "jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]
+  );
 
   const now = Math.floor(Date.now() / 1000);
   const header = { typ: "JWT", alg: "ES256" };
@@ -33,7 +165,10 @@ async function createVapidJwt(
   };
 
   const input = `${b64url(header)}.${b64url(payload)}`;
-  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(input));
+  const sig = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" }, key,
+    new TextEncoder().encode(input)
+  );
 
   const sigBytes = new Uint8Array(sig);
   let rawSig: Uint8Array;
@@ -48,7 +183,8 @@ async function createVapidJwt(
     rawSig.set(s, 32);
   }
 
-  const sigB64 = btoa(String.fromCharCode(...rawSig)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const sigB64 = btoa(String.fromCharCode(...rawSig))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   return `${input}.${sigB64}`;
 }
 
@@ -71,11 +207,11 @@ function derIntegerToRaw(der: Uint8Array, offset: number): Uint8Array {
 type Priority = 0 | 1 | 2 | 3;
 
 const PRIORITY_MAP: Record<string, Priority> = {
-  DEPEG_CONFIRMED: 0,     // P0: depeg confirmed
-  RISK_OVERRIDE: 1,       // P1: override critical
-  POSITION_URGENT: 1,     // P1: position needs immediate action
-  CONFIDENCE_DROP: 2,     // P2: global confidence alert
-  DATA_UNSTABLE: 2,       // P2: system alert
+  DEPEG_CONFIRMED: 0,
+  RISK_OVERRIDE: 1,
+  POSITION_URGENT: 1,
+  CONFIDENCE_DROP: 2,
+  DATA_UNSTABLE: 2,
   GO: 3,
   GO_SPECULATIVE: 3,
   EARLY: 3,
@@ -89,8 +225,6 @@ function getPriority(type: string): Priority {
 
 /* ═══════════════════════════════════════════════════
  *  Event ID — stable hash for deduplication
- *  Format: {type}:{netuid}:{15min-window}
- *  Same event in same 15-min window = same eventId
  * ═══════════════════════════════════════════════════ */
 
 function computeEventId(type: string, netuid: number | null, ts: string): string {
@@ -155,6 +289,56 @@ function eventToNotification(ev: { type: string; netuid: number | null; evidence
 }
 
 /* ═══════════════════════════════════════════════════
+ *  Send a single push notification (with encryption)
+ * ═══════════════════════════════════════════════════ */
+
+async function sendPush(
+  sub: { endpoint: string; p256dh: string; auth: string },
+  payload: string,
+  config: { vapid_public_key: string; vapid_private_key: string },
+): Promise<{ success: boolean; expired: boolean; status: number; error?: string }> {
+  try {
+    const url = new URL(sub.endpoint);
+    const audience = `${url.protocol}//${url.host}`;
+
+    // VAPID JWT for authorization
+    const jwt = await createVapidJwt(
+      audience,
+      "mailto:noreply@taosentinel.app",
+      config.vapid_private_key,
+      config.vapid_public_key,
+    );
+
+    // RFC 8291 encryption
+    const encryptedBody = await encryptPayload(payload, sub.p256dh, sub.auth);
+
+    const res = await fetch(sub.endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Encoding": "aes128gcm",
+        TTL: "86400",
+        Urgency: "high",
+        Authorization: `vapid t=${jwt}, k=${config.vapid_public_key}`,
+      },
+      body: encryptedBody,
+    });
+    await res.text(); // Consume body to prevent resource leak
+
+    if (res.status === 200 || res.status === 201) {
+      return { success: true, expired: false, status: res.status };
+    }
+    if (res.status === 410 || res.status === 404) {
+      return { success: false, expired: true, status: res.status };
+    }
+    return { success: false, expired: false, status: res.status, error: `HTTP ${res.status}` };
+  } catch (err) {
+    console.error("[PUSH] sendPush error:", err);
+    return { success: false, expired: false, status: 0, error: String(err) };
+  }
+}
+
+/* ═══════════════════════════════════════════════════
  *  Main handler
  * ═══════════════════════════════════════════════════ */
 
@@ -213,7 +397,6 @@ Deno.serve(async (req) => {
     }
 
     if (safeModeActive) {
-      // Only allow P0 (DEPEG_CONFIRMED) through
       const criticalOnly = strategic.filter(e => DEPEG_TYPES.has(e.type!));
       console.error(`[PUSH-KILL-SWITCH] SAFE MODE — ${killSwitchReasons.join("; ")} | Blocking ${strategic.length - criticalOnly.length}, allowing ${criticalOnly.length}`);
       if (criticalOnly.length === 0) {
@@ -256,6 +439,8 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    console.log(`[PUSH] Processing ${deduped.size} events for ${subs.length} subscribers`);
+
     /* ── Also process pending retries ── */
     const { data: retryRows } = await sb.from("push_log")
       .select("id, event_id, endpoint, payload, retry_count")
@@ -288,7 +473,6 @@ Deno.serve(async (req) => {
         });
 
         if (insertErr) {
-          // Unique constraint violation = already sent/logged
           if (insertErr.code === "23505") {
             skippedDedup++;
             continue;
@@ -297,6 +481,7 @@ Deno.serve(async (req) => {
         }
 
         const result = await sendPush(sub, payload, config);
+        console.log(`[PUSH] ${ev.type} → ${sub.endpoint.slice(0, 50)}… = ${result.success ? "OK" : `FAIL(${result.status})`}`);
 
         if (result.success) {
           sent++;
@@ -378,46 +563,3 @@ Deno.serve(async (req) => {
     });
   }
 });
-
-/* ═══════════════════════════════════════════════════
- *  Send a single push notification
- * ═══════════════════════════════════════════════════ */
-
-async function sendPush(
-  sub: { endpoint: string; p256dh: string; auth: string },
-  payload: string,
-  config: { vapid_public_key: string; vapid_private_key: string },
-): Promise<{ success: boolean; expired: boolean; status: number; error?: string }> {
-  try {
-    const url = new URL(sub.endpoint);
-    const audience = `${url.protocol}//${url.host}`;
-
-    const jwt = await createVapidJwt(
-      audience,
-      "mailto:noreply@taosentinel.app",
-      config.vapid_private_key,
-      config.vapid_public_key,
-    );
-
-    const res = await fetch(sub.endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/octet-stream",
-        TTL: "86400",
-        Authorization: `vapid t=${jwt}, k=${config.vapid_public_key}`,
-      },
-      body: payload,
-    });
-    await res.text();
-
-    if (res.status === 200 || res.status === 201) {
-      return { success: true, expired: false, status: res.status };
-    }
-    if (res.status === 410 || res.status === 404) {
-      return { success: false, expired: true, status: res.status };
-    }
-    return { success: false, expired: false, status: res.status, error: `HTTP ${res.status}` };
-  } catch (err) {
-    return { success: false, expired: false, status: 0, error: String(err) };
-  }
-}

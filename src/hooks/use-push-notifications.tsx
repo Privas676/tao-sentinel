@@ -183,10 +183,12 @@ export function usePushNotifications() {
       console.log("[Push] Subscription persisted ✓");
       setState("subscribed");
       setError(null);
+      toast({ title: "🔔 Push activé", description: "Vous recevrez les alertes stratégiques." });
     } catch (err) {
       console.error("[Push] Subscribe error:", err);
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
+      toast({ title: "❌ Erreur push", description: msg, variant: "destructive" });
       // Re-detect actual state
       await detectState();
     }
@@ -220,30 +222,56 @@ export function usePushNotifications() {
   const sendTest = useCallback(async () => {
     if (state !== "subscribed") {
       setTestResult("not_subscribed");
+      toast({ title: "⚠️ Push", description: "Abonnement push inactif" });
       return;
     }
     setTestResult("sending");
     setError(null);
+    toast({ title: "🔔 Test push", description: "Envoi en cours…" });
 
     try {
+      console.log("[Push] sendTest: refreshing session…");
       const { data: { session } } = await supabase.auth.refreshSession();
       if (!session?.access_token) throw new Error("Session expired");
+      console.log("[Push] sendTest: calling manage-push send-test…");
 
       const { data, error: testErr } = await supabase.functions.invoke("manage-push", {
         body: { action: "send-test" },
       });
 
+      console.log("[Push] sendTest response:", JSON.stringify(data));
+
       if (testErr) throw new Error(testErr.message);
       if (data?.error) throw new Error(data.error);
-      setTestResult(data?.ok ? "sent" : "failed");
 
-      // Auto-clear after 8s
-      setTimeout(() => setTestResult(null), 8000);
+      const pushResult = data?.pushResult;
+      if (pushResult?.sent > 0) {
+        setTestResult("sent");
+        toast({ title: "✅ Push envoyé", description: `${pushResult.sent} notification(s) envoyée(s). Vérifiez votre appareil.` });
+      } else if (pushResult?.reason === "kill_switch_safe_mode") {
+        setTestResult("blocked");
+        toast({ title: "⚠️ Kill switch actif", description: "Trop d'événements — seuls les depeg passent.", variant: "destructive" });
+      } else if (pushResult?.reason === "no_subscribers") {
+        setTestResult("no_sub");
+        toast({ title: "⚠️ Pas d'abonnement", description: "Aucun abonnement push trouvé en base. Réactivez les notifications.", variant: "destructive" });
+      } else if (pushResult?.dedupSkipped > 0 && pushResult?.sent === 0) {
+        setTestResult("dedup");
+        toast({ title: "ℹ️ Déjà envoyé", description: "Le test a déjà été envoyé récemment (déduplication 15 min)." });
+      } else {
+        setTestResult("failed");
+        const reason = pushResult?.reason || "unknown";
+        toast({ title: "⚠️ Push non envoyé", description: `Raison : ${reason}`, variant: "destructive" });
+      }
+
+      // Auto-clear after 10s
+      setTimeout(() => setTestResult(null), 10000);
     } catch (err) {
       console.error("[Push] Test error:", err);
-      setError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
       setTestResult("failed");
-      setTimeout(() => setTestResult(null), 8000);
+      toast({ title: "❌ Erreur test push", description: msg, variant: "destructive" });
+      setTimeout(() => setTestResult(null), 10000);
     }
   }, [state]);
 
