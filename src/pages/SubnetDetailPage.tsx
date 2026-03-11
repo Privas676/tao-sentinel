@@ -247,7 +247,10 @@ export default function SubnetDetailPage() {
                   )}
                 </div>
               </div>
-              <ActionBadge action={decision.badgeAction} />
+              <div className="flex items-center gap-2">
+                <ActionBadge action={decision.badgeAction} />
+                <DecisionDebugBadge decision={decision} />
+              </div>
             </div>
 
             {/* Primary decision strip */}
