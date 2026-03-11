@@ -26,7 +26,10 @@ export function useSubnetDecisions(): SubnetDecisionsResult {
   const { verdicts, isLoading: verdictsLoading } = useSubnetVerdicts();
 
   const result = useMemo(() => {
-    if (scoresLoading || !scoresList.length) {
+    // Wait for BOTH scores AND verdicts to avoid race condition
+    // where decisions are computed without verdicts (leading to
+    // incorrect ENTRER counts that later flip to SURVEILLER).
+    if (scoresLoading || verdictsLoading || !scoresList.length) {
       return {
         decisions: new Map<number, SubnetDecision>(),
         decisionsList: [] as SubnetDecision[],
@@ -38,7 +41,7 @@ export function useSubnetDecisions(): SubnetDecisionsResult {
     const decisionsList = Array.from(decisions.values());
 
     return { decisions, decisionsList, isLoading: false };
-  }, [scoresList, verdicts, fr, scoresLoading]);
+  }, [scoresList, verdicts, fr, scoresLoading, verdictsLoading]);
 
   return result;
 }
