@@ -275,6 +275,20 @@ export default function SettingsPage() {
                 ok={pushState === "subscribed"}
               />
               <PushDiagRow
+                label={fr ? "Dernier test" : "Last test"}
+                value={
+                  testResult === "sent" ? (fr ? "✅ Envoyé" : "✅ Sent")
+                  : testResult === "dedup" ? (fr ? "⚠️ Dédupliqué" : "⚠️ Deduplicated")
+                  : testResult === "sending" ? "⏳…"
+                  : testResult === "failed" ? (fr ? "❌ Échec" : "❌ Failed")
+                  : testResult === "blocked" ? (fr ? "🛑 Kill switch" : "🛑 Kill switch")
+                  : testResult === "no_sub" ? (fr ? "⚪ Pas d'abonnement" : "⚪ No subscription")
+                  : testResult === "not_subscribed" ? (fr ? "⚪ Non abonné" : "⚪ Not subscribed")
+                  : (fr ? "— Aucun test" : "— No test yet")
+                }
+                ok={testResult === "sent"}
+              />
+              <PushDiagRow
                 label={fr ? "Statut global" : "Overall status"}
                 value={
                   pushState === "subscribed" ? (fr ? "✅ Opérationnel" : "✅ Operational")
