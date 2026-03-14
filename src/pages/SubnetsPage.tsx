@@ -79,6 +79,8 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
     if (row.isOverridden) alerts.push({ icon: "⛔", text: fr ? "Override actif — sortie forcée" : "Active override — forced exit", color: "hsl(var(--destructive))" });
     if (row.depegProbability >= 50) alerts.push({ icon: "⚠", text: `Depeg ${row.depegProbability}%`, color: "hsl(var(--signal-go-spec))" });
     if (row.delistCategory !== "NORMAL") alerts.push({ icon: "🔴", text: fr ? `Risque delist (${row.delistCategory})` : `Delist risk (${row.delistCategory})`, color: "hsl(var(--destructive))" });
+    if (row.externalDelist?.status === "critical") alerts.push({ icon: "💀", text: fr ? `Désenregistrement ext. #${row.externalDelist.rank} (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})` : `External delist #${row.externalDelist.rank} (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})`, color: "hsl(var(--destructive))" });
+    else if (row.externalDelist?.status === "high") alerts.push({ icon: "⚠️", text: fr ? `Risque désenregistrement externe (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})` : `External delist risk (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})`, color: "hsl(var(--signal-go-spec))" });
     if (row.dataUncertain) alerts.push({ icon: "❓", text: fr ? "Données incertaines" : "Uncertain data", color: "hsl(var(--muted-foreground))" });
     if (decision.conflictExplanation) alerts.push({ icon: "⚖️", text: decision.conflictExplanation, color: "hsl(var(--signal-go-spec))" });
   }
