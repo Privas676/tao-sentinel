@@ -101,7 +101,7 @@ describe("subnet-decision — SN-90 scenario", () => {
 describe("subnet-decision — DEPEG_PRIORITY", () => {
   it("always forces SORTIR", () => {
     const s = makeScore({ delistCategory: "DEPEG_PRIORITY" });
-    const d = buildSubnetDecision(s, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true);
     expect(d.finalAction).toBe("SORTIR");
   });
 });
