@@ -438,7 +438,7 @@ export default function SubnetsPage() {
         }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, sparklines, decisions, ownedNetuids, delistInfo, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, sortCol, sortDir, fr]);
+  }, [scoresList, sparklines, decisions, ownedNetuids, delistInfo, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, externalFilter, sortCol, sortDir, fr]);
 
   // ── Column header helper ──
   const SortHeader = ({ col, label, align = "left" }: { col: SortCol; label: string; align?: "left" | "center" | "right" }) => (
