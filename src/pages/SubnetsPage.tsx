@@ -617,6 +617,7 @@ export default function SubnetsPage() {
                   <SortHeader col="risk" label="Risk" align="right" />
                   <SortHeader col="opp" label="Opp." align="right" />
                   <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Signal</th>
+                  <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">{fr ? "Ext." : "Ext."}</th>
                   {!isCompact && (
                     <>
                       <SortHeader col="confidence" label="Conf." align="right" />
