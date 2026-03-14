@@ -150,6 +150,8 @@ export default function SubnetDetailPage() {
   const { decisions } = useSubnetDecisions();
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
+  const { delistInfo } = useExternalDelist();
+  const extDelist = delistInfo.get(netuid);
   const [flash, setFlash] = useState<string | null>(null);
   const [showDeepDive, setShowDeepDive] = useState(false);
   const s = scores.get(netuid);
