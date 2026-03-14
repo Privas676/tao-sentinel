@@ -12,6 +12,7 @@ import { healthColor } from "@/lib/subnet-health";
 import { ActionBadge } from "@/components/sentinel";
 import { SectionCard, SectionTitle, KPIChip, Metric, BarScore, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 import DecisionDebugBadge from "@/components/DecisionDebugBadge";
+import SocialSignalBlock from "@/components/social/SocialSignalBlock";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SUBNET COMMAND CENTER — Decision-First Architecture   */
@@ -452,6 +453,9 @@ export default function SubnetDetailPage() {
             <BarScore label={fr ? "Risque (inv.)" : "Risk (inv.)"} value={100 - s.risk} />
           </div>
         </SectionCard>
+
+        {/* ── Social Signal Block ── */}
+        <SocialSignalBlock subnetUid={netuid} finalAction={decision.finalAction} />
 
         {/* ══════════════════════════════════════════ */}
         {/*   DEEP DIVE — Collapsible advanced metrics   */}

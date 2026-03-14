@@ -374,54 +374,253 @@ export type Database = {
           },
         ]
       }
-      social_kols: {
+      social_accounts: {
         Row: {
-          accuracy_history: Json | null
+          accuracy_history: number
           category: string
           created_at: string
-          credibility_score: number | null
+          credibility_score: number
           display_name: string | null
-          false_positive_rate: number | null
+          false_positive_rate: number
           handle: string
-          id: number
+          id: string
           influence_weight: number
           is_active: boolean
-          last_seen_at: string | null
-          self_mention: boolean
+          notes: string | null
+          platform: string
           tier: string
           updated_at: string
         }
         Insert: {
-          accuracy_history?: Json | null
+          accuracy_history?: number
           category?: string
           created_at?: string
-          credibility_score?: number | null
+          credibility_score?: number
           display_name?: string | null
-          false_positive_rate?: number | null
+          false_positive_rate?: number
           handle: string
-          id?: never
+          id?: string
           influence_weight?: number
           is_active?: boolean
-          last_seen_at?: string | null
-          self_mention?: boolean
+          notes?: string | null
+          platform?: string
           tier?: string
           updated_at?: string
         }
         Update: {
-          accuracy_history?: Json | null
+          accuracy_history?: number
           category?: string
           created_at?: string
-          credibility_score?: number | null
+          credibility_score?: number
           display_name?: string | null
-          false_positive_rate?: number | null
+          false_positive_rate?: number
           handle?: string
-          id?: never
+          id?: string
           influence_weight?: number
           is_active?: boolean
-          last_seen_at?: string | null
-          self_mention?: boolean
+          notes?: string | null
+          platform?: string
           tier?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      social_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          severity: string
+          source_count: number
+          subnet_uid: number
+          title: string
+          weighted_score: number
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          severity?: string
+          source_count?: number
+          subnet_uid: number
+          title: string
+          weighted_score?: number
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          severity?: string
+          source_count?: number
+          subnet_uid?: number
+          title?: string
+          weighted_score?: number
+        }
+        Relationships: []
+      }
+      social_post_mentions: {
+        Row: {
+          confidence_extraction: number
+          conviction_level: number
+          created_at: string
+          id: string
+          mention_type: string
+          post_id: string
+          self_mention: boolean
+          sentiment: string
+          subnet_name: string | null
+          subnet_uid: number
+        }
+        Insert: {
+          confidence_extraction?: number
+          conviction_level?: number
+          created_at?: string
+          id?: string
+          mention_type?: string
+          post_id: string
+          self_mention?: boolean
+          sentiment?: string
+          subnet_name?: string | null
+          subnet_uid: number
+        }
+        Update: {
+          confidence_extraction?: number
+          conviction_level?: number
+          created_at?: string
+          id?: string
+          mention_type?: string
+          post_id?: string
+          self_mention?: boolean
+          sentiment?: string
+          subnet_name?: string | null
+          subnet_uid?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_post_mentions_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_posts: {
+        Row: {
+          account_id: string
+          clean_text: string | null
+          created_at: string
+          engagement_score: number
+          external_post_id: string | null
+          id: string
+          language: string | null
+          like_count: number
+          post_type: string
+          posted_at: string
+          raw_text: string | null
+          reply_count: number
+          repost_count: number
+          url: string | null
+          view_count: number
+        }
+        Insert: {
+          account_id: string
+          clean_text?: string | null
+          created_at?: string
+          engagement_score?: number
+          external_post_id?: string | null
+          id?: string
+          language?: string | null
+          like_count?: number
+          post_type?: string
+          posted_at?: string
+          raw_text?: string | null
+          reply_count?: number
+          repost_count?: number
+          url?: string | null
+          view_count?: number
+        }
+        Update: {
+          account_id?: string
+          clean_text?: string | null
+          created_at?: string
+          engagement_score?: number
+          external_post_id?: string | null
+          id?: string
+          language?: string | null
+          like_count?: number
+          post_type?: string
+          posted_at?: string
+          raw_text?: string | null
+          reply_count?: number
+          repost_count?: number
+          url?: string | null
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_posts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "social_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_subnet_scores: {
+        Row: {
+          created_at: string
+          final_social_signal: string
+          id: string
+          narrative_strength: number
+          pump_risk_score: number
+          raw_mention_count: number
+          score_date: string
+          smart_kol_score: number
+          social_conviction_score: number
+          social_heat_score: number
+          subnet_uid: number
+          unique_account_count: number
+          weighted_bearish_score: number
+          weighted_bullish_score: number
+        }
+        Insert: {
+          created_at?: string
+          final_social_signal?: string
+          id?: string
+          narrative_strength?: number
+          pump_risk_score?: number
+          raw_mention_count?: number
+          score_date?: string
+          smart_kol_score?: number
+          social_conviction_score?: number
+          social_heat_score?: number
+          subnet_uid: number
+          unique_account_count?: number
+          weighted_bearish_score?: number
+          weighted_bullish_score?: number
+        }
+        Update: {
+          created_at?: string
+          final_social_signal?: string
+          id?: string
+          narrative_strength?: number
+          pump_risk_score?: number
+          raw_mention_count?: number
+          score_date?: string
+          smart_kol_score?: number
+          social_conviction_score?: number
+          social_heat_score?: number
+          subnet_uid?: number
+          unique_account_count?: number
+          weighted_bearish_score?: number
+          weighted_bullish_score?: number
         }
         Relationships: []
       }
