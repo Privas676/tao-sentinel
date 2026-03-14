@@ -528,12 +528,14 @@ export function computeDerivedScores(
 export function computeAllDerivedScores(
   factsMap: Map<number, SubnetFacts>,
   concordanceMap: Map<number, ConcordanceResult>,
+  externalHaircuts?: Map<number, number | null>,
 ): Map<number, ScoringResult> {
   const result = new Map<number, ScoringResult>();
   for (const [netuid, facts] of factsMap) {
     const concordance = concordanceMap.get(netuid);
     if (concordance) {
-      result.set(netuid, computeDerivedScores(facts, concordance));
+      const extHaircut = externalHaircuts?.get(netuid) ?? null;
+      result.set(netuid, computeDerivedScores(facts, concordance, extHaircut));
     }
   }
   return result;
