@@ -597,16 +597,18 @@ export function useSubnetScores(): UnifiedScoresResult {
       return applyDecision(decisionInput) as UnifiedSubnetScore;
     });
 
-    // ── Phase 3b: NEW LAYERS — Facts, Concordance, Derived Scores ──
+    // ── Phase 3b: NEW LAYERS — Facts, Concordance, Derived Scores, Verdict v3 ──
     const factsMap = rawPayloads ? extractAllSubnetFacts(rawPayloads, rate) : new Map<number, SubnetFacts>();
     const concordanceMap = computeAllConcordances(factsMap);
     const derivedMap = computeAllDerivedScores(factsMap, concordanceMap);
+    const verdictsV3Map = computeAllVerdictsV3(factsMap, derivedMap, concordanceMap);
 
     // Attach new layers to each scored subnet
     for (const s of scored) {
       s.facts = factsMap.get(s.netuid);
       s.concordance = concordanceMap.get(s.netuid);
       s.derivedScoring = derivedMap.get(s.netuid);
+      s.verdictV3 = verdictsV3Map.get(s.netuid);
     }
 
     // Sort by asymmetry desc (default)
@@ -626,6 +628,11 @@ export function useSubnetScores(): UnifiedScoresResult {
         console.warn(`[STALE-GUARD] Data alignment STALE — all ENTER actions downgraded to WATCH (${blockedCount} potential blocks)`);
       }
 
+      // V3 verdict distribution log
+      const v3Counts = { ENTER: 0, SURVEILLER: 0, SORTIR: 0, DONNÉES_INSTABLES: 0, NON_INVESTISSABLE: 0, SYSTÈME: 0 };
+      for (const [, v] of verdictsV3Map) { v3Counts[v.verdict] = (v3Counts[v.verdict] || 0) + 1; }
+      console.log(`[VERDICT-V3] ${Object.entries(v3Counts).map(([k, v]) => `${k}:${v}`).join(" ")}`);
+
       // Whitelist invariant check
       for (const s of scored) {
         if (SPECIAL_SUBNETS[s.netuid] && s.action === "EXIT") {
@@ -634,7 +641,7 @@ export function useSubnetScores(): UnifiedScoresResult {
       }
     }
 
-    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist, factsMap, concordanceMap, derivedMap };
+    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist, factsMap, concordanceMap, derivedMap, verdictsV3Map };
   }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines, alignmentResult]);
 
   // ── Phase 4: DECISION STATE LAYER (stability: hysteresis, confirmation, cooldown) ──
