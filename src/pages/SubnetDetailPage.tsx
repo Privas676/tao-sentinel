@@ -709,6 +709,30 @@ export default function SubnetDetailPage() {
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-2.5">
           <ActionBadge action={decision.badgeAction} size="sm" />
+          {s.concordance && (
+            <span
+              className="font-mono text-[7px] font-bold px-1.5 py-0.5 rounded tracking-widest"
+              style={{
+                background: s.concordance.grade === "A" ? "hsla(145,65%,48%,0.06)"
+                  : s.concordance.grade === "B" ? "hsla(210,80%,55%,0.06)"
+                  : s.concordance.grade === "C" ? "hsla(38,92%,55%,0.06)"
+                  : "hsla(4,80%,50%,0.06)",
+                color: s.concordance.grade === "A" ? "hsl(145,65%,48%)"
+                  : s.concordance.grade === "B" ? "hsl(210,80%,55%)"
+                  : s.concordance.grade === "C" ? "hsl(38,92%,55%)"
+                  : "hsl(4,80%,50%)",
+                border: `1px solid ${
+                  s.concordance.grade === "A" ? "hsla(145,65%,48%,0.15)"
+                  : s.concordance.grade === "B" ? "hsla(210,80%,55%,0.15)"
+                  : s.concordance.grade === "C" ? "hsla(38,92%,55%,0.15)"
+                  : "hsla(4,80%,50%,0.15)"
+                }`,
+              }}
+              title={`Concordance ${s.concordance.score}/100`}
+            >
+              {s.concordance.grade}
+            </span>
+          )}
           <span className="font-mono text-[9px] text-muted-foreground hidden sm:inline">
             {fr ? profile.labelFr : profile.label}
           </span>
