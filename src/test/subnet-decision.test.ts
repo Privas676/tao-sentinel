@@ -113,7 +113,7 @@ describe("subnet-decision — DEPEG_PRIORITY", () => {
 describe("subnet-decision — Normal", () => {
   it("NORMAL + ENTER + low risk → ENTRER", () => {
     const s = makeScore({ delistCategory: "NORMAL", action: "ENTER", risk: 30 });
-    const d = buildSubnetDecision(s, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true);
     expect(d.finalAction).toBe("ENTRER");
   });
 
