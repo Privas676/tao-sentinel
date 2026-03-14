@@ -154,12 +154,19 @@ Deno.serve(async (req: Request) => {
     // Upsert metrics to external_taoflute_metrics
     if (subnetRows.length > 0) {
       for (const row of subnetRows) {
-        const netuid = row.netuid ?? row.subnet_id ?? row.id;
+        const netuid = row.netuid ?? row.sn_id ?? row.subnet_id ?? row.id;
         if (!netuid || isNaN(Number(netuid))) continue;
 
-        const liqPrice = findNumericField(row, ["liq_price", "liquidation_price", "liq"]);
-        const liqHaircut = findNumericField(row, ["liq_haircut", "haircut", "liq_discount"]);
+        const liqPrice = findNumericField(row, ["liq_price", "metagraph_price", "price"]);
+        const liqHaircut = findNumericField(row, ["liq_haircut", "haircut"]);
         const flags = extractFlags(row);
+
+        // Extract dereg_place for reconciliation
+        const deregPlace = Number(row.dereg_place);
+        const subnetName = String(row.subnet_name ?? row.name ?? `SN-${netuid}`);
+        if (!isNaN(deregPlace) && deregPlace > 0) {
+          deregData.push({ netuid: Number(netuid), rank: deregPlace, name: subnetName });
+        }
 
         const { error } = await supabase
           .from("external_taoflute_metrics")
@@ -175,36 +182,14 @@ Deno.serve(async (req: Request) => {
           }, { onConflict: "netuid" });
         if (!error) result.metricsUpdated++;
       }
-      console.log(`Metrics updated: ${result.metricsUpdated}`);
+      console.log(`Metrics updated: ${result.metricsUpdated}, dereg entries: ${deregData.length}`);
     } else {
       result.status = "degraded";
       result.errors.push("No subnet metrics extracted");
     }
 
     /* ════════════════════════════════════ */
-    /*   PHASE 3: Fetch delist lists         */
-    /* ════════════════════════════════════ */
-    let delistRows: Record<string, any>[] = [];
-    const delistQueries = availableTables.length > 0
-      ? buildDelistQueries(availableTables)
-      : DELIST_QUERIES;
-
-    for (const sql of delistQueries) {
-      try {
-        const queryResult = await grafanaQuery(sql, controller.signal);
-        const rows = extractRows(queryResult);
-        if (rows.length > 0) {
-          delistRows = rows;
-          console.log(`Delist query success: ${rows.length} rows from: ${sql.slice(0, 80)}`);
-          break;
-        }
-      } catch {
-        // Try next
-      }
-    }
-
-    /* ════════════════════════════════════ */
-    /*   PHASE 4: Reconciliation             */
+    /*   PHASE 3: Reconciliation via dereg_place */
     /* ════════════════════════════════════ */
     // Get current DB state
     const { data: currentPriority } = await supabase
