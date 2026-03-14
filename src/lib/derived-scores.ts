@@ -420,6 +420,7 @@ function applyProhibitions(
 export function computeDerivedScores(
   facts: SubnetFacts,
   concordance: ConcordanceResult,
+  externalHaircut?: number | null,
 ): ScoringResult {
   const ms = computeMarketStrength(facts);
   const mom = computeMomentum(facts);
@@ -456,7 +457,7 @@ export function computeDerivedScores(
   };
 
   // Apply prohibition rules (mutates scores in place)
-  const violations = applyProhibitions(scores, facts);
+  const violations = applyProhibitions(scores, facts, externalHaircut);
 
   const explanations: Record<keyof DerivedScores, string> = {
     marketStrength: ms.explanation,
