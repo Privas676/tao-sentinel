@@ -53,6 +53,7 @@ function AppRoutes() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/install" element={<InstallPage />} />
+          <Route path="/settings/social" element={<ErrorBoundary fallbackTitle="Social Settings"><SocialSettingsPage /></ErrorBoundary>} />
           <Route path="/" element={<Navigate to="/compass" replace />} />
           <Route path="/methodology" element={<Navigate to="/lab" replace />} />
           <Route path="/quant-diagnostics" element={<Navigate to="/lab" replace />} />
