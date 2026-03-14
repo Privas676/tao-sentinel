@@ -357,6 +357,7 @@ export default function SubnetsPage() {
   const loadView = useCallback((view: SavedView) => {
     setScope(view.filters.scope); setActionFilter(view.filters.action as ActionFilter); setStatusFilter(view.filters.status);
     setConvictionFilter(view.filters.conviction); setLiquidityFilter(view.filters.liquidity); setStructureFilter(view.filters.structure);
+    setExternalFilter((view.filters.external || "ALL") as ExternalFilter);
   }, []);
 
   const toggleSort = useCallback((col: SortCol) => {
