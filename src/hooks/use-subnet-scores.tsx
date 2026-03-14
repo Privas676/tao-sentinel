@@ -44,6 +44,9 @@ import {
   ApiHealthTracker, computeDataConfidence, computeSubnetConfidence,
   type DataConfidenceScore,
 } from "@/lib/data-confidence";
+import { extractAllSubnetFacts, type SubnetFacts } from "@/lib/subnet-facts";
+import { computeAllConcordances, type ConcordanceResult } from "@/lib/source-concordance";
+import { computeAllDerivedScores, type ScoringResult } from "@/lib/derived-scores";
 
 /* ─── Exported types ─── */
 
@@ -84,6 +87,12 @@ export type UnifiedSubnetScore = {
   depegProbability: number;
   depegState: import("@/lib/depeg-probability").DepegState;
   depegSignals: string[];
+  /** NEW: Raw facts from TaoStats */
+  facts?: SubnetFacts;
+  /** NEW: Derived scores with prohibition rules */
+  derivedScoring?: ScoringResult;
+  /** NEW: Source concordance result */
+  concordance?: ConcordanceResult;
 };
 
 export type UnifiedScoresResult = {
@@ -106,6 +115,12 @@ export type UnifiedScoresResult = {
   fleetDistribution: FleetDistributionReport | null;
   /** Data confidence score (0-100) based on real API health metrics */
   dataConfidence: DataConfidenceScore | null;
+  /** NEW: All subnet facts (Layer A) */
+  subnetFacts: Map<number, SubnetFacts>;
+  /** NEW: All concordance results */
+  concordanceResults: Map<number, ConcordanceResult>;
+  /** NEW: All derived scores (Layer B) */
+  derivedScoringResults: Map<number, ScoringResult>;
 };
 
 /* ─── SPECIAL CASES / WHITELIST ───
@@ -432,8 +447,8 @@ export function useSubnetScores(): UnifiedScoresResult {
   }, [signalsSnapshot, rawPayloadsSnapshot, primaryMetricsSnapshot, taoUsdSnapshot]);
 
   // ── MAIN SCORING PIPELINE (orchestrates 3 independent engines) ──
-  const { scoresList, scoresMap, scoreTimestamp, fleetDistribution } = useMemo(() => {
-    if (!signals) return { scoresList: [] as UnifiedSubnetScore[], scoresMap: new Map<number, UnifiedSubnetScore>(), scoreTimestamp: new Date().toISOString(), fleetDistribution: null as FleetDistributionReport | null };
+  const { scoresList, scoresMap, scoreTimestamp, fleetDistribution, factsMap, concordanceMap, derivedMap } = useMemo(() => {
+    if (!signals) return { scoresList: [] as UnifiedSubnetScore[], scoresMap: new Map<number, UnifiedSubnetScore>(), scoreTimestamp: new Date().toISOString(), fleetDistribution: null as FleetDistributionReport | null, factsMap: new Map<number, SubnetFacts>(), concordanceMap: new Map<number, ConcordanceResult>(), derivedMap: new Map<number, ScoringResult>() };
 
     const rate = taoUsd;
     const ts = new Date().toISOString();
@@ -577,6 +592,18 @@ export function useSubnetScores(): UnifiedScoresResult {
       return applyDecision(decisionInput) as UnifiedSubnetScore;
     });
 
+    // ── Phase 3b: NEW LAYERS — Facts, Concordance, Derived Scores ──
+    const factsMap = rawPayloads ? extractAllSubnetFacts(rawPayloads, rate) : new Map<number, SubnetFacts>();
+    const concordanceMap = computeAllConcordances(factsMap);
+    const derivedMap = computeAllDerivedScores(factsMap, concordanceMap);
+
+    // Attach new layers to each scored subnet
+    for (const s of scored) {
+      s.facts = factsMap.get(s.netuid);
+      s.concordance = concordanceMap.get(s.netuid);
+      s.derivedScoring = derivedMap.get(s.netuid);
+    }
+
     // Sort by asymmetry desc (default)
     scored.sort((a, b) => b.asymmetry - a.asymmetry);
 
@@ -602,7 +629,7 @@ export function useSubnetScores(): UnifiedScoresResult {
       }
     }
 
-    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist };
+    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist, factsMap, concordanceMap, derivedMap };
   }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines, alignmentResult]);
 
   // ── Phase 4: DECISION STATE LAYER (stability: hysteresis, confirmation, cooldown) ──
@@ -629,6 +656,9 @@ export function useSubnetScores(): UnifiedScoresResult {
     decisionStates,
     fleetDistribution,
     dataConfidence: globalDataConfidence,
+    subnetFacts: factsMap,
+    concordanceResults: concordanceMap,
+    derivedScoringResults: derivedMap,
   };
 }
 
