@@ -40,7 +40,7 @@ describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
 
   it("forces SORTIR when HIGH_RISK_NEAR_DELIST + depeg >= 30%", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", depegProbability: 40 });
-    const d = buildSubnetDecision(s, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true);
     expect(d.finalAction).toBe("SORTIR");
   });
 
