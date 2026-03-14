@@ -200,9 +200,41 @@ function checkBuySellCoherence(f: SubnetFacts): ConcordanceCheck {
   return { code: "BUYSELL_COHERENCE", label: "Cohérence buy/sell", passed: true, severity: 0, detail: `Buys: ${buys}, Sells: ${sells}, Var24h: ${ch24h.toFixed(1)}%` };
 }
 
+/* ─── External Taoflute haircut cross-validation ─── */
+
+function checkExternalHaircut(
+  f: SubnetFacts,
+  externalHaircut: number | null,
+): ConcordanceCheck {
+  if (externalHaircut == null) {
+    return { code: "EXTERNAL_HAIRCUT", label: "Haircut externe (Taoflute)", passed: true, severity: 0, detail: "Pas de données Taoflute" };
+  }
+
+  const localHaircut = Math.abs(val(f.liqHaircut));
+  const extAbs = Math.abs(externalHaircut);
+  const divergence = Math.abs(localHaircut - extAbs);
+
+  // If both sources agree on severe haircut → high confidence degradation
+  if (extAbs > 20 && localHaircut > 20) {
+    return { code: "EXTERNAL_HAIRCUT", label: "Haircut externe (Taoflute)", passed: false, severity: 12, detail: `Haircut local: ${localHaircut.toFixed(1)}%, externe: ${extAbs.toFixed(1)}% — double confirmation dégradation` };
+  }
+
+  // If external is severe but local is not → data divergence
+  if (extAbs > 20 && localHaircut < 10) {
+    return { code: "EXTERNAL_HAIRCUT", label: "Haircut externe (Taoflute)", passed: false, severity: 10, detail: `Divergence: local ${localHaircut.toFixed(1)}% vs externe ${extAbs.toFixed(1)}% — risque masqué` };
+  }
+
+  // Large divergence between sources
+  if (divergence > 15) {
+    return { code: "EXTERNAL_HAIRCUT", label: "Haircut externe (Taoflute)", passed: false, severity: 8, detail: `Divergence sources: local ${localHaircut.toFixed(1)}% vs externe ${extAbs.toFixed(1)}%` };
+  }
+
+  return { code: "EXTERNAL_HAIRCUT", label: "Haircut externe (Taoflute)", passed: true, severity: 0, detail: `Local: ${localHaircut.toFixed(1)}%, Externe: ${extAbs.toFixed(1)}% — cohérent` };
+}
+
 /* ─── Main concordance engine ─── */
 
-export function computeConcordance(facts: SubnetFacts): ConcordanceResult {
+export function computeConcordance(facts: SubnetFacts, externalHaircut?: number | null): ConcordanceResult {
   const checks: ConcordanceCheck[] = [
     checkPriceExists(facts),
     checkPoolConsistency(facts),
@@ -213,6 +245,7 @@ export function computeConcordance(facts: SubnetFacts): ConcordanceResult {
     checkEmissionSanity(facts),
     checkRootProportion(facts),
     checkBuySellCoherence(facts),
+    checkExternalHaircut(facts, externalHaircut ?? null),
   ];
 
   // Score: start at 100, deduct severity for each failed check
@@ -238,10 +271,12 @@ export function computeConcordance(facts: SubnetFacts): ConcordanceResult {
 
 export function computeAllConcordances(
   factsMap: Map<number, SubnetFacts>,
+  externalHaircuts?: Map<number, number | null>,
 ): Map<number, ConcordanceResult> {
   const result = new Map<number, ConcordanceResult>();
   for (const [netuid, facts] of factsMap) {
-    result.set(netuid, computeConcordance(facts));
+    const extHaircut = externalHaircuts?.get(netuid) ?? null;
+    result.set(netuid, computeConcordance(facts, extHaircut));
   }
   return result;
 }

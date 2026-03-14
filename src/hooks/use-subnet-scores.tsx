@@ -371,6 +371,28 @@ export function useSubnetScores(): UnifiedScoresResult {
     },
   });
 
+  // ── External Taoflute metrics (liq_haircut cross-validation) ──
+  const { data: taofluteMetrics } = useQuery({
+    queryKey: ["unified-taoflute-metrics"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("external_taoflute_metrics")
+        .select("netuid, liq_haircut, liq_price, is_stale, scraped_at");
+      if (error) throw error;
+      const map = new Map<number, { liq_haircut: number | null; liq_price: number | null; is_stale: boolean; scraped_at: string }>();
+      for (const r of data || []) {
+        map.set(r.netuid, {
+          liq_haircut: r.liq_haircut != null ? Number(r.liq_haircut) : null,
+          liq_price: r.liq_price != null ? Number(r.liq_price) : null,
+          is_stale: r.is_stale,
+          scraped_at: r.scraped_at,
+        });
+      }
+      return map;
+    },
+    refetchInterval: 120_000,
+  });
+
   // ── Data Confidence (real-time: API health + staleness + completeness + variance) ──
   const globalDataConfidence = useMemo<DataConfidenceScore | null>(() => {
     if (!primaryMetrics) return null;
@@ -553,7 +575,15 @@ export function useSubnetScores(): UnifiedScoresResult {
         liqTao, liqUsd: s.displayedLiq,
         capTao: s.slMetrics?.cap ?? 0, alphaPrice: s.slMetrics?.price ?? 0,
         priceChange7d: s.priceChange7d, confianceData: s.confianceScore,
-        liqHaircut: s.recalc?.liqHaircut ?? 0,
+        liqHaircut: (() => {
+          const local = s.recalc?.liqHaircut ?? 0;
+          const ext = taofluteMetrics?.get(s.netuid);
+          if (ext && !ext.is_stale && ext.liq_haircut != null) {
+            // Use worst-case (most negative / largest absolute)
+            return Math.abs(ext.liq_haircut) > Math.abs(local) ? ext.liq_haircut : local;
+          }
+          return local;
+        })(),
         delistMode,
         price24hAgo,
         price7dAgo,
@@ -598,9 +628,19 @@ export function useSubnetScores(): UnifiedScoresResult {
     });
 
     // ── Phase 3b: NEW LAYERS — Facts, Concordance, Derived Scores, Verdict v3 ──
+    // Build external haircut map from Taoflute metrics
+    const externalHaircuts = new Map<number, number | null>();
+    if (taofluteMetrics) {
+      for (const [netuid, m] of taofluteMetrics) {
+        if (!m.is_stale) {
+          externalHaircuts.set(netuid, m.liq_haircut);
+        }
+      }
+    }
+
     const factsMap = rawPayloads ? extractAllSubnetFacts(rawPayloads, rate) : new Map<number, SubnetFacts>();
-    const concordanceMap = computeAllConcordances(factsMap);
-    const derivedMap = computeAllDerivedScores(factsMap, concordanceMap);
+    const concordanceMap = computeAllConcordances(factsMap, externalHaircuts);
+    const derivedMap = computeAllDerivedScores(factsMap, concordanceMap, externalHaircuts);
     const verdictsV3Map = computeAllVerdictsV3(factsMap, derivedMap, concordanceMap);
 
     // Attach new layers to each scored subnet
@@ -642,7 +682,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     }
 
     return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist, factsMap, concordanceMap, derivedMap, verdictsV3Map };
-  }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines, alignmentResult]);
+  }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines, alignmentResult, taofluteMetrics]);
 
   // ── Phase 4: DECISION STATE LAYER (stability: hysteresis, confirmation, cooldown) ──
   const decisionStates = useMemo(() => {

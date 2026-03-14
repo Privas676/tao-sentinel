@@ -327,20 +327,64 @@ function computeVolatility(f: SubnetFacts): { score: number; explanation: string
 function applyProhibitions(
   scores: DerivedScores,
   facts: SubnetFacts,
+  externalHaircut?: number | null,
 ): ProhibitionViolation[] {
   const violations: ProhibitionViolation[] = [];
 
+  // Effective haircut: worst-case between local and external Taoflute
+  const localHaircut = Math.abs(val(facts.liqHaircut));
+  const extHaircut = externalHaircut != null ? Math.abs(externalHaircut) : 0;
+  const effectiveHaircut = Math.max(localHaircut, extHaircut);
+
   // RULE 1: liquidity_score > 85 forbidden if haircut > 15% or liq_price very degraded
-  const haircut = Math.abs(val(facts.liqHaircut));
-  if (scores.liquidityQuality > 85 && haircut > 15) {
+  if (scores.liquidityQuality > 85 && effectiveHaircut > 15) {
     const original = scores.liquidityQuality;
     scores.liquidityQuality = Math.min(scores.liquidityQuality, 60);
     violations.push({
       code: "LIQ_HAIRCUT_CAP",
-      message: `Liquidité plafonnée: haircut ${haircut.toFixed(1)}% trop élevé`,
+      message: `Liquidité plafonnée: haircut effectif ${effectiveHaircut.toFixed(1)}% (local: ${localHaircut.toFixed(1)}%, ext: ${extHaircut.toFixed(1)}%)`,
       scoreCapped: "liquidityQuality",
       originalValue: original,
       cappedValue: scores.liquidityQuality,
+    });
+  }
+
+  // RULE 1b: External haircut severe → force liquidity penalty even below threshold
+  if (extHaircut > 25 && scores.liquidityQuality > 50) {
+    const original = scores.liquidityQuality;
+    scores.liquidityQuality = Math.min(scores.liquidityQuality, 40);
+    violations.push({
+      code: "LIQ_EXT_HAIRCUT_SEVERE",
+      message: `Liquidité dégradée: haircut externe Taoflute ${extHaircut.toFixed(1)}% — signal de risque critique`,
+      scoreCapped: "liquidityQuality",
+      originalValue: original,
+      cappedValue: scores.liquidityQuality,
+    });
+  }
+
+  // RULE 1c: External haircut → depeg risk floor
+  if (extHaircut > 20 && scores.depegRisk < 40) {
+    const original = scores.depegRisk;
+    scores.depegRisk = Math.max(scores.depegRisk, 45);
+    violations.push({
+      code: "DEPEG_EXT_HAIRCUT_FLOOR",
+      message: `Risque depeg relevé: haircut externe ${extHaircut.toFixed(1)}% détecté par Taoflute`,
+      scoreCapped: "depegRisk",
+      originalValue: original,
+      cappedValue: scores.depegRisk,
+    });
+  }
+
+  // RULE 1d: External haircut → execution quality cap
+  if (extHaircut > 15 && scores.executionQuality > 60) {
+    const original = scores.executionQuality;
+    scores.executionQuality = Math.min(scores.executionQuality, 45);
+    violations.push({
+      code: "EXEC_EXT_HAIRCUT_CAP",
+      message: `Exécution plafonnée: haircut externe ${extHaircut.toFixed(1)}% — conditions de marché dégradées`,
+      scoreCapped: "executionQuality",
+      originalValue: original,
+      cappedValue: scores.executionQuality,
     });
   }
 
@@ -420,6 +464,7 @@ function applyProhibitions(
 export function computeDerivedScores(
   facts: SubnetFacts,
   concordance: ConcordanceResult,
+  externalHaircut?: number | null,
 ): ScoringResult {
   const ms = computeMarketStrength(facts);
   const mom = computeMomentum(facts);
@@ -456,7 +501,7 @@ export function computeDerivedScores(
   };
 
   // Apply prohibition rules (mutates scores in place)
-  const violations = applyProhibitions(scores, facts);
+  const violations = applyProhibitions(scores, facts, externalHaircut);
 
   const explanations: Record<keyof DerivedScores, string> = {
     marketStrength: ms.explanation,
@@ -483,12 +528,14 @@ export function computeDerivedScores(
 export function computeAllDerivedScores(
   factsMap: Map<number, SubnetFacts>,
   concordanceMap: Map<number, ConcordanceResult>,
+  externalHaircuts?: Map<number, number | null>,
 ): Map<number, ScoringResult> {
   const result = new Map<number, ScoringResult>();
   for (const [netuid, facts] of factsMap) {
     const concordance = concordanceMap.get(netuid);
     if (concordance) {
-      result.set(netuid, computeDerivedScores(facts, concordance));
+      const extHaircut = externalHaircuts?.get(netuid) ?? null;
+      result.set(netuid, computeDerivedScores(facts, concordance, extHaircut));
     }
   }
   return result;
