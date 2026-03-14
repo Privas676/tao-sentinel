@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useExternalDelist } from "@/hooks/use-external-delist";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
