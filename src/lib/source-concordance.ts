@@ -271,10 +271,12 @@ export function computeConcordance(facts: SubnetFacts, externalHaircut?: number 
 
 export function computeAllConcordances(
   factsMap: Map<number, SubnetFacts>,
+  externalHaircuts?: Map<number, number | null>,
 ): Map<number, ConcordanceResult> {
   const result = new Map<number, ConcordanceResult>();
   for (const [netuid, facts] of factsMap) {
-    result.set(netuid, computeConcordance(facts));
+    const extHaircut = externalHaircuts?.get(netuid) ?? null;
+    result.set(netuid, computeConcordance(facts, extHaircut));
   }
   return result;
 }
