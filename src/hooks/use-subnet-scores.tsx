@@ -671,6 +671,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     subnetFacts: factsMap,
     concordanceResults: concordanceMap,
     derivedScoringResults: derivedMap,
+    verdictsV3: verdictsV3Map,
   };
 }
 
