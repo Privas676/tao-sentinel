@@ -592,6 +592,18 @@ export function useSubnetScores(): UnifiedScoresResult {
       return applyDecision(decisionInput) as UnifiedSubnetScore;
     });
 
+    // ── Phase 3b: NEW LAYERS — Facts, Concordance, Derived Scores ──
+    const factsMap = rawPayloads ? extractAllSubnetFacts(rawPayloads, rate) : new Map<number, SubnetFacts>();
+    const concordanceMap = computeAllConcordances(factsMap);
+    const derivedMap = computeAllDerivedScores(factsMap, concordanceMap);
+
+    // Attach new layers to each scored subnet
+    for (const s of scored) {
+      s.facts = factsMap.get(s.netuid);
+      s.concordance = concordanceMap.get(s.netuid);
+      s.derivedScoring = derivedMap.get(s.netuid);
+    }
+
     // Sort by asymmetry desc (default)
     scored.sort((a, b) => b.asymmetry - a.asymmetry);
 
@@ -617,7 +629,7 @@ export function useSubnetScores(): UnifiedScoresResult {
       }
     }
 
-    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist };
+    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist, factsMap, concordanceMap, derivedMap };
   }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines, alignmentResult]);
 
   // ── Phase 4: DECISION STATE LAYER (stability: hysteresis, confirmation, cooldown) ──
