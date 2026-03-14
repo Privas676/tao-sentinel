@@ -119,7 +119,7 @@ describe("subnet-decision — Normal", () => {
 
   it("NORMAL + EXIT → SORTIR", () => {
     const s = makeScore({ delistCategory: "NORMAL", action: "EXIT" });
-    const d = buildSubnetDecision(s, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true);
     expect(d.finalAction).toBe("SORTIR");
   });
 });
