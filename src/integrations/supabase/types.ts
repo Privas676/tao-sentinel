@@ -95,6 +95,156 @@ export type Database = {
         }
         Relationships: []
       }
+      external_delist_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          netuid: number
+          new_value: string | null
+          old_value: string | null
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          netuid: number
+          new_value?: string | null
+          old_value?: string | null
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          netuid?: number
+          new_value?: string | null
+          old_value?: string | null
+          source?: string
+        }
+        Relationships: []
+      }
+      external_delist_priority: {
+        Row: {
+          created_at: string
+          delist_rank: number
+          detected_at: string
+          id: string
+          is_active: boolean
+          last_seen_at: string
+          netuid: number
+          notes: string | null
+          source: string
+          subnet_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delist_rank: number
+          detected_at?: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          netuid: number
+          notes?: string | null
+          source?: string
+          subnet_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delist_rank?: number
+          detected_at?: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          netuid?: number
+          notes?: string | null
+          source?: string
+          subnet_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      external_delist_watch: {
+        Row: {
+          created_at: string
+          detected_at: string
+          id: string
+          is_active: boolean
+          last_seen_at: string
+          netuid: number
+          notes: string | null
+          source: string
+          subnet_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          detected_at?: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          netuid: number
+          notes?: string | null
+          source?: string
+          subnet_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          detected_at?: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          netuid?: number
+          notes?: string | null
+          source?: string
+          subnet_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      external_taoflute_metrics: {
+        Row: {
+          created_at: string
+          flags: Json | null
+          id: string
+          is_stale: boolean
+          liq_haircut: number | null
+          liq_price: number | null
+          netuid: number
+          raw_data: Json | null
+          scraped_at: string
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          flags?: Json | null
+          id?: string
+          is_stale?: boolean
+          liq_haircut?: number | null
+          liq_price?: number | null
+          netuid: number
+          raw_data?: Json | null
+          scraped_at?: string
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          flags?: Json | null
+          id?: string
+          is_stale?: boolean
+          liq_haircut?: number | null
+          liq_price?: number | null
+          netuid?: number
+          raw_data?: Json | null
+          scraped_at?: string
+          source?: string
+        }
+        Relationships: []
+      }
       fx_rates: {
         Row: {
           tao_usd: number
