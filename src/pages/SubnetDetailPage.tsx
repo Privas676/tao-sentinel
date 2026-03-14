@@ -348,6 +348,22 @@ export default function SubnetDetailPage() {
           </SectionCard>
         )}
 
+        {/* ══════════════════════════════════════════ */}
+        {/*   PROOF SECTIONS — Layers A/B/C            */}
+        {/* ══════════════════════════════════════════ */}
+        {!isSpecial && s.verdictV3 && (
+          <VerdictProvenanceSection verdict={s.verdictV3} fr={fr} />
+        )}
+        {!isSpecial && s.concordance && (
+          <ConcordanceSection concordance={s.concordance} fr={fr} />
+        )}
+        {!isSpecial && s.derivedScoring && (
+          <DerivedScoresSection scoring={s.derivedScoring} fr={fr} />
+        )}
+        {!isSpecial && s.facts && (
+          <RawFactsSection facts={s.facts} fr={fr} />
+        )}
+
         {/*   WATCH NOW — What to monitor               */}
         {/* ══════════════════════════════════════════ */}
         {watches.length > 0 && (
