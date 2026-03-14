@@ -109,6 +109,8 @@ export default function PortfolioPage() {
 
   const { scores, sparklines, subnetList, taoUsd, isLoading } = useSubnetScores();
   const { decisions } = useSubnetDecisions();
+  const { priorityList } = useExternalDelist();
+  const priorityNetuids = useMemo(() => new Set(priorityList.map(p => p.netuid)), [priorityList]);
 
   // ── Seed portfolio positions (one-time import) ──
   useEffect(() => {
