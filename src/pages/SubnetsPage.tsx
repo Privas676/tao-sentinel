@@ -30,6 +30,7 @@ type ConvictionFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type ScopeFilter = "ALL" | "PORTFOLIO" | "WATCHLIST";
 type LiquidityFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type StructureFilter = "ALL" | "HEALTHY" | "FRAGILE" | "CONCENTRATED";
+type ExternalFilter = "ALL" | "PRIORITY" | "WATCH" | "NONE";
 type ViewMode = "compact" | "analytic";
 
 type SortCol = "netuid" | "name" | "action" | "conviction" | "confidence" | "risk" | "momentum" | "opp" | "liquidity" | "stability" | null;
