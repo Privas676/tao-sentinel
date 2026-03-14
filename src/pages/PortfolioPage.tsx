@@ -7,6 +7,7 @@ import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hoo
 import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { confianceColor } from "@/lib/data-fusion";
 import SwipeHint from "@/components/SwipeHint";
+import { useExternalDelist } from "@/hooks/use-external-delist";
 
 import { toast } from "sonner";
 import { SectionCard, SectionTitle, KPIChip, Metric, Sparkline, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
@@ -108,6 +109,8 @@ export default function PortfolioPage() {
 
   const { scores, sparklines, subnetList, taoUsd, isLoading } = useSubnetScores();
   const { decisions } = useSubnetDecisions();
+  const { priorityList } = useExternalDelist();
+  const priorityNetuids = useMemo(() => new Set(priorityList.map(p => p.netuid)), [priorityList]);
 
   // ── Seed portfolio positions (one-time import) ──
   useEffect(() => {
@@ -422,6 +425,36 @@ export default function PortfolioPage() {
                   </div>
                 </div>
               )}
+              {/* ── External delist top 10 alert ── */}
+              {(() => {
+                const exposed = rows.filter(r => priorityNetuids.has(r.netuid));
+                if (exposed.length === 0) return null;
+                const priorityMap = new Map(priorityList.map(p => [p.netuid, p]));
+                return (
+                  <div className="rounded-lg p-3 mt-1" style={{ background: "hsla(var(--destructive), 0.06)", border: "1px solid hsla(var(--destructive), 0.2)" }}>
+                    <div className="font-mono text-[9px] font-bold tracking-wider mb-1.5" style={{ color: "hsl(var(--destructive))" }}>
+                      💀 {fr ? "Positions exposées — Top 10 désenregistrement Taoflute" : "Exposed positions — Taoflute Top 10 deregistration"} ({exposed.length})
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {exposed.map(p => {
+                        const rank = priorityMap.get(p.netuid)?.delist_rank;
+                        return (
+                          <Link key={p.netuid} to={`/subnets/${p.netuid}`} className="font-mono text-[9px] px-2 py-1 rounded transition-colors hover:bg-muted/20" style={{
+                            color: "hsl(var(--destructive))",
+                            background: "hsla(var(--destructive), 0.08)",
+                            border: "1px solid hsla(var(--destructive), 0.18)",
+                          }}>
+                            SN-{p.netuid} · #{rank} · {p.name}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                    <div className="font-mono text-[8px] text-muted-foreground mt-1.5">
+                      {fr ? "Ces subnets sont dans le top 10 des désenregistrements imminents. Sortie recommandée." : "These subnets are in the top 10 imminent deregistrations. Exit recommended."}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </SectionCard>
         )}
