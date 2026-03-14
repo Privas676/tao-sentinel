@@ -2,13 +2,15 @@
 /*   UNIFIED SUBNET DECISION — Single Source of Truth      */
 /*   Every page MUST read from this object.                */
 /*   NO local re-derivation allowed.                       */
-/*   v2: Eliminated reconciliation — one authoritative path */
+/*   v3: Verdict Engine v3 is now the PRIMARY driver.      */
+/*   Old verdict engine kept as fallback for compatibility */
 /* ═══════════════════════════════════════════════════════ */
 
 import type { UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import type { StrategicAction } from "@/lib/strategy-subnet";
+import type { VerdictV3Result, VerdictV3 } from "@/lib/verdict-engine-v3";
 import { actionLabelFr, actionLabelEn } from "@/lib/strategy-colors";
 
 /* ── Types ── */
@@ -51,7 +53,7 @@ export type SubnetDecision = {
   /* ── System subnet flag ── */
   isSystem: boolean;
 
-  /* ── Decision transparency — NEW ── */
+  /* ── Decision transparency ── */
   rawSignal: RawSignal;
   isBlocked: boolean;
   blockReasons: string[];
@@ -96,9 +98,18 @@ export type SubnetDecision = {
   /* ── Raw references for deep-dive ── */
   score: UnifiedSubnetScore;
   verdict?: SubnetVerdictData;
+
+  /* ── v3 verdict (primary driver when available) ── */
+  verdictV3?: VerdictV3Result;
 };
 
 /* ── Derivation helpers (PRIVATE — only used here) ── */
+
+function deriveConvictionFromV3(v3: VerdictV3Result): { level: ConvictionLevel; score: number } {
+  const score = v3.confidence;
+  const level = v3.conviction === "HIGH" ? "HIGH" : v3.conviction === "MEDIUM" ? "MEDIUM" : "LOW";
+  return { level, score };
+}
 
 function deriveConviction(s: UnifiedSubnetScore, v?: SubnetVerdictData): { level: ConvictionLevel; score: number } {
   const raw = v ? Math.max(v.entryScore, v.holdScore) : Math.abs(s.opp - s.risk) * (s.conf / 100);
@@ -121,8 +132,16 @@ function deriveStatus(s: UnifiedSubnetScore): StatusLevel {
   return "OK";
 }
 
+function deriveRawSignalFromV3(v3: VerdictV3Result): RawSignal {
+  // V3 gives us much more nuanced info
+  if (v3.verdict === "ENTER") return "opportunity";
+  if (v3.verdict === "SORTIR" || v3.verdict === "NON_INVESTISSABLE") return "exit";
+  // For SURVEILLER: check if it was blocked from ENTER
+  if (v3.isBlocked) return "opportunity";
+  return "neutral";
+}
+
 function deriveRawSignal(s: UnifiedSubnetScore, v?: SubnetVerdictData): RawSignal {
-  // What the raw metrics suggest BEFORE safety guards
   if (v) {
     if (v.entryScore >= 55) return "opportunity";
     if (v.exitRisk >= 55) return "exit";
@@ -134,8 +153,21 @@ function deriveRawSignal(s: UnifiedSubnetScore, v?: SubnetVerdictData): RawSigna
 }
 
 /**
- * Compute block reasons — why the raw signal might not become the final action.
+ * Compute block reasons from V3 verdict blocks.
  */
+function deriveBlockReasonsFromV3(v3: VerdictV3Result, s: UnifiedSubnetScore, fr = true): string[] {
+  const reasons: string[] = [];
+  // V3 blocks are explicit
+  for (const b of v3.blocks) {
+    reasons.push(b.message);
+  }
+  // Add protection overrides from the scoring layer
+  if (s.isOverridden) reasons.push(fr ? "Override de protection actif" : "Protection override active");
+  if (s.depegProbability >= 50) reasons.push(fr ? `Risque depeg ${s.depegProbability}%` : `Depeg risk ${s.depegProbability}%`);
+  if (s.delistCategory === "DEPEG_PRIORITY") reasons.push(fr ? "Priorité delist/depeg" : "Delist/depeg priority");
+  return reasons;
+}
+
 function deriveBlockReasons(s: UnifiedSubnetScore, v?: SubnetVerdictData, fr = true): string[] {
   const reasons: string[] = [];
   if (s.isOverridden) reasons.push(fr ? "Override de protection actif" : "Protection override active");
@@ -153,55 +185,75 @@ function deriveBlockReasons(s: UnifiedSubnetScore, v?: SubnetVerdictData, fr = t
 }
 
 /**
- * THE SINGLE AUTHORITATIVE DECISION FUNCTION.
+ * Map VerdictV3 to FinalAction.
+ */
+function v3ToFinalAction(v3Verdict: VerdictV3): FinalAction {
+  switch (v3Verdict) {
+    case "ENTER": return "ENTRER";
+    case "SURVEILLER": return "SURVEILLER";
+    case "SORTIR": return "SORTIR";
+    case "DONNÉES_INSTABLES": return "SURVEILLER"; // Downgrade: not enough data for strong action
+    case "NON_INVESTISSABLE": return "SORTIR";     // Toxic structure = exit
+    case "SYSTÈME": return "SYSTÈME";
+  }
+}
+
+/**
+ * THE SINGLE AUTHORITATIVE DECISION FUNCTION — V3 PRIMARY.
+ *
  * Priority rules (strict order):
  * 1. System subnet → SYSTÈME
- * 2. Protection override / depeg / deregistration → SORTIR
- * 3. Verdict engine SORS → SORTIR
- * 4. Engine EXIT (not overridden by verdict) → SORTIR
- * 5. Verdict engine RENTRE + no block → ENTRER
- * 6. Everything else → SURVEILLER
+ * 2. Protection override / depeg / deregistration → SORTIR (hard safety, overrides even v3)
+ * 3. V3 verdict (if available) → mapped to FinalAction
+ * 4. Fallback: old verdict + engine logic (backward compat)
+ *
+ * Protection layer ALWAYS overrides v3 for safety (depeg, delist, override).
+ * V3 provides the analytical decision; protection provides the safety floor.
  */
 function deriveFinalAction(
   s: UnifiedSubnetScore,
   v: SubnetVerdictData | undefined,
+  v3: VerdictV3Result | undefined,
   isSystem: boolean,
 ): FinalAction {
   // 1. System
   if (isSystem) return "SYSTÈME";
 
-  // 2. Hard protection overrides — always SORTIR
+  // 2. Hard protection overrides — ALWAYS SORTIR regardless of v3
   if (s.isOverridden) return "SORTIR";
   if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") return "SORTIR";
   if (s.depegProbability >= 50) return "SORTIR";
   if (s.delistCategory === "DEPEG_PRIORITY") return "SORTIR";
 
-  // 3. If verdict engine says SORS → SORTIR
-  if (v && v.verdict === "SORS") return "SORTIR";
-
-  // 4. If strategic engine says EXIT and no verdict contradicts → SORTIR
-  if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) return "SORTIR";
-
-  // 4b. HIGH_RISK_NEAR_DELIST — NEVER allow ENTRER, force SURVEILLER or SORTIR
-  //     If depeg probability is significant (>=30%) → SORTIR, otherwise → SURVEILLER
+  // 2b. HIGH_RISK_NEAR_DELIST — NEVER allow ENTRER
   if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") {
     if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
     return "SURVEILLER";
   }
 
-  // 5. If verdict engine says RENTRE and no blocking conditions → ENTRER
-  if (v && v.verdict === "RENTRE" && s.action !== "EXIT") {
-    // Additional sanity: entry only if risk is manageable
-    if (s.risk < 65 && s.confianceScore >= 30) return "ENTRER";
-    // Blocked by guards — fall through to SURVEILLER
+  // 3. V3 verdict — PRIMARY analytical decision (when available)
+  if (v3) {
+    const v3Action = v3ToFinalAction(v3.verdict);
+
+    // If v3 says ENTER, apply additional safety guards from the scoring layer
+    if (v3Action === "ENTRER") {
+      if (s.risk >= 65 || s.confianceScore < 30) return "SURVEILLER";
+      return "ENTRER";
+    }
+
+    return v3Action;
   }
 
-  // 5b. Engine says ENTER with no verdict contradicting
+  // 4. FALLBACK: old verdict engine (backward compat for subnets without v3 data)
+  if (v && v.verdict === "SORS") return "SORTIR";
+  if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) return "SORTIR";
+  if (v && v.verdict === "RENTRE" && s.action !== "EXIT") {
+    if (s.risk < 65 && s.confianceScore >= 30) return "ENTRER";
+  }
   if (s.action === "ENTER" && (!v || v.verdict !== "SORS")) {
     if (s.risk < 65 && s.confianceScore >= 30) return "ENTRER";
   }
 
-  // 6. Everything else → SURVEILLER
   return "SURVEILLER";
 }
 
@@ -241,7 +293,17 @@ function finalActionToEngineAction(fa: FinalAction): StrategicAction {
   }
 }
 
-function derivePortfolioAction(s: UnifiedSubnetScore, fa: FinalAction): PortfolioAction {
+function derivePortfolioAction(s: UnifiedSubnetScore, fa: FinalAction, v3?: VerdictV3Result): PortfolioAction {
+  // V3 provides explicit portfolio actions
+  if (v3) {
+    switch (v3.portfolioAction) {
+      case "SORTIR": return "SORTIR";
+      case "RÉDUIRE": return "REDUIRE";
+      case "RENFORCER": return "RENFORCER";
+      case "CONSERVER": return "CONSERVER";
+      case "NE_PAS_ENTRER": return fa === "SORTIR" ? "SORTIR" : "CONSERVER";
+    }
+  }
   if (fa === "SORTIR") return "SORTIR";
   if (s.risk > 65 || s.depegProbability >= 40) return "REDUIRE";
   if (fa === "ENTRER") return "RENFORCER";
@@ -267,20 +329,23 @@ function portfolioActionLabelEn(a: PortfolioAction): string {
 }
 
 /**
- * Build the main signal text — single source, used everywhere.
+ * Build the main signal text — uses V3 primary reason when available.
  */
-function deriveSignalPrincipal(s: UnifiedSubnetScore, fa: FinalAction, rawSignal: RawSignal, isBlocked: boolean, fr: boolean): string {
+function deriveSignalPrincipal(s: UnifiedSubnetScore, fa: FinalAction, rawSignal: RawSignal, isBlocked: boolean, v3: VerdictV3Result | undefined, fr: boolean): string {
   const special = SPECIAL_SUBNETS[s.netuid];
   if (special?.isSystem) return fr ? "Infrastructure réseau" : "Network infrastructure";
   if (s.isOverridden) return s.overrideReasons[0] || (fr ? "Zone critique" : "Critical zone");
   if (s.depegProbability >= 50) return `Depeg ${s.depegProbability}%`;
   if (s.delistCategory !== "NORMAL") return fr ? "Risque delist" : "Delist risk";
 
-  // NEW: If raw signal is opportunity but final action is not ENTRER, show blocked message
+  // V3 primary reason is the most informative
+  if (v3) {
+    return v3.primaryReason.text;
+  }
+
   if (rawSignal === "opportunity" && fa !== "ENTRER" && isBlocked) {
     return fr ? "Opportunité bloquée par garde-fous" : "Opportunity blocked by safety guards";
   }
-
   if (fa === "ENTRER" && s.opp > 60) return fr ? "Forte opportunité" : "Strong opportunity";
   if (fa === "SORTIR") return fr ? "Signal de sortie" : "Exit signal";
   if (s.momentumScore >= 70) return fr ? "Momentum haussier" : "Bullish momentum";
@@ -288,10 +353,14 @@ function deriveSignalPrincipal(s: UnifiedSubnetScore, fa: FinalAction, rawSignal
   return fr ? "Stable" : "Stable";
 }
 
-function derivePrimaryReason(s: UnifiedSubnetScore, fa: FinalAction, rawSignal: RawSignal, blockReasons: string[], fr: boolean): string {
+function derivePrimaryReason(s: UnifiedSubnetScore, fa: FinalAction, rawSignal: RawSignal, blockReasons: string[], v3: VerdictV3Result | undefined, fr: boolean): string {
   if (fa === "SYSTÈME") return fr ? "Subnet système — infrastructure réseau" : "System subnet — network infrastructure";
   if (fa === "SORTIR" && s.isOverridden) return s.overrideReasons[0] || (fr ? "Override de protection" : "Protection override");
   if (fa === "SORTIR" && s.depegProbability >= 50) return fr ? `Risque de depeg à ${s.depegProbability}%` : `Depeg risk at ${s.depegProbability}%`;
+
+  // V3 provides explicit primary reason
+  if (v3) return v3.primaryReason.text;
+
   if (fa === "SORTIR") return fr ? "Risque structurel trop élevé" : "Structural risk too high";
   if (fa === "ENTRER") return fr ? "Conditions d'entrée réunies" : "Entry conditions met";
   if (rawSignal === "opportunity" && blockReasons.length > 0) return fr ? `Signal haussier détecté mais bloqué` : "Bullish signal detected but blocked";
@@ -303,8 +372,16 @@ function derivePrimaryReason(s: UnifiedSubnetScore, fa: FinalAction, rawSignal: 
  */
 function deriveConflictExplanation(
   s: UnifiedSubnetScore, fa: FinalAction, rawSignal: RawSignal,
-  blockReasons: string[], v?: SubnetVerdictData, fr = true,
+  blockReasons: string[], v3: VerdictV3Result | undefined, v?: SubnetVerdictData, fr = true,
 ): string | null {
+  // V3 blocks give explicit conflict information
+  if (v3 && v3.isBlocked && v3.blocks.length > 0) {
+    const blocksStr = v3.blocks.slice(0, 3).map(b => b.message).join(", ");
+    return fr
+      ? `Signal bloqué par : ${blocksStr}`
+      : `Signal blocked by: ${blocksStr}`;
+  }
+
   // Show conflict when raw signal is positive but action is not ENTRER
   if (rawSignal === "opportunity" && fa !== "ENTRER") {
     if (blockReasons.length > 0) {
@@ -318,7 +395,7 @@ function deriveConflictExplanation(
       : "Strong signal detected but insufficient conditions for entry";
   }
 
-  // Show conflict when verdict and engine disagree
+  // Show conflict when verdict and engine disagree (old engine fallback)
   if (v) {
     if (v.verdict === "SORS" && s.action !== "EXIT" && fa === "SORTIR") {
       return fr
@@ -335,29 +412,41 @@ function deriveConflictExplanation(
 /* ═══════════════════════════════════════════════ */
 
 /**
- * Build a unified SubnetDecision from the engine score + verdict.
+ * Build a unified SubnetDecision from the engine score + verdicts.
+ * V3 verdict is the PRIMARY driver when available.
  * This is THE single derivation point. All pages consume this.
  */
 export function buildSubnetDecision(
   s: UnifiedSubnetScore,
   v: SubnetVerdictData | undefined,
+  v3: VerdictV3Result | undefined,
   fr: boolean,
 ): SubnetDecision {
-  const conv = deriveConviction(s, v);
   const special = SPECIAL_SUBNETS[s.netuid];
   const isSystem = !!special?.isSystem;
 
-  // ── AUTHORITATIVE FINAL ACTION — no reconciliation ambiguity ──
-  const finalAction = deriveFinalAction(s, v, isSystem);
+  // ── AUTHORITATIVE FINAL ACTION — V3 primary, protection overrides ──
+  const finalAction = deriveFinalAction(s, v, v3, isSystem);
   const reconciledAction = finalActionToEngineAction(finalAction);
 
-  // ── Decision transparency ──
-  const rawSignal = deriveRawSignal(s, v);
-  const blockReasons = deriveBlockReasons(s, v, fr);
-  const isBlocked = rawSignal === "opportunity" && finalAction !== "ENTRER";
-  const primaryReason = derivePrimaryReason(s, finalAction, rawSignal, blockReasons, fr);
+  // ── Conviction — prefer V3 ──
+  const conv = v3 ? deriveConvictionFromV3(v3) : deriveConviction(s, v);
 
-  const pAction = derivePortfolioAction(s, finalAction);
+  // ── Decision transparency — prefer V3 ──
+  const rawSignal = v3 ? deriveRawSignalFromV3(v3) : deriveRawSignal(s, v);
+  const blockReasons = v3 ? deriveBlockReasonsFromV3(v3, s, fr) : deriveBlockReasons(s, v, fr);
+  const isBlocked = v3 ? (v3.isBlocked || (rawSignal === "opportunity" && finalAction !== "ENTRER")) : (rawSignal === "opportunity" && finalAction !== "ENTRER");
+  const primaryReason = derivePrimaryReason(s, finalAction, rawSignal, blockReasons, v3, fr);
+
+  const pAction = derivePortfolioAction(s, finalAction, v3);
+
+  // ── Thesis & invalidation — V3 provides richer data ──
+  const thesis = v3
+    ? v3.secondaryReasons.map(r => r.text)
+    : (v?.positiveReasons?.slice(0, 3) || []);
+  const invalidation = v3
+    ? v3.riskFlags.map(r => r.text)
+    : (v?.negativeReasons?.slice(0, 3) || []);
 
   return {
     netuid: s.netuid,
@@ -394,10 +483,10 @@ export function buildSubnetDecision(
     structureLevel: deriveStructure(s.stability, s.isOverridden),
     statusLevel: deriveStatus(s),
 
-    signalPrincipal: deriveSignalPrincipal(s, finalAction, rawSignal, isBlocked, fr),
-    thesis: v?.positiveReasons?.slice(0, 3) || [],
-    invalidation: v?.negativeReasons?.slice(0, 3) || [],
-    conflictExplanation: deriveConflictExplanation(s, finalAction, rawSignal, blockReasons, v, fr),
+    signalPrincipal: deriveSignalPrincipal(s, finalAction, rawSignal, isBlocked, v3, fr),
+    thesis,
+    invalidation,
+    conflictExplanation: deriveConflictExplanation(s, finalAction, rawSignal, blockReasons, v3, v, fr),
 
     isOverridden: s.isOverridden,
     dataUncertain: s.dataUncertain,
@@ -407,20 +496,23 @@ export function buildSubnetDecision(
 
     score: s,
     verdict: v,
+    verdictV3: v3,
   };
 }
 
 /**
  * Build decisions for a list of subnets.
+ * Accepts both old verdicts (fallback) and V3 verdicts (primary).
  */
 export function buildAllDecisions(
   scoresList: UnifiedSubnetScore[],
   verdicts: Map<number, SubnetVerdictData>,
+  verdictsV3: Map<number, VerdictV3Result>,
   fr: boolean,
 ): Map<number, SubnetDecision> {
   const map = new Map<number, SubnetDecision>();
   for (const s of scoresList) {
-    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), fr));
+    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), verdictsV3.get(s.netuid), fr));
   }
   return map;
 }

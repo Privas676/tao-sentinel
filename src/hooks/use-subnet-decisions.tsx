@@ -2,6 +2,7 @@
 /*   USE SUBNET DECISIONS — Single source of truth */
 /*   Combines useSubnetScores + useSubnetVerdicts  */
 /*   into unified SubnetDecision objects.           */
+/*   V3 verdict engine is the PRIMARY driver.      */
 /*   ALL PAGES must consume decisions from here.   */
 /* ═══════════════════════════════════════════════ */
 
@@ -22,13 +23,11 @@ export type SubnetDecisionsResult = {
 export function useSubnetDecisions(): SubnetDecisionsResult {
   const { lang } = useI18n();
   const fr = lang === "fr";
-  const { scoresList, isLoading: scoresLoading } = useSubnetScores();
+  const { scoresList, verdictsV3, isLoading: scoresLoading } = useSubnetScores();
   const { verdicts, isLoading: verdictsLoading } = useSubnetVerdicts();
 
   const result = useMemo(() => {
     // Wait for BOTH scores AND verdicts to avoid race condition
-    // where decisions are computed without verdicts (leading to
-    // incorrect ENTRER counts that later flip to SURVEILLER).
     if (scoresLoading || verdictsLoading || !scoresList.length) {
       return {
         decisions: new Map<number, SubnetDecision>(),
@@ -37,11 +36,11 @@ export function useSubnetDecisions(): SubnetDecisionsResult {
       };
     }
 
-    const decisions = buildAllDecisions(scoresList, verdicts, fr);
+    const decisions = buildAllDecisions(scoresList, verdicts, verdictsV3, fr);
     const decisionsList = Array.from(decisions.values());
 
     return { decisions, decisionsList, isLoading: false };
-  }, [scoresList, verdicts, fr, scoresLoading, verdictsLoading]);
+  }, [scoresList, verdicts, verdictsV3, fr, scoresLoading, verdictsLoading]);
 
   return result;
 }
