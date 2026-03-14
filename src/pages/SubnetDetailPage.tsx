@@ -275,6 +275,21 @@ export default function SubnetDetailPage() {
                     {s.concordance.grade === "D" ? "⚠" : "◈"} {s.concordance.grade}
                   </span>
                 )}
+                {/* Engine version indicator */}
+                <span
+                  className="font-mono text-[7px] font-bold px-1.5 py-0.5 rounded tracking-widest"
+                  style={{
+                    background: decision.verdictV3 ? "hsla(210,80%,55%,0.06)" : "hsla(0,0%,100%,0.03)",
+                    color: decision.verdictV3 ? "hsl(210,80%,55%)" : "hsl(var(--muted-foreground))",
+                    border: `1px solid ${decision.verdictV3 ? "hsla(210,80%,55%,0.15)" : "hsla(0,0%,100%,0.06)"}`,
+                  }}
+                  title={decision.verdictV3
+                    ? `Verdict Engine v3 — ${decision.verdictV3.engineVersion} · Concordance ${decision.verdictV3.concordanceGrade}`
+                    : "Fallback verdict engine v1 — données v3 non disponibles"
+                  }
+                >
+                  {decision.verdictV3 ? "⚡ v3" : "⚙ v1"}
+                </span>
                 <DecisionDebugBadge decision={decision} />
               </div>
             </div>
