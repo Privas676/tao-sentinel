@@ -348,7 +348,7 @@ export default function SubnetsPage() {
   const saveCurrentView = useCallback(() => {
     const name = prompt(fr ? "Nom de la vue :" : "View name:");
     if (!name) return;
-    const view: SavedView = { name, filters: { scope, action: actionFilter, status: statusFilter, conviction: convictionFilter, liquidity: liquidityFilter, structure: structureFilter } };
+    const view: SavedView = { name, filters: { scope, action: actionFilter, status: statusFilter, conviction: convictionFilter, liquidity: liquidityFilter, structure: structureFilter, external: externalFilter } };
     const updated = [...savedViews, view];
     setSavedViews(updated);
     localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(updated));
