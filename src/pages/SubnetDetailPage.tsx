@@ -455,7 +455,7 @@ export default function SubnetDetailPage() {
         </SectionCard>
 
         {/* ── Social Signal Block ── */}
-        <SocialSignalBlock subnetUid={netuid} finalAction={d.finalAction} />
+        <SocialSignalBlock subnetUid={netuid} finalAction={decision.finalAction} />
 
         {/* ══════════════════════════════════════════ */}
         {/*   DEEP DIVE — Collapsible advanced metrics   */}
