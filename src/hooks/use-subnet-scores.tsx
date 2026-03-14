@@ -599,9 +599,19 @@ export function useSubnetScores(): UnifiedScoresResult {
     });
 
     // ── Phase 3b: NEW LAYERS — Facts, Concordance, Derived Scores, Verdict v3 ──
+    // Build external haircut map from Taoflute metrics
+    const externalHaircuts = new Map<number, number | null>();
+    if (taofluteMetrics) {
+      for (const [netuid, m] of taofluteMetrics) {
+        if (!m.is_stale) {
+          externalHaircuts.set(netuid, m.liq_haircut);
+        }
+      }
+    }
+
     const factsMap = rawPayloads ? extractAllSubnetFacts(rawPayloads, rate) : new Map<number, SubnetFacts>();
-    const concordanceMap = computeAllConcordances(factsMap);
-    const derivedMap = computeAllDerivedScores(factsMap, concordanceMap);
+    const concordanceMap = computeAllConcordances(factsMap, externalHaircuts);
+    const derivedMap = computeAllDerivedScores(factsMap, concordanceMap, externalHaircuts);
     const verdictsV3Map = computeAllVerdictsV3(factsMap, derivedMap, concordanceMap);
 
     // Attach new layers to each scored subnet
