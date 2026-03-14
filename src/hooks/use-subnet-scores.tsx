@@ -575,7 +575,15 @@ export function useSubnetScores(): UnifiedScoresResult {
         liqTao, liqUsd: s.displayedLiq,
         capTao: s.slMetrics?.cap ?? 0, alphaPrice: s.slMetrics?.price ?? 0,
         priceChange7d: s.priceChange7d, confianceData: s.confianceScore,
-        liqHaircut: s.recalc?.liqHaircut ?? 0,
+        liqHaircut: (() => {
+          const local = s.recalc?.liqHaircut ?? 0;
+          const ext = taofluteMetrics?.get(s.netuid);
+          if (ext && !ext.is_stale && ext.liq_haircut != null) {
+            // Use worst-case (most negative / largest absolute)
+            return Math.abs(ext.liq_haircut) > Math.abs(local) ? ext.liq_haircut : local;
+          }
+          return local;
+        })(),
         delistMode,
         price24hAgo,
         price7dAgo,
