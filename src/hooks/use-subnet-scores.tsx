@@ -656,6 +656,9 @@ export function useSubnetScores(): UnifiedScoresResult {
     decisionStates,
     fleetDistribution,
     dataConfidence: globalDataConfidence,
+    subnetFacts: factsMap,
+    concordanceResults: concordanceMap,
+    derivedScoringResults: derivedMap,
   };
 }
 
