@@ -13,6 +13,7 @@ import { ActionBadge } from "@/components/sentinel";
 import { SectionCard, SectionTitle, KPIChip, Metric, BarScore, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 import DecisionDebugBadge from "@/components/DecisionDebugBadge";
 import SocialSignalBlock from "@/components/social/SocialSignalBlock";
+import { RawFactsSection, ConcordanceSection, DerivedScoresSection, VerdictProvenanceSection } from "@/components/subnet/ProofSections";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SUBNET COMMAND CENTER — Decision-First Architecture   */
@@ -345,6 +346,22 @@ export default function SubnetDetailPage() {
               )}
             </div>
           </SectionCard>
+        )}
+
+        {/* ══════════════════════════════════════════ */}
+        {/*   PROOF SECTIONS — Layers A/B/C            */}
+        {/* ══════════════════════════════════════════ */}
+        {!isSpecial && s.verdictV3 && (
+          <VerdictProvenanceSection verdict={s.verdictV3} fr={fr} />
+        )}
+        {!isSpecial && s.concordance && (
+          <ConcordanceSection concordance={s.concordance} fr={fr} />
+        )}
+        {!isSpecial && s.derivedScoring && (
+          <DerivedScoresSection scoring={s.derivedScoring} fr={fr} />
+        )}
+        {!isSpecial && s.facts && (
+          <RawFactsSection facts={s.facts} fr={fr} />
         )}
 
         {/*   WATCH NOW — What to monitor               */}
