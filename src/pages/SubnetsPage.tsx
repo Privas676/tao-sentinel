@@ -337,7 +337,7 @@ export default function SubnetsPage() {
     try { return (localStorage.getItem("subnet-view-mode") as ViewMode) || "compact"; } catch { return "compact"; }
   });
 
-  const hasActiveFilters = scope !== "ALL" || actionFilter !== "ALL" || statusFilter !== "ALL" || convictionFilter !== "ALL" || liquidityFilter !== "ALL" || structureFilter !== "ALL" || search.length > 0;
+  const hasActiveFilters = scope !== "ALL" || actionFilter !== "ALL" || statusFilter !== "ALL" || convictionFilter !== "ALL" || liquidityFilter !== "ALL" || structureFilter !== "ALL" || externalFilter !== "ALL" || search.length > 0;
 
   const resetFilters = useCallback(() => {
     setScope("ALL"); setActionFilter("ALL"); setStatusFilter("ALL");
