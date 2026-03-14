@@ -13,6 +13,7 @@ import { ActionBadge } from "@/components/sentinel";
 import { SectionCard, SectionTitle, KPIChip, Metric, BarScore, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 import DecisionDebugBadge from "@/components/DecisionDebugBadge";
 import SocialSignalBlock from "@/components/social/SocialSignalBlock";
+import { RawFactsSection, ConcordanceSection, DerivedScoresSection, VerdictProvenanceSection } from "@/components/subnet/ProofSections";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   SUBNET COMMAND CENTER — Decision-First Architecture   */
