@@ -327,6 +327,7 @@ export default function SubnetsPage() {
   const [convictionFilter, setConvictionFilter] = useState<ConvictionFilter>("ALL");
   const [liquidityFilter, setLiquidityFilter] = useState<LiquidityFilter>("ALL");
   const [structureFilter, setStructureFilter] = useState<StructureFilter>("ALL");
+  const [externalFilter, setExternalFilter] = useState<ExternalFilter>("ALL");
   const [search, setSearch] = useState("");
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
