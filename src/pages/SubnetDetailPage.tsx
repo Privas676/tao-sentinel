@@ -251,6 +251,30 @@ export default function SubnetDetailPage() {
               </div>
               <div className="flex items-center gap-2">
                 <ActionBadge action={decision.badgeAction} />
+                {s.concordance && (
+                  <span
+                    className="font-mono text-[8px] font-bold px-2 py-0.5 rounded-md tracking-widest"
+                    style={{
+                      background: s.concordance.grade === "A" ? "hsla(145,65%,48%,0.06)"
+                        : s.concordance.grade === "B" ? "hsla(210,80%,55%,0.06)"
+                        : s.concordance.grade === "C" ? "hsla(38,92%,55%,0.06)"
+                        : "hsla(4,80%,50%,0.06)",
+                      color: s.concordance.grade === "A" ? "hsl(145,65%,48%)"
+                        : s.concordance.grade === "B" ? "hsl(210,80%,55%)"
+                        : s.concordance.grade === "C" ? "hsl(38,92%,55%)"
+                        : "hsl(4,80%,50%)",
+                      border: `1px solid ${
+                        s.concordance.grade === "A" ? "hsla(145,65%,48%,0.15)"
+                        : s.concordance.grade === "B" ? "hsla(210,80%,55%,0.15)"
+                        : s.concordance.grade === "C" ? "hsla(38,92%,55%,0.15)"
+                        : "hsla(4,80%,50%,0.15)"
+                      }`,
+                    }}
+                    title={`Concordance ${s.concordance.score}/100 — ${s.concordance.failedChecks.length} check(s) failed`}
+                  >
+                    {s.concordance.grade === "D" ? "⚠" : "◈"} {s.concordance.grade}
+                  </span>
+                )}
                 <DecisionDebugBadge decision={decision} />
               </div>
             </div>
