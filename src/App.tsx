@@ -14,6 +14,7 @@ import LabPage from "./pages/LabPage";
 import InstallPage from "./pages/InstallPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
+import SocialSettingsPage from "./pages/SocialSettingsPage";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -52,6 +53,7 @@ function AppRoutes() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/install" element={<InstallPage />} />
+          <Route path="/settings/social" element={<ErrorBoundary fallbackTitle="Social Settings"><SocialSettingsPage /></ErrorBoundary>} />
           <Route path="/" element={<Navigate to="/compass" replace />} />
           <Route path="/methodology" element={<Navigate to="/lab" replace />} />
           <Route path="/quant-diagnostics" element={<Navigate to="/lab" replace />} />
