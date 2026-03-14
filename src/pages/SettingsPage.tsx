@@ -365,7 +365,22 @@ export default function SettingsPage() {
           </div>
         </SectionCard>
 
-        {/* ── 2b. INSTALL ── */}
+        {/* ── 2b. SOCIAL SIGNAL ── */}
+        <SectionCard>
+          <SectionTitle icon="📡" title="Social Signal / KOL Tracker" />
+          <div className="px-5 py-4">
+            <p className="font-mono text-[9px] text-muted-foreground mb-3 leading-relaxed">
+              {fr ? "Gérez la watchlist de comptes X pour le module de signal social." : "Manage the X accounts watchlist for the social signal module."}
+            </p>
+            <Link to="/settings/social"
+              className="font-mono text-[10px] px-3 py-1.5 rounded-lg border transition-all inline-block"
+              style={{ borderColor: "hsl(var(--gold))", color: "hsl(var(--gold))" }}>
+              {fr ? "Ouvrir la configuration →" : "Open configuration →"}
+            </Link>
+          </div>
+        </SectionCard>
+
+        {/* ── 2c. INSTALL ── */}
         <InstallSection fr={fr} />
 
         {/* ── 3. ENGINE BEHAVIOR ── */}
