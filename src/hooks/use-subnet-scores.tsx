@@ -87,6 +87,12 @@ export type UnifiedSubnetScore = {
   depegProbability: number;
   depegState: import("@/lib/depeg-probability").DepegState;
   depegSignals: string[];
+  /** NEW: Raw facts from TaoStats */
+  facts?: SubnetFacts;
+  /** NEW: Derived scores with prohibition rules */
+  derivedScoring?: ScoringResult;
+  /** NEW: Source concordance result */
+  concordance?: ConcordanceResult;
 };
 
 export type UnifiedScoresResult = {
