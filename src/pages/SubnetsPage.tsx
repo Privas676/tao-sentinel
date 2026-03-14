@@ -30,6 +30,7 @@ type ConvictionFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type ScopeFilter = "ALL" | "PORTFOLIO" | "WATCHLIST";
 type LiquidityFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type StructureFilter = "ALL" | "HEALTHY" | "FRAGILE" | "CONCENTRATED";
+type ExternalFilter = "ALL" | "PRIORITY" | "WATCH" | "NONE";
 type ViewMode = "compact" | "analytic";
 
 type SortCol = "netuid" | "name" | "action" | "conviction" | "confidence" | "risk" | "momentum" | "opp" | "liquidity" | "stability" | null;
@@ -51,7 +52,7 @@ type TableRow = UnifiedSubnetScore & {
 
 /* ─── Saved views ─── */
 const SAVED_VIEWS_KEY = "sentinel-subnet-views";
-type SavedView = { name: string; filters: { scope: ScopeFilter; action: ActionFilter; status: StatusFilter; conviction: ConvictionFilter; liquidity: LiquidityFilter; structure: StructureFilter } };
+type SavedView = { name: string; filters: { scope: ScopeFilter; action: ActionFilter; status: StatusFilter; conviction: ConvictionFilter; liquidity: LiquidityFilter; structure: StructureFilter; external?: ExternalFilter } };
 
 function loadSavedViews(): SavedView[] {
   try { return JSON.parse(localStorage.getItem(SAVED_VIEWS_KEY) || "[]"); } catch { return []; }
@@ -326,6 +327,7 @@ export default function SubnetsPage() {
   const [convictionFilter, setConvictionFilter] = useState<ConvictionFilter>("ALL");
   const [liquidityFilter, setLiquidityFilter] = useState<LiquidityFilter>("ALL");
   const [structureFilter, setStructureFilter] = useState<StructureFilter>("ALL");
+  const [externalFilter, setExternalFilter] = useState<ExternalFilter>("ALL");
   const [search, setSearch] = useState("");
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -335,26 +337,27 @@ export default function SubnetsPage() {
     try { return (localStorage.getItem("subnet-view-mode") as ViewMode) || "compact"; } catch { return "compact"; }
   });
 
-  const hasActiveFilters = scope !== "ALL" || actionFilter !== "ALL" || statusFilter !== "ALL" || convictionFilter !== "ALL" || liquidityFilter !== "ALL" || structureFilter !== "ALL" || search.length > 0;
+  const hasActiveFilters = scope !== "ALL" || actionFilter !== "ALL" || statusFilter !== "ALL" || convictionFilter !== "ALL" || liquidityFilter !== "ALL" || structureFilter !== "ALL" || externalFilter !== "ALL" || search.length > 0;
 
   const resetFilters = useCallback(() => {
     setScope("ALL"); setActionFilter("ALL"); setStatusFilter("ALL");
     setConvictionFilter("ALL"); setLiquidityFilter("ALL"); setStructureFilter("ALL");
-    setSearch("");
+    setExternalFilter("ALL"); setSearch("");
   }, []);
 
   const saveCurrentView = useCallback(() => {
     const name = prompt(fr ? "Nom de la vue :" : "View name:");
     if (!name) return;
-    const view: SavedView = { name, filters: { scope, action: actionFilter, status: statusFilter, conviction: convictionFilter, liquidity: liquidityFilter, structure: structureFilter } };
+    const view: SavedView = { name, filters: { scope, action: actionFilter, status: statusFilter, conviction: convictionFilter, liquidity: liquidityFilter, structure: structureFilter, external: externalFilter } };
     const updated = [...savedViews, view];
     setSavedViews(updated);
     localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(updated));
-  }, [scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, savedViews, fr]);
+  }, [scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, externalFilter, savedViews, fr]);
 
   const loadView = useCallback((view: SavedView) => {
     setScope(view.filters.scope); setActionFilter(view.filters.action as ActionFilter); setStatusFilter(view.filters.status);
     setConvictionFilter(view.filters.conviction); setLiquidityFilter(view.filters.liquidity); setStructureFilter(view.filters.structure);
+    setExternalFilter((view.filters.external || "ALL") as ExternalFilter);
   }, []);
 
   const toggleSort = useCallback((col: SortCol) => {
@@ -405,6 +408,9 @@ export default function SubnetsPage() {
         if (convictionFilter !== "ALL" && r.convictionLevel !== convictionFilter) return false;
         if (liquidityFilter !== "ALL" && r.liquidityLevel !== liquidityFilter) return false;
         if (structureFilter !== "ALL" && r.structureLevel !== structureFilter) return false;
+        if (externalFilter === "PRIORITY" && r.externalDelist?.status !== "critical") return false;
+        if (externalFilter === "WATCH" && r.externalDelist?.status !== "high") return false;
+        if (externalFilter === "NONE" && r.externalDelist) return false;
         return true;
       })
       .sort((a, b) => {
@@ -432,7 +438,7 @@ export default function SubnetsPage() {
         }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, sparklines, decisions, ownedNetuids, delistInfo, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, sortCol, sortDir, fr]);
+  }, [scoresList, sparklines, decisions, ownedNetuids, delistInfo, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, externalFilter, sortCol, sortDir, fr]);
 
   // ── Column header helper ──
   const SortHeader = ({ col, label, align = "left" }: { col: SortCol; label: string; align?: "left" | "center" | "right" }) => (
@@ -562,6 +568,19 @@ export default function SubnetsPage() {
                 ]}
                 active={convictionFilter}
                 onChange={v => setConvictionFilter(v as ConvictionFilter)}
+              />
+            </FilterGroup>
+            <FilterSep />
+            <FilterGroup label={fr ? "EXTERNE" : "EXTERNAL"}>
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Tous" : "All" },
+                  { key: "PRIORITY", label: "🔴 Top 10" },
+                  { key: "WATCH", label: "🟠 Watch" },
+                  { key: "NONE", label: fr ? "Aucun" : "None" },
+                ]}
+                active={externalFilter}
+                onChange={v => setExternalFilter(v as ExternalFilter)}
               />
             </FilterGroup>
           </div>
