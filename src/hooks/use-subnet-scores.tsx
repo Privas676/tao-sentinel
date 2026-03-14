@@ -371,6 +371,28 @@ export function useSubnetScores(): UnifiedScoresResult {
     },
   });
 
+  // ── External Taoflute metrics (liq_haircut cross-validation) ──
+  const { data: taofluteMetrics } = useQuery({
+    queryKey: ["unified-taoflute-metrics"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("external_taoflute_metrics")
+        .select("netuid, liq_haircut, liq_price, is_stale, scraped_at");
+      if (error) throw error;
+      const map = new Map<number, { liq_haircut: number | null; liq_price: number | null; is_stale: boolean; scraped_at: string }>();
+      for (const r of data || []) {
+        map.set(r.netuid, {
+          liq_haircut: r.liq_haircut != null ? Number(r.liq_haircut) : null,
+          liq_price: r.liq_price != null ? Number(r.liq_price) : null,
+          is_stale: r.is_stale,
+          scraped_at: r.scraped_at,
+        });
+      }
+      return map;
+    },
+    refetchInterval: 120_000,
+  });
+
   // ── Data Confidence (real-time: API health + staleness + completeness + variance) ──
   const globalDataConfidence = useMemo<DataConfidenceScore | null>(() => {
     if (!primaryMetrics) return null;
