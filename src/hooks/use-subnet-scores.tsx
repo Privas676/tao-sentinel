@@ -452,8 +452,8 @@ export function useSubnetScores(): UnifiedScoresResult {
   }, [signalsSnapshot, rawPayloadsSnapshot, primaryMetricsSnapshot, taoUsdSnapshot]);
 
   // ── MAIN SCORING PIPELINE (orchestrates 3 independent engines) ──
-  const { scoresList, scoresMap, scoreTimestamp, fleetDistribution, factsMap, concordanceMap, derivedMap } = useMemo(() => {
-    if (!signals) return { scoresList: [] as UnifiedSubnetScore[], scoresMap: new Map<number, UnifiedSubnetScore>(), scoreTimestamp: new Date().toISOString(), fleetDistribution: null as FleetDistributionReport | null, factsMap: new Map<number, SubnetFacts>(), concordanceMap: new Map<number, ConcordanceResult>(), derivedMap: new Map<number, ScoringResult>() };
+  const { scoresList, scoresMap, scoreTimestamp, fleetDistribution, factsMap, concordanceMap, derivedMap, verdictsV3Map } = useMemo(() => {
+    if (!signals) return { scoresList: [] as UnifiedSubnetScore[], scoresMap: new Map<number, UnifiedSubnetScore>(), scoreTimestamp: new Date().toISOString(), fleetDistribution: null as FleetDistributionReport | null, factsMap: new Map<number, SubnetFacts>(), concordanceMap: new Map<number, ConcordanceResult>(), derivedMap: new Map<number, ScoringResult>(), verdictsV3Map: new Map<number, VerdictV3Result>() };
 
     const rate = taoUsd;
     const ts = new Date().toISOString();
