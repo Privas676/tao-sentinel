@@ -7,6 +7,7 @@ import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hoo
 import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useExternalDelist, type ExternalDelistInfo } from "@/hooks/use-external-delist";
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
@@ -44,6 +45,7 @@ type TableRow = UnifiedSubnetScore & {
   structureLevel: "HEALTHY" | "FRAGILE" | "CONCENTRATED";
   statusLevel: "OK" | "WATCH" | "DANGER";
   signalPrincipal: string;
+  externalDelist?: ExternalDelistInfo;
 };
 
 
@@ -77,6 +79,8 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
     if (row.isOverridden) alerts.push({ icon: "⛔", text: fr ? "Override actif — sortie forcée" : "Active override — forced exit", color: "hsl(var(--destructive))" });
     if (row.depegProbability >= 50) alerts.push({ icon: "⚠", text: `Depeg ${row.depegProbability}%`, color: "hsl(var(--signal-go-spec))" });
     if (row.delistCategory !== "NORMAL") alerts.push({ icon: "🔴", text: fr ? `Risque delist (${row.delistCategory})` : `Delist risk (${row.delistCategory})`, color: "hsl(var(--destructive))" });
+    if (row.externalDelist?.status === "critical") alerts.push({ icon: "💀", text: fr ? `Désenregistrement ext. #${row.externalDelist.rank} (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})` : `External delist #${row.externalDelist.rank} (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})`, color: "hsl(var(--destructive))" });
+    else if (row.externalDelist?.status === "high") alerts.push({ icon: "⚠️", text: fr ? `Risque désenregistrement externe (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})` : `External delist risk (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})`, color: "hsl(var(--signal-go-spec))" });
     if (row.dataUncertain) alerts.push({ icon: "❓", text: fr ? "Données incertaines" : "Uncertain data", color: "hsl(var(--muted-foreground))" });
     if (decision.conflictExplanation) alerts.push({ icon: "⚖️", text: decision.conflictExplanation, color: "hsl(var(--signal-go-spec))" });
   }
@@ -300,6 +304,7 @@ export default function SubnetsPage() {
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug, isLoading } = useSubnetScores();
   const { decisions, decisionsList } = useSubnetDecisions();
+  const { delistInfo } = useExternalDelist();
 
   // ── Action counts from DECISIONS (single source of truth) ──
   // Exclude system subnets from counts (same as Compass)
@@ -383,6 +388,7 @@ export default function SubnetsPage() {
           structureLevel: decision.structureLevel,
           statusLevel: decision.statusLevel,
           signalPrincipal: decision.signalPrincipal,
+          externalDelist: delistInfo.get(s.netuid),
         } as TableRow;
       })
       .filter((r): r is TableRow => r !== null)
@@ -426,7 +432,7 @@ export default function SubnetsPage() {
         }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, sparklines, decisions, ownedNetuids, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, sortCol, sortDir, fr]);
+  }, [scoresList, sparklines, decisions, ownedNetuids, delistInfo, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, sortCol, sortDir, fr]);
 
   // ── Column header helper ──
   const SortHeader = ({ col, label, align = "left" }: { col: SortCol; label: string; align?: "left" | "center" | "right" }) => (
@@ -613,6 +619,7 @@ export default function SubnetsPage() {
                   <SortHeader col="risk" label="Risk" align="right" />
                   <SortHeader col="opp" label="Opp." align="right" />
                   <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Signal</th>
+                  <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">{fr ? "Ext." : "Ext."}</th>
                   {!isCompact && (
                     <>
                       <SortHeader col="confidence" label="Conf." align="right" />
@@ -681,6 +688,19 @@ export default function SubnetsPage() {
                       <td className="py-2 px-2.5 text-right font-mono text-[10px] font-bold" style={{ color: riskColor(r.risk) }}>{r.risk}</td>
                       <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: opportunityColor(r.opp) }}>{r.opp}</td>
                       <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
+                      <td className="py-2 px-2.5 text-center">
+                        {r.externalDelist?.status === "critical" ? (
+                          <span className="font-mono text-[8px] font-black px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-break), 0.12)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.25)" }}>
+                            #{r.externalDelist.rank}
+                          </span>
+                        ) : r.externalDelist?.status === "high" ? (
+                          <span className="font-mono text-[7px] font-bold px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-go-spec), 0.1)", color: "hsl(var(--signal-go-spec))", border: "1px solid hsla(var(--signal-go-spec), 0.2)" }}>
+                            {fr ? "WATCH" : "WATCH"}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-[9px]">—</span>
+                        )}
+                      </td>
                       {!isCompact && (
                         <>
                           <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: confianceColor(r.confianceScore) }}>{r.confianceScore}%</td>

@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useExternalDelist } from "@/hooks/use-external-delist";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
@@ -149,6 +150,8 @@ export default function SubnetDetailPage() {
   const { decisions } = useSubnetDecisions();
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
+  const { delistInfo } = useExternalDelist();
+  const extDelist = delistInfo.get(netuid);
   const [flash, setFlash] = useState<string | null>(null);
   const [showDeepDive, setShowDeepDive] = useState(false);
   const s = scores.get(netuid);
@@ -435,6 +438,51 @@ export default function SubnetDetailPage() {
         )}
 
         {/* ══════════════════════════════════════════ */}
+        {/*   EXTERNAL DELIST RISK (Taoflute)           */}
+        {/* ══════════════════════════════════════════ */}
+        {extDelist && (
+          <SectionCard>
+            <SectionTitle icon="💀" title={fr ? "Risque de désenregistrement externe" : "External Deregistration Risk"} />
+            <div className="px-5 py-4 space-y-3">
+              <div className="flex items-center gap-3">
+                {extDelist.status === "critical" ? (
+                  <span className="font-mono text-[11px] font-black px-2.5 py-1 rounded" style={{ background: "hsla(var(--signal-break), 0.12)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.25)" }}>
+                    #{extDelist.rank} — {fr ? "PRIORITÉ CRITIQUE" : "CRITICAL PRIORITY"}
+                  </span>
+                ) : (
+                  <span className="font-mono text-[11px] font-bold px-2.5 py-1 rounded" style={{ background: "hsla(var(--signal-go-spec), 0.1)", color: "hsl(var(--signal-go-spec))", border: "1px solid hsla(var(--signal-go-spec), 0.2)" }}>
+                    {fr ? "WATCH — À RISQUE" : "WATCH — AT RISK"}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg px-3 py-2 bg-muted/20 border border-border">
+                  <div className="font-mono text-[7px] text-muted-foreground tracking-widest uppercase">SOURCE</div>
+                  <div className="font-mono text-[11px] text-foreground/80 mt-0.5">
+                    {extDelist.source.includes("seed") ? (fr ? "Seed manuelle validée" : "Validated manual seed") : "Taoflute"}
+                  </div>
+                </div>
+                <div className="rounded-lg px-3 py-2 bg-muted/20 border border-border">
+                  <div className="font-mono text-[7px] text-muted-foreground tracking-widest uppercase">{fr ? "LISTE" : "LIST"}</div>
+                  <div className="font-mono text-[11px] text-foreground/80 mt-0.5">
+                    {extDelist.list === "priority" ? (fr ? "Priorité désinscription" : "Deregistration priority") : (fr ? "Surveillance" : "Watch")}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg px-4 py-2.5 border border-destructive/15 bg-destructive/[0.03]">
+                <div className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground mb-1">{fr ? "IMPACT SUR LE VERDICT" : "VERDICT IMPACT"}</div>
+                <div className="font-mono text-[10px] text-foreground/70 leading-relaxed">
+                  {extDelist.status === "critical"
+                    ? (fr ? "Ce subnet est dans le top 10 des désenregistrements imminents. Entrée bloquée. Seules les actions SORTIR et ÉVITER sont autorisées. Malus fort appliqué sur structure, conviction et confiance."
+                        : "This subnet is in the top 10 imminent deregistrations. Entry blocked. Only EXIT and AVOID actions allowed. Strong penalties on structure, conviction, and confidence.")
+                    : (fr ? "Ce subnet est à risque de désenregistrement prochain. Entrée agressive interdite. Malus moyen appliqué sur structure et risque."
+                        : "This subnet is at risk of near-term deregistration. Aggressive entry blocked. Medium penalty on structure and risk.")}
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+        )}
+
         {/*   WHY / WHY NOT — Premium 4-quadrant        */}
         {/* ══════════════════════════════════════════ */}
         <SectionCard>

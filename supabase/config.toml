@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.log-audit-event]
 verify_jwt = false
+
+[functions.sync-taoflute]
+verify_jwt = false
