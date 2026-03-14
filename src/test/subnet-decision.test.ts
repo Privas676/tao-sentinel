@@ -65,7 +65,7 @@ describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
 
   it("portfolioAction is coherent with finalAction for near-delist", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", depegProbability: 40 });
-    const d = buildSubnetDecision(s, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true);
     // finalAction = SORTIR → portfolioAction must be SORTIR
     expect(d.portfolioAction).toBe("SORTIR");
   });
