@@ -570,6 +570,19 @@ export default function SubnetsPage() {
                 onChange={v => setConvictionFilter(v as ConvictionFilter)}
               />
             </FilterGroup>
+            <FilterSep />
+            <FilterGroup label={fr ? "EXTERNE" : "EXTERNAL"}>
+              <FilterChipGroup
+                chips={[
+                  { key: "ALL", label: fr ? "Tous" : "All" },
+                  { key: "PRIORITY", label: "🔴 Top 10" },
+                  { key: "WATCH", label: "🟠 Watch" },
+                  { key: "NONE", label: fr ? "Aucun" : "None" },
+                ]}
+                active={externalFilter}
+                onChange={v => setExternalFilter(v as ExternalFilter)}
+              />
+            </FilterGroup>
           </div>
           {/* Second row — advanced filters (analytic mode only) */}
           {!isCompact && (
