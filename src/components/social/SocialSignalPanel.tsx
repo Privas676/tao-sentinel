@@ -11,7 +11,7 @@ import {
   type SocialAlert,
 } from "@/hooks/use-social-signal";
 import { useSocialPostMentions } from "@/hooks/use-social-signal";
-import { alertSeverityIcon, socialBadgeColor } from "@/lib/social-signal";
+import { alertSeverityIcon, getSocialSourceState, getSocialSourceLabel } from "@/lib/social-signal";
 import { SectionCard, SectionTitle } from "@/components/settings/SettingsShared";
 
 /* ═══════════════════════════════════════════════════════ */
@@ -33,6 +33,20 @@ const TABS: { key: SocialTab; icon: string; fr: string; en: string }[] = [
   { key: "accounts", icon: "👥", fr: "Comptes", en: "Accounts" },
   { key: "alerts", icon: "🚨", fr: "Alertes", en: "Alerts" },
 ];
+
+/* ── Demo Banner ── */
+function DemoBanner({ fr }: { fr: boolean }) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/15 px-4 py-2 flex items-center gap-2">
+      <span className="text-xs">🧪</span>
+      <span className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+        {fr
+          ? "Mode démonstration sociale — certaines sources sont simulées"
+          : "Social demo mode — some sources are simulated"}
+      </span>
+    </div>
+  );
+}
 
 /* ── Leaderboard Tab ── */
 function LeaderboardTab({ scores, fr }: { scores: SocialSubnetScore[]; fr: boolean }) {
@@ -68,6 +82,33 @@ function LeaderboardTab({ scores, fr }: { scores: SocialSubnetScore[]; fr: boole
   );
 }
 
+/* ── Post Source Button ── */
+function PostSourceAction({ post, fr }: { post: SocialPost; fr: boolean }) {
+  const state = getSocialSourceState(post);
+  const label = getSocialSourceLabel(post, fr);
+
+  if (state === "valid") {
+    return (
+      <a href={post.url!} target="_blank" rel="noopener noreferrer"
+        className="font-mono text-[8px] px-2 py-1 rounded border transition-all hover:opacity-80"
+        style={{ borderColor: `${GOLD}40`, color: GOLD }}>
+        → {label}
+      </a>
+    );
+  }
+
+  return (
+    <span className="font-mono text-[8px] px-2 py-1 rounded border inline-flex items-center gap-1"
+      style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))", opacity: 0.5, cursor: "default" }}
+      aria-disabled="true">
+      {state === "mock" && (
+        <span className="font-mono text-[7px] px-1 py-px rounded bg-muted text-muted-foreground font-bold">MOCK</span>
+      )}
+      {label}
+    </span>
+  );
+}
+
 /* ── Posts Tab ── */
 function PostsTab({ posts, fr }: { posts: SocialPost[]; fr: boolean }) {
   const postIds = posts.map(p => p.id);
@@ -79,15 +120,27 @@ function PostsTab({ posts, fr }: { posts: SocialPost[]; fr: boolean }) {
       {posts.map(p => {
         const mentions = allMentions.filter(m => m.post_id === p.id);
         const acct = p.account as any;
+        const sourceState = getSocialSourceState(p);
         return (
           <div key={p.id} className="px-4 py-3 hover:bg-muted/5 transition-colors">
+            {/* Author line */}
             <div className="flex items-center gap-2 mb-1.5">
               <span className="text-xs">{CAT_ICONS[acct?.category] || "👤"}</span>
               <span className="font-mono text-[10px] font-bold text-foreground/80">@{acct?.handle}</span>
+              {acct?.display_name && acct.display_name !== acct.handle && (
+                <span className="font-mono text-[8px] text-muted-foreground">{acct.display_name}</span>
+              )}
               <span className="font-mono text-[8px] px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase">{p.post_type}</span>
+              {sourceState === "mock" && (
+                <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-bold">MOCK</span>
+              )}
               <span className="font-mono text-[8px] text-muted-foreground ml-auto">{timeAgo(p.posted_at, fr)}</span>
             </div>
+
+            {/* Post text */}
             <p className="font-mono text-[10px] text-foreground/60 leading-relaxed line-clamp-2 mb-1.5">{p.clean_text || p.raw_text}</p>
+
+            {/* Mentions + engagement + source action */}
             <div className="flex items-center gap-3 flex-wrap">
               {mentions.map(m => (
                 <span key={m.id} className="font-mono text-[8px] px-1.5 py-0.5 rounded border"
@@ -103,7 +156,7 @@ function PostsTab({ posts, fr }: { posts: SocialPost[]; fr: boolean }) {
                 <span>💬 {p.reply_count}</span>
                 <span>🔄 {p.repost_count}</span>
               </div>
-              {p.url && <a href={p.url} target="_blank" rel="noopener" className="font-mono text-[8px] text-gold hover:underline">→ {fr ? "voir" : "view"}</a>}
+              <PostSourceAction post={p} fr={fr} />
             </div>
           </div>
         );
@@ -156,7 +209,7 @@ function AlertsTab({ alerts, fr }: { alerts: SocialAlert[]; fr: boolean }) {
           {a.description && <p className="font-mono text-[9px] text-muted-foreground leading-relaxed ml-6">{a.description}</p>}
           <div className="flex items-center gap-3 mt-1 ml-6 font-mono text-[8px] text-muted-foreground">
             <span>SN-{a.subnet_uid}</span>
-            <span>{fr ? "Sources" : "Sources"}: {a.source_count}</span>
+            <span>Sources: {a.source_count}</span>
             <span>Score: {a.weighted_score.toFixed(0)}</span>
             <span className="ml-auto">{timeAgo(a.created_at, fr)}</span>
           </div>
@@ -231,6 +284,9 @@ export default function SocialSignalPanel() {
             )}
           </div>
         </div>
+
+        {/* Demo banner */}
+        <DemoBanner fr={fr} />
 
         {/* Sub-tabs */}
         <div className="flex border-b border-border">
