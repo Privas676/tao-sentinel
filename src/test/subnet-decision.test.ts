@@ -52,7 +52,7 @@ describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
 
   it("forces SURVEILLER when HIGH_RISK_NEAR_DELIST + moderate risk", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", risk: 30, depegProbability: 10 });
-    const d = buildSubnetDecision(s, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true);
     expect(d.finalAction).toBe("SURVEILLER");
   });
 
