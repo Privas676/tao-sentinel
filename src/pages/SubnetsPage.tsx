@@ -52,7 +52,7 @@ type TableRow = UnifiedSubnetScore & {
 
 /* ─── Saved views ─── */
 const SAVED_VIEWS_KEY = "sentinel-subnet-views";
-type SavedView = { name: string; filters: { scope: ScopeFilter; action: ActionFilter; status: StatusFilter; conviction: ConvictionFilter; liquidity: LiquidityFilter; structure: StructureFilter } };
+type SavedView = { name: string; filters: { scope: ScopeFilter; action: ActionFilter; status: StatusFilter; conviction: ConvictionFilter; liquidity: LiquidityFilter; structure: StructureFilter; external?: ExternalFilter } };
 
 function loadSavedViews(): SavedView[] {
   try { return JSON.parse(localStorage.getItem(SAVED_VIEWS_KEY) || "[]"); } catch { return []; }
