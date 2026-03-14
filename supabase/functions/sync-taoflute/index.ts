@@ -204,23 +204,25 @@ Deno.serve(async (req: Request) => {
     const currentPriorityMap = new Map((currentPriority || []).map(p => [p.netuid, p]));
     const currentWatchMap = new Map((currentWatch || []).map(w => [w.netuid, w]));
 
-    if (delistRows.length > 0) {
-      // Parse scraped delist data
+    if (deregData.length > 0) {
+      // Use dereg_place from materialized_overview_data
       const scrapedPriority = new Map<number, { rank: number; name: string }>();
       const scrapedWatch = new Set<number>();
 
-      for (const row of delistRows) {
-        const netuid = Number(row.netuid ?? row.subnet_id ?? row.id);
-        if (!netuid || isNaN(netuid)) continue;
-        const rank = Number(row.rank ?? row.priority ?? row.delist_rank ?? 0);
-        const name = String(row.name ?? row.subnet_name ?? `SN-${netuid}`);
+      // Sort by rank — top 10 = priority, rest with high rank = watch
+      deregData.sort((a, b) => a.rank - b.rank);
+      const totalSubnets = subnetRows.length;
 
-        if (rank > 0 && rank <= 10) {
-          scrapedPriority.set(netuid, { rank, name });
-        } else {
-          scrapedWatch.add(netuid);
+      for (const item of deregData) {
+        if (item.rank <= 10) {
+          scrapedPriority.set(item.netuid, { rank: item.rank, name: item.name });
+        } else if (item.rank <= 30 || item.rank > totalSubnets - 25) {
+          // Bottom ~25 subnets or rank ≤30 → watch list
+          scrapedWatch.add(item.netuid);
         }
       }
+
+      console.log(`Dereg reconciliation: ${scrapedPriority.size} priority, ${scrapedWatch.size} watch`);
 
       // Reconcile priority list
       await reconcilePriority(supabase, currentPriorityMap, scrapedPriority, now, result);
@@ -228,8 +230,7 @@ Deno.serve(async (req: Request) => {
       // Reconcile watch list
       await reconcileWatch(supabase, currentWatchMap, scrapedWatch, currentPriorityMap, now, result);
     } else {
-      // No delist data from scrape — just update last_seen for existing seed entries
-      console.log("No delist data scraped — seed list remains authoritative");
+      console.log("No dereg_place data — seed list remains authoritative");
     }
 
     // Mark stale metrics if no data fetched
