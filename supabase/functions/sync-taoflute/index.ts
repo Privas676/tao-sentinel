@@ -129,6 +129,7 @@ Deno.serve(async (req: Request) => {
     /*   PHASE 2: Fetch subnet metrics      */
     /* ════════════════════════════════════ */
     let subnetRows: Record<string, any>[] = [];
+    let deregData: { netuid: number; rank: number; name: string }[] = [];
 
     // Try known queries or build from discovered tables
     const metricsQueries = availableTables.length > 0
