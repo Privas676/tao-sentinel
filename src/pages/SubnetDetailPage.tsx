@@ -103,6 +103,16 @@ function watchPoints(s: UnifiedSubnetScore, d: SubnetDecision, eco: any, sn: any
   if (sn?.stakeConcentration > 50)
     pts.push({ icon: "🏗", text: fr ? `Concentration élevée (${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(0)}%) — risque de dump coordonné` : `High concentration (${(sn.stakeConcentration <= 1 ? sn.stakeConcentration * 100 : sn.stakeConcentration).toFixed(0)}%) — coordinated dump risk`, urgency: "medium" });
 
+  // Inject v3 engine watchlist items (deduplicated)
+  if (d.verdictV3?.watchlist?.length) {
+    const existingTexts = new Set(pts.map(p => p.text.toLowerCase()));
+    for (const item of d.verdictV3.watchlist) {
+      if (!existingTexts.has(item.toLowerCase())) {
+        pts.push({ icon: "⚡", text: item, urgency: "medium" });
+      }
+    }
+  }
+
   // Sort by urgency, take top 5
   const order = { high: 0, medium: 1, low: 2 };
   return pts.sort((a, b) => order[a.urgency] - order[b.urgency]).slice(0, 5);
