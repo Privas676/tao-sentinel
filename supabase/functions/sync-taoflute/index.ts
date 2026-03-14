@@ -434,18 +434,21 @@ function buildSmartQueries(tables: string[]): string[] {
   const queries: string[] = [];
   const t = new Set(tables);
 
-  // Look for subnet-related tables
-  for (const name of tables) {
-    if (/subnet|overview|pool|token/i.test(name)) {
-      queries.push(`SELECT * FROM "${name}" ORDER BY 1 LIMIT 200`);
-    }
+  // Priority: materialized_overview_data is the richest table
+  if (t.has("materialized_overview_data")) {
+    queries.push(`SELECT * FROM "materialized_overview_data" ORDER BY 1 LIMIT 200`);
   }
 
-  // Generic fallback
-  if (queries.length === 0 && tables.length > 0) {
-    // Try first few tables that might contain subnet data
-    for (const name of tables.slice(0, 3)) {
-      queries.push(`SELECT * FROM "${name}" LIMIT 5`);
+  // Then snapshot_history for delist-related data
+  if (t.has("snapshot_history")) {
+    queries.push(`SELECT * FROM "snapshot_history" ORDER BY 1 DESC LIMIT 200`);
+  }
+
+  // Then other subnet-related tables
+  for (const name of tables) {
+    if (name === "materialized_overview_data" || name === "snapshot_history") continue;
+    if (/subnet|overview|pool|token|ohlc|price/i.test(name)) {
+      queries.push(`SELECT * FROM "${name}" ORDER BY 1 LIMIT 200`);
     }
   }
 
