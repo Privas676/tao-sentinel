@@ -352,7 +352,7 @@ export default function SubnetsPage() {
     const updated = [...savedViews, view];
     setSavedViews(updated);
     localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(updated));
-  }, [scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, savedViews, fr]);
+  }, [scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, externalFilter, savedViews, fr]);
 
   const loadView = useCallback((view: SavedView) => {
     setScope(view.filters.scope); setActionFilter(view.filters.action as ActionFilter); setStatusFilter(view.filters.status);
