@@ -342,7 +342,7 @@ export default function SubnetsPage() {
   const resetFilters = useCallback(() => {
     setScope("ALL"); setActionFilter("ALL"); setStatusFilter("ALL");
     setConvictionFilter("ALL"); setLiquidityFilter("ALL"); setStructureFilter("ALL");
-    setSearch("");
+    setExternalFilter("ALL"); setSearch("");
   }, []);
 
   const saveCurrentView = useCallback(() => {
