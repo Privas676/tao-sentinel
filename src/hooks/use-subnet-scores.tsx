@@ -47,6 +47,7 @@ import {
 import { extractAllSubnetFacts, type SubnetFacts } from "@/lib/subnet-facts";
 import { computeAllConcordances, type ConcordanceResult } from "@/lib/source-concordance";
 import { computeAllDerivedScores, type ScoringResult } from "@/lib/derived-scores";
+import { computeAllVerdictsV3, type VerdictV3Result } from "@/lib/verdict-engine-v3";
 
 /* ─── Exported types ─── */
 
@@ -93,6 +94,8 @@ export type UnifiedSubnetScore = {
   derivedScoring?: ScoringResult;
   /** NEW: Source concordance result */
   concordance?: ConcordanceResult;
+  /** NEW: Verdict v3 result */
+  verdictV3?: VerdictV3Result;
 };
 
 export type UnifiedScoresResult = {
@@ -121,6 +124,8 @@ export type UnifiedScoresResult = {
   concordanceResults: Map<number, ConcordanceResult>;
   /** NEW: All derived scores (Layer B) */
   derivedScoringResults: Map<number, ScoringResult>;
+  /** NEW: All verdict v3 results (Layer C) */
+  verdictsV3: Map<number, VerdictV3Result>;
 };
 
 /* ─── SPECIAL CASES / WHITELIST ───
@@ -447,8 +452,8 @@ export function useSubnetScores(): UnifiedScoresResult {
   }, [signalsSnapshot, rawPayloadsSnapshot, primaryMetricsSnapshot, taoUsdSnapshot]);
 
   // ── MAIN SCORING PIPELINE (orchestrates 3 independent engines) ──
-  const { scoresList, scoresMap, scoreTimestamp, fleetDistribution, factsMap, concordanceMap, derivedMap } = useMemo(() => {
-    if (!signals) return { scoresList: [] as UnifiedSubnetScore[], scoresMap: new Map<number, UnifiedSubnetScore>(), scoreTimestamp: new Date().toISOString(), fleetDistribution: null as FleetDistributionReport | null, factsMap: new Map<number, SubnetFacts>(), concordanceMap: new Map<number, ConcordanceResult>(), derivedMap: new Map<number, ScoringResult>() };
+  const { scoresList, scoresMap, scoreTimestamp, fleetDistribution, factsMap, concordanceMap, derivedMap, verdictsV3Map } = useMemo(() => {
+    if (!signals) return { scoresList: [] as UnifiedSubnetScore[], scoresMap: new Map<number, UnifiedSubnetScore>(), scoreTimestamp: new Date().toISOString(), fleetDistribution: null as FleetDistributionReport | null, factsMap: new Map<number, SubnetFacts>(), concordanceMap: new Map<number, ConcordanceResult>(), derivedMap: new Map<number, ScoringResult>(), verdictsV3Map: new Map<number, VerdictV3Result>() };
 
     const rate = taoUsd;
     const ts = new Date().toISOString();
@@ -592,16 +597,18 @@ export function useSubnetScores(): UnifiedScoresResult {
       return applyDecision(decisionInput) as UnifiedSubnetScore;
     });
 
-    // ── Phase 3b: NEW LAYERS — Facts, Concordance, Derived Scores ──
+    // ── Phase 3b: NEW LAYERS — Facts, Concordance, Derived Scores, Verdict v3 ──
     const factsMap = rawPayloads ? extractAllSubnetFacts(rawPayloads, rate) : new Map<number, SubnetFacts>();
     const concordanceMap = computeAllConcordances(factsMap);
     const derivedMap = computeAllDerivedScores(factsMap, concordanceMap);
+    const verdictsV3Map = computeAllVerdictsV3(factsMap, derivedMap, concordanceMap);
 
     // Attach new layers to each scored subnet
     for (const s of scored) {
       s.facts = factsMap.get(s.netuid);
       s.concordance = concordanceMap.get(s.netuid);
       s.derivedScoring = derivedMap.get(s.netuid);
+      s.verdictV3 = verdictsV3Map.get(s.netuid);
     }
 
     // Sort by asymmetry desc (default)
@@ -621,6 +628,11 @@ export function useSubnetScores(): UnifiedScoresResult {
         console.warn(`[STALE-GUARD] Data alignment STALE — all ENTER actions downgraded to WATCH (${blockedCount} potential blocks)`);
       }
 
+      // V3 verdict distribution log
+      const v3Counts = { ENTER: 0, SURVEILLER: 0, SORTIR: 0, DONNÉES_INSTABLES: 0, NON_INVESTISSABLE: 0, SYSTÈME: 0 };
+      for (const [, v] of verdictsV3Map) { v3Counts[v.verdict] = (v3Counts[v.verdict] || 0) + 1; }
+      console.log(`[VERDICT-V3] ${Object.entries(v3Counts).map(([k, v]) => `${k}:${v}`).join(" ")}`);
+
       // Whitelist invariant check
       for (const s of scored) {
         if (SPECIAL_SUBNETS[s.netuid] && s.action === "EXIT") {
@@ -629,7 +641,7 @@ export function useSubnetScores(): UnifiedScoresResult {
       }
     }
 
-    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist, factsMap, concordanceMap, derivedMap };
+    return { scoresList: scored, scoresMap: map, scoreTimestamp: ts, fleetDistribution: fleetDist, factsMap, concordanceMap, derivedMap, verdictsV3Map };
   }, [signals, rawPayloads, taoUsd, primaryMetrics, subnetLatest, consensusMap, consensusPrices, price30dMap, delistMode, sparklines, alignmentResult]);
 
   // ── Phase 4: DECISION STATE LAYER (stability: hysteresis, confirmation, cooldown) ──
@@ -659,6 +671,7 @@ export function useSubnetScores(): UnifiedScoresResult {
     subnetFacts: factsMap,
     concordanceResults: concordanceMap,
     derivedScoringResults: derivedMap,
+    verdictsV3: verdictsV3Map,
   };
 }
 
