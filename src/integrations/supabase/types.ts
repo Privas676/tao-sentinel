@@ -374,6 +374,57 @@ export type Database = {
           },
         ]
       }
+      social_kols: {
+        Row: {
+          accuracy_history: Json | null
+          category: string
+          created_at: string
+          credibility_score: number | null
+          display_name: string | null
+          false_positive_rate: number | null
+          handle: string
+          id: number
+          influence_weight: number
+          is_active: boolean
+          last_seen_at: string | null
+          self_mention: boolean
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          accuracy_history?: Json | null
+          category?: string
+          created_at?: string
+          credibility_score?: number | null
+          display_name?: string | null
+          false_positive_rate?: number | null
+          handle: string
+          id?: never
+          influence_weight?: number
+          is_active?: boolean
+          last_seen_at?: string | null
+          self_mention?: boolean
+          tier?: string
+          updated_at?: string
+        }
+        Update: {
+          accuracy_history?: Json | null
+          category?: string
+          created_at?: string
+          credibility_score?: number | null
+          display_name?: string | null
+          false_positive_rate?: number | null
+          handle?: string
+          id?: never
+          influence_weight?: number
+          is_active?: boolean
+          last_seen_at?: string | null
+          self_mention?: boolean
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subnet_metrics_ts: {
         Row: {
           cap: number | null
