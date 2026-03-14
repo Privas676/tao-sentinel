@@ -47,6 +47,7 @@ import {
 import { extractAllSubnetFacts, type SubnetFacts } from "@/lib/subnet-facts";
 import { computeAllConcordances, type ConcordanceResult } from "@/lib/source-concordance";
 import { computeAllDerivedScores, type ScoringResult } from "@/lib/derived-scores";
+import { computeAllVerdictsV3, type VerdictV3Result } from "@/lib/verdict-engine-v3";
 
 /* ─── Exported types ─── */
 
