@@ -94,6 +94,8 @@ export type UnifiedSubnetScore = {
   derivedScoring?: ScoringResult;
   /** NEW: Source concordance result */
   concordance?: ConcordanceResult;
+  /** NEW: Verdict v3 result */
+  verdictV3?: VerdictV3Result;
 };
 
 export type UnifiedScoresResult = {
