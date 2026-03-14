@@ -124,6 +124,8 @@ export type UnifiedScoresResult = {
   concordanceResults: Map<number, ConcordanceResult>;
   /** NEW: All derived scores (Layer B) */
   derivedScoringResults: Map<number, ScoringResult>;
+  /** NEW: All verdict v3 results (Layer C) */
+  verdictsV3: Map<number, VerdictV3Result>;
 };
 
 /* ─── SPECIAL CASES / WHITELIST ───
