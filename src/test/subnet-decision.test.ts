@@ -58,7 +58,7 @@ describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
 
   it("isBlocked is true when raw signal is opportunity + HIGH_RISK_NEAR_DELIST", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", opp: 70, momentumScore: 60 });
-    const d = buildSubnetDecision(s, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true);
     expect(d.isBlocked).toBe(true);
     expect(d.blockReasons.length).toBeGreaterThan(0);
   });
