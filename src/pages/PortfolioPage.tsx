@@ -7,6 +7,7 @@ import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hoo
 import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { confianceColor } from "@/lib/data-fusion";
 import SwipeHint from "@/components/SwipeHint";
+import { useExternalDelist } from "@/hooks/use-external-delist";
 
 import { toast } from "sonner";
 import { SectionCard, SectionTitle, KPIChip, Metric, Sparkline, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
