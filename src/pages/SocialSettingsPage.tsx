@@ -227,7 +227,7 @@ export default function SocialSettingsPage() {
           ) : filtered.length === 0 ? (
             <div className="px-5 py-8 text-center"><span className="font-mono text-[10px] text-muted-foreground">{fr ? "Aucun compte" : "No accounts"}</span></div>
           ) : (
-            <div>{filtered.map(a => <AccountRow key={a.id} account={a} />)}</div>
+            <div className="max-h-[360px] overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>{filtered.map(a => <AccountRow key={a.id} account={a} />)}</div>
           )}
         </SectionCard>
 
