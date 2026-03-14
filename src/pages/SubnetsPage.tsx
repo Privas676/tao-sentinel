@@ -686,6 +686,19 @@ export default function SubnetsPage() {
                       <td className="py-2 px-2.5 text-right font-mono text-[10px] font-bold" style={{ color: riskColor(r.risk) }}>{r.risk}</td>
                       <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: opportunityColor(r.opp) }}>{r.opp}</td>
                       <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
+                      <td className="py-2 px-2.5 text-center">
+                        {r.externalDelist?.status === "critical" ? (
+                          <span className="font-mono text-[8px] font-black px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-break), 0.12)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.25)" }}>
+                            #{r.externalDelist.rank}
+                          </span>
+                        ) : r.externalDelist?.status === "high" ? (
+                          <span className="font-mono text-[7px] font-bold px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-go-spec), 0.1)", color: "hsl(var(--signal-go-spec))", border: "1px solid hsla(var(--signal-go-spec), 0.2)" }}>
+                            {fr ? "WATCH" : "WATCH"}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-[9px]">—</span>
+                        )}
+                      </td>
                       {!isCompact && (
                         <>
                           <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: confianceColor(r.confianceScore) }}>{r.confianceScore}%</td>
