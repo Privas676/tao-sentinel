@@ -86,7 +86,7 @@ describe("subnet-decision — SN-90 scenario", () => {
       action: "ENTER",
       confianceScore: 80,
     });
-    const d = buildSubnetDecision(s, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true);
     expect(d.finalAction).not.toBe("ENTRER");
     expect(d.finalAction).toBe("SORTIR");
     expect(d.badgeAction).toBe("SORS");
