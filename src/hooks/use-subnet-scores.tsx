@@ -44,6 +44,9 @@ import {
   ApiHealthTracker, computeDataConfidence, computeSubnetConfidence,
   type DataConfidenceScore,
 } from "@/lib/data-confidence";
+import { extractAllSubnetFacts, type SubnetFacts } from "@/lib/subnet-facts";
+import { computeAllConcordances, type ConcordanceResult } from "@/lib/source-concordance";
+import { computeAllDerivedScores, type ScoringResult } from "@/lib/derived-scores";
 
 /* ─── Exported types ─── */
 
