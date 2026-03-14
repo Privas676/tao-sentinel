@@ -115,6 +115,12 @@ export type UnifiedScoresResult = {
   fleetDistribution: FleetDistributionReport | null;
   /** Data confidence score (0-100) based on real API health metrics */
   dataConfidence: DataConfidenceScore | null;
+  /** NEW: All subnet facts (Layer A) */
+  subnetFacts: Map<number, SubnetFacts>;
+  /** NEW: All concordance results */
+  concordanceResults: Map<number, ConcordanceResult>;
+  /** NEW: All derived scores (Layer B) */
+  derivedScoringResults: Map<number, ScoringResult>;
 };
 
 /* ─── SPECIAL CASES / WHITELIST ───
