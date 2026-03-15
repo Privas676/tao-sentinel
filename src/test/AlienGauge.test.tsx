@@ -86,6 +86,7 @@ vi.mock("@/lib/i18n", () => ({
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import AlienGauge from "@/pages/AlienGauge";
 
