@@ -336,6 +336,7 @@ export default function CompassPage() {
     { key: "enter", title: fr ? "ENTRER" : "ENTER", emoji: "🟢", items: priorityGroups.enterGroup, count: priorityGroups.enterCount, color: GO, bg: `color-mix(in srgb, ${GO} 4%, transparent)`, border: `color-mix(in srgb, ${GO} 12%, transparent)` },
     { key: "hold", title: fr ? "SURVEILLER" : "WATCH", emoji: "🟡", items: priorityGroups.holdGroup, count: priorityGroups.holdCount, color: WARN, bg: `color-mix(in srgb, ${WARN} 4%, transparent)`, border: `color-mix(in srgb, ${WARN} 12%, transparent)` },
     { key: "exit", title: fr ? "SORTIR" : "EXIT", emoji: "🔴", items: priorityGroups.exitGroup, count: priorityGroups.exitCount, color: BREAK, bg: `color-mix(in srgb, ${BREAK} 4%, transparent)`, border: `color-mix(in srgb, ${BREAK} 12%, transparent)` },
+    { key: "avoid", title: fr ? "ÉVITER" : "AVOID", emoji: "⛔", items: priorityGroups.avoidGroup, count: priorityGroups.avoidCount, color: "hsl(4,80%,40%)", bg: "color-mix(in srgb, hsl(4,80%,40%) 4%, transparent)", border: "color-mix(in srgb, hsl(4,80%,40%) 12%, transparent)" },
   ];
 
   const rotationGroups = [
