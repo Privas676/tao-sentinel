@@ -97,9 +97,9 @@ export function buildCanonicalDecision(
   // Social scores from canonical facts (if available)
   const socialSignal = facts?.social_signal_strength ?? 0;
   const socialConfidence = facts?.social_credibility_score ?? 0;
-
-  return {
-    subnet_id: decision.netuid,
+  const finalAction = mapFinalAction(decision);
+  const isExit = finalAction === "SORTIR" || finalAction === "ÉVITER";
+  const socialBonus = computeSocialBonus(socialSignal, socialConfidence, isExit);
 
     // Final Action
     final_action: mapFinalAction(decision),
