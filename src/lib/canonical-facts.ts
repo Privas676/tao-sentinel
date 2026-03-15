@@ -87,18 +87,53 @@ export function buildCanonicalFacts(
   const circSupply = val(facts.circulatingSupply);
   const emissionsPct = circSupply > 0 ? (emissionDay / circSupply) * 100 : null;
 
-  // Build provenance map (key fields only)
+  // Build provenance map — every critical field group gets a verifiable source
+  const tsProv = taostatsProv(taostatsTs, facts.netuid);
+  const tsChain = prov("TaoStats", "taostats:chain", taostatsUrl, taostatsTs, 90);
+  const comp = computedProv(taostatsTs);
+
   const provenance: Record<string, SourceProvenance> = {
-    price: taostatsProv(taostatsTs, facts.netuid),
-    market_cap: taostatsProv(taostatsTs, facts.netuid),
-    volume_24h: taostatsProv(taostatsTs, facts.netuid),
-    buys_count: taostatsProv(taostatsTs, facts.netuid),
-    tao_in_pool: taostatsProv(taostatsTs, facts.netuid),
-    slippage_1tau: computedProv(taostatsTs),
-    spread: computedProv(taostatsTs),
-    emissions_day: prov("TaoStats", "taostats:chain", taostatsUrl, taostatsTs, 85),
-    validators: prov("TaoStats", "taostats:chain", taostatsUrl, taostatsTs, 90),
-    miners: prov("TaoStats", "taostats:chain", taostatsUrl, taostatsTs, 90),
+    // Price & Market (primary on-chain via TaoStats)
+    price: tsProv,
+    price_usd: comp,
+    change_1h: tsProv,
+    change_24h: tsProv,
+    change_7d: tsProv,
+    change_30d: tsProv,
+    market_cap: tsProv,
+    market_cap_usd: comp,
+    fdv: comp,
+    volume_24h: tsProv,
+    volume_24h_usd: comp,
+
+    // Trading Activity
+    buys_count: tsProv,
+    sells_count: tsProv,
+    buyers_count: tsProv,
+    sellers_count: tsProv,
+    sentiment_score_raw: comp,
+
+    // Pool / AMM
+    tao_in_pool: tsProv,
+    alpha_in_pool: tsProv,
+    tao_pool_ratio: comp,
+    spread: comp,
+    slippage_1tau: comp,
+    slippage_10tau: comp,
+    depth: tsProv,
+
+    // Emissions & Economics (chain data)
+    emissions_pct: comp,
+    emissions_day: tsChain,
+    root_proportion: tsChain,
+    incentive_burn_pct: comp,
+    circulating_supply: tsChain,
+    total_supply: tsChain,
+
+    // Structure (chain data)
+    uid_saturation: tsChain,
+    validators: tsChain,
+    miners: tsChain,
   };
 
   const tfExt = tf?.externalRisk;
