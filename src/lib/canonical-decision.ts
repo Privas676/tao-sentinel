@@ -101,8 +101,11 @@ export function buildCanonicalDecision(
   const isExit = finalAction === "SORTIR" || finalAction === "ÉVITER";
   const socialBonus = computeSocialBonus(socialSignal, socialConfidence, isExit);
 
+  return {
+    subnet_id: decision.netuid,
+
     // Final Action
-    final_action: mapFinalAction(decision),
+    final_action: finalAction,
     final_reason_primary: decision.primaryReason,
     final_reason_secondary: [
       ...decision.thesis.slice(0, 2),
