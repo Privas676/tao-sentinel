@@ -427,12 +427,13 @@ function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids,
 /* ═══════════════════════════════════════════ */
 /*   GROUPED BY SUBNET VIEW                    */
 /* ═══════════════════════════════════════════ */
-function SubnetGroupedView({ groups, fr, scores, onDismiss, portfolioNetuids }: {
+function SubnetGroupedView({ groups, fr, scores, onDismiss, portfolioNetuids, decisions }: {
   groups: GroupedEvent[];
   fr: boolean;
   scores: Map<number, any>;
   onDismiss: (key: string) => void;
   portfolioNetuids: Set<number>;
+  decisions: Map<number, any>;
 }) {
   const bySubnet = useMemo(() => {
     const map = new Map<number, GroupedEvent[]>();
