@@ -534,6 +534,7 @@ export default function AlertsPage() {
 
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
+  const { decisions } = useSubnetDecisions();
   const portfolio = useLocalPortfolio();
 
   const handleDismiss = useCallback((key: string) => {
