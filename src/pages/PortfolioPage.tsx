@@ -89,7 +89,7 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
 /* ── Action helpers — use unified decision source ── */
 function portfolioActionColor(a: string): string {
   if (a === "RENFORCER") return GO;
-  if (a === "SORTIR") return BREAK;
+  if (a === "SORTIR" || a === "ÉVITER" || a === "EVITER") return BREAK;
   if (a === "REDUIRE" || a === "RÉDUIRE") return WARN;
   return MUTED;
 }
