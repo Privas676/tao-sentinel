@@ -255,7 +255,7 @@ const ACTION_CONFIG: { key: FinalAction; icon: string; color: string; bg: string
 ];
 
 function DecisionDistribution({ fr }: { fr: boolean }) {
-  const { decisionsList, isLoading } = useSubnetDecisions();
+  const { decisionsList, isLoading } = useCanonicalSubnets();
 
   const counts = useMemo(() => {
     const map: Record<string, number> = {};
