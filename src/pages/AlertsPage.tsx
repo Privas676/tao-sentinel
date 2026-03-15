@@ -5,6 +5,8 @@ import { useMemo, useState, useCallback } from "react";
 import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
+import { useSubnetDecisions } from "@/hooks/use-subnet-decisions";
+import { finalActionColor, finalActionIcon, finalActionLabel, isExitAction, type FinalAction } from "@/lib/subnet-decision";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { SectionCard, SectionTitle, KPIChip, GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
@@ -298,13 +300,14 @@ function alertSummary(ev: EventRow, fr: boolean): string {
 /* ═══════════════════════════════════════════ */
 /*   ALERT CARD COMPONENT                      */
 /* ═══════════════════════════════════════════ */
-function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids }: {
+function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids, decisions }: {
   group: GroupedEvent;
   fr: boolean;
   scores: Map<number, any>;
   onDismiss?: (key: string) => void;
   impactTier: ImpactTier;
   portfolioNetuids: Set<number>;
+  decisions: Map<number, any>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const ev = group.latest;
@@ -312,9 +315,16 @@ function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids 
   const sev = alertSeverityClass(ev.type);
   const sevBadge = severityBadge(sev);
   const subnet = ev.netuid != null ? scores.get(ev.netuid) : null;
-  const confidence = subnet?.confianceScore ?? null;
+  const decision = ev.netuid != null ? decisions.get(ev.netuid) : null;
+  const confidence = decision?.confidence ?? subnet?.confianceScore ?? null;
   const isPortfolioHeld = ev.netuid != null && portfolioNetuids.has(ev.netuid);
   const tierConfig = impactTierConfig(impactTier, fr);
+
+  // Use canonical finalAction from decision
+  const canonicalAction = decision?.finalAction as FinalAction | undefined;
+  const canonicalColor = canonicalAction ? finalActionColor(canonicalAction) : null;
+  const canonicalIcon = canonicalAction ? finalActionIcon(canonicalAction) : null;
+  const canonicalLabel = canonicalAction ? finalActionLabel(canonicalAction, fr) : null;
 
   const borderStyle = impactTier === "BLOQUANT" ? { borderLeftColor: BREAK } : impactTier === "SURVEILLANCE" ? { borderLeftColor: WARN } : { borderLeftColor: "transparent" };
 
@@ -324,7 +334,7 @@ function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids 
         className={`px-4 py-3 ${group.count > 1 ? "cursor-pointer" : ""}`}
         onClick={() => group.count > 1 && setExpanded(!expanded)}
       >
-        {/* Row 1: impact tier + type + subnet + time */}
+        {/* Row 1: impact tier + type + subnet + canonical action + time */}
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <span className="font-mono text-[8px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{
             color: tierConfig.color,
@@ -341,6 +351,16 @@ function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids 
               SN-{ev.netuid}
               {subnet?.name && <span className="text-muted-foreground ml-1 text-[9px]">{subnet.name}</span>}
             </Link>
+          )}
+          {/* Canonical decision badge — THE authoritative action */}
+          {canonicalAction && (
+            <span className="font-mono text-[8px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{
+              color: canonicalColor!,
+              background: `color-mix(in srgb, ${canonicalColor!} 10%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${canonicalColor!} 20%, transparent)`,
+            }}>
+              {canonicalIcon} {canonicalLabel}
+            </span>
           )}
           {isPortfolioHeld && (
             <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--gold), 0.08)", color: "hsl(var(--gold))", border: "1px solid hsla(var(--gold), 0.15)" }}>★ PF</span>
@@ -360,7 +380,7 @@ function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids 
           </div>
         </div>
 
-        {/* Row 2: summary + confidence + impact + action */}
+        {/* Row 2: summary + confidence + canonical reason */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <span className="font-mono text-[11px] text-foreground/70 flex-1 min-w-[200px]">{alertSummary(ev, fr)}</span>
           {confidence != null && (
@@ -368,13 +388,19 @@ function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids 
               {fr ? "Conf." : "Conf."} <span className="font-bold" style={{ color: confidence >= 70 ? GO : confidence >= 45 ? WARN : BREAK }}>{confidence}%</span>
             </span>
           )}
-          <span className="font-mono text-[9px] text-muted-foreground">{alertImpact(ev.type, fr)}</span>
+          {/* Use canonical decision reason instead of local derivation */}
+          {decision?.primaryReason && (
+            <span className="font-mono text-[9px] text-muted-foreground truncate" style={{ maxWidth: 200 }}>{decision.primaryReason}</span>
+          )}
+          {!decision?.primaryReason && (
+            <span className="font-mono text-[9px] text-muted-foreground">{alertImpact(ev.type, fr)}</span>
+          )}
           <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{
-            color: sev === "critical" ? BREAK : sev === "warning" ? WARN : GO,
-            background: `color-mix(in srgb, ${sev === "critical" ? BREAK : sev === "warning" ? WARN : GO} 6%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${sev === "critical" ? BREAK : sev === "warning" ? WARN : GO} 12%, transparent)`,
+            color: canonicalColor ?? (sev === "critical" ? BREAK : sev === "warning" ? WARN : GO),
+            background: `color-mix(in srgb, ${canonicalColor ?? (sev === "critical" ? BREAK : sev === "warning" ? WARN : GO)} 6%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${canonicalColor ?? (sev === "critical" ? BREAK : sev === "warning" ? WARN : GO)} 12%, transparent)`,
           }}>
-            {suggestedAction(ev.type, ev.evidence, fr)}
+            {canonicalLabel ?? suggestedAction(ev.type, ev.evidence, fr)}
           </span>
         </div>
       </div>
@@ -401,12 +427,13 @@ function AlertCard({ group, fr, scores, onDismiss, impactTier, portfolioNetuids 
 /* ═══════════════════════════════════════════ */
 /*   GROUPED BY SUBNET VIEW                    */
 /* ═══════════════════════════════════════════ */
-function SubnetGroupedView({ groups, fr, scores, onDismiss, portfolioNetuids }: {
+function SubnetGroupedView({ groups, fr, scores, onDismiss, portfolioNetuids, decisions }: {
   groups: GroupedEvent[];
   fr: boolean;
   scores: Map<number, any>;
   onDismiss: (key: string) => void;
   portfolioNetuids: Set<number>;
+  decisions: Map<number, any>;
 }) {
   const bySubnet = useMemo(() => {
     const map = new Map<number, GroupedEvent[]>();
@@ -454,7 +481,7 @@ function SubnetGroupedView({ groups, fr, scores, onDismiss, portfolioNetuids }: 
               {alerts.map(g => (
                 <AlertCard key={g.key} group={g} fr={fr} scores={scores} onDismiss={onDismiss}
                   impactTier={alertImpactTier(g.latest.type, portfolioNetuids, g.latest.netuid)}
-                  portfolioNetuids={portfolioNetuids} />
+                  portfolioNetuids={portfolioNetuids} decisions={decisions} />
               ))}
             </div>
           </SectionCard>
@@ -508,6 +535,7 @@ export default function AlertsPage() {
 
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
+  const { decisions } = useSubnetDecisions();
   const portfolio = useLocalPortfolio();
 
   const handleDismiss = useCallback((key: string) => {
@@ -650,7 +678,7 @@ export default function AlertsPage() {
 
         {/* ── 4. FEED / GROUPED VIEW ── */}
         {viewMode === "grouped" ? (
-          <SubnetGroupedView groups={sortedByImpact} fr={fr} scores={scores} onDismiss={handleDismiss} portfolioNetuids={portfolio.ownedNetuids} />
+          <SubnetGroupedView groups={sortedByImpact} fr={fr} scores={scores} onDismiss={handleDismiss} portfolioNetuids={portfolio.ownedNetuids} decisions={decisions} />
         ) : (
           sortedByImpact.length === 0 ? (
             <div className="py-16 text-center space-y-3">
@@ -662,7 +690,7 @@ export default function AlertsPage() {
               {sortedByImpact.map(group => (
                 <AlertCard key={group.key} group={group} fr={fr} scores={scores} onDismiss={handleDismiss}
                   impactTier={alertImpactTier(group.latest.type, portfolio.ownedNetuids, group.latest.netuid)}
-                  portfolioNetuids={portfolio.ownedNetuids} />
+                  portfolioNetuids={portfolio.ownedNetuids} decisions={decisions} />
               ))}
             </div>
           )

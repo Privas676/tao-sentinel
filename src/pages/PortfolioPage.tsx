@@ -89,7 +89,7 @@ function SubnetDropdown({ subnets, value, onChange, isOwned }: { subnets: { netu
 /* ── Action helpers — use unified decision source ── */
 function portfolioActionColor(a: string): string {
   if (a === "RENFORCER") return GO;
-  if (a === "SORTIR") return BREAK;
+  if (a === "SORTIR" || a === "ÉVITER" || a === "EVITER") return BREAK;
   if (a === "REDUIRE" || a === "RÉDUIRE") return WARN;
   return MUTED;
 }
@@ -155,18 +155,20 @@ export default function PortfolioPage() {
     const alphaPriceTao = s?.consensusPrice ?? 0;
     const alphaQty = alphaPriceTao > 0 ? pos.quantity_tao / alphaPriceTao : 0;
     const pAction = decision?.portfolioActionFr ?? "CONSERVER";
+    const finalAction = decision?.finalAction ?? "SURVEILLER";
     return {
-      netuid, name: s?.name || `SN-${netuid}`,
+      netuid, name: decision?.name || s?.name || `SN-${netuid}`,
       taoInvest: pos.quantity_tao, entryPrice: pos.entry_price, alphaPriceTao, alphaQty,
-      opp: s?.opp ?? 0, risk: s?.risk ?? 0, stability: s?.stability ?? 50,
-      momentumScore: s?.momentumScore ?? 50, momentumLabel: s?.momentumLabel ?? "—",
-      confianceScore: s?.confianceScore ?? 50, asymmetry: s?.asymmetry ?? 0,
-      action: s?.action ?? "WATCH", pAction,
-      isOverridden: s?.isOverridden ?? false,
-      depegProbability: s?.depegProbability ?? 0,
-      delistCategory: s?.delistCategory ?? "NORMAL",
+      opp: decision?.opp ?? s?.opp ?? 0, risk: decision?.risk ?? s?.risk ?? 0, stability: decision?.stability ?? s?.stability ?? 50,
+      momentumScore: decision?.momentumScore ?? s?.momentumScore ?? 50, momentumLabel: decision?.momentumLabel ?? s?.momentumLabel ?? "—",
+      confianceScore: decision?.confidence ?? s?.confianceScore ?? 50, asymmetry: decision?.asymmetry ?? s?.asymmetry ?? 0,
+      action: s?.action ?? "WATCH", pAction, finalAction,
+      isOverridden: decision?.isOverridden ?? s?.isOverridden ?? false,
+      depegProbability: decision?.depegProbability ?? s?.depegProbability ?? 0,
+      delistCategory: decision?.delistCategory ?? s?.delistCategory ?? "NORMAL",
       healthScores: s?.healthScores ?? { liquidityHealth: 50, activityHealth: 50, emissionPressure: 50, dilutionRisk: 50, concentrationRisk: 50 },
       verdict: v, score: s, decision,
+      signalReason: decision?.signalPrincipal ?? (fr ? "En observation" : "Monitoring"),
     };
   }), [portfolio.positions, scores, decisions, fr]);
 
@@ -187,7 +189,7 @@ export default function PortfolioPage() {
     const maxWeight = Math.max(...weights.map(w => w.weight));
     const reinforceCount = rows.filter(r => r.pAction === "RENFORCER").length;
     const reduceCount = rows.filter(r => r.pAction === "RÉDUIRE").length;
-    const exitCount = rows.filter(r => r.pAction === "SORTIR").length;
+    const exitCount = rows.filter(r => r.pAction === "SORTIR" || r.finalAction === "ÉVITER").length;
     const holdCount = rows.filter(r => r.pAction === "CONSERVER").length;
     const fragilePositions = rows.filter(r => r.isOverridden || r.depegProbability >= 30 || r.risk > 70);
     const fragileExposure = totalTao > 0
@@ -222,11 +224,13 @@ export default function PortfolioPage() {
     if (!analytics) return null;
     const nonSystemRows = rows.filter(r => !SPECIAL_SUBNETS[r.netuid]?.isSystem);
     const systemRows = rows.filter(r => SPECIAL_SUBNETS[r.netuid]?.isSystem);
-    const exitRows = nonSystemRows.filter(r => r.pAction === "SORTIR").sort((a, b) => b.risk - a.risk);
-    const reduceRows = nonSystemRows.filter(r => r.pAction === "RÉDUIRE").sort((a, b) => b.risk - a.risk);
+    const avoidRows = nonSystemRows.filter(r => r.finalAction === "ÉVITER").sort((a, b) => b.risk - a.risk);
+    const exitRows = nonSystemRows.filter(r => r.pAction === "SORTIR" && r.finalAction !== "ÉVITER").sort((a, b) => b.risk - a.risk);
+    const reduceRows = nonSystemRows.filter(r => r.pAction === "RÉDUIRE" && r.finalAction !== "ÉVITER").sort((a, b) => b.risk - a.risk);
     const reinforceRows = nonSystemRows.filter(r => r.pAction === "RENFORCER").sort((a, b) => b.opp - a.opp);
-    const holdRows = nonSystemRows.filter(r => r.pAction === "CONSERVER");
+    const holdRows = nonSystemRows.filter(r => r.pAction === "CONSERVER" && r.finalAction !== "ÉVITER");
     return [
+      ...(avoidRows.length > 0 ? [{ key: "avoid", label: fr ? "⛔ ÉVITER" : "⛔ AVOID", icon: "⛔", color: "hsl(4,80%,40%)", rows: avoidRows, priority: true }] : []),
       { key: "exit", label: fr ? "À VENDRE" : "SELL NOW", icon: "🔴", color: BREAK, rows: exitRows, priority: exitRows.length > 0 },
       { key: "reduce", label: fr ? "À SURVEILLER" : "MONITOR", icon: "⚠", color: WARN, rows: reduceRows, priority: reduceRows.length > 0 },
       { key: "reinforce", label: fr ? "À RENFORCER" : "REINFORCE", icon: "⬆", color: GO, rows: reinforceRows, priority: false },
@@ -626,16 +630,7 @@ export default function PortfolioPage() {
                     const aColor = portfolioActionColor(r.pAction);
                     const rowBorder = r.pAction === "EXIT" ? "border-l-2 border-l-destructive/40" : r.pAction === "REDUCE" ? "border-l-2 border-l-signal-hold/40" : "";
 
-                    const signalReason = (() => {
-                      if (r.isOverridden) return fr ? "Override actif" : "Active override";
-                      if (r.depegProbability >= 40) return `Depeg ${r.depegProbability}%`;
-                      if (r.pAction === "SORTIR") return fr ? "Signal de sortie" : "Exit signal";
-                      if (r.pAction === "RÉDUIRE") return fr ? `Risque ${r.risk}` : `Risk ${r.risk}`;
-                      if (r.pAction === "RENFORCER" && r.opp > 55) return fr ? `Opp. forte (${r.opp})` : `Strong opp. (${r.opp})`;
-                      if (r.pAction === "RENFORCER") return fr ? "Momentum +" : "Momentum +";
-                      if (r.stability > 60) return fr ? "Position stable" : "Stable position";
-                      return fr ? "En observation" : "Monitoring";
-                    })();
+                    const signalReason = r.signalReason;
 
                     return (
                       <tr key={r.netuid} className={`border-b border-border hover:bg-muted/10 transition-colors ${rowBorder}`}>
