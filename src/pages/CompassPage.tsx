@@ -223,11 +223,13 @@ export default function CompassPage() {
     const getFa = (s: DashSignal) => decisions.get(s.netuid)?.finalAction;
     const enterGroup = nonSystem.filter(s => getFa(s) === "ENTRER").sort((a, b) => b.opp - a.opp).slice(0, 5);
     const holdGroup = nonSystem.filter(s => getFa(s) === "SURVEILLER").sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const exitGroup = nonSystem.filter(s => { const f = getFa(s); return f === "SORTIR" || f === "ÉVITER"; }).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const exitGroup = nonSystem.filter(s => getFa(s) === "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const avoidGroup = nonSystem.filter(s => getFa(s) === "ÉVITER").sort((a, b) => b.risk - a.risk).slice(0, 5);
     const enterCount = nonSystem.filter(s => getFa(s) === "ENTRER").length;
     const holdCount = nonSystem.filter(s => getFa(s) === "SURVEILLER").length;
-    const exitCount = nonSystem.filter(s => { const f = getFa(s); return f === "SORTIR" || f === "ÉVITER"; }).length;
-    return { enterGroup, holdGroup, exitGroup, enterCount, holdCount, exitCount };
+    const exitCount = nonSystem.filter(s => getFa(s) === "SORTIR").length;
+    const avoidCount = nonSystem.filter(s => getFa(s) === "ÉVITER").length;
+    return { enterGroup, holdGroup, exitGroup, avoidGroup, enterCount, holdCount, exitCount, avoidCount };
   }, [enrichedSignals, decisions]);
 
   // ── Best opportunity & worst risk ──
@@ -301,7 +303,7 @@ export default function CompassPage() {
   const drivers = useMemo(() => {
     const avgMom = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + s.momentumScore, 0) / enrichedSignals.length) : 0;
     const avgLiqEff = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + (s.quality || 50), 0) / enrichedSignals.length) : 50;
-    const sellPressure = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").length / enrichedSignals.length * 100) : 0;
+    const sellPressure = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => { const f = decisions.get(s.netuid)?.finalAction; return f === "SORTIR" || f === "ÉVITER"; }).length / enrichedSignals.length * 100) : 0;
     const entryRatio = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => decisions.get(s.netuid)?.finalAction === "ENTRER").length / enrichedSignals.length * 100) : 0;
     return [
       { icon: "💰", label: fr ? "Smart Capital" : "Smart Capital", value: smartCapital.state === "ACCUMULATION" ? "Accum." : smartCapital.state === "DISTRIBUTION" ? "Distrib." : "Stable", num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? GO : smartCapital.state === "DISTRIBUTION" ? BREAK : MUTED },
@@ -317,7 +319,7 @@ export default function CompassPage() {
     if (!enrichedSignals.length) return "";
     const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
     const entryCount = nonSystem.filter(s => decisions.get(s.netuid)?.finalAction === "ENTRER").length;
-    const exitCount = nonSystem.filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").length;
+    const exitCount = nonSystem.filter(s => { const f = decisions.get(s.netuid)?.finalAction; return f === "SORTIR" || f === "ÉVITER"; }).length;
     const bestName = bestOpp ? `SN-${bestOpp.netuid} ${bestOpp.name}` : "";
     const worstName = worstRisk ? `SN-${worstRisk.netuid}` : "";
     if (fr) {
@@ -334,6 +336,7 @@ export default function CompassPage() {
     { key: "enter", title: fr ? "ENTRER" : "ENTER", emoji: "🟢", items: priorityGroups.enterGroup, count: priorityGroups.enterCount, color: GO, bg: `color-mix(in srgb, ${GO} 4%, transparent)`, border: `color-mix(in srgb, ${GO} 12%, transparent)` },
     { key: "hold", title: fr ? "SURVEILLER" : "WATCH", emoji: "🟡", items: priorityGroups.holdGroup, count: priorityGroups.holdCount, color: WARN, bg: `color-mix(in srgb, ${WARN} 4%, transparent)`, border: `color-mix(in srgb, ${WARN} 12%, transparent)` },
     { key: "exit", title: fr ? "SORTIR" : "EXIT", emoji: "🔴", items: priorityGroups.exitGroup, count: priorityGroups.exitCount, color: BREAK, bg: `color-mix(in srgb, ${BREAK} 4%, transparent)`, border: `color-mix(in srgb, ${BREAK} 12%, transparent)` },
+    { key: "avoid", title: fr ? "ÉVITER" : "AVOID", emoji: "⛔", items: priorityGroups.avoidGroup, count: priorityGroups.avoidCount, color: "hsl(4,80%,40%)", bg: "color-mix(in srgb, hsl(4,80%,40%) 4%, transparent)", border: "color-mix(in srgb, hsl(4,80%,40%) 12%, transparent)" },
   ];
 
   const rotationGroups = [
@@ -411,10 +414,10 @@ export default function CompassPage() {
                     />
                     <DirectiveCard
                       label={fr ? "SORTIES" : "EXITS"}
-                      value={priorityGroups.exitCount}
+                      value={priorityGroups.exitCount + priorityGroups.avoidCount}
                       sub={fr ? "à exécuter" : "to execute"}
-                      color={priorityGroups.exitCount > 0 ? BREAK : MUTED}
-                      icon={priorityGroups.exitCount > 0 ? "⚠" : "✓"}
+                      color={(priorityGroups.exitCount + priorityGroups.avoidCount) > 0 ? BREAK : MUTED}
+                      icon={(priorityGroups.exitCount + priorityGroups.avoidCount) > 0 ? "⚠" : "✓"}
                     />
                   </div>
 
@@ -462,7 +465,7 @@ export default function CompassPage() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
               {sections.map(s => (
                 <div key={s.key} className="rounded-xl overflow-hidden" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
                   <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${s.border}` }}>
@@ -476,9 +479,9 @@ export default function CompassPage() {
                       <span className="font-mono text-[10px] font-bold" style={{ color: GOLD, minWidth: 36 }}>SN-{v.netuid}</span>
                       {(() => {
                         const fa = decisions.get(v.netuid)?.finalAction ?? "SURVEILLER";
-                        const faC = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : WARN;
-                        const faI = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : "👁";
-                        const faL = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : (fr ? "SURVEILLER" : "MONITOR");
+                        const faC = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : fa === "ÉVITER" ? "hsl(4,80%,40%)" : WARN;
+                        const faI = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : fa === "ÉVITER" ? "⛔" : "👁";
+                        const faL = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "ÉVITER" ? (fr ? "ÉVITER" : "AVOID") : (fr ? "SURVEILLER" : "MONITOR");
                         return <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: faC }}>{faI} {faL}</span>;
                       })()}
                       <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{v.overrideReasons[0] || v.name}</span>
@@ -515,8 +518,8 @@ export default function CompassPage() {
                     {watchlist.map((s, idx) => {
                       const d = decisions.get(s.netuid);
                       const fa = d?.finalAction ?? "SURVEILLER";
-                      const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : WARN;
-                      const faLabel = fa === "ENTRER" ? (fr ? "🟢 ENTRER" : "🟢 ENTER") : fa === "SORTIR" ? (fr ? "🔴 SORTIR" : "🔴 EXIT") : (fr ? "👁 SURVEILLER" : "👁 MONITOR");
+                      const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" || fa === "ÉVITER" ? BREAK : WARN;
+                      const faLabel = fa === "ENTRER" ? (fr ? "🟢 ENTRER" : "🟢 ENTER") : fa === "SORTIR" ? (fr ? "🔴 SORTIR" : "🔴 EXIT") : fa === "ÉVITER" ? (fr ? "⛔ ÉVITER" : "⛔ AVOID") : (fr ? "👁 SURVEILLER" : "👁 MONITOR");
                       const convScore = d?.convictionScore ?? Math.abs(s.opp - s.risk) * (s.conf / 100);
                       const convLevel = convScore >= 70 ? "HIGH" : convScore >= 40 ? "MED" : "LOW";
                       const convLevelColor = convScore >= 70 ? GO : convScore >= 40 ? WARN : MUTED;
