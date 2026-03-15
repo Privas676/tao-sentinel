@@ -286,7 +286,7 @@ describe("DecisionStateManager — Delta trigger", () => {
     mgr.tick(d1, "ALIGNED", 1000);
 
     // Return to OK
-    const dOk = makeDecision({ netuid: 96, delistScore: 5 });
+    const dOk = makeDecision({ netuid: 70, delistScore: 5 });
     mgr.tick(dOk, "ALIGNED", 2000);
 
     // Re-fire with delistScore=70 (delta = |70-50|/100 = 0.20 > 0.15)
