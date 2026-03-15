@@ -481,7 +481,7 @@ function SubnetGroupedView({ groups, fr, scores, onDismiss, portfolioNetuids, de
               {alerts.map(g => (
                 <AlertCard key={g.key} group={g} fr={fr} scores={scores} onDismiss={onDismiss}
                   impactTier={alertImpactTier(g.latest.type, portfolioNetuids, g.latest.netuid)}
-                  portfolioNetuids={portfolioNetuids} />
+                  portfolioNetuids={portfolioNetuids} decisions={decisions} />
               ))}
             </div>
           </SectionCard>
