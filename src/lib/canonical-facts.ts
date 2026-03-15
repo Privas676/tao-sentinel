@@ -87,46 +87,91 @@ export function buildCanonicalFacts(
   const circSupply = val(facts.circulatingSupply);
   const emissionsPct = circSupply > 0 ? (emissionDay / circSupply) * 100 : null;
 
-  // Build provenance map (key fields only)
+  // Build provenance map — every critical field group gets a verifiable source
+  const tsProv = taostatsProv(taostatsTs, facts.netuid);
+  const tsChain = prov("TaoStats", "taostats:chain", taostatsUrl, taostatsTs, 90);
+  const comp = computedProv(taostatsTs);
+
   const provenance: Record<string, SourceProvenance> = {
-    price: taostatsProv(taostatsTs, facts.netuid),
-    market_cap: taostatsProv(taostatsTs, facts.netuid),
-    volume_24h: taostatsProv(taostatsTs, facts.netuid),
-    buys_count: taostatsProv(taostatsTs, facts.netuid),
-    tao_in_pool: taostatsProv(taostatsTs, facts.netuid),
-    slippage_1tau: computedProv(taostatsTs),
-    spread: computedProv(taostatsTs),
-    emissions_day: prov("TaoStats", "taostats:chain", taostatsUrl, taostatsTs, 85),
-    validators: prov("TaoStats", "taostats:chain", taostatsUrl, taostatsTs, 90),
-    miners: prov("TaoStats", "taostats:chain", taostatsUrl, taostatsTs, 90),
+    // Price & Market (primary on-chain via TaoStats)
+    price: tsProv,
+    price_usd: comp,
+    change_1h: tsProv,
+    change_24h: tsProv,
+    change_7d: tsProv,
+    change_30d: tsProv,
+    market_cap: tsProv,
+    market_cap_usd: comp,
+    fdv: comp,
+    volume_24h: tsProv,
+    volume_24h_usd: comp,
+
+    // Trading Activity
+    buys_count: tsProv,
+    sells_count: tsProv,
+    buyers_count: tsProv,
+    sellers_count: tsProv,
+    sentiment_score_raw: comp,
+
+    // Pool / AMM
+    tao_in_pool: tsProv,
+    alpha_in_pool: tsProv,
+    tao_pool_ratio: comp,
+    spread: comp,
+    slippage_1tau: comp,
+    slippage_10tau: comp,
+    depth: tsProv,
+
+    // Emissions & Economics (chain data)
+    emissions_pct: comp,
+    emissions_day: tsChain,
+    root_proportion: tsChain,
+    incentive_burn_pct: comp,
+    circulating_supply: tsChain,
+    total_supply: tsChain,
+
+    // Structure (chain data)
+    uid_saturation: tsChain,
+    validators: tsChain,
+    miners: tsChain,
   };
 
+  // TaoFlute external risk provenance — verifiable reference
   const tfExt = tf?.externalRisk;
+  const tfSourceRef = tfExt?.source_ref ?? null;
+  const tfSnapshotAt = tfExt?.source_snapshot_at ?? null;
+  const tfVerifiableUrl = `https://taoflute.com/subnet/${facts.netuid}`;
+
   if (tf?.taoflute_match && tfExt) {
-    provenance.external_status = prov(
+    const tfProv = prov(
       "TaoFlute",
       "taoflute",
-      tfExt.source_ref ?? null,
-      tfExt.source_snapshot_at ?? null,
+      tfSourceRef || tfVerifiableUrl,
+      tfSnapshotAt,
       70,
     );
-    provenance.liq_haircut = prov(
-      "TaoFlute",
-      "taoflute",
-      tfExt.source_ref ?? null,
-      tfExt.source_snapshot_at ?? null,
-      70,
-    );
+    provenance.external_status = tfProv;
+    provenance.liq_price = tfProv;
+    provenance.liq_haircut = tfProv;
+    provenance.taoflute_flags = tfProv;
+    provenance.delist_risk = tfProv;
   }
 
+  // Social provenance — verifiable post refs when available
   if (social) {
-    provenance.social_signal = prov(
+    const socialProv = prov(
       "Social/X",
       "social",
       null,
       socialTimestamp,
       60,
     );
+    provenance.social_mentions_24h = socialProv;
+    provenance.social_unique_accounts = socialProv;
+    provenance.social_sentiment_score = socialProv;
+    provenance.social_hype_score = socialProv;
+    provenance.social_credibility_score = socialProv;
+    provenance.social_signal_strength = socialProv;
   }
 
   return {
@@ -190,7 +235,9 @@ export function buildCanonicalFacts(
     liq_price: tfExt?.liq_price ?? null,
     liq_haircut: tfExt?.liq_haircut ?? null,
     taoflute_flags: tfExt?.flags ?? [],
-    taoflute_links: tfExt?.source_ref ? [tfExt.source_ref] : [],
+    taoflute_links: tf?.taoflute_match
+      ? [tfVerifiableUrl, ...(tfExt?.source_ref ? [tfExt.source_ref] : [])]
+      : [],
 
     // Social Signal
     social_mentions_24h: social?.raw_mention_count ?? null,
@@ -215,13 +262,13 @@ export function buildCanonicalFacts(
 
     // Timestamps
     taostats_timestamp: taostatsTs,
-    taoflute_timestamp: tfExt?.source_snapshot_at ?? null,
+    taoflute_timestamp: tfSnapshotAt,
     social_timestamp: socialTimestamp,
     sentinel_timestamp: now,
 
-    // Source References
+    // Source References (verifiable URLs)
     taostats_source_url: taostatsUrl,
-    taoflute_source_ref: tfExt?.source_ref ?? null,
+    taoflute_source_ref: tf?.taoflute_match ? (tfSourceRef || tfVerifiableUrl) : null,
     social_source_refs: [],  // filled when real social post URLs are available
 
     // Provenance
