@@ -224,11 +224,13 @@ export default function PortfolioPage() {
     if (!analytics) return null;
     const nonSystemRows = rows.filter(r => !SPECIAL_SUBNETS[r.netuid]?.isSystem);
     const systemRows = rows.filter(r => SPECIAL_SUBNETS[r.netuid]?.isSystem);
-    const exitRows = nonSystemRows.filter(r => r.pAction === "SORTIR").sort((a, b) => b.risk - a.risk);
-    const reduceRows = nonSystemRows.filter(r => r.pAction === "RÉDUIRE").sort((a, b) => b.risk - a.risk);
+    const avoidRows = nonSystemRows.filter(r => r.finalAction === "ÉVITER").sort((a, b) => b.risk - a.risk);
+    const exitRows = nonSystemRows.filter(r => r.pAction === "SORTIR" && r.finalAction !== "ÉVITER").sort((a, b) => b.risk - a.risk);
+    const reduceRows = nonSystemRows.filter(r => r.pAction === "RÉDUIRE" && r.finalAction !== "ÉVITER").sort((a, b) => b.risk - a.risk);
     const reinforceRows = nonSystemRows.filter(r => r.pAction === "RENFORCER").sort((a, b) => b.opp - a.opp);
-    const holdRows = nonSystemRows.filter(r => r.pAction === "CONSERVER");
+    const holdRows = nonSystemRows.filter(r => r.pAction === "CONSERVER" && r.finalAction !== "ÉVITER");
     return [
+      ...(avoidRows.length > 0 ? [{ key: "avoid", label: fr ? "⛔ ÉVITER" : "⛔ AVOID", icon: "⛔", color: "hsl(4,80%,40%)", rows: avoidRows, priority: true }] : []),
       { key: "exit", label: fr ? "À VENDRE" : "SELL NOW", icon: "🔴", color: BREAK, rows: exitRows, priority: exitRows.length > 0 },
       { key: "reduce", label: fr ? "À SURVEILLER" : "MONITOR", icon: "⚠", color: WARN, rows: reduceRows, priority: reduceRows.length > 0 },
       { key: "reinforce", label: fr ? "À RENFORCER" : "REINFORCE", icon: "⬆", color: GO, rows: reinforceRows, priority: false },
