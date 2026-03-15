@@ -293,11 +293,14 @@ function deriveFinalAction(
   // R1: If !taoflute_match, delistCategory from auto-scoring still applies but NOT as "external"
   if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "ÉVITER";
 
-  // R3: TaoFlute WATCH → never force EXIT, but cap at SURVEILLER
+  // R3: TaoFlute WATCH → cap at SURVEILLER by default
+  // Only escalate to SORTIR if STRONG internal weakness confirms the external signal
   if (tf.taoflute_severity === "watch") {
-    // Never allow ENTRER for watch subnets
-    if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
-    // Fall through but will be capped below
+    // WATCH + severe internal weakness → SORTIR
+    if (s.depegProbability >= 40) return "SORTIR";
+    if (s.risk >= 70 && s.depegProbability >= 20) return "SORTIR";
+    if (s.isOverridden) return "SORTIR";
+    // WATCH simple → falls through, capped to SURVEILLER below
   }
 
   // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute)
