@@ -48,6 +48,8 @@ vi.mock("@/hooks/use-subnet-scores", () => ({
     subnetList: [{ netuid: 1, name: "Alpha" }, { netuid: 6, name: "Bravo" }],
     marketContext: new Map(),
   }),
+  SPECIAL_SUBNETS: { 0: { label: "ROOT", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20, isSystem: true } },
+  getSubnetScore: (map: any, id: number) => map.get(id),
 }));
 
 vi.mock("@/lib/i18n", () => ({

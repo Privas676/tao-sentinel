@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock modules before imports
 vi.mock("@/hooks/use-subnet-scores", () => ({
   useSubnetScores: vi.fn(),
+  SPECIAL_SUBNETS: { 0: { label: "ROOT", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20, isSystem: true } },
+  getSubnetScore: (map: any, id: number) => map.get(id),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
