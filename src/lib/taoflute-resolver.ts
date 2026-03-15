@@ -82,11 +82,18 @@ const PRIORITY_RANK_MAP: ReadonlyMap<number, number> = new Map([
   [128, 10], // ByteLeap
 ]);
 
+/* ── Exclusion list — subnets that must NEVER show TaoFlute status ── */
+/* These are confirmed false positives from the scraper */
+const TAOFLUTE_EXCLUDED: ReadonlySet<number> = new Set([
+  64, // Chutes — NOT on any TaoFlute list, scraper false positive
+]);
+
 /* ── Resolver ── */
 
 /**
  * Resolve TaoFlute status for a single subnet.
  * Uses STRICT subnet_id matching:
+ * - If subnet_id is in exclusion list → always none
  * - If subnet_id is in priority list → priority
  * - If subnet_id is in watch list → watch
  * - Otherwise → none (NO taoflute mention allowed)
@@ -101,6 +108,18 @@ export function resolveTaoFluteStatus(
   dbWatch?: Map<number, { source: string; lastSeen: string }>,
   dbMetrics?: Map<number, { liq_haircut: number | null; liq_price: number | null; is_stale: boolean; scraped_at: string }>,
 ): TaoFluteResolvedStatus {
+  // 0. Exclusion list — override everything
+  if (TAOFLUTE_EXCLUDED.has(subnetId)) {
+    return {
+      subnet_id: subnetId,
+      taoflute_match: false,
+      taoflute_watch_risk: false,
+      taoflute_priority_rank: null,
+      taoflute_severity: "none",
+      externalRisk: null,
+    };
+  }
+
   // 1. Check DB first (most up-to-date)
   const dbP = dbPriority?.get(subnetId);
   if (dbP) {
