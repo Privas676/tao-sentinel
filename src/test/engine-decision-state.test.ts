@@ -313,7 +313,7 @@ describe("DecisionStateManager — Delta trigger", () => {
     expect(out1.isTransition).toBe(true);
 
     // Same state with similar score — no new transition
-    const d2 = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 55 });
+    const d2 = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 55 });
     const out2 = mgr.tick(d2, "ALIGNED", 5000);
     // Still DEPEG_CONFIRMED, but not a new transition
     expect(out2.state).toBe("DEPEG_CONFIRMED");
