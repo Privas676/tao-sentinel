@@ -105,7 +105,7 @@ describe("evaluateRawState", () => {
   });
 
   it("DEPEG_CONFIRMED takes priority over DATA_STALE", () => {
-    const d = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
+    const d = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
     expect(evaluateRawState(d, "STALE", s)).toBe("DEPEG_CONFIRMED");
   });
 
