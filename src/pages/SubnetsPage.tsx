@@ -409,6 +409,7 @@ export default function SubnetsPage() {
         if (actionFilter === "ENTRER" && r.decision.finalAction !== "ENTRER") return false;
         if (actionFilter === "SURVEILLER" && r.decision.finalAction !== "SURVEILLER" && r.decision.finalAction !== "SYSTÈME") return false;
         if (actionFilter === "SORTIR" && r.decision.finalAction !== "SORTIR") return false;
+        if (actionFilter === "ÉVITER" && r.decision.finalAction !== "ÉVITER") return false;
         if (statusFilter === "OK" && r.statusLevel !== "OK") return false;
         if (statusFilter === "WATCH" && r.statusLevel !== "WATCH") return false;
         if (statusFilter === "DANGER" && r.statusLevel !== "DANGER") return false;
