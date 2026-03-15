@@ -162,7 +162,21 @@ export function useSocialSubnetScores() {
   return useQuery({
     queryKey: ["social_subnet_scores"],
     queryFn: async () => {
-      const { data, error } = await supabase.from(T("social_subnet_scores")).select("*").eq("score_date", new Date().toISOString().split("T")[0]).order("social_conviction_score", { ascending: false });
+      // Get the most recent score_date available, not strictly "today"
+      const { data: latest, error: latestErr } = await supabase
+        .from(T("social_subnet_scores"))
+        .select("score_date")
+        .order("score_date", { ascending: false })
+        .limit(1);
+      if (latestErr) throw latestErr;
+      const latestDate = (latest as any)?.[0]?.score_date;
+      if (!latestDate) return [] as SocialSubnetScore[];
+
+      const { data, error } = await supabase
+        .from(T("social_subnet_scores"))
+        .select("*")
+        .eq("score_date", latestDate)
+        .order("social_conviction_score", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as SocialSubnetScore[];
     },
