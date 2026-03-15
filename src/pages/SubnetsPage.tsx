@@ -8,6 +8,7 @@ import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-deci
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { taoFluteColumnLabel } from "@/lib/taoflute-resolver";
+import { finalActionColor as canonicalFaColor, finalActionIcon as canonicalFaIcon, finalActionLabel as canonicalFaLabel } from "@/lib/subnet-decision";
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
