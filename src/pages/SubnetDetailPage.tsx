@@ -288,6 +288,8 @@ export default function SubnetDetailPage() {
               {s.concordance && <ConcordanceSection concordance={s.concordance} fr={fr} />}
               {/* Derived scores (Layer B/C) */}
               {s.derivedScoring && <DerivedScoresSection scoring={s.derivedScoring} fr={fr} />}
+              {/* Verdict v3 provenance (Layer C) */}
+              {decision.verdictV3 && <VerdictProvenanceSection verdict={decision.verdictV3} fr={fr} />}
               {/* Raw signal vs final action */}
               <SectionCard>
                 <div className="px-5 py-4">
