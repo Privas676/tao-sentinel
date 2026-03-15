@@ -56,7 +56,8 @@ vi.mock("@/hooks/use-subnet-scores", () => ({
     subnetList: mockScoresList.map(s => ({ netuid: s.netuid, name: s.name })),
     marketContext: new Map(),
   }),
-  SPECIAL_SUBNETS: { 0: { label: "ROOT", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20 } },
+  SPECIAL_SUBNETS: { 0: { label: "ROOT", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20, isSystem: true } },
+  getSubnetScore: (map: any, id: number) => map.get(id),
 }));
 
 vi.mock("@/hooks/use-local-portfolio", () => ({
