@@ -70,11 +70,11 @@ describe("TaoFlute — Test 2: priority subnet shows P#", () => {
 /*  cannot show enter                      */
 /* ═══════════════════════════════════════ */
 describe("TaoFlute — Test 3: exit verdict coherence", () => {
-  it("SN-78 priority → finalAction = SORTIR even with opportunity signal", () => {
+  it("SN-78 priority → finalAction = ÉVITER even with opportunity signal", () => {
     const s = makeScore({ netuid: 78, opp: 70, risk: 20, action: "ENTER" });
     const tf = resolveTaoFluteStatus(78);
     const d = buildSubnetDecision(s, undefined, undefined, true, tf);
-    expect(d.finalAction).toBe("SORTIR");
+    expect(d.finalAction).toBe("ÉVITER");
     expect(d.badgeAction).not.toBe("ENTRE");
     // rawSignal can still be opportunity
   });
