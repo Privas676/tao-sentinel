@@ -518,8 +518,8 @@ export default function CompassPage() {
                     {watchlist.map((s, idx) => {
                       const d = decisions.get(s.netuid);
                       const fa = d?.finalAction ?? "SURVEILLER";
-                      const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : WARN;
-                      const faLabel = fa === "ENTRER" ? (fr ? "🟢 ENTRER" : "🟢 ENTER") : fa === "SORTIR" ? (fr ? "🔴 SORTIR" : "🔴 EXIT") : (fr ? "👁 SURVEILLER" : "👁 MONITOR");
+                      const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" || fa === "ÉVITER" ? BREAK : WARN;
+                      const faLabel = fa === "ENTRER" ? (fr ? "🟢 ENTRER" : "🟢 ENTER") : fa === "SORTIR" ? (fr ? "🔴 SORTIR" : "🔴 EXIT") : fa === "ÉVITER" ? (fr ? "⛔ ÉVITER" : "⛔ AVOID") : (fr ? "👁 SURVEILLER" : "👁 MONITOR");
                       const convScore = d?.convictionScore ?? Math.abs(s.opp - s.risk) * (s.conf / 100);
                       const convLevel = convScore >= 70 ? "HIGH" : convScore >= 40 ? "MED" : "LOW";
                       const convLevelColor = convScore >= 70 ? GO : convScore >= 40 ? WARN : MUTED;
