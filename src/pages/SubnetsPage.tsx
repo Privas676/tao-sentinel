@@ -241,6 +241,7 @@ function finalActionColor(fa: FinalAction): string {
     case "ENTRER": return "hsl(var(--signal-go))";
     case "SURVEILLER": return "hsl(var(--signal-go-spec))";
     case "SORTIR": return "hsl(var(--signal-break))";
+    case "ÉVITER": return "hsl(var(--signal-break))";
     case "SYSTÈME": return "hsl(var(--signal-system))";
   }
 }
