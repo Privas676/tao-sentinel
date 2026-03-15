@@ -306,7 +306,7 @@ export default function SubnetsPage() {
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug, isLoading } = useSubnetScores();
   const { decisions, decisionsList } = useSubnetDecisions();
-  const { delistInfo } = useExternalDelist();
+  
 
   // ── Action counts from DECISIONS (single source of truth) ──
   // Exclude system subnets from counts (same as Compass)
