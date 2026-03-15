@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
-import { useSubnetDecisions } from "@/hooks/use-subnet-decisions";
+import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
 import { analyzeDistribution } from "@/lib/distribution-monitor";
 import { analyzeScoreVolatility, type FleetVolatilityReport } from "@/lib/score-volatility";
 import { supabase } from "@/integrations/supabase/client";
