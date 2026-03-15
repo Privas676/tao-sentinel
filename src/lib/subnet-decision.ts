@@ -259,12 +259,16 @@ function deriveFinalAction(
 
   // 3. V3 verdict — PRIMARY analytical decision (when available)
   if (v3) {
-    const v3Action = v3ToFinalAction(v3.verdict);
+    let v3Action = v3ToFinalAction(v3.verdict);
 
     // If v3 says ENTER, apply additional safety guards from the scoring layer
     if (v3Action === "ENTRER") {
-      if (s.risk >= 65 || s.confianceScore < 30) return "SURVEILLER";
-      return "ENTRER";
+      if (s.risk >= 65 || s.confianceScore < 30) v3Action = "SURVEILLER";
+    }
+
+    // R3: TaoFlute WATCH cap — never allow ENTRER
+    if (tf.taoflute_severity === "watch" && v3Action === "ENTRER") {
+      v3Action = "SURVEILLER";
     }
 
     return v3Action;
@@ -273,6 +277,10 @@ function deriveFinalAction(
   // 4. FALLBACK: old verdict engine (backward compat for subnets without v3 data)
   if (v && v.verdict === "SORS") return "SORTIR";
   if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) return "SORTIR";
+
+  // R3: TaoFlute WATCH — cap fallback to SURVEILLER
+  if (tf.taoflute_severity === "watch") return "SURVEILLER";
+
   if (v && v.verdict === "RENTRE" && s.action !== "EXIT") {
     if (s.risk < 65 && s.confianceScore >= 30) return "ENTRER";
   }
