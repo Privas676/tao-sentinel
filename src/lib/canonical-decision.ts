@@ -51,6 +51,30 @@ function mapPortfolioAction(decision: SubnetDecision): CanonicalPortfolioAction 
   return "HOLD";
 }
 
+/* ── Social bonus computation ── */
+
+/**
+ * Compute a bounded social bonus for conviction/momentum.
+ * Rules:
+ * - Social is an ACCELERATOR, never a primary driver (max +15 pts)
+ * - Weighted by credibility: low-credibility signal has minimal impact
+ * - Only applies to non-exit actions (SORTIR/ÉVITER are never boosted)
+ * - Signal below 20 is noise → no bonus
+ */
+function computeSocialBonus(
+  socialSignal: number,
+  socialCredibility: number,
+  isExitAction: boolean,
+): number {
+  if (isExitAction || socialSignal < 20) return 0;
+  // Credibility weight: 0-1 (credibility 50+ starts having real impact)
+  const credWeight = Math.min(1, Math.max(0, (socialCredibility - 30) / 70));
+  // Signal intensity: 0-1 (signal 20-80 range mapped to 0-1)
+  const intensity = Math.min(1, Math.max(0, (socialSignal - 20) / 60));
+  // Max bonus: 15 points, scaled by both credibility and intensity
+  return Math.round(intensity * credWeight * 15);
+}
+
 /* ── Main builder ── */
 
 /**
