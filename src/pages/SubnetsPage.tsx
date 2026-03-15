@@ -251,6 +251,7 @@ function finalActionBg(fa: FinalAction): string {
     case "ENTRER": return "hsla(var(--signal-go), 0.08)";
     case "SURVEILLER": return "hsla(var(--signal-go-spec), 0.06)";
     case "SORTIR": return "hsla(var(--signal-break), 0.08)";
+    case "ÉVITER": return "hsla(var(--signal-break), 0.10)";
     case "SYSTÈME": return "hsla(var(--signal-system), 0.08)";
   }
 }
