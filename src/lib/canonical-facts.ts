@@ -101,20 +101,21 @@ export function buildCanonicalFacts(
     miners: prov("TaoStats", "taostats:chain", taostatsUrl, taostatsTs, 90),
   };
 
-  if (tf?.taoflute_match) {
+  const tfExt = tf?.externalRisk;
+  if (tf?.taoflute_match && tfExt) {
     provenance.external_status = prov(
       "TaoFlute",
       "taoflute",
-      tf.taoflute_source_ref ?? null,
-      tf.taoflute_timestamp ?? null,
-      tf.taoflute_confidence ?? 70,
+      tfExt.source_ref ?? null,
+      tfExt.source_snapshot_at ?? null,
+      70,
     );
     provenance.liq_haircut = prov(
       "TaoFlute",
       "taoflute",
-      tf.taoflute_source_ref ?? null,
-      tf.taoflute_timestamp ?? null,
-      tf.taoflute_confidence ?? 70,
+      tfExt.source_ref ?? null,
+      tfExt.source_snapshot_at ?? null,
+      70,
     );
   }
 
