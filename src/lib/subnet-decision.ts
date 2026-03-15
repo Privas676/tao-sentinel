@@ -204,8 +204,8 @@ function v3ToFinalAction(v3Verdict: VerdictV3): FinalAction {
     case "ENTER": return "ENTRER";
     case "SURVEILLER": return "SURVEILLER";
     case "SORTIR": return "SORTIR";
-    case "DONNÉES_INSTABLES": return "SURVEILLER"; // Downgrade: not enough data for strong action
-    case "NON_INVESTISSABLE": return "SORTIR";     // Toxic structure = exit
+    case "DONNÉES_INSTABLES": return "SURVEILLER";
+    case "NON_INVESTISSABLE": return "ÉVITER";
     case "SYSTÈME": return "SYSTÈME";
   }
 }
