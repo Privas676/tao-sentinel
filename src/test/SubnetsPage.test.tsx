@@ -123,9 +123,11 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <BrowserRouter>
-        <SubnetsPage />
-      </BrowserRouter>
+      <TooltipProvider>
+        <BrowserRouter>
+          <SubnetsPage />
+        </BrowserRouter>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
