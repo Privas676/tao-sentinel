@@ -30,6 +30,14 @@ vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
 
+vi.mock("@/hooks/use-subnet-verdict", () => ({
+  useSubnetVerdicts: () => ({ verdicts: new Map(), isLoading: false }),
+}));
+
+vi.mock("@/hooks/use-audit-log", () => ({
+  useAuditLogger: () => {},
+}));
+
 vi.mock("@/lib/i18n", () => ({
   useI18n: () => ({
     t: (k: string) => {
