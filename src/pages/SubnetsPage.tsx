@@ -7,7 +7,7 @@ import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hoo
 import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useExternalDelist, type ExternalDelistInfo } from "@/hooks/use-external-delist";
+import { taoFluteColumnLabel } from "@/lib/taoflute-resolver";
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
@@ -46,7 +46,7 @@ type TableRow = UnifiedSubnetScore & {
   structureLevel: "HEALTHY" | "FRAGILE" | "CONCENTRATED";
   statusLevel: "OK" | "WATCH" | "DANGER";
   signalPrincipal: string;
-  externalDelist?: ExternalDelistInfo;
+  extLabel: string;
 };
 
 
@@ -80,8 +80,9 @@ function QuickViewDrawer({ row, open, onClose, fr, onAddWatchlist }: {
     if (row.isOverridden) alerts.push({ icon: "⛔", text: fr ? "Override actif — sortie forcée" : "Active override — forced exit", color: "hsl(var(--destructive))" });
     if (row.depegProbability >= 50) alerts.push({ icon: "⚠", text: `Depeg ${row.depegProbability}%`, color: "hsl(var(--signal-go-spec))" });
     if (row.delistCategory !== "NORMAL") alerts.push({ icon: "🔴", text: fr ? `Risque delist (${row.delistCategory})` : `Delist risk (${row.delistCategory})`, color: "hsl(var(--destructive))" });
-    if (row.externalDelist?.status === "critical") alerts.push({ icon: "💀", text: fr ? `Désenregistrement ext. #${row.externalDelist.rank} (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})` : `External delist #${row.externalDelist.rank} (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})`, color: "hsl(var(--destructive))" });
-    else if (row.externalDelist?.status === "high") alerts.push({ icon: "⚠️", text: fr ? `Risque désenregistrement externe (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})` : `External delist risk (${row.externalDelist.source.includes("seed") ? "seed" : "taoflute"})`, color: "hsl(var(--signal-go-spec))" });
+    const tf = decision.taoFluteStatus;
+    if (tf?.taoflute_severity === "priority") alerts.push({ icon: "💀", text: fr ? `TaoFlute priorité #${tf.taoflute_priority_rank}` : `TaoFlute priority #${tf.taoflute_priority_rank}`, color: "hsl(var(--destructive))" });
+    else if (tf?.taoflute_severity === "watch") alerts.push({ icon: "⚠️", text: fr ? "Sous surveillance TaoFlute" : "TaoFlute watch", color: "hsl(var(--signal-go-spec))" });
     if (row.dataUncertain) alerts.push({ icon: "❓", text: fr ? "Données incertaines" : "Uncertain data", color: "hsl(var(--muted-foreground))" });
     if (decision.conflictExplanation) alerts.push({ icon: "⚖️", text: decision.conflictExplanation, color: "hsl(var(--signal-go-spec))" });
   }
@@ -305,7 +306,7 @@ export default function SubnetsPage() {
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug, isLoading } = useSubnetScores();
   const { decisions, decisionsList } = useSubnetDecisions();
-  const { delistInfo } = useExternalDelist();
+  
 
   // ── Action counts from DECISIONS (single source of truth) ──
   // Exclude system subnets from counts (same as Compass)
@@ -391,7 +392,7 @@ export default function SubnetsPage() {
           structureLevel: decision.structureLevel,
           statusLevel: decision.statusLevel,
           signalPrincipal: decision.signalPrincipal,
-          externalDelist: delistInfo.get(s.netuid),
+          extLabel: taoFluteColumnLabel(decision.taoFluteStatus),
         } as TableRow;
       })
       .filter((r): r is TableRow => r !== null)
@@ -408,9 +409,9 @@ export default function SubnetsPage() {
         if (convictionFilter !== "ALL" && r.convictionLevel !== convictionFilter) return false;
         if (liquidityFilter !== "ALL" && r.liquidityLevel !== liquidityFilter) return false;
         if (structureFilter !== "ALL" && r.structureLevel !== structureFilter) return false;
-        if (externalFilter === "PRIORITY" && r.externalDelist?.status !== "critical") return false;
-        if (externalFilter === "WATCH" && r.externalDelist?.status !== "high") return false;
-        if (externalFilter === "NONE" && r.externalDelist) return false;
+        if (externalFilter === "PRIORITY" && r.decision.taoFluteStatus?.taoflute_severity !== "priority") return false;
+        if (externalFilter === "WATCH" && r.decision.taoFluteStatus?.taoflute_severity !== "watch") return false;
+        if (externalFilter === "NONE" && r.decision.taoFluteStatus?.taoflute_match) return false;
         return true;
       })
       .sort((a, b) => {
@@ -438,7 +439,7 @@ export default function SubnetsPage() {
         }
         return b.asymmetry - a.asymmetry;
       });
-  }, [scoresList, sparklines, decisions, ownedNetuids, delistInfo, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, externalFilter, sortCol, sortDir, fr]);
+  }, [scoresList, sparklines, decisions, ownedNetuids, search, scope, actionFilter, statusFilter, convictionFilter, liquidityFilter, structureFilter, externalFilter, sortCol, sortDir, fr]);
 
   // ── Column header helper ──
   const SortHeader = ({ col, label, align = "left" }: { col: SortCol; label: string; align?: "left" | "center" | "right" }) => (
@@ -708,13 +709,13 @@ export default function SubnetsPage() {
                       <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: opportunityColor(r.opp) }}>{r.opp}</td>
                       <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
                       <td className="py-2 px-2.5 text-center">
-                        {r.externalDelist?.status === "critical" ? (
+                        {r.extLabel.startsWith("P") ? (
                           <span className="font-mono text-[8px] font-black px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-break), 0.12)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.25)" }}>
-                            #{r.externalDelist.rank}
+                            {r.extLabel}
                           </span>
-                        ) : r.externalDelist?.status === "high" ? (
+                        ) : r.extLabel === "WATCH" ? (
                           <span className="font-mono text-[7px] font-bold px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-go-spec), 0.1)", color: "hsl(var(--signal-go-spec))", border: "1px solid hsla(var(--signal-go-spec), 0.2)" }}>
-                            {fr ? "WATCH" : "WATCH"}
+                            WATCH
                           </span>
                         ) : (
                           <span className="text-muted-foreground text-[9px]">—</span>
