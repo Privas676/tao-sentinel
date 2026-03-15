@@ -24,7 +24,7 @@ import {
 
 /* ── Types ── */
 
-export type FinalAction = "ENTRER" | "SURVEILLER" | "SORTIR" | "SYSTÈME";
+export type FinalAction = "ENTRER" | "SURVEILLER" | "SORTIR" | "ÉVITER" | "SYSTÈME";
 
 export type DecisionAction = "ENTRER" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SORTIR" | "SYSTÈME" | "SYSTEM";
 
