@@ -290,7 +290,7 @@ describe("DecisionStateManager — Delta trigger", () => {
     mgr.tick(dOk, "ALIGNED", 2000);
 
     // Re-fire with delistScore=70 (delta = |70-50|/100 = 0.20 > 0.15)
-    const d2 = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 70 });
+    const d2 = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 70 });
     const out = mgr.tick(d2, "ALIGNED", 5000); // Still within cooldown
     expect(out.state).toBe("DEPEG_CONFIRMED");
     expect(out.isTransition).toBe(true);
