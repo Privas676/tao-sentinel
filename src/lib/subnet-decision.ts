@@ -329,17 +329,24 @@ function deriveFinalAction(
   }
 
   // 4. FALLBACK: old verdict engine (backward compat for subnets without v3 data)
-  if (v && v.verdict === "SORS") return "SORTIR";
-  if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) return "SORTIR";
+  if (v && v.verdict === "SORS") {
+    // If WATCH, only allow SORTIR with strong internal weakness
+    if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
+    return "SORTIR";
+  }
+  if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) {
+    if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
+    return "SORTIR";
+  }
 
   // R3: TaoFlute WATCH — cap fallback to SURVEILLER
-  if (tf.taoflute_severity === "watch") return "SURVEILLER";
+  if (isWatch) return "SURVEILLER";
 
   if (v && v.verdict === "RENTRE" && s.action !== "EXIT") {
-    if (s.risk < 65 && s.confianceScore >= 30) return "ENTRER";
+    if (s.risk < 50 && s.opp >= 20 && s.confianceScore >= 30) return "ENTRER";
   }
   if (s.action === "ENTER" && (!v || v.verdict !== "SORS")) {
-    if (s.risk < 65 && s.confianceScore >= 30) return "ENTRER";
+    if (s.risk < 50 && s.opp >= 20 && s.confianceScore >= 30) return "ENTRER";
   }
 
   return "SURVEILLER";
