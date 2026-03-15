@@ -1,0 +1,2 @@
+UPDATE public.external_delist_watch SET is_active = false, notes = 'Excluded: SN-64 Chutes is NOT on TaoFlute lists. False positive from scraper.' WHERE netuid = 64 AND is_active = true;
+UPDATE public.external_delist_priority SET is_active = false, notes = 'Excluded: SN-64 Chutes is NOT on TaoFlute lists.' WHERE netuid = 64 AND is_active = true;
