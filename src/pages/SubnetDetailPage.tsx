@@ -50,7 +50,7 @@ export default function SubnetDetailPage() {
   }, [goBack]);
 
   const { scores, sparklines } = useSubnetScores();
-  const { decisions } = useSubnetDecisions();
+  const { decisions } = useCanonicalSubnets();
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
   const [flash, setFlash] = useState<string | null>(null);
