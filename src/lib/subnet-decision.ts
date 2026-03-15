@@ -294,16 +294,16 @@ function deriveFinalAction(
   if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "ÉVITER";
 
   // R3: TaoFlute WATCH → cap at SURVEILLER by default
-  // Only escalate to SORTIR if STRONG internal weakness confirms the external signal
-  if (tf.taoflute_severity === "watch") {
-    // WATCH + severe internal weakness → SORTIR
-    if (s.depegProbability >= 40) return "SORTIR";
-    if (s.risk >= 70 && s.depegProbability >= 20) return "SORTIR";
-    if (s.isOverridden) return "SORTIR";
-    // WATCH simple → falls through, capped to SURVEILLER below
+  // Only escalate to SORTIR if VERY STRONG internal weakness (extreme risk or very high depeg)
+  // Note: depeg >= 50 is already caught above (line 287), so only extreme risk matters here
+  const isWatch = tf.taoflute_severity === "watch";
+  if (isWatch) {
+    // WATCH + extreme risk only → SORTIR
+    if (s.risk >= 75) return "SORTIR";
+    // Everything else for WATCH → falls through to V3/fallback, capped to SURVEILLER below
   }
 
-  // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute)
+  // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute subnets only)
   if (s.delistCategory === "HIGH_RISK_NEAR_DELIST" && !tf.taoflute_match) {
     if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
     return "SURVEILLER";
@@ -315,29 +315,38 @@ function deriveFinalAction(
 
     // If v3 says ENTER, apply additional safety guards from the scoring layer
     if (v3Action === "ENTRER") {
-      if (s.risk >= 65 || s.confianceScore < 30) v3Action = "SURVEILLER";
+      // Quality gate: insufficient opportunity or excessive risk → SURVEILLER
+      if (s.risk >= 50 || s.opp < 20 || s.confianceScore < 30) v3Action = "SURVEILLER";
     }
 
-    // R3: TaoFlute WATCH cap — never allow ENTRER
-    if (tf.taoflute_severity === "watch" && v3Action === "ENTRER") {
-      v3Action = "SURVEILLER";
+    // R3: TaoFlute WATCH cap — never allow ENTRER, cap SORTIR to SURVEILLER unless strong weakness
+    if (isWatch) {
+      if (v3Action === "ENTRER") v3Action = "SURVEILLER";
+      if (v3Action === "SORTIR" && s.risk < 70 && s.depegProbability < 40) v3Action = "SURVEILLER";
     }
 
     return v3Action;
   }
 
   // 4. FALLBACK: old verdict engine (backward compat for subnets without v3 data)
-  if (v && v.verdict === "SORS") return "SORTIR";
-  if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) return "SORTIR";
+  if (v && v.verdict === "SORS") {
+    // If WATCH, only allow SORTIR with strong internal weakness
+    if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
+    return "SORTIR";
+  }
+  if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) {
+    if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
+    return "SORTIR";
+  }
 
   // R3: TaoFlute WATCH — cap fallback to SURVEILLER
-  if (tf.taoflute_severity === "watch") return "SURVEILLER";
+  if (isWatch) return "SURVEILLER";
 
   if (v && v.verdict === "RENTRE" && s.action !== "EXIT") {
-    if (s.risk < 65 && s.confianceScore >= 30) return "ENTRER";
+    if (s.risk < 50 && s.opp >= 20 && s.confianceScore >= 30) return "ENTRER";
   }
   if (s.action === "ENTER" && (!v || v.verdict !== "SORS")) {
-    if (s.risk < 65 && s.confianceScore >= 30) return "ENTRER";
+    if (s.risk < 50 && s.opp >= 20 && s.confianceScore >= 30) return "ENTRER";
   }
 
   return "SURVEILLER";
