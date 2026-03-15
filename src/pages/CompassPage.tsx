@@ -319,7 +319,7 @@ export default function CompassPage() {
     if (!enrichedSignals.length) return "";
     const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
     const entryCount = nonSystem.filter(s => decisions.get(s.netuid)?.finalAction === "ENTRER").length;
-    const exitCount = nonSystem.filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").length;
+    const exitCount = nonSystem.filter(s => { const f = decisions.get(s.netuid)?.finalAction; return f === "SORTIR" || f === "ÉVITER"; }).length;
     const bestName = bestOpp ? `SN-${bestOpp.netuid} ${bestOpp.name}` : "";
     const worstName = worstRisk ? `SN-${worstRisk.netuid}` : "";
     if (fr) {
