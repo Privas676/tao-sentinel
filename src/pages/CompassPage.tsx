@@ -265,10 +265,11 @@ export default function CompassPage() {
   const rotationMap = useMemo(() => {
     const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
     const getFa = (s: DashSignal) => decisions.get(s.netuid)?.finalAction;
+    const isEx = (f: string | undefined) => f === "SORTIR" || f === "ÉVITER";
     const leaders = nonSystem.filter(s => getFa(s) === "ENTRER" && s.momentumScore >= 55).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const accumulating = nonSystem.filter(s => s.sc === "ACCUMULATION" && !isExit(getFa(s)) && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
-    const fragile = nonSystem.filter(s => s.risk > 60 && !isExit(getFa(s))).sort((a, b) => b.risk - a.risk).slice(0, 5);
-    const avoid = nonSystem.filter(s => isExit(getFa(s))).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const accumulating = nonSystem.filter(s => s.sc === "ACCUMULATION" && !isEx(getFa(s)) && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
+    const fragile = nonSystem.filter(s => s.risk > 60 && !isEx(getFa(s))).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const avoid = nonSystem.filter(s => isEx(getFa(s))).sort((a, b) => b.risk - a.risk).slice(0, 5);
     return { leaders, accumulating, fragile, avoid };
   }, [enrichedSignals, decisions]);
 
