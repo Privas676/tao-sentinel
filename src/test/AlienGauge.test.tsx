@@ -147,9 +147,11 @@ function renderGauge() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <AlienGauge />
-      </MemoryRouter>
+      <TooltipProvider>
+        <MemoryRouter>
+          <AlienGauge />
+        </MemoryRouter>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
