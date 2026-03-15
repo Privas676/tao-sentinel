@@ -277,6 +277,10 @@ export default function SubnetDetailPage() {
             <div className="mt-3 space-y-4">
               {/* Raw Facts from canonical source */}
               {subnetFacts && <RawFactsSection facts={subnetFacts} fr={fr} />}
+              {/* Concordance checks (Layer B) */}
+              {s.concordance && <ConcordanceSection concordance={s.concordance} fr={fr} />}
+              {/* Derived scores (Layer B/C) */}
+              {s.derivedScoring && <DerivedScoresSection scoring={s.derivedScoring} fr={fr} />}
               {/* Raw signal vs final action */}
               <SectionCard>
                 <div className="px-5 py-4">
