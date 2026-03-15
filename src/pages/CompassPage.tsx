@@ -283,7 +283,7 @@ export default function CompassPage() {
     for (const netuid of held) {
       const fa = decisions.get(netuid)?.finalAction;
       if (!fa) { watching++; continue; }
-      if (fa === "SORTIR") misaligned++;
+      if (fa === "SORTIR" || fa === "ÉVITER") misaligned++;
       else if (fa === "ENTRER" || fa === "SURVEILLER") aligned++;
       else watching++;
     }
