@@ -296,6 +296,7 @@ function finalActionToActionFr(fa: FinalAction): DecisionAction {
     case "ENTRER": return "ENTRER";
     case "SURVEILLER": return "SURVEILLER";
     case "SORTIR": return "SORTIR";
+    case "ÉVITER": return "ÉVITER";
     case "SYSTÈME": return "SYSTÈME";
   }
 }
@@ -305,6 +306,7 @@ function finalActionToActionEn(fa: FinalAction): string {
     case "ENTRER": return "ENTER";
     case "SURVEILLER": return "MONITOR";
     case "SORTIR": return "EXIT";
+    case "ÉVITER": return "AVOID";
     case "SYSTÈME": return "SYSTEM";
   }
 }
