@@ -295,15 +295,15 @@ function deriveFinalAction(
 
   // R3: TaoFlute WATCH → cap at SURVEILLER by default
   // Only escalate to SORTIR if STRONG internal weakness confirms the external signal
-  if (tf.taoflute_severity === "watch") {
+  const isWatch = tf.taoflute_severity === "watch";
+  if (isWatch) {
     // WATCH + severe internal weakness → SORTIR
     if (s.depegProbability >= 40) return "SORTIR";
     if (s.risk >= 70 && s.depegProbability >= 20) return "SORTIR";
-    if (s.isOverridden) return "SORTIR";
     // WATCH simple → falls through, capped to SURVEILLER below
   }
 
-  // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute)
+  // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute subnets only)
   if (s.delistCategory === "HIGH_RISK_NEAR_DELIST" && !tf.taoflute_match) {
     if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
     return "SURVEILLER";
@@ -315,12 +315,14 @@ function deriveFinalAction(
 
     // If v3 says ENTER, apply additional safety guards from the scoring layer
     if (v3Action === "ENTRER") {
-      if (s.risk >= 65 || s.confianceScore < 30) v3Action = "SURVEILLER";
+      // Quality gate: insufficient opportunity or excessive risk → SURVEILLER
+      if (s.risk >= 50 || s.opp < 20 || s.confianceScore < 30) v3Action = "SURVEILLER";
     }
 
-    // R3: TaoFlute WATCH cap — never allow ENTRER
-    if (tf.taoflute_severity === "watch" && v3Action === "ENTRER") {
-      v3Action = "SURVEILLER";
+    // R3: TaoFlute WATCH cap — never allow ENTRER, cap SORTIR to SURVEILLER unless strong weakness
+    if (isWatch) {
+      if (v3Action === "ENTRER") v3Action = "SURVEILLER";
+      if (v3Action === "SORTIR" && s.risk < 70 && s.depegProbability < 40) v3Action = "SURVEILLER";
     }
 
     return v3Action;
