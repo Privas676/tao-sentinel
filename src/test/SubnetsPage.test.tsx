@@ -101,6 +101,24 @@ vi.mock("@/hooks/use-delist-mode", () => ({
   useDelistMode: () => ({ delistMode: false }),
 }));
 
+vi.mock("@/hooks/use-canonical-subnets", () => ({
+  useCanonicalSubnets: () => ({
+    facts: new Map(),
+    canonicalDecisions: new Map(),
+    decisions: new Map(),
+    decisionsList: [],
+    isLoading: false,
+  }),
+}));
+
+vi.mock("@/hooks/use-subnet-verdict", () => ({
+  useSubnetVerdicts: () => ({ verdicts: new Map(), isLoading: false }),
+}));
+
+vi.mock("@/hooks/use-external-delist", () => ({
+  useExternalDelist: () => ({ taoFluteStatuses: new Map(), priorityList: [], watchList: [], isLoading: false }),
+}));
+
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
