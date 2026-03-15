@@ -293,11 +293,14 @@ function deriveFinalAction(
   // R1: If !taoflute_match, delistCategory from auto-scoring still applies but NOT as "external"
   if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "ÉVITER";
 
-  // R3: TaoFlute WATCH → never force EXIT, but cap at SURVEILLER
+  // R3: TaoFlute WATCH → cap at SURVEILLER by default
+  // Only escalate to SORTIR if STRONG internal weakness confirms the external signal
   if (tf.taoflute_severity === "watch") {
-    // Never allow ENTRER for watch subnets
-    if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
-    // Fall through but will be capped below
+    // WATCH + severe internal weakness → SORTIR
+    if (s.depegProbability >= 40) return "SORTIR";
+    if (s.risk >= 70 && s.depegProbability >= 20) return "SORTIR";
+    if (s.isOverridden) return "SORTIR";
+    // WATCH simple → falls through, capped to SURVEILLER below
   }
 
   // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute)
@@ -381,18 +384,17 @@ function finalActionToEngineAction(fa: FinalAction): StrategicAction {
 }
 
 function derivePortfolioAction(s: UnifiedSubnetScore, fa: FinalAction, v3?: VerdictV3Result): PortfolioAction {
-  if (v3) {
-    switch (v3.portfolioAction) {
-      case "SORTIR": return "SORTIR";
-      case "RÉDUIRE": return "REDUIRE";
-      case "RENFORCER": return "RENFORCER";
-      case "CONSERVER": return "CONSERVER";
-      case "NE_PAS_ENTRER": return fa === "SORTIR" || fa === "ÉVITER" ? "SORTIR" : "CONSERVER";
-    }
-  }
-  if (fa === "SORTIR" || fa === "ÉVITER") return "SORTIR";
-  if (s.risk > 65 || s.depegProbability >= 40) return "REDUIRE";
+  // Portfolio action MUST be coherent with finalAction — strict mapping
+  // ÉVITER → always SORTIR (block/exit)
+  // SORTIR → SORTIR
+  // SURVEILLER → CONSERVER (or REDUIRE if risk high)
+  // ENTRER → RENFORCER
+  if (fa === "ÉVITER") return "SORTIR";
+  if (fa === "SORTIR") return "SORTIR";
+  if (fa === "SYSTÈME") return "CONSERVER";
   if (fa === "ENTRER") return "RENFORCER";
+  // SURVEILLER: check for risk degradation
+  if (s.risk > 65 || s.depegProbability >= 40) return "REDUIRE";
   return "CONSERVER";
 }
 
@@ -473,12 +475,12 @@ function deriveConflictExplanation(
     if (blockReasons.length > 0) {
       const blocksStr = blockReasons.slice(0, 3).join(", ");
       return fr
-        ? `Opportunité brute détectée — non actionnable actuellement. Bloquée par : ${blocksStr}`
-        : `Raw opportunity detected — not actionable currently. Blocked by: ${blocksStr}`;
+        ? `Signal brut positif mais non exécutable. Bloqué par : ${blocksStr}`
+        : `Raw signal positive but not actionable. Blocked by: ${blocksStr}`;
     }
     return fr
-      ? "Signal fort détecté mais conditions insuffisantes pour une entrée"
-      : "Strong signal detected but insufficient conditions for entry";
+      ? "Signal brut positif mais conditions insuffisantes pour une entrée"
+      : "Raw signal positive but insufficient conditions for entry";
   }
 
   // Show conflict when verdict and engine disagree (old engine fallback)
