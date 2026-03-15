@@ -31,7 +31,17 @@ vi.mock("@/hooks/use-mobile", () => ({
 }));
 
 vi.mock("@/hooks/use-subnet-verdict", () => ({
-  useSubnetVerdicts: () => ({ verdicts: new Map(), isLoading: false }),
+  useSubnetVerdicts: () => ({
+    verdicts: new Map(),
+    verdictList: [],
+    topRentre: [],
+    topHold: [],
+    topSors: [],
+    isLoading: false,
+    countRentre: 0,
+    countHold: 0,
+    countSors: 0,
+  }),
 }));
 
 vi.mock("@/hooks/use-audit-log", () => ({

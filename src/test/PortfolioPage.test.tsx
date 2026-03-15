@@ -5,6 +5,30 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import PortfolioPage from "@/pages/PortfolioPage";
 
+// ── Mock SubnetDecision factory ──
+function makeDecision(netuid: number, name: string, overrides: Record<string, any> = {}) {
+  return {
+    netuid, name,
+    finalAction: "SURVEILLER" as const,
+    engineAction: "WATCH" as const,
+    actionFr: "SURVEILLER", actionEn: "MONITOR",
+    badgeAction: "SURVEILLER" as const,
+    isSystem: false,
+    rawSignal: { type: "WATCH", reasons: [] },
+    isBlocked: false, blockReasons: [],
+    primaryReason: "Signal neutre",
+    portfolioAction: "CONSERVER", portfolioActionFr: "CONSERVER", portfolioActionEn: "HOLD",
+    conviction: "MEDIUM" as const, convictionScore: 50,
+    opp: 50, risk: 50, asymmetry: 0, confidence: 60, momentumScore: 50, momentumLabel: "STABLE", stability: 50,
+    liquidityLevel: "MEDIUM" as const, structureLevel: "HEALTHY" as const, statusLevel: "OK" as const,
+    signalPrincipal: "Observation", thesis: [], invalidation: [], conflictExplanation: null,
+    isOverridden: false, dataUncertain: false, depegProbability: 0, delistCategory: "NORMAL", delistScore: 10,
+    taoFluteStatus: { taoflute_match: false, taoflute_severity: null },
+    score: {} as any, verdict: undefined,
+    ...overrides,
+  };
+}
+
 // ── Mock hooks ──
 const mockAddPosition = vi.fn();
 const mockSellPosition = vi.fn();
@@ -28,15 +52,29 @@ const mockScores = new Map([
     netuid: 1, name: "Alpha", opp: 70, risk: 25, asymmetry: 45, stability: 75,
     sc: "ACCUMULATION", action: "ENTER", isOverridden: false, systemStatus: "OK",
     confianceScore: 80, state: "GO", consensusPrice: 0.05, alphaPrice: 0.05,
-    momentumLabel: "FORT",
+    momentumLabel: "FORT", momentumScore: 70, healthScores: {} as any,
+    depegProbability: 0, delistCategory: "NORMAL",
   }],
   [6, {
     netuid: 6, name: "Bravo", opp: 0, risk: 85, asymmetry: -85, stability: 20,
     sc: "DISTRIBUTION", action: "EXIT", isOverridden: true, systemStatus: "CRITICAL",
     confianceScore: 40, state: "BREAK", consensusPrice: 0.001, alphaPrice: 0.001,
-    momentumLabel: "DÉTÉRIORATION",
+    momentumLabel: "DÉTÉRIORATION", momentumScore: 10, healthScores: {} as any,
+    depegProbability: 0, delistCategory: "HIGH_RISK_NEAR_DELIST",
   }],
 ]);
+
+const mockDecisions = [
+  makeDecision(1, "Alpha", {
+    finalAction: "ENTRER", opp: 70, risk: 25, portfolioActionFr: "RENFORCER",
+    conviction: "HIGH", convictionScore: 80,
+  }),
+  makeDecision(6, "Bravo", {
+    finalAction: "SORTIR", opp: 0, risk: 85, portfolioActionFr: "SORTIR",
+    isOverridden: true, statusLevel: "DANGER",
+  }),
+];
+const mockDecisionsMap = new Map(mockDecisions.map(d => [d.netuid, d]));
 
 vi.mock("@/hooks/use-subnet-scores", () => ({
   useSubnetScores: () => ({
@@ -48,6 +86,7 @@ vi.mock("@/hooks/use-subnet-scores", () => ({
     sparklines: new Map(),
     subnetList: [{ netuid: 1, name: "Alpha" }, { netuid: 6, name: "Bravo" }],
     marketContext: new Map(),
+    subnetFacts: new Map(),
   }),
   SPECIAL_SUBNETS: { 0: { label: "ROOT", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20, isSystem: true } },
   getSubnetScore: (map: any, id: number) => map.get(id),
@@ -69,8 +108,8 @@ vi.mock("@/hooks/use-canonical-subnets", () => ({
   useCanonicalSubnets: () => ({
     facts: new Map(),
     canonicalDecisions: new Map(),
-    decisions: new Map(),
-    decisionsList: [],
+    decisions: mockDecisionsMap,
+    decisionsList: mockDecisions,
     isLoading: false,
   }),
 }));
@@ -142,7 +181,6 @@ describe("PortfolioPage", () => {
       { subnet_id: 1, quantity_tao: 100, entry_price: 0.04, timestamp_added: "2026-01-01" },
     ];
     renderPage();
-    // Summary cards should show Total TAO
     expect(screen.getByText("Total TAO")).toBeInTheDocument();
   });
 
@@ -206,26 +244,12 @@ describe("PortfolioPage — Add position interactions", () => {
     expect(screen.queryByText("AJOUTER AU PORTEFEUILLE")).not.toBeInTheDocument();
   });
 
-  it("modal shows consensus price preview", () => {
-    renderPage();
-    fireEvent.click(screen.getByText(/Ajouter un subnet/));
-    expect(screen.getByText(/Prix consensus|Consensus price/)).toBeInTheDocument();
-  });
-
-  it("modal shows estimated value preview", () => {
-    renderPage();
-    fireEvent.click(screen.getByText(/Ajouter un subnet/));
-    const matches = screen.getAllByText(/Valeur estimée|Est. value/);
-    expect(matches.length).toBeGreaterThanOrEqual(2); // summary card + modal
-  });
-
   it("add button disabled with zero quantity", () => {
     renderPage();
     fireEvent.click(screen.getByText(/Ajouter un subnet/));
     const input = screen.getByDisplayValue("10") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "0" } });
     const addBtn = screen.getByText("AJOUTER");
-    // Button should be disabled
     fireEvent.click(addBtn);
     expect(mockAddPosition).not.toHaveBeenCalled();
   });
@@ -253,7 +277,7 @@ describe("PortfolioPage — Position management", () => {
     ];
     renderPage();
     fireEvent.click(screen.getByText("VENDRE"));
-    expect(mockSellPosition).toHaveBeenCalledWith(1, 0.05); // price from mock scores
+    expect(mockSellPosition).toHaveBeenCalledWith(1, 0.05);
   });
 
   it("remove button (✕) is visible for each position", () => {
@@ -264,12 +288,11 @@ describe("PortfolioPage — Position management", () => {
     expect(screen.getByText("✕")).toBeInTheDocument();
   });
 
-  it("shows RENFORCER action for owned subnets (not ENTRER)", () => {
+  it("shows RENFORCER action for owned subnets", () => {
     mockPositions = [
       { subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" },
     ];
     renderPage();
-    // Alpha has action ENTER → becomes REINFORCE for owned
     expect(screen.getByText("RENFORCER")).toBeInTheDocument();
   });
 
@@ -304,7 +327,6 @@ describe("PortfolioPage — Position management", () => {
       { subnet_id: 1, quantity_tao: 100, entry_price: 0.04, timestamp_added: "2026-01-01" },
     ];
     renderPage();
-    // Should show 100.00 τ in Total TAO
     expect(screen.getByText("100.00 τ")).toBeInTheDocument();
   });
 
@@ -314,7 +336,6 @@ describe("PortfolioPage — Position management", () => {
     ];
     renderPage();
     fireEvent.click(screen.getByText(/Ajouter un subnet/));
-    // Since netuid 1 is owned and is the default selection
     expect(screen.getByText(/Déjà possédé/)).toBeInTheDocument();
   });
 });

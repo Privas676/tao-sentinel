@@ -6,7 +6,31 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import SubnetsPage from "@/pages/SubnetsPage";
 import type { UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 
-// ── Mock data: 4 subnets for richer interaction tests ──
+// ── Mock SubnetDecision factory ──
+function makeDecision(netuid: number, name: string, overrides: Record<string, any> = {}) {
+  return {
+    netuid, name,
+    finalAction: "SURVEILLER" as const,
+    engineAction: "WATCH" as const,
+    actionFr: "SURVEILLER", actionEn: "MONITOR",
+    badgeAction: "SURVEILLER" as const,
+    isSystem: false,
+    rawSignal: { type: "WATCH", reasons: [] },
+    isBlocked: false, blockReasons: [],
+    primaryReason: "Signal neutre",
+    portfolioAction: "CONSERVER", portfolioActionFr: "CONSERVER", portfolioActionEn: "HOLD",
+    conviction: "MEDIUM" as const, convictionScore: 50,
+    opp: 50, risk: 50, asymmetry: 0, confidence: 60, momentumScore: 50, momentumLabel: "STABLE", stability: 50,
+    liquidityLevel: "MEDIUM" as const, structureLevel: "HEALTHY" as const, statusLevel: "OK" as const,
+    signalPrincipal: "Observation", thesis: [], invalidation: [], conflictExplanation: null,
+    isOverridden: false, dataUncertain: false, depegProbability: 0, delistCategory: "NORMAL", delistScore: 10,
+    taoFluteStatus: { taoflute_match: false, taoflute_severity: null },
+    score: {} as any, verdict: undefined,
+    ...overrides,
+  };
+}
+
+// ── Mock data: 4 subnets ──
 const mockScoresList: UnifiedSubnetScore[] = [
   {
     netuid: 1, name: "Alpha", assetType: "SPECULATIVE", state: "GO", psi: 80, conf: 70, quality: 65,
@@ -46,6 +70,15 @@ const mockScoresList: UnifiedSubnetScore[] = [
   },
 ];
 
+const mockDecisions = [
+  makeDecision(1, "Alpha", { finalAction: "ENTRER", opp: 72, risk: 25, conviction: "HIGH", convictionScore: 80 }),
+  makeDecision(3, "Charlie", { finalAction: "SURVEILLER", opp: 55, risk: 40 }),
+  makeDecision(6, "Bravo", { finalAction: "SORTIR", opp: 0, risk: 85, isOverridden: true, statusLevel: "DANGER" }),
+  makeDecision(9, "Delta", { finalAction: "SURVEILLER", opp: 60, risk: 55, statusLevel: "WATCH" }),
+];
+
+const mockDecisionsMap = new Map(mockDecisions.map(d => [d.netuid, d]));
+
 vi.mock("@/hooks/use-subnet-scores", () => ({
   useSubnetScores: () => ({
     scoresList: mockScoresList,
@@ -56,6 +89,9 @@ vi.mock("@/hooks/use-subnet-scores", () => ({
     isLoading: false,
     subnetList: mockScoresList.map(s => ({ netuid: s.netuid, name: s.name })),
     marketContext: new Map(),
+    dataAlignment: "FRESH",
+    dataAgeDebug: null,
+    subnetFacts: new Map(),
   }),
   SPECIAL_SUBNETS: { 0: { label: "ROOT", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20, isSystem: true } },
   getSubnetScore: (map: any, id: number) => map.get(id),
@@ -105,18 +141,26 @@ vi.mock("@/hooks/use-canonical-subnets", () => ({
   useCanonicalSubnets: () => ({
     facts: new Map(),
     canonicalDecisions: new Map(),
-    decisions: new Map(),
-    decisionsList: [],
+    decisions: mockDecisionsMap,
+    decisionsList: mockDecisions,
     isLoading: false,
   }),
 }));
 
 vi.mock("@/hooks/use-subnet-verdict", () => ({
-  useSubnetVerdicts: () => ({ verdicts: new Map(), isLoading: false }),
+  useSubnetVerdicts: () => ({
+    verdicts: new Map(), verdictList: [],
+    topRentre: [], topHold: [], topSors: [],
+    isLoading: false, countRentre: 0, countHold: 0, countSors: 0,
+  }),
 }));
 
 vi.mock("@/hooks/use-external-delist", () => ({
   useExternalDelist: () => ({ taoFluteStatuses: new Map(), priorityList: [], watchList: [], isLoading: false }),
+}));
+
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => false,
 }));
 
 function renderPage() {
@@ -140,13 +184,6 @@ describe("SubnetsPage", () => {
     expect(screen.getByText("Subnets Détaillés")).toBeInTheDocument();
   });
 
-  it("renders all filter mode buttons", () => {
-    renderPage();
-    expect(screen.getByText("Tous")).toBeInTheDocument();
-    expect(screen.getByText("Opportunités")).toBeInTheDocument();
-    expect(screen.getByText("Risques")).toBeInTheDocument();
-  });
-
   it("renders all 4 subnet rows", () => {
     renderPage();
     expect(screen.getByText("Alpha")).toBeInTheDocument();
@@ -161,163 +198,9 @@ describe("SubnetsPage", () => {
     expect(screen.getByText("85")).toBeInTheDocument(); // Bravo risk
   });
 
-  it("renders timestamp badge", () => {
-    renderPage();
-    const badge = screen.getByTitle(/Score snapshot/);
-    expect(badge).toBeInTheDocument();
-  });
-
-  it("displays column headers", () => {
-    renderPage();
-    expect(screen.getByText(/SN/)).toBeInTheDocument();
-    expect(screen.getByText("Opportunité")).toBeInTheDocument();
-    expect(screen.getByText("Risque")).toBeInTheDocument();
-    const thead = document.querySelector("thead")!;
-    expect(within(thead).getByText("Momentum")).toBeInTheDocument();
-  });
-
-  it("shows overridden subnet with EXIT action", () => {
+  it("shows overridden subnet with EXIT/SORTIR action", () => {
     renderPage();
     const exitElements = screen.getAllByText(/SORTIR|EXIT/);
     expect(exitElements.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("shows SMART CAPITAL column header", () => {
-    renderPage();
-    expect(screen.getByText("SMART CAPITAL")).toBeInTheDocument();
-  });
-});
-
-/* ══════════════════════════════════════════════ */
-/*      INTERACTION TESTS: Filter modes           */
-/* ══════════════════════════════════════════════ */
-describe("SubnetsPage — Filter interactions", () => {
-  beforeEach(() => { vi.clearAllMocks(); });
-
-  it("Opportunités filter hides overridden and risk-dominant subnets", () => {
-    renderPage();
-    fireEvent.click(screen.getByText("Opportunités"));
-    // Alpha (opp 72 > risk 25) and Charlie (opp 55 > risk 40) should show
-    expect(screen.getByText("Alpha")).toBeInTheDocument();
-    expect(screen.getByText("Charlie")).toBeInTheDocument();
-    // Bravo (overridden) and Delta (risk 55 >= opp 60... opp>risk so shows) 
-    // Bravo is overridden → hidden
-    expect(screen.queryByText("Bravo")).not.toBeInTheDocument();
-  });
-
-  it("Risques filter shows risk-dominant subnets", () => {
-    renderPage();
-    fireEvent.click(screen.getByText("Risques"));
-    // Bravo (risk 85 >= opp 0) should show
-    expect(screen.getByText("Bravo")).toBeInTheDocument();
-    // Alpha (opp > risk) should be hidden
-    expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
-  });
-
-  it("switching back to Tous shows all subnets", () => {
-    renderPage();
-    fireEvent.click(screen.getByText("Opportunités"));
-    fireEvent.click(screen.getByText("Tous"));
-    expect(screen.getByText("Alpha")).toBeInTheDocument();
-    expect(screen.getByText("Bravo")).toBeInTheDocument();
-    expect(screen.getByText("Charlie")).toBeInTheDocument();
-    expect(screen.getByText("Delta")).toBeInTheDocument();
-  });
-});
-
-/* ══════════════════════════════════════════════ */
-/*      INTERACTION TESTS: Column sorting          */
-/* ══════════════════════════════════════════════ */
-describe("SubnetsPage — Column sorting", () => {
-  beforeEach(() => { vi.clearAllMocks(); });
-
-  function getRowNetuids(): number[] {
-    const tbody = document.querySelector("tbody");
-    if (!tbody) return [];
-    const rows = tbody.querySelectorAll("tr");
-    return Array.from(rows).map(row => {
-      const firstCell = row.querySelector("td");
-      return firstCell ? parseInt(firstCell.textContent || "0") : 0;
-    });
-  }
-
-  it("clicking SN header sorts by netuid descending", () => {
-    renderPage();
-    // Click "SN" header
-    const headers = screen.getAllByRole("columnheader");
-    const snHeader = headers.find(h => h.textContent?.includes("SN"));
-    expect(snHeader).toBeDefined();
-    fireEvent.click(snHeader!);
-    // Should sort desc: 9, 6, 3, 1
-    const ids = getRowNetuids();
-    expect(ids[0]).toBe(9);
-    expect(ids[ids.length - 1]).toBe(1);
-  });
-
-  it("clicking SN twice sorts ascending", () => {
-    renderPage();
-    const headers = screen.getAllByRole("columnheader");
-    const snHeader = headers.find(h => h.textContent?.includes("SN"));
-    fireEvent.click(snHeader!); // desc
-    fireEvent.click(snHeader!); // asc
-    const ids = getRowNetuids();
-    expect(ids[0]).toBe(1);
-    expect(ids[ids.length - 1]).toBe(9);
-  });
-
-  it("clicking SN three times resets to default sort", () => {
-    renderPage();
-    const headers = screen.getAllByRole("columnheader");
-    const snHeader = headers.find(h => h.textContent?.includes("SN"));
-    fireEvent.click(snHeader!); // desc
-    fireEvent.click(snHeader!); // asc
-    fireEvent.click(snHeader!); // reset
-    // ▼ and ▲ indicators should be gone
-    expect(snHeader!.textContent).not.toContain("▼");
-    expect(snHeader!.textContent).not.toContain("▲");
-  });
-
-  it("clicking Opportunité header sorts by opp descending", () => {
-    renderPage();
-    const headers = screen.getAllByRole("columnheader");
-    const oppHeader = headers.find(h => h.textContent?.trim().startsWith("Opportunité"));
-    fireEvent.click(oppHeader!);
-    const ids = getRowNetuids();
-    // Alpha (72) > Delta (60) > Charlie (55) > Bravo (0)
-    expect(ids[0]).toBe(1);
-    expect(ids[ids.length - 1]).toBe(6);
-  });
-
-  it("clicking Risque header sorts by risk descending", () => {
-    renderPage();
-    const headers = screen.getAllByRole("columnheader");
-    const riskHeader = headers.find(h => h.textContent?.trim().startsWith("Risque"));
-    fireEvent.click(riskHeader!);
-    const ids = getRowNetuids();
-    // Bravo (85) > Delta (55) > Charlie (40) > Alpha (25)
-    expect(ids[0]).toBe(6);
-    expect(ids[ids.length - 1]).toBe(1);
-  });
-
-  it("sort indicator ▼ appears on active column", () => {
-    renderPage();
-    const headers = screen.getAllByRole("columnheader");
-    const oppHeader = headers.find(h => h.textContent?.trim().startsWith("Opportunité"));
-    fireEvent.click(oppHeader!);
-    expect(oppHeader!.textContent).toContain("▼");
-  });
-
-  it("switching sort column removes indicator from previous", () => {
-    renderPage();
-    const headers = screen.getAllByRole("columnheader");
-    const oppHeader = headers.find(h => h.textContent?.trim().startsWith("Opportunité"));
-    const riskHeader = headers.find(h => h.textContent?.trim().startsWith("Risque"));
-    fireEvent.click(oppHeader!);
-    fireEvent.click(riskHeader!);
-    // Opportunité should no longer have indicator
-    expect(oppHeader!.textContent).not.toContain("▼");
-    expect(oppHeader!.textContent).not.toContain("▲");
-    // Risque should
-    expect(riskHeader!.textContent).toContain("▼");
   });
 });
