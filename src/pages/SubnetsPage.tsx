@@ -237,54 +237,19 @@ function MetricMini({ label, value, color }: { label: string; value: string | nu
 }
 
 /* ─── Final action color/icon helpers ─── */
-function finalActionColor(fa: FinalAction): string {
+/* ─── Use canonical helpers from subnet-decision.ts ─── */
+const finalActionColor = canonicalFaColor;
+const finalActionBg = (fa: FinalAction): string => {
   switch (fa) {
-    case "ENTRER": return "hsl(var(--signal-go))";
-    case "SURVEILLER": return "hsl(var(--signal-go-spec))";
-    case "SORTIR": return "hsl(var(--signal-break))";
-    case "ÉVITER": return "hsl(var(--signal-break))";
-    case "SYSTÈME": return "hsl(var(--signal-system))";
+    case "ENTRER": return "hsla(145,65%,48%,0.08)";
+    case "SURVEILLER": return "hsla(38,60%,50%,0.06)";
+    case "SORTIR": return "hsla(4,80%,50%,0.08)";
+    case "ÉVITER": return "hsla(4,80%,40%,0.10)";
+    case "SYSTÈME": return "hsla(210,60%,55%,0.08)";
   }
-}
-
-function finalActionBg(fa: FinalAction): string {
-  switch (fa) {
-    case "ENTRER": return "hsla(var(--signal-go), 0.08)";
-    case "SURVEILLER": return "hsla(var(--signal-go-spec), 0.06)";
-    case "SORTIR": return "hsla(var(--signal-break), 0.08)";
-    case "ÉVITER": return "hsla(var(--signal-break), 0.10)";
-    case "SYSTÈME": return "hsla(var(--signal-system), 0.08)";
-  }
-}
-
-function finalActionIcon(fa: FinalAction): string {
-  switch (fa) {
-    case "ENTRER": return "🟢";
-    case "SURVEILLER": return "👁";
-    case "SORTIR": return "🔴";
-    case "ÉVITER": return "⛔";
-    case "SYSTÈME": return "🔷";
-  }
-}
-
-function finalActionLabel(fa: FinalAction, fr: boolean): string {
-  if (fr) {
-    switch (fa) {
-      case "ENTRER": return "ENTRER";
-      case "SURVEILLER": return "SURVEILLER";
-      case "SORTIR": return "SORTIR";
-      case "ÉVITER": return "ÉVITER";
-      case "SYSTÈME": return "SYSTÈME";
-    }
-  }
-  switch (fa) {
-    case "ENTRER": return "ENTER";
-    case "SURVEILLER": return "MONITOR";
-    case "SORTIR": return "EXIT";
-    case "ÉVITER": return "AVOID";
-    case "SYSTÈME": return "SYSTEM";
-  }
-}
+};
+const finalActionIcon = canonicalFaIcon;
+const finalActionLabel = canonicalFaLabel;
 
 /* ─── Filter label helpers ─── */
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
