@@ -414,10 +414,10 @@ export default function CompassPage() {
                     />
                     <DirectiveCard
                       label={fr ? "SORTIES" : "EXITS"}
-                      value={priorityGroups.exitCount}
+                      value={priorityGroups.exitCount + priorityGroups.avoidCount}
                       sub={fr ? "à exécuter" : "to execute"}
-                      color={priorityGroups.exitCount > 0 ? BREAK : MUTED}
-                      icon={priorityGroups.exitCount > 0 ? "⚠" : "✓"}
+                      color={(priorityGroups.exitCount + priorityGroups.avoidCount) > 0 ? BREAK : MUTED}
+                      icon={(priorityGroups.exitCount + priorityGroups.avoidCount) > 0 ? "⚠" : "✓"}
                     />
                   </div>
 
