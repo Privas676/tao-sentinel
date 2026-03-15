@@ -476,12 +476,12 @@ function deriveConflictExplanation(
     if (blockReasons.length > 0) {
       const blocksStr = blockReasons.slice(0, 3).join(", ");
       return fr
-        ? `Opportunité brute détectée — non actionnable actuellement. Bloquée par : ${blocksStr}`
-        : `Raw opportunity detected — not actionable currently. Blocked by: ${blocksStr}`;
+        ? `Signal brut positif mais non exécutable. Bloqué par : ${blocksStr}`
+        : `Raw signal positive but not actionable. Blocked by: ${blocksStr}`;
     }
     return fr
-      ? "Signal fort détecté mais conditions insuffisantes pour une entrée"
-      : "Strong signal detected but insufficient conditions for entry";
+      ? "Signal brut positif mais conditions insuffisantes pour une entrée"
+      : "Raw signal positive but insufficient conditions for entry";
   }
 
   // Show conflict when verdict and engine disagree (old engine fallback)
