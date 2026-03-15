@@ -115,6 +115,55 @@ export type SubnetDecision = {
   verdictV3?: VerdictV3Result;
 };
 
+/* ── Public helpers for UI consistency ── */
+
+/** Returns true if the action is an exit/avoid (SORTIR or ÉVITER) */
+export function isExitAction(fa: FinalAction): boolean {
+  return fa === "SORTIR" || fa === "ÉVITER";
+}
+
+/** Canonical color for a FinalAction */
+export function finalActionColor(fa: FinalAction): string {
+  switch (fa) {
+    case "ENTRER": return "hsl(145,65%,48%)";
+    case "SURVEILLER": return "hsl(38,60%,50%)";
+    case "SORTIR": return "hsl(4,80%,50%)";
+    case "ÉVITER": return "hsl(4,80%,40%)";
+    case "SYSTÈME": return "hsl(210,60%,55%)";
+  }
+}
+
+/** Canonical icon for a FinalAction */
+export function finalActionIcon(fa: FinalAction): string {
+  switch (fa) {
+    case "ENTRER": return "🟢";
+    case "SURVEILLER": return "👁";
+    case "SORTIR": return "🔴";
+    case "ÉVITER": return "⛔";
+    case "SYSTÈME": return "🔷";
+  }
+}
+
+/** Canonical label for a FinalAction */
+export function finalActionLabel(fa: FinalAction, fr: boolean): string {
+  if (fr) {
+    switch (fa) {
+      case "ENTRER": return "ENTRER";
+      case "SURVEILLER": return "SURVEILLER";
+      case "SORTIR": return "SORTIR";
+      case "ÉVITER": return "ÉVITER";
+      case "SYSTÈME": return "SYSTÈME";
+    }
+  }
+  switch (fa) {
+    case "ENTRER": return "ENTER";
+    case "SURVEILLER": return "MONITOR";
+    case "SORTIR": return "EXIT";
+    case "ÉVITER": return "AVOID";
+    case "SYSTÈME": return "SYSTEM";
+  }
+}
+
 /* ── Derivation helpers (PRIVATE — only used here) ── */
 
 function deriveConvictionFromV3(v3: VerdictV3Result): { level: ConvictionLevel; score: number } {
