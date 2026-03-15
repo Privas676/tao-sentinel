@@ -70,9 +70,9 @@ function SubnetQuickPanel({ signal, open, onClose, fr, decisions }: { signal: Da
   if (!signal) return null;
   const d = decisions.get(signal.netuid);
   const fa = d?.finalAction ?? "SURVEILLER";
-  const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : fa === "SYSTÈME" ? MUTED : WARN;
-  const faIcon = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : fa === "SYSTÈME" ? "🔷" : "👁";
-  const faLabel = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "SYSTÈME" ? (fr ? "SYSTÈME" : "SYSTEM") : (fr ? "SURVEILLER" : "MONITOR");
+  const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" || fa === "ÉVITER" ? BREAK : fa === "SYSTÈME" ? MUTED : WARN;
+  const faIcon = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : fa === "ÉVITER" ? "⛔" : fa === "SYSTÈME" ? "🔷" : "👁";
+  const faLabel = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "ÉVITER" ? (fr ? "ÉVITER" : "AVOID") : fa === "SYSTÈME" ? (fr ? "SYSTÈME" : "SYSTEM") : (fr ? "SURVEILLER" : "MONITOR");
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[380px] border-l border-border bg-background text-foreground overflow-y-auto">
