@@ -294,13 +294,13 @@ function deriveFinalAction(
   if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "ÉVITER";
 
   // R3: TaoFlute WATCH → cap at SURVEILLER by default
-  // Only escalate to SORTIR if STRONG internal weakness confirms the external signal
+  // Only escalate to SORTIR if VERY STRONG internal weakness (extreme risk or very high depeg)
+  // Note: depeg >= 50 is already caught above (line 287), so only extreme risk matters here
   const isWatch = tf.taoflute_severity === "watch";
   if (isWatch) {
-    // WATCH + severe internal weakness → SORTIR
-    if (s.depegProbability >= 40) return "SORTIR";
-    if (s.risk >= 70 && s.depegProbability >= 20) return "SORTIR";
-    // WATCH simple → falls through, capped to SURVEILLER below
+    // WATCH + extreme risk only → SORTIR
+    if (s.risk >= 75) return "SORTIR";
+    // Everything else for WATCH → falls through to V3/fallback, capped to SURVEILLER below
   }
 
   // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute subnets only)
