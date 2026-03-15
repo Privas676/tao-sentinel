@@ -335,7 +335,7 @@ describe("DecisionStateManager — Hysteresis integration", () => {
     mgr.tick(dDepeg, "ALIGNED", 1000);
 
     // Score drops to 35 (still >= depegExit=30) → should stay DEPEG
-    const dMid = makeDecision({ netuid: 96, delistScore: 35 });
+    const dMid = makeDecision({ netuid: 70, delistScore: 35 });
     const out = mgr.tick(dMid, "ALIGNED", 2000);
     expect(out.state).toBe("DEPEG_CONFIRMED");
 
