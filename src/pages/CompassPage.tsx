@@ -223,10 +223,10 @@ export default function CompassPage() {
     const getFa = (s: DashSignal) => decisions.get(s.netuid)?.finalAction;
     const enterGroup = nonSystem.filter(s => getFa(s) === "ENTRER").sort((a, b) => b.opp - a.opp).slice(0, 5);
     const holdGroup = nonSystem.filter(s => getFa(s) === "SURVEILLER").sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const exitGroup = nonSystem.filter(s => getFa(s) === "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const exitGroup = nonSystem.filter(s => { const f = getFa(s); return f === "SORTIR" || f === "ÉVITER"; }).sort((a, b) => b.risk - a.risk).slice(0, 5);
     const enterCount = nonSystem.filter(s => getFa(s) === "ENTRER").length;
     const holdCount = nonSystem.filter(s => getFa(s) === "SURVEILLER").length;
-    const exitCount = nonSystem.filter(s => getFa(s) === "SORTIR").length;
+    const exitCount = nonSystem.filter(s => { const f = getFa(s); return f === "SORTIR" || f === "ÉVITER"; }).length;
     return { enterGroup, holdGroup, exitGroup, enterCount, holdCount, exitCount };
   }, [enrichedSignals, decisions]);
 
