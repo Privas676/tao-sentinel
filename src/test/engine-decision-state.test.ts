@@ -282,7 +282,7 @@ describe("DecisionStateManager — Delta trigger", () => {
     const mgr = new DecisionStateManager(settings);
 
     // First fire: delistScore=50
-    const d1 = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 50 });
+    const d1 = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 50 });
     mgr.tick(d1, "ALIGNED", 1000);
 
     // Return to OK
