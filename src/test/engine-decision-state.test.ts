@@ -65,7 +65,7 @@ describe("evaluateRawState", () => {
   });
 
   it("returns DEPEG_CONFIRMED when delistScore >= depegEnter threshold (manual list)", () => {
-    const d = makeDecision({ netuid: 96, delistScore: 50 });
+    const d = makeDecision({ netuid: 70, delistScore: 50 });
     expect(evaluateRawState(d, "ALIGNED", s)).toBe("DEPEG_CONFIRMED");
   });
 
