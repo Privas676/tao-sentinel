@@ -275,6 +275,8 @@ export default function SubnetDetailPage() {
 
           {showAudit && (
             <div className="mt-3 space-y-4">
+              {/* Raw Facts from canonical source */}
+              {subnetFacts && <RawFactsSection facts={subnetFacts} fr={fr} />}
               {/* Raw signal vs final action */}
               <SectionCard>
                 <div className="px-5 py-4">
