@@ -461,7 +461,7 @@ export default function SubnetsPage() {
 
   const isCompact = viewMode === "compact";
 
-  if (isLoading || !scoresList.length) return <PageLoadingState label={fr ? "Chargement subnets..." : "Loading subnets..."} />;
+  if (isLoading || decisionsLoading || !scoresList.length) return <PageLoadingState label={fr ? "Chargement subnets..." : "Loading subnets..."} />;
 
   // Count non-system subnets
   const specSubnets = scoresList.filter(s => SPECIAL_SUBNETS[s.netuid]?.isSystem).length;
