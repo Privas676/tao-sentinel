@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
+import { useSubnetDecisions } from "@/hooks/use-subnet-decisions";
 import { analyzeDistribution } from "@/lib/distribution-monitor";
 import { analyzeScoreVolatility, type FleetVolatilityReport } from "@/lib/score-volatility";
 import { supabase } from "@/integrations/supabase/client";
 import CorrelationPanel from "@/components/CorrelationPanel";
 import PredictivePowerPanel from "@/components/PredictivePowerPanel";
-
+import type { FinalAction } from "@/lib/subnet-decision";
 /* ── Histogram renderer ── */
 function Histogram({ values, label, bins = 10 }: { values: number[]; label: string; bins?: number }) {
   const buckets = useMemo(() => {
