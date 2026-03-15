@@ -207,9 +207,9 @@ export default function CompassPage() {
   const isMobile = useIsMobile();
   const { positions } = useLocalPortfolio();
 
-  // ── Data sources — useSubnetDecisions is the canonical decision source ──
+  // ── Data sources — useCanonicalSubnets is the single source of truth ──
   const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence, isLoading } = useSubnetScores();
-  const { decisions } = useSubnetDecisions();
+  const { facts: canonicalFacts, decisions } = useCanonicalSubnets();
 
 
   const { data: rawSignals } = useQuery({
