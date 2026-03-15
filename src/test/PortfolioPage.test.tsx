@@ -87,9 +87,11 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <BrowserRouter>
-        <PortfolioPage />
-      </BrowserRouter>
+      <TooltipProvider>
+        <BrowserRouter>
+          <PortfolioPage />
+        </BrowserRouter>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
