@@ -24,7 +24,7 @@ import type { FinalAction } from "@/lib/subnet-decision";
 /* ═══════════════════════════════════════════════ */
 
 /* ─── Filter types ─── */
-type ActionFilter = "ALL" | "ENTRER" | "SURVEILLER" | "SORTIR";
+type ActionFilter = "ALL" | "ENTRER" | "SURVEILLER" | "SORTIR" | "ÉVITER";
 type StatusFilter = "ALL" | "OK" | "WATCH" | "DANGER";
 type ConvictionFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type ScopeFilter = "ALL" | "PORTFOLIO" | "WATCHLIST";
