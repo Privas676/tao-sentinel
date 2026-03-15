@@ -630,16 +630,7 @@ export default function PortfolioPage() {
                     const aColor = portfolioActionColor(r.pAction);
                     const rowBorder = r.pAction === "EXIT" ? "border-l-2 border-l-destructive/40" : r.pAction === "REDUCE" ? "border-l-2 border-l-signal-hold/40" : "";
 
-                    const signalReason = (() => {
-                      if (r.isOverridden) return fr ? "Override actif" : "Active override";
-                      if (r.depegProbability >= 40) return `Depeg ${r.depegProbability}%`;
-                      if (r.pAction === "SORTIR") return fr ? "Signal de sortie" : "Exit signal";
-                      if (r.pAction === "RÉDUIRE") return fr ? `Risque ${r.risk}` : `Risk ${r.risk}`;
-                      if (r.pAction === "RENFORCER" && r.opp > 55) return fr ? `Opp. forte (${r.opp})` : `Strong opp. (${r.opp})`;
-                      if (r.pAction === "RENFORCER") return fr ? "Momentum +" : "Momentum +";
-                      if (r.stability > 60) return fr ? "Position stable" : "Stable position";
-                      return fr ? "En observation" : "Monitoring";
-                    })();
+                    const signalReason = r.signalReason;
 
                     return (
                       <tr key={r.netuid} className={`border-b border-border hover:bg-muted/10 transition-colors ${rowBorder}`}>
