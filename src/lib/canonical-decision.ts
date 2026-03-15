@@ -51,6 +51,30 @@ function mapPortfolioAction(decision: SubnetDecision): CanonicalPortfolioAction 
   return "HOLD";
 }
 
+/* ── Social bonus computation ── */
+
+/**
+ * Compute a bounded social bonus for conviction/momentum.
+ * Rules:
+ * - Social is an ACCELERATOR, never a primary driver (max +15 pts)
+ * - Weighted by credibility: low-credibility signal has minimal impact
+ * - Only applies to non-exit actions (SORTIR/ÉVITER are never boosted)
+ * - Signal below 20 is noise → no bonus
+ */
+function computeSocialBonus(
+  socialSignal: number,
+  socialCredibility: number,
+  isExitAction: boolean,
+): number {
+  if (isExitAction || socialSignal < 20) return 0;
+  // Credibility weight: 0-1 (credibility 50+ starts having real impact)
+  const credWeight = Math.min(1, Math.max(0, (socialCredibility - 30) / 70));
+  // Signal intensity: 0-1 (signal 20-80 range mapped to 0-1)
+  const intensity = Math.min(1, Math.max(0, (socialSignal - 20) / 60));
+  // Max bonus: 15 points, scaled by both credibility and intensity
+  return Math.round(intensity * credWeight * 15);
+}
+
 /* ── Main builder ── */
 
 /**
@@ -73,12 +97,15 @@ export function buildCanonicalDecision(
   // Social scores from canonical facts (if available)
   const socialSignal = facts?.social_signal_strength ?? 0;
   const socialConfidence = facts?.social_credibility_score ?? 0;
+  const finalAction = mapFinalAction(decision);
+  const isExit = finalAction === "SORTIR" || finalAction === "ÉVITER";
+  const socialBonus = computeSocialBonus(socialSignal, socialConfidence, isExit);
 
   return {
     subnet_id: decision.netuid,
 
     // Final Action
-    final_action: mapFinalAction(decision),
+    final_action: finalAction,
     final_reason_primary: decision.primaryReason,
     final_reason_secondary: [
       ...decision.thesis.slice(0, 2),
@@ -95,10 +122,10 @@ export function buildCanonicalDecision(
     guardrail_active: decision.isBlocked,
     guardrail_reason: decision.blockReasons,
 
-    // Core Scores
+    // Core Scores (social bonus applied to conviction & momentum)
     confidence_score: decision.confidence,
-    conviction_score: decision.convictionScore,
-    momentum_score: decision.momentumScore,
+    conviction_score: Math.min(100, decision.convictionScore + socialBonus),
+    momentum_score: Math.min(100, decision.momentumScore + Math.round(socialBonus * 0.6)),
 
     // Risk Scores
     risk_market_score: decision.score.risk,
