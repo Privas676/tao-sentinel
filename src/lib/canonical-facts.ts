@@ -185,12 +185,12 @@ export function buildCanonicalFacts(
     // TaoFlute External Risk
     taoflute_match: tf?.taoflute_match ?? false,
     external_status: tf
-      ? tfSeverityToExternalStatus(tf.taoflute_severity, tf.taoflute_rank ?? null)
+      ? tfSeverityToExternalStatus(tf.taoflute_severity, tf.taoflute_priority_rank)
       : "NONE",
-    liq_price: tf?.liq_price ?? null,
-    liq_haircut: tf?.liq_haircut ?? null,
-    taoflute_flags: tf?.taoflute_flags ?? [],
-    taoflute_links: tf?.taoflute_source_ref ? [tf.taoflute_source_ref] : [],
+    liq_price: tfExt?.liq_price ?? null,
+    liq_haircut: tfExt?.liq_haircut ?? null,
+    taoflute_flags: tfExt?.flags ?? [],
+    taoflute_links: tfExt?.source_ref ? [tfExt.source_ref] : [],
 
     // Social Signal
     social_mentions_24h: social?.raw_mention_count ?? null,
@@ -215,13 +215,13 @@ export function buildCanonicalFacts(
 
     // Timestamps
     taostats_timestamp: taostatsTs,
-    taoflute_timestamp: tf?.taoflute_timestamp ?? null,
+    taoflute_timestamp: tfExt?.source_snapshot_at ?? null,
     social_timestamp: socialTimestamp,
     sentinel_timestamp: now,
 
     // Source References
     taostats_source_url: taostatsUrl,
-    taoflute_source_ref: tf?.taoflute_source_ref ?? null,
+    taoflute_source_ref: tfExt?.source_ref ?? null,
     social_source_refs: [],  // filled when real social post URLs are available
 
     // Provenance
