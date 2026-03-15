@@ -235,7 +235,9 @@ export function buildCanonicalFacts(
     liq_price: tfExt?.liq_price ?? null,
     liq_haircut: tfExt?.liq_haircut ?? null,
     taoflute_flags: tfExt?.flags ?? [],
-    taoflute_links: tfExt?.source_ref ? [tfExt.source_ref] : [],
+    taoflute_links: tf?.taoflute_match
+      ? [tfVerifiableUrl, ...(tfExt?.source_ref ? [tfExt.source_ref] : [])]
+      : [],
 
     // Social Signal
     social_mentions_24h: social?.raw_mention_count ?? null,
@@ -260,13 +262,13 @@ export function buildCanonicalFacts(
 
     // Timestamps
     taostats_timestamp: taostatsTs,
-    taoflute_timestamp: tfExt?.source_snapshot_at ?? null,
+    taoflute_timestamp: tfSnapshotAt,
     social_timestamp: socialTimestamp,
     sentinel_timestamp: now,
 
-    // Source References
+    // Source References (verifiable URLs)
     taostats_source_url: taostatsUrl,
-    taoflute_source_ref: tfExt?.source_ref ?? null,
+    taoflute_source_ref: tf?.taoflute_match ? (tfSourceRef || tfVerifiableUrl) : null,
     social_source_refs: [],  // filled when real social post URLs are available
 
     // Provenance
