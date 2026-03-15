@@ -392,7 +392,7 @@ export default function SubnetsPage() {
           structureLevel: decision.structureLevel,
           statusLevel: decision.statusLevel,
           signalPrincipal: decision.signalPrincipal,
-          externalDelist: delistInfo.get(s.netuid),
+          extLabel: taoFluteColumnLabel(decision.taoFluteStatus),
         } as TableRow;
       })
       .filter((r): r is TableRow => r !== null)
