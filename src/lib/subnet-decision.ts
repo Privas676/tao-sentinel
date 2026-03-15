@@ -242,7 +242,7 @@ function deriveFinalAction(
 
   // Only use delistCategory for non-TaoFlute subnets (auto-computed)
   // R1: If !taoflute_match, delistCategory from auto-scoring still applies but NOT as "external"
-  if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "SORTIR";
+  if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "ÉVITER";
 
   // R3: TaoFlute WATCH → never force EXIT, but cap at SURVEILLER
   if (tf.taoflute_severity === "watch") {
