@@ -206,7 +206,7 @@ export default function SubnetDetailPage() {
               <Metric label={fr ? "Asymétrie" : "Asymmetry"} value={s.asymmetry > 0 ? `+${s.asymmetry}` : `${s.asymmetry}`} color={s.asymmetry > 0 ? GO : BREAK} />
               <Metric label={fr ? "Confiance données" : "Data confidence"} value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
               <Metric label={fr ? "Conviction" : "Conviction"} value={decision.conviction} color={decision.conviction === "HIGH" ? GO : decision.conviction === "MEDIUM" ? WARN : MUTED} />
-              <Metric label={fr ? "Profil PF" : "PF Profile"} value={decision.portfolioActionFr} />
+              <Metric label={fr ? "Statut externe" : "External status"} value={decision.taoFluteStatus?.taoflute_match ? (decision.taoFluteStatus.taoflute_severity === "priority" ? `P${decision.taoFluteStatus.taoflute_priority_rank}` : "WATCH") : "NONE"} color={decision.taoFluteStatus?.taoflute_severity === "priority" ? BREAK : decision.taoFluteStatus?.taoflute_severity === "watch" ? WARN : MUTED} />
             </div>
 
             {/* Sparkline */}
