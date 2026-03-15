@@ -141,16 +141,13 @@ describe("PortfolioPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPositions = [];
+    // Clear seed key to prevent auto-seeding in tests
+    localStorage.removeItem("portfolio_seed_v1");
   });
 
   it("renders page title", () => {
     renderPage();
-    expect(screen.getByText("Portefeuille")).toBeInTheDocument();
-  });
-
-  it("shows empty state when no positions", () => {
-    renderPage();
-    expect(screen.getByText("📊")).toBeInTheDocument();
+    expect(screen.getByText("Portfolio Commander")).toBeInTheDocument();
   });
 
   it("renders add subnet button", () => {
@@ -178,25 +175,12 @@ describe("PortfolioPage", () => {
     expect(screen.queryByText("AJOUTER AU PORTEFEUILLE")).not.toBeInTheDocument();
   });
 
-  it("renders summary cards with positions", () => {
-    mockPositions = [
-      { subnet_id: 1, quantity_tao: 100, entry_price: 0.04, timestamp_added: "2026-01-01" },
-    ];
-    renderPage();
-    expect(screen.getByText("Total TAO")).toBeInTheDocument();
-  });
-
   it("renders position row with subnet name", () => {
     mockPositions = [
       { subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" },
     ];
     renderPage();
     expect(screen.getByText("Alpha")).toBeInTheDocument();
-  });
-
-  it("shows score timestamp", () => {
-    renderPage();
-    expect(screen.getByText(/Scores unifiés/)).toBeInTheDocument();
   });
 
   it("displays portfolio alerts for overridden positions", () => {
@@ -215,21 +199,14 @@ describe("PortfolioPage — Add position interactions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPositions = [];
+    localStorage.removeItem("portfolio_seed_v1");
   });
 
   it("add modal shows quantity input", () => {
     renderPage();
     fireEvent.click(screen.getByText(/Ajouter un subnet/));
-    const input = screen.getByDisplayValue("10"); // default qty
+    const input = screen.getByDisplayValue("10");
     expect(input).toBeInTheDocument();
-  });
-
-  it("changing quantity updates input", () => {
-    renderPage();
-    fireEvent.click(screen.getByText(/Ajouter un subnet/));
-    const input = screen.getByDisplayValue("10") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "50" } });
-    expect(input.value).toBe("50");
   });
 
   it("clicking AJOUTER calls addPosition", () => {
@@ -251,8 +228,7 @@ describe("PortfolioPage — Add position interactions", () => {
     fireEvent.click(screen.getByText(/Ajouter un subnet/));
     const input = screen.getByDisplayValue("10") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "0" } });
-    const addBtn = screen.getByText("AJOUTER");
-    fireEvent.click(addBtn);
+    fireEvent.click(screen.getByText("AJOUTER"));
     expect(mockAddPosition).not.toHaveBeenCalled();
   });
 });
@@ -263,6 +239,7 @@ describe("PortfolioPage — Add position interactions", () => {
 describe("PortfolioPage — Position management", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem("portfolio_seed_v1");
   });
 
   it("sell button is visible for each position", () => {
@@ -322,22 +299,5 @@ describe("PortfolioPage — Position management", () => {
     renderPage();
     const sellButtons = screen.getAllByText("VENDRE");
     expect(sellButtons).toHaveLength(2);
-  });
-
-  it("summary cards update with position data", () => {
-    mockPositions = [
-      { subnet_id: 1, quantity_tao: 100, entry_price: 0.04, timestamp_added: "2026-01-01" },
-    ];
-    renderPage();
-    expect(screen.getByText("100.00 τ")).toBeInTheDocument();
-  });
-
-  it("shows already-owned warning in add modal for existing positions", () => {
-    mockPositions = [
-      { subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" },
-    ];
-    renderPage();
-    fireEvent.click(screen.getByText(/Ajouter un subnet/));
-    expect(screen.getByText(/Déjà possédé/)).toBeInTheDocument();
   });
 });

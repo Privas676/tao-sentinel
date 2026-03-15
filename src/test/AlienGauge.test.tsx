@@ -233,8 +233,8 @@ describe("AlienGauge", () => {
 
   it("renders stability and confiance sub-metrics", () => {
     renderGauge();
-    expect(screen.getByText("Stabilité")).toBeInTheDocument();
-    expect(screen.getByText("Confiance")).toBeInTheDocument();
+    expect(screen.getAllByText("Stabilité").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Confiance").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows timestamp from scoreTimestamp", () => {

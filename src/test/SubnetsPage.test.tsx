@@ -113,22 +113,7 @@ vi.mock("@/hooks/use-local-portfolio", () => ({
 vi.mock("@/lib/i18n", () => ({
   useI18n: () => ({
     lang: "fr",
-    t: (key: string) => {
-      const map: Record<string, string> = {
-        "sub.title": "Subnets Détaillés",
-        "sub.name": "Nom",
-        "sub.opp": "Opportunité",
-        "sub.risk": "Risque",
-        "sub.momentum": "Momentum",
-        "sub.mode_all": "Tous",
-        "sub.mode_opp": "Opportunités",
-        "sub.mode_risk": "Risques",
-        "tip.price7d": "Prix 7j",
-        "sc.label": "SMART CAPITAL",
-        "data.confiance": "CONFIANCE DATA",
-      };
-      return map[key] ?? key;
-    },
+    t: (key: string) => key,
     setLang: vi.fn(),
   }),
 }));
@@ -181,7 +166,7 @@ describe("SubnetsPage", () => {
 
   it("renders page title", () => {
     renderPage();
-    expect(screen.getByText("Subnets Détaillés")).toBeInTheDocument();
+    expect(screen.getByText("Subnet Intelligence")).toBeInTheDocument();
   });
 
   it("renders all 4 subnet rows", () => {
@@ -194,13 +179,13 @@ describe("SubnetsPage", () => {
 
   it("displays opportunity and risk scores", () => {
     renderPage();
-    expect(screen.getByText("72")).toBeInTheDocument(); // Alpha opp
-    expect(screen.getByText("85")).toBeInTheDocument(); // Bravo risk
+    expect(screen.getByText("72")).toBeInTheDocument();
+    expect(screen.getByText("85")).toBeInTheDocument();
   });
 
-  it("shows overridden subnet with EXIT/SORTIR action", () => {
+  it("shows overridden subnet with SORTIR action", () => {
     renderPage();
-    const exitElements = screen.getAllByText(/SORTIR|EXIT/);
+    const exitElements = screen.getAllByText(/SORTIR/);
     expect(exitElements.length).toBeGreaterThanOrEqual(1);
   });
 });
