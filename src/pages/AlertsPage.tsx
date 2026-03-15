@@ -678,7 +678,7 @@ export default function AlertsPage() {
 
         {/* ── 4. FEED / GROUPED VIEW ── */}
         {viewMode === "grouped" ? (
-          <SubnetGroupedView groups={sortedByImpact} fr={fr} scores={scores} onDismiss={handleDismiss} portfolioNetuids={portfolio.ownedNetuids} />
+          <SubnetGroupedView groups={sortedByImpact} fr={fr} scores={scores} onDismiss={handleDismiss} portfolioNetuids={portfolio.ownedNetuids} decisions={decisions} />
         ) : (
           sortedByImpact.length === 0 ? (
             <div className="py-16 text-center space-y-3">
