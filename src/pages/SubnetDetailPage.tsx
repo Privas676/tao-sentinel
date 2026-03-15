@@ -2,6 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
+import { RawFactsSection } from "@/components/subnet/ProofSections";
 import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
@@ -50,7 +51,7 @@ export default function SubnetDetailPage() {
   }, [goBack]);
 
   const { scores, sparklines } = useSubnetScores();
-  const { decisions } = useCanonicalSubnets();
+  const { decisions, facts: canonicalFacts } = useCanonicalSubnets();
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
   const [flash, setFlash] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export default function SubnetDetailPage() {
 
   const s = scores.get(netuid);
   const decision = decisions.get(netuid);
+  const subnetFacts = canonicalFacts.get(netuid);
   const spark = sparklines?.get(netuid) || [];
   const radar = useMemo(() => radarData?.find(r => r.netuid === netuid) || null, [radarData, netuid]);
   const inPortfolio = isOwned(netuid);
@@ -273,6 +275,8 @@ export default function SubnetDetailPage() {
 
           {showAudit && (
             <div className="mt-3 space-y-4">
+              {/* Raw Facts from canonical source */}
+              {subnetFacts && <RawFactsSection facts={subnetFacts} fr={fr} />}
               {/* Raw signal vs final action */}
               <SectionCard>
                 <div className="px-5 py-4">
