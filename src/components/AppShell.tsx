@@ -58,9 +58,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
         .select("type, netuid")
         .gte("ts", since);
       if (error) return 0;
+      // Exclude noise types that AlertsPage also filters out
+      const NOISE_TYPES = new Set(["DATA_DIVERGENCE"]);
       // Deduplicate by type+netuid combination
       const seen = new Set<string>();
       for (const ev of (data || [])) {
+        if (NOISE_TYPES.has(ev.type ?? "")) continue;
         seen.add(`${ev.type ?? ""}::${ev.netuid ?? ""}`);
       }
       return Math.min(seen.size, 99); // Cap at 99
