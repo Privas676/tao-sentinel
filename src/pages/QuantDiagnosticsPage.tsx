@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
+import { useSubnetDecisions } from "@/hooks/use-subnet-decisions";
 import { analyzeDistribution } from "@/lib/distribution-monitor";
 import { analyzeScoreVolatility, type FleetVolatilityReport } from "@/lib/score-volatility";
 import { supabase } from "@/integrations/supabase/client";
 import CorrelationPanel from "@/components/CorrelationPanel";
 import PredictivePowerPanel from "@/components/PredictivePowerPanel";
-
+import type { FinalAction } from "@/lib/subnet-decision";
 /* ── Histogram renderer ── */
 function Histogram({ values, label, bins = 10 }: { values: number[]; label: string; bins?: number }) {
   const buckets = useMemo(() => {
@@ -244,6 +245,83 @@ function VolatilityContent({ report, fr }: { report: FleetVolatilityReport; fr: 
   );
 }
 
+/* ── Decision Distribution Panel ── */
+const ACTION_CONFIG: { key: FinalAction; icon: string; color: string; bg: string }[] = [
+  { key: "ENTRER",     icon: "🟢", color: "hsl(145,65%,48%)",  bg: "hsla(145,65%,48%,0.10)" },
+  { key: "SURVEILLER", icon: "👁",  color: "hsl(38,92%,55%)",   bg: "hsla(38,92%,55%,0.10)" },
+  { key: "SORTIR",     icon: "🔴", color: "hsl(4,80%,50%)",    bg: "hsla(4,80%,50%,0.10)" },
+  { key: "ÉVITER",     icon: "⛔", color: "hsl(4,80%,40%)",    bg: "hsla(4,80%,40%,0.12)" },
+  { key: "SYSTÈME",    icon: "🔷", color: "hsl(210,60%,55%)",  bg: "hsla(210,60%,55%,0.10)" },
+];
+
+function DecisionDistribution({ fr }: { fr: boolean }) {
+  const { decisionsList, isLoading } = useSubnetDecisions();
+
+  const counts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of ACTION_CONFIG) map[c.key] = 0;
+    for (const d of decisionsList) {
+      const k = d.finalAction;
+      map[k] = (map[k] || 0) + 1;
+    }
+    return map;
+  }, [decisionsList]);
+
+  const total = decisionsList.length;
+
+  if (isLoading || total === 0) {
+    return (
+      <div className="border border-white/[0.06] rounded-lg p-4">
+        <span className="font-mono text-xs tracking-widest text-white/50">
+          {fr ? "RÉPARTITION DES DÉCISIONS" : "DECISION DISTRIBUTION"}
+        </span>
+        <div className="font-mono text-[10px] text-white/20 py-4 text-center">
+          {fr ? "Chargement…" : "Loading…"}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-white/[0.06] rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-xs tracking-widest text-white/50">
+          {fr ? "RÉPARTITION DES DÉCISIONS" : "DECISION DISTRIBUTION"}
+        </span>
+        <span className="font-mono text-[9px] text-white/25">{total} subnets</span>
+      </div>
+
+      {/* Bar chart */}
+      <div className="space-y-1.5">
+        {ACTION_CONFIG.map(({ key, icon, color, bg }) => {
+          const n = counts[key] || 0;
+          const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+          return (
+            <div key={key} className="flex items-center gap-2">
+              <span className="font-mono text-[9px] w-[90px] flex items-center gap-1" style={{ color }}>
+                <span style={{ fontSize: 10 }}>{icon}</span> {key}
+              </span>
+              <div className="flex-1 h-4 rounded overflow-hidden" style={{ background: "rgba(255,255,255,0.03)" }}>
+                <div
+                  className="h-full rounded transition-all"
+                  style={{ width: `${Math.max(pct, n > 0 ? 2 : 0)}%`, background: bg, borderRight: n > 0 ? `2px solid ${color}` : undefined }}
+                />
+              </div>
+              <span className="font-mono text-[10px] w-[44px] text-right" style={{ color }}>
+                {n} <span className="text-white/20">({pct}%)</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="font-mono text-[8px] text-white/15">
+        {fr ? "Source unique de vérité — moteur de décision canonique V6" : "Single source of truth — canonical decision engine V6"}
+      </p>
+    </div>
+  );
+}
+
 export default function QuantDiagnosticsPage() {
   const { lang } = useI18n();
   const fr = lang === "fr";
@@ -326,6 +404,11 @@ export default function QuantDiagnosticsPage() {
               ✓ {fr ? "Distributions saines — aucun flag actif" : "Healthy distributions — no flags active"}
             </div>
           )}
+        </div>
+
+        {/* ── Decision Distribution ── */}
+        <div className="mb-4">
+          <DecisionDistribution fr={fr} />
         </div>
 
         {/* ── PSI Section ── */}
