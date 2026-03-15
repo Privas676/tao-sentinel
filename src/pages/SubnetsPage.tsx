@@ -46,7 +46,7 @@ type TableRow = UnifiedSubnetScore & {
   structureLevel: "HEALTHY" | "FRAGILE" | "CONCENTRATED";
   statusLevel: "OK" | "WATCH" | "DANGER";
   signalPrincipal: string;
-  externalDelist?: ExternalDelistInfo;
+  extLabel: string;
 };
 
 
