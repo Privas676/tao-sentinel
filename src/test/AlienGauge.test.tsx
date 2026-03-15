@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock modules before imports
 vi.mock("@/hooks/use-subnet-scores", () => ({
   useSubnetScores: vi.fn(),
+  SPECIAL_SUBNETS: { 0: { label: "ROOT", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20, isSystem: true } },
+  getSubnetScore: (map: any, id: number) => map.get(id),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -26,6 +28,24 @@ vi.mock("@tanstack/react-query", async () => {
 
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
+}));
+
+vi.mock("@/hooks/use-subnet-verdict", () => ({
+  useSubnetVerdicts: () => ({
+    verdicts: new Map(),
+    verdictList: [],
+    topRentre: [],
+    topHold: [],
+    topSors: [],
+    isLoading: false,
+    countRentre: 0,
+    countHold: 0,
+    countSors: 0,
+  }),
+}));
+
+vi.mock("@/hooks/use-audit-log", () => ({
+  useAuditLogger: () => {},
 }));
 
 vi.mock("@/lib/i18n", () => ({
@@ -76,6 +96,7 @@ vi.mock("@/lib/i18n", () => ({
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import AlienGauge from "@/pages/AlienGauge";
 
@@ -136,9 +157,11 @@ function renderGauge() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <AlienGauge />
-      </MemoryRouter>
+      <TooltipProvider>
+        <MemoryRouter>
+          <AlienGauge />
+        </MemoryRouter>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
@@ -210,8 +233,8 @@ describe("AlienGauge", () => {
 
   it("renders stability and confiance sub-metrics", () => {
     renderGauge();
-    expect(screen.getByText("Stabilité")).toBeInTheDocument();
-    expect(screen.getByText("Confiance")).toBeInTheDocument();
+    expect(screen.getAllByText("Stabilité").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Confiance").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows timestamp from scoreTimestamp", () => {
