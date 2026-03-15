@@ -743,7 +743,7 @@ export default function CompassPage() {
         </section>
       </div>
 
-      <SubnetQuickPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} fr={fr} decisions={decisions} />
+      <SubnetQuickPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} fr={fr} decisions={decisions} facts={canonicalFacts} />
     </div>
   );
 }
