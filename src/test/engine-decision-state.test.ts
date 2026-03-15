@@ -60,12 +60,12 @@ describe("evaluateRawState", () => {
   });
 
   it("returns DEPEG_CONFIRMED for DEPEG_PRIORITY category", () => {
-    const d = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
+    const d = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
     expect(evaluateRawState(d, "ALIGNED", s)).toBe("DEPEG_CONFIRMED");
   });
 
   it("returns DEPEG_CONFIRMED when delistScore >= depegEnter threshold (manual list)", () => {
-    const d = makeDecision({ netuid: 96, delistScore: 50 });
+    const d = makeDecision({ netuid: 70, delistScore: 50 });
     expect(evaluateRawState(d, "ALIGNED", s)).toBe("DEPEG_CONFIRMED");
   });
 
@@ -105,7 +105,7 @@ describe("evaluateRawState", () => {
   });
 
   it("DEPEG_CONFIRMED takes priority over DATA_STALE", () => {
-    const d = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
+    const d = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
     expect(evaluateRawState(d, "STALE", s)).toBe("DEPEG_CONFIRMED");
   });
 
@@ -282,15 +282,15 @@ describe("DecisionStateManager — Delta trigger", () => {
     const mgr = new DecisionStateManager(settings);
 
     // First fire: delistScore=50
-    const d1 = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 50 });
+    const d1 = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 50 });
     mgr.tick(d1, "ALIGNED", 1000);
 
     // Return to OK
-    const dOk = makeDecision({ netuid: 96, delistScore: 5 });
+    const dOk = makeDecision({ netuid: 70, delistScore: 5 });
     mgr.tick(dOk, "ALIGNED", 2000);
 
     // Re-fire with delistScore=70 (delta = |70-50|/100 = 0.20 > 0.15)
-    const d2 = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 70 });
+    const d2 = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 70 });
     const out = mgr.tick(d2, "ALIGNED", 5000); // Still within cooldown
     expect(out.state).toBe("DEPEG_CONFIRMED");
     expect(out.isTransition).toBe(true);
@@ -307,13 +307,13 @@ describe("DecisionStateManager — Delta trigger", () => {
     const mgr = new DecisionStateManager(settings);
 
     // Confirm DEPEG at score=50
-    const d1 = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 50 });
+    const d1 = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 50 });
     const out1 = mgr.tick(d1, "ALIGNED", 1000);
     expect(out1.state).toBe("DEPEG_CONFIRMED");
     expect(out1.isTransition).toBe(true);
 
     // Same state with similar score — no new transition
-    const d2 = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 55 });
+    const d2 = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 55 });
     const out2 = mgr.tick(d2, "ALIGNED", 5000);
     // Still DEPEG_CONFIRMED, but not a new transition
     expect(out2.state).toBe("DEPEG_CONFIRMED");
@@ -331,16 +331,16 @@ describe("DecisionStateManager — Hysteresis integration", () => {
     const mgr = new DecisionStateManager(settings);
 
     // Confirm DEPEG
-    const dDepeg = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
+    const dDepeg = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
     mgr.tick(dDepeg, "ALIGNED", 1000);
 
     // Score drops to 35 (still >= depegExit=30) → should stay DEPEG
-    const dMid = makeDecision({ netuid: 96, delistScore: 35 });
+    const dMid = makeDecision({ netuid: 70, delistScore: 35 });
     const out = mgr.tick(dMid, "ALIGNED", 2000);
     expect(out.state).toBe("DEPEG_CONFIRMED");
 
     // Score drops to 20 (< depegExit=30) → allowed to exit
-    const dLow = makeDecision({ netuid: 96, delistScore: 20 });
+    const dLow = makeDecision({ netuid: 70, delistScore: 20 });
     const out2 = mgr.tick(dLow, "ALIGNED", 3000);
     expect(out2.state).toBe("OK");
   });
@@ -356,7 +356,7 @@ describe("DecisionStateManager — tickAll", () => {
     const decisions = [
       makeDecision({ netuid: 1 }),
       makeDecision({ netuid: 2, isOverridden: true, risk: 75 }),
-      makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 90 }),
+      makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 90 }),
     ];
     const outs = mgr.tickAll(decisions, "ALIGNED", 1000);
     expect(outs).toHaveLength(3);
