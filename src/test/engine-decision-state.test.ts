@@ -307,7 +307,7 @@ describe("DecisionStateManager — Delta trigger", () => {
     const mgr = new DecisionStateManager(settings);
 
     // Confirm DEPEG at score=50
-    const d1 = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 50 });
+    const d1 = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 50 });
     const out1 = mgr.tick(d1, "ALIGNED", 1000);
     expect(out1.state).toBe("DEPEG_CONFIRMED");
     expect(out1.isTransition).toBe(true);
