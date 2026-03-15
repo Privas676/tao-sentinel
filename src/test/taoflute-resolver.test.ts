@@ -70,11 +70,11 @@ describe("TaoFlute — Test 2: priority subnet shows P#", () => {
 /*  cannot show enter                      */
 /* ═══════════════════════════════════════ */
 describe("TaoFlute — Test 3: exit verdict coherence", () => {
-  it("SN-78 priority → finalAction = SORTIR even with opportunity signal", () => {
+  it("SN-78 priority → finalAction = ÉVITER even with opportunity signal", () => {
     const s = makeScore({ netuid: 78, opp: 70, risk: 20, action: "ENTER" });
     const tf = resolveTaoFluteStatus(78);
     const d = buildSubnetDecision(s, undefined, undefined, true, tf);
-    expect(d.finalAction).toBe("SORTIR");
+    expect(d.finalAction).toBe("ÉVITER");
     expect(d.badgeAction).not.toBe("ENTRE");
     // rawSignal can still be opportunity
   });
@@ -113,13 +113,13 @@ describe("TaoFlute — Test 5: SN-64 Chutes excluded", () => {
 /*  Test 6: SN-78 → P9 + SORTIR           */
 /* ═══════════════════════════════════════ */
 describe("TaoFlute — Test 6: SN-78 Loosh full scenario", () => {
-  it("SN-78 → TaoFlute P9 and verdict SORTIR", () => {
+  it("SN-78 → TaoFlute P9 and verdict ÉVITER", () => {
     const status = resolveTaoFluteStatus(78);
     expect(taoFluteColumnLabel(status)).toBe("P9");
 
     const s = makeScore({ netuid: 78, opp: 80, risk: 15, action: "ENTER", confianceScore: 90 });
     const d = buildSubnetDecision(s, undefined, undefined, true, status);
-    expect(d.finalAction).toBe("SORTIR");
+    expect(d.finalAction).toBe("ÉVITER");
     expect(d.taoFluteStatus.taoflute_severity).toBe("priority");
   });
 });
