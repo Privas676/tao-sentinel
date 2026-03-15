@@ -238,7 +238,7 @@ function deriveFinalAction(
   if (s.depegProbability >= 50) return "SORTIR";
 
   // R2: TaoFlute PRIORITY → guardrail_active = true → force EXIT
-  if (tf.taoflute_severity === "priority") return "SORTIR";
+  if (tf.taoflute_severity === "priority") return "ÉVITER";
 
   // Only use delistCategory for non-TaoFlute subnets (auto-computed)
   // R1: If !taoflute_match, delistCategory from auto-scoring still applies but NOT as "external"
