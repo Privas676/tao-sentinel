@@ -233,8 +233,8 @@ function deriveFinalAction(
   if (isSystem) return "SYSTÈME";
 
   // 2. Hard protection overrides — ALWAYS SORTIR regardless of v3
-  if (s.isOverridden) return "SORTIR";
-  if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") return "SORTIR";
+  if (s.isOverridden) return "ÉVITER";
+  if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") return "ÉVITER";
   if (s.depegProbability >= 50) return "SORTIR";
 
   // R2: TaoFlute PRIORITY → guardrail_active = true → force EXIT
