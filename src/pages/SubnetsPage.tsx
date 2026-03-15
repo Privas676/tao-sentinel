@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
-import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
+import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
+import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { taoFluteColumnLabel } from "@/lib/taoflute-resolver";
@@ -276,7 +277,7 @@ export default function SubnetsPage() {
 
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug, isLoading } = useSubnetScores();
-  const { decisions, decisionsList, isLoading: decisionsLoading } = useSubnetDecisions();
+  const { decisions, decisionsList, isLoading: decisionsLoading } = useCanonicalSubnets();
   
 
   // ── Action counts from DECISIONS (single source of truth) ──
