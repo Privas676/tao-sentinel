@@ -206,7 +206,7 @@ export default function SubnetDetailPage() {
               <Metric label={fr ? "Asymétrie" : "Asymmetry"} value={s.asymmetry > 0 ? `+${s.asymmetry}` : `${s.asymmetry}`} color={s.asymmetry > 0 ? GO : BREAK} />
               <Metric label={fr ? "Confiance données" : "Data confidence"} value={`${s.confianceScore}%`} color={confianceColor(s.confianceScore)} />
               <Metric label={fr ? "Conviction" : "Conviction"} value={decision.conviction} color={decision.conviction === "HIGH" ? GO : decision.conviction === "MEDIUM" ? WARN : MUTED} />
-              <Metric label={fr ? "Profil PF" : "PF Profile"} value={decision.portfolioActionFr} />
+              <Metric label={fr ? "Statut externe" : "External status"} value={decision.taoFluteStatus?.taoflute_match ? (decision.taoFluteStatus.taoflute_severity === "priority" ? `P${decision.taoFluteStatus.taoflute_priority_rank}` : "WATCH") : "NONE"} color={decision.taoFluteStatus?.taoflute_severity === "priority" ? BREAK : decision.taoFluteStatus?.taoflute_severity === "watch" ? WARN : MUTED} />
             </div>
 
             {/* Sparkline */}
@@ -342,7 +342,7 @@ export default function SubnetDetailPage() {
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-2.5">
           <ActionBadge action={decision.badgeAction} size="sm" />
-          <span className="font-mono text-[9px] text-muted-foreground hidden sm:inline">{decision.portfolioActionFr}</span>
+          <span className="font-mono text-[9px] text-muted-foreground hidden sm:inline">{faLbl}</span>
           <div className="flex-1" />
           {flash && <span className="font-mono text-[9px] text-primary animate-pulse">{flash}</span>}
           <button
