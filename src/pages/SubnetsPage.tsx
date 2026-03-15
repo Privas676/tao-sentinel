@@ -547,6 +547,7 @@ export default function SubnetsPage() {
                    { key: "ENTRER", label: fr ? "Entrer" : "Enter", count: actionCounts.enter || undefined },
                    { key: "SURVEILLER", label: fr ? "Surveiller" : "Monitor", count: actionCounts.monitor || undefined },
                    { key: "SORTIR", label: fr ? "Sortir" : "Exit", count: actionCounts.exit || undefined },
+                   { key: "ÉVITER", label: fr ? "Éviter" : "Avoid", count: actionCounts.avoid || undefined },
                  ]}
                 active={actionFilter}
                 onChange={v => setActionFilter(v as ActionFilter)}
