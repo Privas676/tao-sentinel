@@ -311,14 +311,15 @@ export default function SubnetsPage() {
   // ── Action counts from DECISIONS (single source of truth) ──
   // Exclude system subnets from counts (same as Compass)
   const actionCounts = useMemo(() => {
-    let enter = 0, monitor = 0, exit = 0;
+    let enter = 0, monitor = 0, exit = 0, avoid = 0;
     for (const d of decisionsList) {
       if (d.isSystem) continue;
       if (d.finalAction === "ENTRER") enter++;
+      else if (d.finalAction === "ÉVITER") avoid++;
       else if (d.finalAction === "SORTIR") exit++;
       else monitor++;
     }
-    return { enter, monitor, exit };
+    return { enter, monitor, exit, avoid };
   }, [decisionsList]);
 
   // ── Filters ──
