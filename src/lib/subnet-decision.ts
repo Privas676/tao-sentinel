@@ -455,12 +455,16 @@ export function buildSubnetDecision(
   v: SubnetVerdictData | undefined,
   v3: VerdictV3Result | undefined,
   fr: boolean,
+  tfStatus?: TaoFluteResolvedStatus,
 ): SubnetDecision {
   const special = SPECIAL_SUBNETS[s.netuid];
   const isSystem = !!special?.isSystem;
 
-  // ── AUTHORITATIVE FINAL ACTION — V3 primary, protection overrides ──
-  const finalAction = deriveFinalAction(s, v, v3, isSystem);
+  // ── Resolve TaoFlute status (strict subnet_id matching) ──
+  const tf = tfStatus ?? resolveTaoFluteStatus(s.netuid);
+
+  // ── AUTHORITATIVE FINAL ACTION — V3 primary, protection overrides, TaoFlute guardrails ──
+  const finalAction = deriveFinalAction(s, v, v3, isSystem, tf);
   const reconciledAction = finalActionToEngineAction(finalAction);
 
   // ── Conviction — prefer V3 ──
@@ -468,9 +472,22 @@ export function buildSubnetDecision(
 
   // ── Decision transparency — prefer V3 ──
   const rawSignal = v3 ? deriveRawSignalFromV3(v3) : deriveRawSignal(s, v);
-  const blockReasons = v3 ? deriveBlockReasonsFromV3(v3, s, fr) : deriveBlockReasons(s, v, fr);
+  let blockReasons = v3 ? deriveBlockReasonsFromV3(v3, s, fr) : deriveBlockReasons(s, v, fr);
+
+  // R2/R3: Add TaoFlute block reasons
+  if (tf.taoflute_severity === "priority") {
+    blockReasons = [taoFluteBlockedLabel(fr), ...blockReasons.filter(r => !r.includes("TaoFlute") && !r.includes("delist"))];
+  } else if (tf.taoflute_severity === "watch" && rawSignal === "opportunity") {
+    blockReasons = [taoFluteRawBlockedLabel(fr), ...blockReasons];
+  }
+
   const isBlocked = v3 ? (v3.isBlocked || (rawSignal === "opportunity" && finalAction !== "ENTRER")) : (rawSignal === "opportunity" && finalAction !== "ENTRER");
-  const primaryReason = derivePrimaryReason(s, finalAction, rawSignal, blockReasons, v3, fr);
+
+  // R4: Primary reason must reflect final_action, not raw_signal
+  let primaryReason = derivePrimaryReason(s, finalAction, rawSignal, blockReasons, v3, fr);
+  if (tf.taoflute_severity === "priority" && finalAction === "SORTIR") {
+    primaryReason = taoFluteLabel(tf, fr);
+  }
 
   const pAction = derivePortfolioAction(s, finalAction, v3);
 
@@ -481,6 +498,11 @@ export function buildSubnetDecision(
   const invalidation = v3
     ? v3.riskFlags.map(r => r.text)
     : (v?.negativeReasons?.slice(0, 3) || []);
+
+  // R5/R6: Adjust delistScore based on TaoFlute
+  let effectiveDelistScore = s.delistScore;
+  if (tf.taoflute_severity === "priority") effectiveDelistScore = Math.max(effectiveDelistScore, 85);
+  else if (tf.taoflute_severity === "watch") effectiveDelistScore = Math.max(effectiveDelistScore, 60);
 
   return {
     netuid: s.netuid,
@@ -526,7 +548,9 @@ export function buildSubnetDecision(
     dataUncertain: s.dataUncertain,
     depegProbability: s.depegProbability,
     delistCategory: s.delistCategory,
-    delistScore: s.delistScore,
+    delistScore: effectiveDelistScore,
+
+    taoFluteStatus: tf,
 
     score: s,
     verdict: v,
@@ -537,16 +561,19 @@ export function buildSubnetDecision(
 /**
  * Build decisions for a list of subnets.
  * Accepts both old verdicts (fallback) and V3 verdicts (primary).
+ * TaoFlute statuses are resolved per subnet_id (strict matching).
  */
 export function buildAllDecisions(
   scoresList: UnifiedSubnetScore[],
   verdicts: Map<number, SubnetVerdictData>,
   verdictsV3: Map<number, VerdictV3Result>,
   fr: boolean,
+  taoFluteStatuses?: Map<number, TaoFluteResolvedStatus>,
 ): Map<number, SubnetDecision> {
   const map = new Map<number, SubnetDecision>();
   for (const s of scoresList) {
-    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), verdictsV3.get(s.netuid), fr));
+    const tf = taoFluteStatuses?.get(s.netuid);
+    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), verdictsV3.get(s.netuid), fr, tf));
   }
   return map;
 }
