@@ -55,7 +55,7 @@ describe("VerdictProvenanceSection", () => {
       ],
     });
     render(<VerdictProvenanceSection verdict={v} fr />);
-    expect(screen.getByText("SORTIR")).toBeInTheDocument();
+    expect(screen.getAllByText("SORTIR")).toHaveLength(2); // verdict + portfolio
     expect(screen.getByText("Pool ratio critical")).toBeInTheDocument();
     expect(screen.getByText(/POOL_IMBALANCE/)).toBeInTheDocument();
   });
