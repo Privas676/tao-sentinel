@@ -143,7 +143,7 @@ export function analyzeSentiment(text: string): Sentiment {
 
 /* ── Social Overlay Integration ── */
 
-export type FinalAction = "ENTRER" | "SURVEILLER" | "SORTIR" | "SYSTÈME";
+export type FinalAction = "ENTRER" | "SURVEILLER" | "SORTIR" | "ÉVITER" | "SYSTÈME";
 
 export function computeSocialOverlay(
   subnetScore: {
