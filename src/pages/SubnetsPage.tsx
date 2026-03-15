@@ -7,7 +7,7 @@ import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hoo
 import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useExternalDelist, type ExternalDelistInfo } from "@/hooks/use-external-delist";
+import { taoFluteColumnLabel } from "@/lib/taoflute-resolver";
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
