@@ -1,7 +1,8 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
-import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
+import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
+import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useMemo, useState, useEffect, useCallback } from "react";
@@ -49,7 +50,7 @@ export default function SubnetDetailPage() {
   }, [goBack]);
 
   const { scores, sparklines } = useSubnetScores();
-  const { decisions } = useSubnetDecisions();
+  const { decisions } = useCanonicalSubnets();
   const { data: radarData } = useStakeAnalytics();
   const { isOwned, addPosition, removePosition } = useLocalPortfolio();
   const [flash, setFlash] = useState<string | null>(null);

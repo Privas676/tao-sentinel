@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
-import { useSubnetDecisions } from "@/hooks/use-subnet-decisions";
+import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
 import { analyzeDistribution } from "@/lib/distribution-monitor";
 import { analyzeScoreVolatility, type FleetVolatilityReport } from "@/lib/score-volatility";
 import { supabase } from "@/integrations/supabase/client";
@@ -255,7 +255,7 @@ const ACTION_CONFIG: { key: FinalAction; icon: string; color: string; bg: string
 ];
 
 function DecisionDistribution({ fr }: { fr: boolean }) {
-  const { decisionsList, isLoading } = useSubnetDecisions();
+  const { decisionsList, isLoading } = useCanonicalSubnets();
 
   const counts = useMemo(() => {
     const map: Record<string, number> = {};

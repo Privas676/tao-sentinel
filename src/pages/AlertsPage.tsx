@@ -5,7 +5,7 @@ import { useMemo, useState, useCallback } from "react";
 import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
-import { useSubnetDecisions } from "@/hooks/use-subnet-decisions";
+import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
 import { finalActionColor, finalActionIcon, finalActionLabel, isExitAction, type FinalAction } from "@/lib/subnet-decision";
 import { useOverrideMode } from "@/hooks/use-override-mode";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
@@ -535,7 +535,7 @@ export default function AlertsPage() {
 
   const { mode: overrideMode } = useOverrideMode();
   const { scores } = useSubnetScores();
-  const { decisions } = useSubnetDecisions();
+  const { decisions } = useCanonicalSubnets();
   const portfolio = useLocalPortfolio();
 
   const handleDismiss = useCallback((key: string) => {

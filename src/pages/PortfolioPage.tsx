@@ -4,7 +4,8 @@ import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
-import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
+import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
+import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { confianceColor } from "@/lib/data-fusion";
 import SwipeHint from "@/components/SwipeHint";
 import { useExternalDelist } from "@/hooks/use-external-delist";
@@ -108,7 +109,7 @@ export default function PortfolioPage() {
   const { currency, toggle: toggleCurrency } = useCurrencyToggle();
 
   const { scores, sparklines, subnetList, taoUsd, isLoading } = useSubnetScores();
-  const { decisions } = useSubnetDecisions();
+  const { decisions } = useCanonicalSubnets();
   const { priorityList } = useExternalDelist();
   const priorityNetuids = useMemo(() => new Set(priorityList.map(p => p.netuid)), [priorityList]);
 
