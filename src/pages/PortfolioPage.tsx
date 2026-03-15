@@ -189,7 +189,7 @@ export default function PortfolioPage() {
     const maxWeight = Math.max(...weights.map(w => w.weight));
     const reinforceCount = rows.filter(r => r.pAction === "RENFORCER").length;
     const reduceCount = rows.filter(r => r.pAction === "RÉDUIRE").length;
-    const exitCount = rows.filter(r => r.pAction === "SORTIR").length;
+    const exitCount = rows.filter(r => r.pAction === "SORTIR" || r.finalAction === "ÉVITER").length;
     const holdCount = rows.filter(r => r.pAction === "CONSERVER").length;
     const fragilePositions = rows.filter(r => r.isOverridden || r.depegProbability >= 30 || r.risk > 70);
     const fragileExposure = totalTao > 0
