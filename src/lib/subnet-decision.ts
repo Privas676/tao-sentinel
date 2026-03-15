@@ -384,18 +384,17 @@ function finalActionToEngineAction(fa: FinalAction): StrategicAction {
 }
 
 function derivePortfolioAction(s: UnifiedSubnetScore, fa: FinalAction, v3?: VerdictV3Result): PortfolioAction {
-  if (v3) {
-    switch (v3.portfolioAction) {
-      case "SORTIR": return "SORTIR";
-      case "RÉDUIRE": return "REDUIRE";
-      case "RENFORCER": return "RENFORCER";
-      case "CONSERVER": return "CONSERVER";
-      case "NE_PAS_ENTRER": return fa === "SORTIR" || fa === "ÉVITER" ? "SORTIR" : "CONSERVER";
-    }
-  }
-  if (fa === "SORTIR" || fa === "ÉVITER") return "SORTIR";
-  if (s.risk > 65 || s.depegProbability >= 40) return "REDUIRE";
+  // Portfolio action MUST be coherent with finalAction — strict mapping
+  // ÉVITER → always SORTIR (block/exit)
+  // SORTIR → SORTIR
+  // SURVEILLER → CONSERVER (or REDUIRE if risk high)
+  // ENTRER → RENFORCER
+  if (fa === "ÉVITER") return "SORTIR";
+  if (fa === "SORTIR") return "SORTIR";
+  if (fa === "SYSTÈME") return "CONSERVER";
   if (fa === "ENTRER") return "RENFORCER";
+  // SURVEILLER: check for risk degradation
+  if (s.risk > 65 || s.depegProbability >= 40) return "REDUIRE";
   return "CONSERVER";
 }
 

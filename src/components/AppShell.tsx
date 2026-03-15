@@ -47,18 +47,25 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Alert badge: deduplicated active alerts (last 6h, grouped by type+subnet)
+  // NOT raw historical event count — avoids aberrant numbers like 4641
   const { data: unreadCount } = useQuery({
-    queryKey: ["unread-events"],
+    queryKey: ["unread-events-dedup"],
     queryFn: async () => {
-      const since = new Date(Date.now() - 24 * 3600000).toISOString();
-      const { count, error } = await supabase
+      const since = new Date(Date.now() - 6 * 3600000).toISOString();
+      const { data, error } = await supabase
         .from("events")
-        .select("*", { count: "exact", head: true })
+        .select("type, netuid")
         .gte("ts", since);
       if (error) return 0;
-      return count || 0;
+      // Deduplicate by type+netuid combination
+      const seen = new Set<string>();
+      for (const ev of (data || [])) {
+        seen.add(`${ev.type ?? ""}::${ev.netuid ?? ""}`);
+      }
+      return Math.min(seen.size, 99); // Cap at 99
     },
-    refetchInterval: 60_000,
+    refetchInterval: 120_000,
   });
 
   const navItems: NavItem[] = [
