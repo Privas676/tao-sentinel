@@ -120,7 +120,7 @@ describe("PortfolioPage — Position management", () => {
 
   it("shows RENFORCER action for owned subnets", () => {
     mockPositions = [{ subnet_id: 1, quantity_tao: 50, entry_price: 0.04, timestamp_added: "2026-01-01" }];
-    renderPage(); expect(screen.getByText("RENFORCER")).toBeInTheDocument();
+    renderPage(); expect(screen.getAllByText("RENFORCER").length).toBeGreaterThanOrEqual(1);
   });
 
   it("multiple positions show multiple sell buttons", () => {
