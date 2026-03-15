@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
-import { useSubnetDecisions } from "@/hooks/use-subnet-decisions";
+import { useCanonicalSubnets, type CanonicalSubnetFacts } from "@/hooks/use-canonical-subnets";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import {
   clamp, opportunityColor, riskColor, computeSmartCapital, computeASMicro, stabilityColor,
@@ -65,10 +65,11 @@ function TaoPriceTicker({ taoUsd, scoreTimestamp }: { taoUsd: number | null; sco
 }
 
 /* ─── Subnet Side Panel ─── */
-function SubnetQuickPanel({ signal, open, onClose, fr, decisions }: { signal: DashSignal | null; open: boolean; onClose: () => void; fr: boolean; decisions: Map<number, import("@/lib/subnet-decision").SubnetDecision> }) {
+function SubnetQuickPanel({ signal, open, onClose, fr, decisions, facts }: { signal: DashSignal | null; open: boolean; onClose: () => void; fr: boolean; decisions: Map<number, import("@/hooks/use-subnet-decisions").SubnetDecision>; facts: Map<number, CanonicalSubnetFacts> }) {
   const { t } = useI18n();
   if (!signal) return null;
   const d = decisions.get(signal.netuid);
+  const cf = facts.get(signal.netuid);
   const fa = d?.finalAction ?? "SURVEILLER";
   const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" || fa === "ÉVITER" ? BREAK : fa === "SYSTÈME" ? MUTED : WARN;
   const faIcon = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : fa === "ÉVITER" ? "⛔" : fa === "SYSTÈME" ? "🔷" : "👁";
@@ -84,7 +85,7 @@ function SubnetQuickPanel({ signal, open, onClose, fr, decisions }: { signal: Da
         </SheetHeader>
         <div className="mt-4 space-y-5">
           <div className="text-center">
-            <div className="font-mono text-sm text-muted-foreground">{signal.name}</div>
+            <div className="font-mono text-sm text-muted-foreground">{cf?.subnet_name ?? signal.name}</div>
             <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: `color-mix(in srgb, ${faColor} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${faColor} 20%, transparent)` }}>
               <span>{faIcon}</span>
               <span className="font-mono font-bold tracking-wider text-xs" style={{ color: faColor }}>{faLabel}</span>
@@ -101,6 +102,77 @@ function SubnetQuickPanel({ signal, open, onClose, fr, decisions }: { signal: Da
               <div className="font-mono text-[9px] text-muted-foreground tracking-widest">{t("gauge.risk")}</div>
             </div>
           </div>
+
+          {/* ── Canonical Facts Summary ── */}
+          {cf && (
+            <div className="rounded-lg p-3 space-y-2" style={{ background: "hsla(0,0%,100%,0.02)", border: "1px solid hsla(0,0%,100%,0.04)" }}>
+              <div className="font-mono text-[9px] text-muted-foreground tracking-widest mb-1">{fr ? "DONNÉES CANONIQUES" : "CANONICAL DATA"}</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                {cf.price != null && (
+                  <FactRow label={fr ? "Prix α" : "Price α"} value={`${cf.price.toFixed(4)} τ`} />
+                )}
+                {cf.price_usd != null && (
+                  <FactRow label="USD" value={`$${cf.price_usd.toFixed(4)}`} />
+                )}
+                {cf.change_24h != null && (
+                  <FactRow label="24h" value={`${cf.change_24h >= 0 ? "+" : ""}${cf.change_24h.toFixed(1)}%`} color={cf.change_24h >= 0 ? GO : BREAK} />
+                )}
+                {cf.volume_24h != null && (
+                  <FactRow label={fr ? "Vol 24h" : "Vol 24h"} value={`${cf.volume_24h.toFixed(1)} τ`} />
+                )}
+                {cf.market_cap != null && (
+                  <FactRow label="MCap" value={`${(cf.market_cap / 1000).toFixed(1)}k τ`} />
+                )}
+                {cf.tao_in_pool != null && (
+                  <FactRow label={fr ? "Pool τ" : "Pool τ"} value={`${cf.tao_in_pool.toFixed(1)}`} />
+                )}
+                {cf.emissions_day != null && (
+                  <FactRow label={fr ? "Émis./j" : "Emis./d"} value={`${cf.emissions_day.toFixed(2)} τ`} />
+                )}
+                {cf.validators != null && (
+                  <FactRow label="Val." value={`${cf.validators}`} />
+                )}
+                {cf.miners != null && (
+                  <FactRow label="Min." value={`${cf.miners}`} />
+                )}
+              </div>
+              {/* External risk */}
+              {cf.taoflute_match && (
+                <div className="mt-2 flex items-center gap-1.5 px-2 py-1 rounded" style={{ background: "hsla(4,80%,50%,0.06)", border: "1px solid hsla(4,80%,50%,0.12)" }}>
+                  <span style={{ fontSize: 9 }}>⚠</span>
+                  <span className="font-mono text-[8px] font-bold" style={{ color: "hsl(4,80%,50%)" }}>TaoFlute: {cf.external_status}</span>
+                  {cf.liq_price != null && <span className="font-mono text-[8px] text-muted-foreground ml-1">Liq: {cf.liq_price.toFixed(4)}</span>}
+                </div>
+              )}
+              {/* Social signal */}
+              {cf.social_signal_strength != null && cf.social_signal_strength > 0 && (
+                <div className="mt-1 flex items-center gap-1.5 px-2 py-1 rounded" style={{ background: "hsla(200,70%,50%,0.04)", border: "1px solid hsla(200,70%,50%,0.1)" }}>
+                  <span style={{ fontSize: 9 }}>📡</span>
+                  <span className="font-mono text-[8px] text-muted-foreground">Social: {cf.social_signal_strength}/100</span>
+                  {cf.social_sentiment_score != null && <span className="font-mono text-[8px] text-muted-foreground ml-1">Sent: {cf.social_sentiment_score > 0 ? "+" : ""}{cf.social_sentiment_score}</span>}
+                </div>
+              )}
+              {/* Source provenance */}
+              <div className="mt-2 flex flex-wrap gap-1">
+                {cf.taostats_timestamp && (
+                  <span className="font-mono text-[7px] px-1.5 py-0.5 rounded text-muted-foreground/50" style={{ background: "hsla(0,0%,100%,0.02)" }}>
+                    TaoStats {new Date(cf.taostats_timestamp).toLocaleTimeString()}
+                  </span>
+                )}
+                {cf.taoflute_timestamp && (
+                  <span className="font-mono text-[7px] px-1.5 py-0.5 rounded text-muted-foreground/50" style={{ background: "hsla(0,0%,100%,0.02)" }}>
+                    TaoFlute {new Date(cf.taoflute_timestamp).toLocaleTimeString()}
+                  </span>
+                )}
+                {cf.social_timestamp && (
+                  <span className="font-mono text-[7px] px-1.5 py-0.5 rounded text-muted-foreground/50" style={{ background: "hsla(0,0%,100%,0.02)" }}>
+                    Social {new Date(cf.social_timestamp).toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {signal.reasons.length > 0 && (
             <div className="rounded-lg p-3" style={{ background: "hsla(0,0%,100%,0.02)" }}>
               <div className="font-mono text-[9px] text-muted-foreground tracking-widest mb-2">RAISONS</div>
@@ -116,6 +188,16 @@ function SubnetQuickPanel({ signal, open, onClose, fr, decisions }: { signal: Da
   );
 }
 
+/* ─── Fact Row helper ─── */
+function FactRow({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="font-mono text-[8px] text-muted-foreground/50 uppercase tracking-wider">{label}</span>
+      <span className="font-mono text-[10px] font-bold" style={{ color: color ?? "hsl(var(--foreground))" }}>{value}</span>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════ */
 /*   MAIN PAGE                              */
 /* ═══════════════════════════════════════ */
@@ -125,9 +207,9 @@ export default function CompassPage() {
   const isMobile = useIsMobile();
   const { positions } = useLocalPortfolio();
 
-  // ── Data sources — useSubnetDecisions is the canonical decision source ──
+  // ── Data sources — useCanonicalSubnets is the single source of truth ──
   const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence, isLoading } = useSubnetScores();
-  const { decisions } = useSubnetDecisions();
+  const { facts: canonicalFacts, decisions } = useCanonicalSubnets();
 
 
   const { data: rawSignals } = useQuery({
@@ -661,7 +743,7 @@ export default function CompassPage() {
         </section>
       </div>
 
-      <SubnetQuickPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} fr={fr} decisions={decisions} />
+      <SubnetQuickPanel signal={panelSignal} open={!!panelSignal} onClose={() => setPanelSignal(null)} fr={fr} decisions={decisions} facts={canonicalFacts} />
     </div>
   );
 }
