@@ -406,6 +406,11 @@ export default function QuantDiagnosticsPage() {
           )}
         </div>
 
+        {/* ── Decision Distribution ── */}
+        <div className="mb-4">
+          <DecisionDistribution fr={fr} />
+        </div>
+
         {/* ── PSI Section ── */}
         <div className="border border-white/[0.06] rounded-lg p-4 mb-4 space-y-3">
           <span className="font-mono text-xs tracking-widest text-white/50">PSI (Potential Signal Index)</span>
