@@ -136,32 +136,42 @@ export function buildCanonicalFacts(
     miners: tsChain,
   };
 
+  // TaoFlute external risk provenance — verifiable reference
   const tfExt = tf?.externalRisk;
+  const tfSourceRef = tfExt?.source_ref ?? null;
+  const tfSnapshotAt = tfExt?.source_snapshot_at ?? null;
+  const tfVerifiableUrl = `https://taoflute.com/subnet/${facts.netuid}`;
+
   if (tf?.taoflute_match && tfExt) {
-    provenance.external_status = prov(
+    const tfProv = prov(
       "TaoFlute",
       "taoflute",
-      tfExt.source_ref ?? null,
-      tfExt.source_snapshot_at ?? null,
+      tfSourceRef || tfVerifiableUrl,
+      tfSnapshotAt,
       70,
     );
-    provenance.liq_haircut = prov(
-      "TaoFlute",
-      "taoflute",
-      tfExt.source_ref ?? null,
-      tfExt.source_snapshot_at ?? null,
-      70,
-    );
+    provenance.external_status = tfProv;
+    provenance.liq_price = tfProv;
+    provenance.liq_haircut = tfProv;
+    provenance.taoflute_flags = tfProv;
+    provenance.delist_risk = tfProv;
   }
 
+  // Social provenance — verifiable post refs when available
   if (social) {
-    provenance.social_signal = prov(
+    const socialProv = prov(
       "Social/X",
       "social",
       null,
       socialTimestamp,
       60,
     );
+    provenance.social_mentions_24h = socialProv;
+    provenance.social_unique_accounts = socialProv;
+    provenance.social_sentiment_score = socialProv;
+    provenance.social_hype_score = socialProv;
+    provenance.social_credibility_score = socialProv;
+    provenance.social_signal_strength = socialProv;
   }
 
   return {
