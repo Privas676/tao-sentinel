@@ -479,9 +479,9 @@ export default function CompassPage() {
                       <span className="font-mono text-[10px] font-bold" style={{ color: GOLD, minWidth: 36 }}>SN-{v.netuid}</span>
                       {(() => {
                         const fa = decisions.get(v.netuid)?.finalAction ?? "SURVEILLER";
-                        const faC = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : WARN;
-                        const faI = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : "👁";
-                        const faL = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : (fr ? "SURVEILLER" : "MONITOR");
+                        const faC = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : fa === "ÉVITER" ? "hsl(4,80%,40%)" : WARN;
+                        const faI = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : fa === "ÉVITER" ? "⛔" : "👁";
+                        const faL = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "ÉVITER" ? (fr ? "ÉVITER" : "AVOID") : (fr ? "SURVEILLER" : "MONITOR");
                         return <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: faC }}>{faI} {faL}</span>;
                       })()}
                       <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{v.overrideReasons[0] || v.name}</span>
