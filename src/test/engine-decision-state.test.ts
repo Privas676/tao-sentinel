@@ -331,7 +331,7 @@ describe("DecisionStateManager — Hysteresis integration", () => {
     const mgr = new DecisionStateManager(settings);
 
     // Confirm DEPEG
-    const dDepeg = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
+    const dDepeg = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
     mgr.tick(dDepeg, "ALIGNED", 1000);
 
     // Score drops to 35 (still >= depegExit=30) → should stay DEPEG
