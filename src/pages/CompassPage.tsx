@@ -236,7 +236,7 @@ export default function CompassPage() {
   }, [enrichedSignals, decisions]);
 
   const worstRisk = useMemo(() => {
-    return [...enrichedSignals].filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").sort((a, b) => b.risk - a.risk)[0] || null;
+    return [...enrichedSignals].filter(s => { const f = decisions.get(s.netuid)?.finalAction; return f === "SORTIR" || f === "ÉVITER"; }).sort((a, b) => b.risk - a.risk)[0] || null;
   }, [enrichedSignals, decisions]);
 
   // ── Critical risks ──
