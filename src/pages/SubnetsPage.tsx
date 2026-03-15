@@ -409,9 +409,9 @@ export default function SubnetsPage() {
         if (convictionFilter !== "ALL" && r.convictionLevel !== convictionFilter) return false;
         if (liquidityFilter !== "ALL" && r.liquidityLevel !== liquidityFilter) return false;
         if (structureFilter !== "ALL" && r.structureLevel !== structureFilter) return false;
-        if (externalFilter === "PRIORITY" && r.externalDelist?.status !== "critical") return false;
-        if (externalFilter === "WATCH" && r.externalDelist?.status !== "high") return false;
-        if (externalFilter === "NONE" && r.externalDelist) return false;
+        if (externalFilter === "PRIORITY" && r.decision.taoFluteStatus?.taoflute_severity !== "priority") return false;
+        if (externalFilter === "WATCH" && r.decision.taoFluteStatus?.taoflute_severity !== "watch") return false;
+        if (externalFilter === "NONE" && r.decision.taoFluteStatus?.taoflute_match) return false;
         return true;
       })
       .sort((a, b) => {
