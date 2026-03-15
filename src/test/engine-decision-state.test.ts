@@ -356,7 +356,7 @@ describe("DecisionStateManager — tickAll", () => {
     const decisions = [
       makeDecision({ netuid: 1 }),
       makeDecision({ netuid: 2, isOverridden: true, risk: 75 }),
-      makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 90 }),
+      makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 90 }),
     ];
     const outs = mgr.tickAll(decisions, "ALIGNED", 1000);
     expect(outs).toHaveLength(3);
