@@ -258,6 +258,12 @@ export default function SubnetDetailPage() {
         </SectionCard>
 
         {/* ══════════════════════════════════════════ */}
+        {/* ══════════════════════════════════════════ */}
+        {/*   BLOC 3b: SOCIAL SIGNAL                     */}
+        {/* ══════════════════════════════════════════ */}
+        <SocialSignalBlock subnetUid={netuid} finalAction={fa} />
+
+        {/* ══════════════════════════════════════════ */}
         {/*   BLOC 4: AUDIT — Compact, repliable         */}
         {/* ══════════════════════════════════════════ */}
         <div>
