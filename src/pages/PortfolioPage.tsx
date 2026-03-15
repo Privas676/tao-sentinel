@@ -649,25 +649,25 @@ export default function PortfolioPage() {
                         <td className="py-3 px-3 font-mono text-[11px] font-bold" style={{ color: conv > 20 ? GO : conv > 0 ? WARN : BREAK }}>{conv}</td>
                         <td className="py-3 px-3 font-mono text-[11px] font-bold" style={{ color: r.risk > 60 ? BREAK : r.risk > 40 ? WARN : GO }}>{r.risk}</td>
                         <td className="py-3 px-3">
-                          <div className="flex flex-col items-start gap-1">
-                            <span className="font-mono text-[9px] font-bold tracking-wider px-2 py-0.5 rounded" style={{
-                              color: aColor,
-                              background: `color-mix(in srgb, ${aColor} 8%, transparent)`,
-                              border: `1px solid color-mix(in srgb, ${aColor} 15%, transparent)`,
-                            }}>
-                              {r.pAction}
-                            </span>
-                            {/* Show finalAction when it differs from pAction mapping to avoid double-truth */}
-                            {r.finalAction === "ÉVITER" && r.pAction === "SORTIR" && (
-                              <span className="font-mono text-[7px] tracking-wider px-1.5 py-0.5 rounded" style={{
-                                color: "hsl(4,80%,40%)",
-                                background: "hsla(4,80%,40%,0.08)",
-                                border: "1px solid hsla(4,80%,40%,0.15)",
+                          {(() => {
+                            // Single badge: show canonical finalAction as primary, never double-truth
+                            const isAvoid = r.finalAction === "ÉVITER";
+                            const label = isAvoid ? (fr ? "⛔ ÉVITER" : "⛔ AVOID")
+                              : r.finalAction === "SORTIR" ? (fr ? "🔴 SORTIR" : "🔴 EXIT")
+                              : r.pAction;
+                            const color = isAvoid ? "hsl(4,80%,40%)"
+                              : r.finalAction === "SORTIR" ? BREAK
+                              : aColor;
+                            return (
+                              <span className="font-mono text-[9px] font-bold tracking-wider px-2 py-0.5 rounded" style={{
+                                color,
+                                background: `color-mix(in srgb, ${color} 8%, transparent)`,
+                                border: `1px solid color-mix(in srgb, ${color} 15%, transparent)`,
                               }}>
-                                ⛔ {fr ? "ÉVITER" : "AVOID"}
+                                {label}
                               </span>
-                            )}
-                          </div>
+                            );
+                          })()}
                         </td>
                         <td className="py-3 px-3 font-mono text-[9px] text-muted-foreground" style={{ maxWidth: 130 }}>
                           {signalReason}
