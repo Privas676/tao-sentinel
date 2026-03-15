@@ -261,6 +261,7 @@ function finalActionIcon(fa: FinalAction): string {
     case "ENTRER": return "🟢";
     case "SURVEILLER": return "👁";
     case "SORTIR": return "🔴";
+    case "ÉVITER": return "⛔";
     case "SYSTÈME": return "🔷";
   }
 }
@@ -271,6 +272,7 @@ function finalActionLabel(fa: FinalAction, fr: boolean): string {
       case "ENTRER": return "ENTRER";
       case "SURVEILLER": return "SURVEILLER";
       case "SORTIR": return "SORTIR";
+      case "ÉVITER": return "ÉVITER";
       case "SYSTÈME": return "SYSTÈME";
     }
   }
@@ -278,6 +280,7 @@ function finalActionLabel(fa: FinalAction, fr: boolean): string {
     case "ENTRER": return "ENTER";
     case "SURVEILLER": return "MONITOR";
     case "SORTIR": return "EXIT";
+    case "ÉVITER": return "AVOID";
     case "SYSTÈME": return "SYSTEM";
   }
 }
