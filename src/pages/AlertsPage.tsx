@@ -690,7 +690,7 @@ export default function AlertsPage() {
               {sortedByImpact.map(group => (
                 <AlertCard key={group.key} group={group} fr={fr} scores={scores} onDismiss={handleDismiss}
                   impactTier={alertImpactTier(group.latest.type, portfolio.ownedNetuids, group.latest.netuid)}
-                  portfolioNetuids={portfolio.ownedNetuids} />
+                  portfolioNetuids={portfolio.ownedNetuids} decisions={decisions} />
               ))}
             </div>
           )
