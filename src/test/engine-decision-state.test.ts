@@ -340,7 +340,7 @@ describe("DecisionStateManager — Hysteresis integration", () => {
     expect(out.state).toBe("DEPEG_CONFIRMED");
 
     // Score drops to 20 (< depegExit=30) → allowed to exit
-    const dLow = makeDecision({ netuid: 96, delistScore: 20 });
+    const dLow = makeDecision({ netuid: 70, delistScore: 20 });
     const out2 = mgr.tick(dLow, "ALIGNED", 3000);
     expect(out2.state).toBe("OK");
   });
