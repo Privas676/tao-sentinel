@@ -31,7 +31,7 @@ export type DelistReason = {
 
 /* ─── MANUAL LISTS (Taoflute baseline — updated from validated screenshots 2026-03) ─── */
 
-export const DEPEG_PRIORITY_MANUAL: number[] = [70, 55, 57, 84, 79, 82, 128, 102, 69, 40];
+export const DEPEG_PRIORITY_MANUAL: number[] = [70, 82, 55, 57, 102, 84, 79, 66, 78, 128];
 export const HIGH_RISK_NEAR_DELIST_MANUAL: number[] = [96, 109, 31, 86, 47, 99, 67, 97, 76, 90, 15, 108, 38, 114, 107, 113, 92, 126, 87, 80, 91, 94];
 
 /* ─── WHITELISTED (never delist) ─── */
