@@ -86,6 +86,8 @@ vi.mock("@/hooks/use-subnet-scores", () => ({
     sparklines: new Map(),
     subnetList: [{ netuid: 1, name: "Alpha" }, { netuid: 6, name: "Bravo" }],
     marketContext: new Map(),
+    dataAlignment: "ALIGNED",
+    dataAgeDebug: [],
     subnetFacts: new Map(),
   }),
   SPECIAL_SUBNETS: { 0: { label: "ROOT", forceStatus: "OK", forceAction: "HOLD", forceRiskMax: 20, isSystem: true } },
