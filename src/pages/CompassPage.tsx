@@ -303,7 +303,7 @@ export default function CompassPage() {
   const drivers = useMemo(() => {
     const avgMom = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + s.momentumScore, 0) / enrichedSignals.length) : 0;
     const avgLiqEff = enrichedSignals.length ? Math.round(enrichedSignals.reduce((a, s) => a + (s.quality || 50), 0) / enrichedSignals.length) : 50;
-    const sellPressure = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").length / enrichedSignals.length * 100) : 0;
+    const sellPressure = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => { const f = decisions.get(s.netuid)?.finalAction; return f === "SORTIR" || f === "ÉVITER"; }).length / enrichedSignals.length * 100) : 0;
     const entryRatio = enrichedSignals.length ? Math.round(enrichedSignals.filter(s => decisions.get(s.netuid)?.finalAction === "ENTRER").length / enrichedSignals.length * 100) : 0;
     return [
       { icon: "💰", label: fr ? "Smart Capital" : "Smart Capital", value: smartCapital.state === "ACCUMULATION" ? "Accum." : smartCapital.state === "DISTRIBUTION" ? "Distrib." : "Stable", num: smartCapital.score, color: smartCapital.state === "ACCUMULATION" ? GO : smartCapital.state === "DISTRIBUTION" ? BREAK : MUTED },
