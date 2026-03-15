@@ -70,9 +70,9 @@ function SubnetQuickPanel({ signal, open, onClose, fr, decisions }: { signal: Da
   if (!signal) return null;
   const d = decisions.get(signal.netuid);
   const fa = d?.finalAction ?? "SURVEILLER";
-  const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" ? BREAK : fa === "SYSTÈME" ? MUTED : WARN;
-  const faIcon = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : fa === "SYSTÈME" ? "🔷" : "👁";
-  const faLabel = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "SYSTÈME" ? (fr ? "SYSTÈME" : "SYSTEM") : (fr ? "SURVEILLER" : "MONITOR");
+  const faColor = fa === "ENTRER" ? GO : fa === "SORTIR" || fa === "ÉVITER" ? BREAK : fa === "SYSTÈME" ? MUTED : WARN;
+  const faIcon = fa === "ENTRER" ? "🟢" : fa === "SORTIR" ? "🔴" : fa === "ÉVITER" ? "⛔" : fa === "SYSTÈME" ? "🔷" : "👁";
+  const faLabel = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "ÉVITER" ? (fr ? "ÉVITER" : "AVOID") : fa === "SYSTÈME" ? (fr ? "SYSTÈME" : "SYSTEM") : (fr ? "SURVEILLER" : "MONITOR");
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[380px] border-l border-border bg-background text-foreground overflow-y-auto">
@@ -223,10 +223,10 @@ export default function CompassPage() {
     const getFa = (s: DashSignal) => decisions.get(s.netuid)?.finalAction;
     const enterGroup = nonSystem.filter(s => getFa(s) === "ENTRER").sort((a, b) => b.opp - a.opp).slice(0, 5);
     const holdGroup = nonSystem.filter(s => getFa(s) === "SURVEILLER").sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const exitGroup = nonSystem.filter(s => getFa(s) === "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const exitGroup = nonSystem.filter(s => { const f = getFa(s); return f === "SORTIR" || f === "ÉVITER"; }).sort((a, b) => b.risk - a.risk).slice(0, 5);
     const enterCount = nonSystem.filter(s => getFa(s) === "ENTRER").length;
     const holdCount = nonSystem.filter(s => getFa(s) === "SURVEILLER").length;
-    const exitCount = nonSystem.filter(s => getFa(s) === "SORTIR").length;
+    const exitCount = nonSystem.filter(s => { const f = getFa(s); return f === "SORTIR" || f === "ÉVITER"; }).length;
     return { enterGroup, holdGroup, exitGroup, enterCount, holdCount, exitCount };
   }, [enrichedSignals, decisions]);
 
@@ -236,13 +236,13 @@ export default function CompassPage() {
   }, [enrichedSignals, decisions]);
 
   const worstRisk = useMemo(() => {
-    return [...enrichedSignals].filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR").sort((a, b) => b.risk - a.risk)[0] || null;
+    return [...enrichedSignals].filter(s => { const f = decisions.get(s.netuid)?.finalAction; return f === "SORTIR" || f === "ÉVITER"; }).sort((a, b) => b.risk - a.risk)[0] || null;
   }, [enrichedSignals, decisions]);
 
   // ── Critical risks ──
   const criticalRisks = useMemo(() => {
     return enrichedSignals
-      .filter(s => decisions.get(s.netuid)?.finalAction === "SORTIR")
+      .filter(s => { const f = decisions.get(s.netuid)?.finalAction; return f === "SORTIR" || f === "ÉVITER"; })
       .sort((a, b) => {
         const sev = (x: DashSignal) => (x.isOverridden ? 100 : 0) + x.depegProbability + (x.delistCategory !== "NORMAL" ? x.delistScore : 0);
         return sev(b) - sev(a);
@@ -265,10 +265,11 @@ export default function CompassPage() {
   const rotationMap = useMemo(() => {
     const nonSystem = enrichedSignals.filter(s => !SPECIAL_SUBNETS[s.netuid]?.isSystem);
     const getFa = (s: DashSignal) => decisions.get(s.netuid)?.finalAction;
+    const isEx = (f: string | undefined) => f === "SORTIR" || f === "ÉVITER";
     const leaders = nonSystem.filter(s => getFa(s) === "ENTRER" && s.momentumScore >= 55).sort((a, b) => b.opp - a.opp).slice(0, 5);
-    const accumulating = nonSystem.filter(s => s.sc === "ACCUMULATION" && getFa(s) !== "SORTIR" && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
-    const fragile = nonSystem.filter(s => s.risk > 60 && getFa(s) !== "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
-    const avoid = nonSystem.filter(s => getFa(s) === "SORTIR").sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const accumulating = nonSystem.filter(s => s.sc === "ACCUMULATION" && !isEx(getFa(s)) && !leaders.find(l => l.netuid === s.netuid)).sort((a, b) => b.psi - a.psi).slice(0, 5);
+    const fragile = nonSystem.filter(s => s.risk > 60 && !isEx(getFa(s))).sort((a, b) => b.risk - a.risk).slice(0, 5);
+    const avoid = nonSystem.filter(s => isEx(getFa(s))).sort((a, b) => b.risk - a.risk).slice(0, 5);
     return { leaders, accumulating, fragile, avoid };
   }, [enrichedSignals, decisions]);
 

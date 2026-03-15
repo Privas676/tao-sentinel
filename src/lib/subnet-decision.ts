@@ -24,9 +24,9 @@ import {
 
 /* ── Types ── */
 
-export type FinalAction = "ENTRER" | "SURVEILLER" | "SORTIR" | "SYSTÈME";
+export type FinalAction = "ENTRER" | "SURVEILLER" | "SORTIR" | "ÉVITER" | "SYSTÈME";
 
-export type DecisionAction = "ENTRER" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SORTIR" | "SYSTÈME" | "SYSTEM";
+export type DecisionAction = "ENTRER" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SORTIR" | "ÉVITER" | "SYSTÈME" | "SYSTEM";
 
 export type ConvictionLevel = "HIGH" | "MEDIUM" | "LOW";
 export type LiquidityLevel = "HIGH" | "MEDIUM" | "LOW";
@@ -57,7 +57,7 @@ export type SubnetDecision = {
   actionEn: string;
 
   /* ── ActionBadge key for the ActionBadge component ── */
-  badgeAction: "RENTRE" | "SORS" | "RENFORCER" | "HOLD" | "SURVEILLER" | "ATTENDRE" | "SYSTEME";
+  badgeAction: "RENTRE" | "SORS" | "RENFORCER" | "HOLD" | "SURVEILLER" | "ATTENDRE" | "SYSTEME" | "EVITER";
 
   /* ── System subnet flag ── */
   isSystem: boolean;
@@ -114,6 +114,55 @@ export type SubnetDecision = {
   /* ── v3 verdict (primary driver when available) ── */
   verdictV3?: VerdictV3Result;
 };
+
+/* ── Public helpers for UI consistency ── */
+
+/** Returns true if the action is an exit/avoid (SORTIR or ÉVITER) */
+export function isExitAction(fa: FinalAction): boolean {
+  return fa === "SORTIR" || fa === "ÉVITER";
+}
+
+/** Canonical color for a FinalAction */
+export function finalActionColor(fa: FinalAction): string {
+  switch (fa) {
+    case "ENTRER": return "hsl(145,65%,48%)";
+    case "SURVEILLER": return "hsl(38,60%,50%)";
+    case "SORTIR": return "hsl(4,80%,50%)";
+    case "ÉVITER": return "hsl(4,80%,40%)";
+    case "SYSTÈME": return "hsl(210,60%,55%)";
+  }
+}
+
+/** Canonical icon for a FinalAction */
+export function finalActionIcon(fa: FinalAction): string {
+  switch (fa) {
+    case "ENTRER": return "🟢";
+    case "SURVEILLER": return "👁";
+    case "SORTIR": return "🔴";
+    case "ÉVITER": return "⛔";
+    case "SYSTÈME": return "🔷";
+  }
+}
+
+/** Canonical label for a FinalAction */
+export function finalActionLabel(fa: FinalAction, fr: boolean): string {
+  if (fr) {
+    switch (fa) {
+      case "ENTRER": return "ENTRER";
+      case "SURVEILLER": return "SURVEILLER";
+      case "SORTIR": return "SORTIR";
+      case "ÉVITER": return "ÉVITER";
+      case "SYSTÈME": return "SYSTÈME";
+    }
+  }
+  switch (fa) {
+    case "ENTRER": return "ENTER";
+    case "SURVEILLER": return "MONITOR";
+    case "SORTIR": return "EXIT";
+    case "ÉVITER": return "AVOID";
+    case "SYSTÈME": return "SYSTEM";
+  }
+}
 
 /* ── Derivation helpers (PRIVATE — only used here) ── */
 
@@ -204,8 +253,8 @@ function v3ToFinalAction(v3Verdict: VerdictV3): FinalAction {
     case "ENTER": return "ENTRER";
     case "SURVEILLER": return "SURVEILLER";
     case "SORTIR": return "SORTIR";
-    case "DONNÉES_INSTABLES": return "SURVEILLER"; // Downgrade: not enough data for strong action
-    case "NON_INVESTISSABLE": return "SORTIR";     // Toxic structure = exit
+    case "DONNÉES_INSTABLES": return "SURVEILLER";
+    case "NON_INVESTISSABLE": return "ÉVITER";
     case "SYSTÈME": return "SYSTÈME";
   }
 }
@@ -233,16 +282,16 @@ function deriveFinalAction(
   if (isSystem) return "SYSTÈME";
 
   // 2. Hard protection overrides — ALWAYS SORTIR regardless of v3
-  if (s.isOverridden) return "SORTIR";
-  if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") return "SORTIR";
+  if (s.isOverridden) return "ÉVITER";
+  if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") return "ÉVITER";
   if (s.depegProbability >= 50) return "SORTIR";
 
   // R2: TaoFlute PRIORITY → guardrail_active = true → force EXIT
-  if (tf.taoflute_severity === "priority") return "SORTIR";
+  if (tf.taoflute_severity === "priority") return "ÉVITER";
 
   // Only use delistCategory for non-TaoFlute subnets (auto-computed)
   // R1: If !taoflute_match, delistCategory from auto-scoring still applies but NOT as "external"
-  if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "SORTIR";
+  if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "ÉVITER";
 
   // R3: TaoFlute WATCH → never force EXIT, but cap at SURVEILLER
   if (tf.taoflute_severity === "watch") {
@@ -296,6 +345,7 @@ function finalActionToActionFr(fa: FinalAction): DecisionAction {
     case "ENTRER": return "ENTRER";
     case "SURVEILLER": return "SURVEILLER";
     case "SORTIR": return "SORTIR";
+    case "ÉVITER": return "ÉVITER";
     case "SYSTÈME": return "SYSTÈME";
   }
 }
@@ -305,6 +355,7 @@ function finalActionToActionEn(fa: FinalAction): string {
     case "ENTRER": return "ENTER";
     case "SURVEILLER": return "MONITOR";
     case "SORTIR": return "EXIT";
+    case "ÉVITER": return "AVOID";
     case "SYSTÈME": return "SYSTEM";
   }
 }
@@ -314,6 +365,7 @@ function finalActionToBadge(fa: FinalAction): SubnetDecision["badgeAction"] {
     case "ENTRER": return "RENTRE";
     case "SURVEILLER": return "SURVEILLER";
     case "SORTIR": return "SORS";
+    case "ÉVITER": return "EVITER";
     case "SYSTÈME": return "SYSTEME";
   }
 }
@@ -323,22 +375,22 @@ function finalActionToEngineAction(fa: FinalAction): StrategicAction {
     case "ENTRER": return "ENTER";
     case "SURVEILLER": return "WATCH";
     case "SORTIR": return "EXIT";
+    case "ÉVITER": return "EXIT";
     case "SYSTÈME": return "HOLD";
   }
 }
 
 function derivePortfolioAction(s: UnifiedSubnetScore, fa: FinalAction, v3?: VerdictV3Result): PortfolioAction {
-  // V3 provides explicit portfolio actions
   if (v3) {
     switch (v3.portfolioAction) {
       case "SORTIR": return "SORTIR";
       case "RÉDUIRE": return "REDUIRE";
       case "RENFORCER": return "RENFORCER";
       case "CONSERVER": return "CONSERVER";
-      case "NE_PAS_ENTRER": return fa === "SORTIR" ? "SORTIR" : "CONSERVER";
+      case "NE_PAS_ENTRER": return fa === "SORTIR" || fa === "ÉVITER" ? "SORTIR" : "CONSERVER";
     }
   }
-  if (fa === "SORTIR") return "SORTIR";
+  if (fa === "SORTIR" || fa === "ÉVITER") return "SORTIR";
   if (s.risk > 65 || s.depegProbability >= 40) return "REDUIRE";
   if (fa === "ENTRER") return "RENFORCER";
   return "CONSERVER";

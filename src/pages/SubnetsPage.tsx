@@ -24,7 +24,7 @@ import type { FinalAction } from "@/lib/subnet-decision";
 /* ═══════════════════════════════════════════════ */
 
 /* ─── Filter types ─── */
-type ActionFilter = "ALL" | "ENTRER" | "SURVEILLER" | "SORTIR";
+type ActionFilter = "ALL" | "ENTRER" | "SURVEILLER" | "SORTIR" | "ÉVITER";
 type StatusFilter = "ALL" | "OK" | "WATCH" | "DANGER";
 type ConvictionFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 type ScopeFilter = "ALL" | "PORTFOLIO" | "WATCHLIST";
@@ -241,6 +241,7 @@ function finalActionColor(fa: FinalAction): string {
     case "ENTRER": return "hsl(var(--signal-go))";
     case "SURVEILLER": return "hsl(var(--signal-go-spec))";
     case "SORTIR": return "hsl(var(--signal-break))";
+    case "ÉVITER": return "hsl(var(--signal-break))";
     case "SYSTÈME": return "hsl(var(--signal-system))";
   }
 }
@@ -250,6 +251,7 @@ function finalActionBg(fa: FinalAction): string {
     case "ENTRER": return "hsla(var(--signal-go), 0.08)";
     case "SURVEILLER": return "hsla(var(--signal-go-spec), 0.06)";
     case "SORTIR": return "hsla(var(--signal-break), 0.08)";
+    case "ÉVITER": return "hsla(var(--signal-break), 0.10)";
     case "SYSTÈME": return "hsla(var(--signal-system), 0.08)";
   }
 }
@@ -259,6 +261,7 @@ function finalActionIcon(fa: FinalAction): string {
     case "ENTRER": return "🟢";
     case "SURVEILLER": return "👁";
     case "SORTIR": return "🔴";
+    case "ÉVITER": return "⛔";
     case "SYSTÈME": return "🔷";
   }
 }
@@ -269,6 +272,7 @@ function finalActionLabel(fa: FinalAction, fr: boolean): string {
       case "ENTRER": return "ENTRER";
       case "SURVEILLER": return "SURVEILLER";
       case "SORTIR": return "SORTIR";
+      case "ÉVITER": return "ÉVITER";
       case "SYSTÈME": return "SYSTÈME";
     }
   }
@@ -276,6 +280,7 @@ function finalActionLabel(fa: FinalAction, fr: boolean): string {
     case "ENTRER": return "ENTER";
     case "SURVEILLER": return "MONITOR";
     case "SORTIR": return "EXIT";
+    case "ÉVITER": return "AVOID";
     case "SYSTÈME": return "SYSTEM";
   }
 }
@@ -311,14 +316,15 @@ export default function SubnetsPage() {
   // ── Action counts from DECISIONS (single source of truth) ──
   // Exclude system subnets from counts (same as Compass)
   const actionCounts = useMemo(() => {
-    let enter = 0, monitor = 0, exit = 0;
+    let enter = 0, monitor = 0, exit = 0, avoid = 0;
     for (const d of decisionsList) {
       if (d.isSystem) continue;
       if (d.finalAction === "ENTRER") enter++;
+      else if (d.finalAction === "ÉVITER") avoid++;
       else if (d.finalAction === "SORTIR") exit++;
       else monitor++;
     }
-    return { enter, monitor, exit };
+    return { enter, monitor, exit, avoid };
   }, [decisionsList]);
 
   // ── Filters ──
@@ -403,6 +409,7 @@ export default function SubnetsPage() {
         if (actionFilter === "ENTRER" && r.decision.finalAction !== "ENTRER") return false;
         if (actionFilter === "SURVEILLER" && r.decision.finalAction !== "SURVEILLER" && r.decision.finalAction !== "SYSTÈME") return false;
         if (actionFilter === "SORTIR" && r.decision.finalAction !== "SORTIR") return false;
+        if (actionFilter === "ÉVITER" && r.decision.finalAction !== "ÉVITER") return false;
         if (statusFilter === "OK" && r.statusLevel !== "OK") return false;
         if (statusFilter === "WATCH" && r.statusLevel !== "WATCH") return false;
         if (statusFilter === "DANGER" && r.statusLevel !== "DANGER") return false;
@@ -421,7 +428,7 @@ export default function SubnetsPage() {
             case "netuid": av = a.netuid; bv = b.netuid; break;
             case "name": return sortDir === "desc" ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
             case "action": {
-              const rank = (fa: FinalAction) => ({ "SORTIR": 0, "SURVEILLER": 1, "SYSTÈME": 1, "ENTRER": 2 }[fa] ?? 1);
+              const rank = (fa: FinalAction) => ({ "ÉVITER": 0, "SORTIR": 0, "SURVEILLER": 1, "SYSTÈME": 1, "ENTRER": 2 }[fa] ?? 1);
               av = rank(a.decision.finalAction); bv = rank(b.decision.finalAction); break;
             }
             case "conviction": {
@@ -540,6 +547,7 @@ export default function SubnetsPage() {
                    { key: "ENTRER", label: fr ? "Entrer" : "Enter", count: actionCounts.enter || undefined },
                    { key: "SURVEILLER", label: fr ? "Surveiller" : "Monitor", count: actionCounts.monitor || undefined },
                    { key: "SORTIR", label: fr ? "Sortir" : "Exit", count: actionCounts.exit || undefined },
+                   { key: "ÉVITER", label: fr ? "Éviter" : "Avoid", count: actionCounts.avoid || undefined },
                  ]}
                 active={actionFilter}
                 onChange={v => setActionFilter(v as ActionFilter)}
