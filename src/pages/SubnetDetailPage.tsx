@@ -3,6 +3,7 @@ import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
 import { RawFactsSection, ConcordanceSection, DerivedScoresSection } from "@/components/subnet/ProofSections";
+import SocialSignalBlock from "@/components/social/SocialSignalBlock";
 import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
@@ -255,6 +256,12 @@ export default function SubnetDetailPage() {
             )}
           </div>
         </SectionCard>
+
+        {/* ══════════════════════════════════════════ */}
+        {/* ══════════════════════════════════════════ */}
+        {/*   BLOC 3b: SOCIAL SIGNAL                     */}
+        {/* ══════════════════════════════════════════ */}
+        <SocialSignalBlock subnetUid={netuid} finalAction={fa} />
 
         {/* ══════════════════════════════════════════ */}
         {/*   BLOC 4: AUDIT — Compact, repliable         */}
