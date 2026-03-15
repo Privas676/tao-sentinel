@@ -155,18 +155,20 @@ export default function PortfolioPage() {
     const alphaPriceTao = s?.consensusPrice ?? 0;
     const alphaQty = alphaPriceTao > 0 ? pos.quantity_tao / alphaPriceTao : 0;
     const pAction = decision?.portfolioActionFr ?? "CONSERVER";
+    const finalAction = decision?.finalAction ?? "SURVEILLER";
     return {
-      netuid, name: s?.name || `SN-${netuid}`,
+      netuid, name: decision?.name || s?.name || `SN-${netuid}`,
       taoInvest: pos.quantity_tao, entryPrice: pos.entry_price, alphaPriceTao, alphaQty,
-      opp: s?.opp ?? 0, risk: s?.risk ?? 0, stability: s?.stability ?? 50,
-      momentumScore: s?.momentumScore ?? 50, momentumLabel: s?.momentumLabel ?? "—",
-      confianceScore: s?.confianceScore ?? 50, asymmetry: s?.asymmetry ?? 0,
-      action: s?.action ?? "WATCH", pAction,
-      isOverridden: s?.isOverridden ?? false,
-      depegProbability: s?.depegProbability ?? 0,
-      delistCategory: s?.delistCategory ?? "NORMAL",
+      opp: decision?.opp ?? s?.opp ?? 0, risk: decision?.risk ?? s?.risk ?? 0, stability: decision?.stability ?? s?.stability ?? 50,
+      momentumScore: decision?.momentumScore ?? s?.momentumScore ?? 50, momentumLabel: decision?.momentumLabel ?? s?.momentumLabel ?? "—",
+      confianceScore: decision?.confidence ?? s?.confianceScore ?? 50, asymmetry: decision?.asymmetry ?? s?.asymmetry ?? 0,
+      action: s?.action ?? "WATCH", pAction, finalAction,
+      isOverridden: decision?.isOverridden ?? s?.isOverridden ?? false,
+      depegProbability: decision?.depegProbability ?? s?.depegProbability ?? 0,
+      delistCategory: decision?.delistCategory ?? s?.delistCategory ?? "NORMAL",
       healthScores: s?.healthScores ?? { liquidityHealth: 50, activityHealth: 50, emissionPressure: 50, dilutionRisk: 50, concentrationRisk: 50 },
       verdict: v, score: s, decision,
+      signalReason: decision?.signalPrincipal ?? (fr ? "En observation" : "Monitoring"),
     };
   }), [portfolio.positions, scores, decisions, fr]);
 
