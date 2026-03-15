@@ -316,6 +316,7 @@ function finalActionToBadge(fa: FinalAction): SubnetDecision["badgeAction"] {
     case "ENTRER": return "RENTRE";
     case "SURVEILLER": return "SURVEILLER";
     case "SORTIR": return "SORS";
+    case "ÉVITER": return "EVITER";
     case "SYSTÈME": return "SYSTEME";
   }
 }
@@ -325,6 +326,7 @@ function finalActionToEngineAction(fa: FinalAction): StrategicAction {
     case "ENTRER": return "ENTER";
     case "SURVEILLER": return "WATCH";
     case "SORTIR": return "EXIT";
+    case "ÉVITER": return "EXIT";
     case "SYSTÈME": return "HOLD";
   }
 }
