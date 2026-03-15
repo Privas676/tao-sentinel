@@ -428,7 +428,7 @@ export default function SubnetsPage() {
             case "netuid": av = a.netuid; bv = b.netuid; break;
             case "name": return sortDir === "desc" ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
             case "action": {
-              const rank = (fa: FinalAction) => ({ "SORTIR": 0, "SURVEILLER": 1, "SYSTÈME": 1, "ENTRER": 2 }[fa] ?? 1);
+              const rank = (fa: FinalAction) => ({ "ÉVITER": 0, "SORTIR": 0, "SURVEILLER": 1, "SYSTÈME": 1, "ENTRER": 2 }[fa] ?? 1);
               av = rank(a.decision.finalAction); bv = rank(b.decision.finalAction); break;
             }
             case "conviction": {
