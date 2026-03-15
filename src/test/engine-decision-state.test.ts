@@ -60,7 +60,7 @@ describe("evaluateRawState", () => {
   });
 
   it("returns DEPEG_CONFIRMED for DEPEG_PRIORITY category", () => {
-    const d = makeDecision({ netuid: 96, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
+    const d = makeDecision({ netuid: 70, delistCategory: "DEPEG_PRIORITY", delistScore: 90 });
     expect(evaluateRawState(d, "ALIGNED", s)).toBe("DEPEG_CONFIRMED");
   });
 
