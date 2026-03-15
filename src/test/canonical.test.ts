@@ -244,7 +244,7 @@ describe("buildCanonicalDecision", () => {
   }
 
   it("maps final action correctly", () => {
-    const cd = buildCanonicalDecision(makeDecision({ finalAction: "ENTRER" }));
+    const cd = buildCanonicalDecision(makeDecision({ finalAction: "ENTRER", portfolioAction: "RENFORCER" }));
     expect(cd.final_action).toBe("ENTRER");
     expect(cd.portfolio_action).toBe("ADD");
   });
