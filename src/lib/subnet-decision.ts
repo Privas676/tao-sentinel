@@ -3,6 +3,7 @@
 /*   Every page MUST read from this object.                */
 /*   NO local re-derivation allowed.                       */
 /*   v3: Verdict Engine v3 is now the PRIMARY driver.      */
+/*   TaoFlute: STRICT subnet_id matching via resolver.     */
 /*   Old verdict engine kept as fallback for compatibility */
 /* ═══════════════════════════════════════════════════════ */
 
@@ -12,6 +13,14 @@ import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import type { StrategicAction } from "@/lib/strategy-subnet";
 import type { VerdictV3Result, VerdictV3 } from "@/lib/verdict-engine-v3";
 import { actionLabelFr, actionLabelEn } from "@/lib/strategy-colors";
+import {
+  resolveTaoFluteStatus,
+  taoFluteLabel,
+  taoFluteBlockedLabel,
+  taoFluteRawBlockedLabel,
+  type TaoFluteResolvedStatus,
+  type TaoFluteSeverity,
+} from "@/lib/taoflute-resolver";
 
 /* ── Types ── */
 
