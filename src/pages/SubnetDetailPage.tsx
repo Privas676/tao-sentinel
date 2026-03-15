@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
-import { RawFactsSection } from "@/components/subnet/ProofSections";
+import { RawFactsSection, ConcordanceSection, DerivedScoresSection } from "@/components/subnet/ProofSections";
 import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
@@ -277,6 +277,10 @@ export default function SubnetDetailPage() {
             <div className="mt-3 space-y-4">
               {/* Raw Facts from canonical source */}
               {subnetFacts && <RawFactsSection facts={subnetFacts} fr={fr} />}
+              {/* Concordance checks (Layer B) */}
+              {s.concordance && <ConcordanceSection concordance={s.concordance} fr={fr} />}
+              {/* Derived scores (Layer B/C) */}
+              {s.derivedScoring && <DerivedScoresSection scoring={s.derivedScoring} fr={fr} />}
               {/* Raw signal vs final action */}
               <SectionCard>
                 <div className="px-5 py-4">
