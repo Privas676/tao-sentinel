@@ -63,7 +63,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       // Deduplicate by type+netuid combination
       const seen = new Set<string>();
       for (const ev of (data || [])) {
-        if (NOISE_TYPES.has(ev.type ?? "")) continue;
+        if (EXCLUDED_TYPES.has(ev.type ?? "")) continue;
         seen.add(`${ev.type ?? ""}::${ev.netuid ?? ""}`);
       }
       return Math.min(seen.size, 99); // Cap at 99
