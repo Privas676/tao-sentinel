@@ -26,7 +26,7 @@ import {
 
 export type FinalAction = "ENTRER" | "SURVEILLER" | "SORTIR" | "ÉVITER" | "SYSTÈME";
 
-export type DecisionAction = "ENTRER" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SORTIR" | "SYSTÈME" | "SYSTEM";
+export type DecisionAction = "ENTRER" | "RENFORCER" | "ATTENDRE" | "SURVEILLER" | "SORTIR" | "ÉVITER" | "SYSTÈME" | "SYSTEM";
 
 export type ConvictionLevel = "HIGH" | "MEDIUM" | "LOW";
 export type LiquidityLevel = "HIGH" | "MEDIUM" | "LOW";
