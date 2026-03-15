@@ -3,6 +3,7 @@
 /*   Every page MUST read from this object.                */
 /*   NO local re-derivation allowed.                       */
 /*   v3: Verdict Engine v3 is now the PRIMARY driver.      */
+/*   TaoFlute: STRICT subnet_id matching via resolver.     */
 /*   Old verdict engine kept as fallback for compatibility */
 /* ═══════════════════════════════════════════════════════ */
 
@@ -12,6 +13,14 @@ import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import type { StrategicAction } from "@/lib/strategy-subnet";
 import type { VerdictV3Result, VerdictV3 } from "@/lib/verdict-engine-v3";
 import { actionLabelFr, actionLabelEn } from "@/lib/strategy-colors";
+import {
+  resolveTaoFluteStatus,
+  taoFluteLabel,
+  taoFluteBlockedLabel,
+  taoFluteRawBlockedLabel,
+  type TaoFluteResolvedStatus,
+  type TaoFluteSeverity,
+} from "@/lib/taoflute-resolver";
 
 /* ── Types ── */
 
@@ -94,6 +103,9 @@ export type SubnetDecision = {
   depegProbability: number;
   delistCategory: string;
   delistScore: number;
+
+  /* ── TaoFlute resolved status (STRICT subnet_id matching) ── */
+  taoFluteStatus: TaoFluteResolvedStatus;
 
   /* ── Raw references for deep-dive ── */
   score: UnifiedSubnetScore;
@@ -215,6 +227,7 @@ function deriveFinalAction(
   v: SubnetVerdictData | undefined,
   v3: VerdictV3Result | undefined,
   isSystem: boolean,
+  tf: TaoFluteResolvedStatus,
 ): FinalAction {
   // 1. System
   if (isSystem) return "SYSTÈME";
@@ -223,22 +236,39 @@ function deriveFinalAction(
   if (s.isOverridden) return "SORTIR";
   if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") return "SORTIR";
   if (s.depegProbability >= 50) return "SORTIR";
-  if (s.delistCategory === "DEPEG_PRIORITY") return "SORTIR";
 
-  // 2b. HIGH_RISK_NEAR_DELIST — NEVER allow ENTRER
-  if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") {
+  // R2: TaoFlute PRIORITY → guardrail_active = true → force EXIT
+  if (tf.taoflute_severity === "priority") return "SORTIR";
+
+  // Only use delistCategory for non-TaoFlute subnets (auto-computed)
+  // R1: If !taoflute_match, delistCategory from auto-scoring still applies but NOT as "external"
+  if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "SORTIR";
+
+  // R3: TaoFlute WATCH → never force EXIT, but cap at SURVEILLER
+  if (tf.taoflute_severity === "watch") {
+    // Never allow ENTRER for watch subnets
+    if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
+    // Fall through but will be capped below
+  }
+
+  // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute)
+  if (s.delistCategory === "HIGH_RISK_NEAR_DELIST" && !tf.taoflute_match) {
     if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
     return "SURVEILLER";
   }
 
   // 3. V3 verdict — PRIMARY analytical decision (when available)
   if (v3) {
-    const v3Action = v3ToFinalAction(v3.verdict);
+    let v3Action = v3ToFinalAction(v3.verdict);
 
     // If v3 says ENTER, apply additional safety guards from the scoring layer
     if (v3Action === "ENTRER") {
-      if (s.risk >= 65 || s.confianceScore < 30) return "SURVEILLER";
-      return "ENTRER";
+      if (s.risk >= 65 || s.confianceScore < 30) v3Action = "SURVEILLER";
+    }
+
+    // R3: TaoFlute WATCH cap — never allow ENTRER
+    if (tf.taoflute_severity === "watch" && v3Action === "ENTRER") {
+      v3Action = "SURVEILLER";
     }
 
     return v3Action;
@@ -247,6 +277,10 @@ function deriveFinalAction(
   // 4. FALLBACK: old verdict engine (backward compat for subnets without v3 data)
   if (v && v.verdict === "SORS") return "SORTIR";
   if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) return "SORTIR";
+
+  // R3: TaoFlute WATCH — cap fallback to SURVEILLER
+  if (tf.taoflute_severity === "watch") return "SURVEILLER";
+
   if (v && v.verdict === "RENTRE" && s.action !== "EXIT") {
     if (s.risk < 65 && s.confianceScore >= 30) return "ENTRER";
   }
@@ -421,12 +455,16 @@ export function buildSubnetDecision(
   v: SubnetVerdictData | undefined,
   v3: VerdictV3Result | undefined,
   fr: boolean,
+  tfStatus?: TaoFluteResolvedStatus,
 ): SubnetDecision {
   const special = SPECIAL_SUBNETS[s.netuid];
   const isSystem = !!special?.isSystem;
 
-  // ── AUTHORITATIVE FINAL ACTION — V3 primary, protection overrides ──
-  const finalAction = deriveFinalAction(s, v, v3, isSystem);
+  // ── Resolve TaoFlute status (strict subnet_id matching) ──
+  const tf = tfStatus ?? resolveTaoFluteStatus(s.netuid);
+
+  // ── AUTHORITATIVE FINAL ACTION — V3 primary, protection overrides, TaoFlute guardrails ──
+  const finalAction = deriveFinalAction(s, v, v3, isSystem, tf);
   const reconciledAction = finalActionToEngineAction(finalAction);
 
   // ── Conviction — prefer V3 ──
@@ -434,9 +472,22 @@ export function buildSubnetDecision(
 
   // ── Decision transparency — prefer V3 ──
   const rawSignal = v3 ? deriveRawSignalFromV3(v3) : deriveRawSignal(s, v);
-  const blockReasons = v3 ? deriveBlockReasonsFromV3(v3, s, fr) : deriveBlockReasons(s, v, fr);
+  let blockReasons = v3 ? deriveBlockReasonsFromV3(v3, s, fr) : deriveBlockReasons(s, v, fr);
+
+  // R2/R3: Add TaoFlute block reasons
+  if (tf.taoflute_severity === "priority") {
+    blockReasons = [taoFluteBlockedLabel(fr), ...blockReasons.filter(r => !r.includes("TaoFlute") && !r.includes("delist"))];
+  } else if (tf.taoflute_severity === "watch" && rawSignal === "opportunity") {
+    blockReasons = [taoFluteRawBlockedLabel(fr), ...blockReasons];
+  }
+
   const isBlocked = v3 ? (v3.isBlocked || (rawSignal === "opportunity" && finalAction !== "ENTRER")) : (rawSignal === "opportunity" && finalAction !== "ENTRER");
-  const primaryReason = derivePrimaryReason(s, finalAction, rawSignal, blockReasons, v3, fr);
+
+  // R4: Primary reason must reflect final_action, not raw_signal
+  let primaryReason = derivePrimaryReason(s, finalAction, rawSignal, blockReasons, v3, fr);
+  if (tf.taoflute_severity === "priority" && finalAction === "SORTIR") {
+    primaryReason = taoFluteLabel(tf, fr);
+  }
 
   const pAction = derivePortfolioAction(s, finalAction, v3);
 
@@ -447,6 +498,11 @@ export function buildSubnetDecision(
   const invalidation = v3
     ? v3.riskFlags.map(r => r.text)
     : (v?.negativeReasons?.slice(0, 3) || []);
+
+  // R5/R6: Adjust delistScore based on TaoFlute
+  let effectiveDelistScore = s.delistScore;
+  if (tf.taoflute_severity === "priority") effectiveDelistScore = Math.max(effectiveDelistScore, 85);
+  else if (tf.taoflute_severity === "watch") effectiveDelistScore = Math.max(effectiveDelistScore, 60);
 
   return {
     netuid: s.netuid,
@@ -492,7 +548,9 @@ export function buildSubnetDecision(
     dataUncertain: s.dataUncertain,
     depegProbability: s.depegProbability,
     delistCategory: s.delistCategory,
-    delistScore: s.delistScore,
+    delistScore: effectiveDelistScore,
+
+    taoFluteStatus: tf,
 
     score: s,
     verdict: v,
@@ -503,16 +561,19 @@ export function buildSubnetDecision(
 /**
  * Build decisions for a list of subnets.
  * Accepts both old verdicts (fallback) and V3 verdicts (primary).
+ * TaoFlute statuses are resolved per subnet_id (strict matching).
  */
 export function buildAllDecisions(
   scoresList: UnifiedSubnetScore[],
   verdicts: Map<number, SubnetVerdictData>,
   verdictsV3: Map<number, VerdictV3Result>,
   fr: boolean,
+  taoFluteStatuses?: Map<number, TaoFluteResolvedStatus>,
 ): Map<number, SubnetDecision> {
   const map = new Map<number, SubnetDecision>();
   for (const s of scoresList) {
-    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), verdictsV3.get(s.netuid), fr));
+    const tf = taoFluteStatuses?.get(s.netuid);
+    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), verdictsV3.get(s.netuid), fr, tf));
   }
   return map;
 }
