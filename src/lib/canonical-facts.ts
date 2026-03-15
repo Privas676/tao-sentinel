@@ -239,25 +239,25 @@ export function buildCanonicalFacts(
       ? [tfVerifiableUrl, ...(tfExt?.source_ref ? [tfExt.source_ref] : [])]
       : [],
 
-    // Social Signal
+    // Social Signal (scores from DB are already 0-100 integers)
     social_mentions_24h: social?.raw_mention_count ?? null,
     social_mentions_delta: null,  // requires previous period comparison
     social_unique_accounts: social?.unique_account_count ?? null,
     social_kol_mentions: social?.smart_kol_score != null
-      ? Math.round(social.smart_kol_score * 10) // approximate from score
+      ? Math.round(social.smart_kol_score)
       : null,
     social_official_mentions: null, // requires post-level classification
     social_sentiment_score: social
       ? Math.round((social.weighted_bullish_score - social.weighted_bearish_score) * 100)
       : null,
-    social_hype_score: social?.social_heat_score
-      ? Math.round(social.social_heat_score * 100)
+    social_hype_score: social?.social_heat_score != null
+      ? Math.round(social.social_heat_score)
       : null,
-    social_credibility_score: social?.smart_kol_score
-      ? Math.round(social.smart_kol_score * 100)
+    social_credibility_score: social?.smart_kol_score != null
+      ? Math.round(social.smart_kol_score)
       : null,
-    social_signal_strength: social?.social_conviction_score
-      ? Math.round(social.social_conviction_score * 100)
+    social_signal_strength: social?.social_conviction_score != null
+      ? Math.round(social.social_conviction_score)
       : null,
 
     // Timestamps
