@@ -332,17 +332,16 @@ function finalActionToEngineAction(fa: FinalAction): StrategicAction {
 }
 
 function derivePortfolioAction(s: UnifiedSubnetScore, fa: FinalAction, v3?: VerdictV3Result): PortfolioAction {
-  // V3 provides explicit portfolio actions
   if (v3) {
     switch (v3.portfolioAction) {
       case "SORTIR": return "SORTIR";
       case "RÉDUIRE": return "REDUIRE";
       case "RENFORCER": return "RENFORCER";
       case "CONSERVER": return "CONSERVER";
-      case "NE_PAS_ENTRER": return fa === "SORTIR" ? "SORTIR" : "CONSERVER";
+      case "NE_PAS_ENTRER": return fa === "SORTIR" || fa === "ÉVITER" ? "SORTIR" : "CONSERVER";
     }
   }
-  if (fa === "SORTIR") return "SORTIR";
+  if (fa === "SORTIR" || fa === "ÉVITER") return "SORTIR";
   if (s.risk > 65 || s.depegProbability >= 40) return "REDUIRE";
   if (fa === "ENTRER") return "RENFORCER";
   return "CONSERVER";
