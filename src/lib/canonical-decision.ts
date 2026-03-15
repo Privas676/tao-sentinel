@@ -122,10 +122,10 @@ export function buildCanonicalDecision(
     guardrail_active: decision.isBlocked,
     guardrail_reason: decision.blockReasons,
 
-    // Core Scores
+    // Core Scores (social bonus applied to conviction & momentum)
     confidence_score: decision.confidence,
-    conviction_score: decision.convictionScore,
-    momentum_score: decision.momentumScore,
+    conviction_score: Math.min(100, decision.convictionScore + socialBonus),
+    momentum_score: Math.min(100, decision.momentumScore + Math.round(socialBonus * 0.6)),
 
     // Risk Scores
     risk_market_score: decision.score.risk,
