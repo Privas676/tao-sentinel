@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════════════ */
 /*   PROOF SECTIONS — Raw Facts, Concordance, Derived     */
 /*   Scores, and full Verdict Provenance for subnet detail */
+/*   Uses CanonicalSubnetFacts as single source of truth   */
 /* ═══════════════════════════════════════════════════════ */
 
 import { useState } from "react";
-import type { SubnetFacts, Sourced, FieldSource } from "@/lib/subnet-facts";
-import { val } from "@/lib/subnet-facts";
+import type { CanonicalSubnetFacts, SourceType } from "@/lib/canonical-types";
 import type { ConcordanceResult, ConcordanceCheck } from "@/lib/source-concordance";
 import type { ScoringResult, DerivedScores, ProhibitionViolation } from "@/lib/derived-scores";
 import type { VerdictV3Result } from "@/lib/verdict-engine-v3";
@@ -13,10 +13,12 @@ import { SectionCard, SectionTitle, GOLD, GO, WARN, BREAK, MUTED } from "@/compo
 
 /* ─── Helpers ─── */
 
-function sourceTag(src: FieldSource) {
-  const colors: Record<FieldSource, string> = {
+function sourceTag(src: SourceType) {
+  const colors: Record<SourceType, string> = {
     taostats: "hsl(var(--primary))",
     "taostats:chain": "hsl(210, 60%, 55%)",
+    taoflute: "hsl(280, 60%, 55%)",
+    social: "hsl(160, 60%, 50%)",
     computed: "hsl(var(--gold))",
     unavailable: "hsl(var(--muted-foreground))",
   };
@@ -27,15 +29,19 @@ function sourceTag(src: FieldSource) {
   );
 }
 
-function FactRow({ label, sourced, fmt }: { label: string; sourced: Sourced<any>; fmt?: (v: any) => string }) {
-  const v = sourced.value;
-  const display = fmt ? fmt(v) : typeof v === "number" ? (v > 1000 ? v.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) : v.toFixed(v < 0.01 ? 6 : 2)) : String(v);
+function getFieldSource(facts: CanonicalSubnetFacts, fieldKey: string): SourceType {
+  return facts.provenance[fieldKey]?.source_type ?? "unavailable";
+}
+
+function FactRow({ label, value, source, fmt }: { label: string; value: number | string | null; source: SourceType; fmt?: (v: any) => string }) {
+  if (value == null) return null;
+  const display = fmt ? fmt(value) : typeof value === "number" ? (value > 1000 ? value.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) : value.toFixed(value < 0.01 && value > 0 ? 6 : 2)) : String(value);
   return (
     <div className="flex items-center justify-between py-0.5 gap-2">
       <span className="font-mono text-[9px] text-muted-foreground truncate">{label}</span>
       <div className="flex items-center gap-1.5">
         <span className="font-mono text-[10px] text-foreground/80">{display}</span>
-        {sourceTag(sourced.source)}
+        {sourceTag(source)}
       </div>
     </div>
   );
@@ -59,16 +65,17 @@ function ScoreBar({ label, value, explanation, inverted }: { label: string; valu
 }
 
 /* ═══════════════════════════════════════════ */
-/*   SECTION 1: RAW FACTS                      */
+/*   SECTION 1: RAW FACTS (Canonical)          */
 /* ═══════════════════════════════════════════ */
 
-export function RawFactsSection({ facts, fr }: { facts: SubnetFacts; fr: boolean }) {
+export function RawFactsSection({ facts, fr }: { facts: CanonicalSubnetFacts; fr: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const fmtPct = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
   const fmtTao = (v: number) => `${v.toFixed(2)} τ`;
   const fmtUsd = (v: number) => `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   const fmtInt = (v: number) => Math.round(v).toString();
   const fmtPctR = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const src = (key: string) => getFieldSource(facts, key);
 
   return (
     <SectionCard>
@@ -78,63 +85,74 @@ export function RawFactsSection({ facts, fr }: { facts: SubnetFacts; fr: boolean
           {/* Price & Market — always visible */}
           <div>
             <div className="font-mono text-[7px] tracking-[0.2em] uppercase text-muted-foreground mb-1 mt-1">{fr ? "PRIX & MARCHÉ" : "PRICE & MARKET"}</div>
-            <FactRow label={fr ? "Prix α" : "Price α"} sourced={facts.price} fmt={fmtTao} />
-            <FactRow label={fr ? "Prix USD" : "Price USD"} sourced={facts.priceUsd} fmt={fmtUsd} />
-            <FactRow label="Var 1h" sourced={facts.priceChange1h} fmt={fmtPct} />
-            <FactRow label="Var 24h" sourced={facts.priceChange24h} fmt={fmtPct} />
-            <FactRow label="Var 7j" sourced={facts.priceChange7d} fmt={fmtPct} />
-            <FactRow label="Var 30j" sourced={facts.priceChange30d} fmt={fmtPct} />
-            <FactRow label="Market Cap" sourced={facts.marketCap} fmt={fmtTao} />
-            <FactRow label="FDV" sourced={facts.fdv} fmt={fmtTao} />
-            <FactRow label="Vol 24h" sourced={facts.vol24h} fmt={fmtTao} />
+            <FactRow label={fr ? "Prix α" : "Price α"} value={facts.price} source={src("price")} fmt={fmtTao} />
+            <FactRow label={fr ? "Prix USD" : "Price USD"} value={facts.price_usd} source={src("price_usd")} fmt={fmtUsd} />
+            <FactRow label="Var 1h" value={facts.change_1h} source={src("change_1h")} fmt={fmtPct} />
+            <FactRow label="Var 24h" value={facts.change_24h} source={src("change_24h")} fmt={fmtPct} />
+            <FactRow label="Var 7j" value={facts.change_7d} source={src("change_7d")} fmt={fmtPct} />
+            <FactRow label="Var 30j" value={facts.change_30d} source={src("change_30d")} fmt={fmtPct} />
+            <FactRow label="Market Cap" value={facts.market_cap} source={src("market_cap")} fmt={fmtTao} />
+            <FactRow label="FDV" value={facts.fdv} source={src("fdv")} fmt={fmtTao} />
+            <FactRow label="Vol 24h" value={facts.volume_24h} source={src("volume_24h")} fmt={fmtTao} />
           </div>
           <div>
             <div className="font-mono text-[7px] tracking-[0.2em] uppercase text-muted-foreground mb-1 mt-1">POOL / AMM</div>
-            <FactRow label="TAO pool" sourced={facts.taoInPool} fmt={fmtTao} />
-            <FactRow label="Alpha pool" sourced={facts.alphaInPool} fmt={fmtTao} />
-            <FactRow label="Pool price" sourced={facts.poolPrice} fmt={fmtTao} />
-            <FactRow label="Haircut" sourced={facts.liqHaircut} fmt={fmtPct} />
-            <FactRow label="Slippage 1τ" sourced={facts.slippage1tau} fmt={fmtPct} />
-            <FactRow label="Slippage 10τ" sourced={facts.slippage10tau} fmt={fmtPct} />
-            <FactRow label="Spread" sourced={facts.spread} fmt={fmtPct} />
+            <FactRow label="TAO pool" value={facts.tao_in_pool} source={src("tao_in_pool")} fmt={fmtTao} />
+            <FactRow label="Alpha pool" value={facts.alpha_in_pool} source={src("alpha_in_pool")} fmt={fmtTao} />
+            <FactRow label="Pool ratio" value={facts.tao_pool_ratio} source={src("tao_pool_ratio")} fmt={fmtTao} />
+            <FactRow label="Slippage 1τ" value={facts.slippage_1tau} source={src("slippage_1tau")} fmt={fmtPct} />
+            <FactRow label="Slippage 10τ" value={facts.slippage_10tau} source={src("slippage_10tau")} fmt={fmtPct} />
+            <FactRow label="Spread" value={facts.spread} source={src("spread")} fmt={fmtPct} />
           </div>
         </div>
 
         {expanded && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 mt-2 pt-2 border-t border-border">
             <div>
-              <div className="font-mono text-[7px] tracking-[0.2em] uppercase text-muted-foreground mb-1">{fr ? "TRADING" : "TRADING"}</div>
-              <FactRow label="Buys 24h" sourced={facts.buyCount} fmt={fmtInt} />
-              <FactRow label="Sells 24h" sourced={facts.sellCount} fmt={fmtInt} />
-              <FactRow label="Buyers" sourced={facts.buyerCount} fmt={fmtInt} />
-              <FactRow label="Sellers" sourced={facts.sellerCount} fmt={fmtInt} />
+              <div className="font-mono text-[7px] tracking-[0.2em] uppercase text-muted-foreground mb-1">TRADING</div>
+              <FactRow label="Buys 24h" value={facts.buys_count} source={src("buys_count")} fmt={fmtInt} />
+              <FactRow label="Sells 24h" value={facts.sells_count} source={src("sells_count")} fmt={fmtInt} />
+              <FactRow label="Buyers" value={facts.buyers_count} source={src("buyers_count")} fmt={fmtInt} />
+              <FactRow label="Sellers" value={facts.sellers_count} source={src("sellers_count")} fmt={fmtInt} />
             </div>
             <div>
               <div className="font-mono text-[7px] tracking-[0.2em] uppercase text-muted-foreground mb-1">{fr ? "STRUCTURE" : "STRUCTURE"}</div>
-              <FactRow label="Validators" sourced={facts.validators} fmt={fmtInt} />
-              <FactRow label="Miners" sourced={facts.miners} fmt={fmtInt} />
-              <FactRow label="Active UIDs" sourced={facts.activeUids} fmt={fmtInt} />
-              <FactRow label="Max UIDs" sourced={facts.maxUids} fmt={fmtInt} />
-              <FactRow label="UID Sat." sourced={facts.uidSaturation} fmt={fmtPctR} />
-              <FactRow label="Registrations" sourced={facts.registrations} fmt={fmtInt} />
+              <FactRow label="Validators" value={facts.validators} source={src("validators")} fmt={fmtInt} />
+              <FactRow label="Miners" value={facts.miners} source={src("miners")} fmt={fmtInt} />
+              <FactRow label="Holders" value={facts.holders} source={src("holders")} fmt={fmtInt} />
+              <FactRow label="UID Sat." value={facts.uid_saturation} source={src("uid_saturation")} fmt={fmtPctR} />
             </div>
             <div>
               <div className="font-mono text-[7px] tracking-[0.2em] uppercase text-muted-foreground mb-1">{fr ? "ÉCONOMIE" : "ECONOMICS"}</div>
-              <FactRow label="Emission/j" sourced={facts.emissionPerDay} fmt={fmtTao} />
-              <FactRow label="Burn 24h" sourced={facts.burn} fmt={fmtTao} />
-              <FactRow label="Root prop" sourced={facts.rootProportion} fmt={fmtPctR} />
-              <FactRow label="Circ. Supply" sourced={facts.circulatingSupply} fmt={fmtTao} />
-              <FactRow label="Total Supply" sourced={facts.totalSupply} fmt={fmtTao} />
-              <FactRow label="Alpha Staked" sourced={facts.alphaStaked} fmt={fmtTao} />
+              <FactRow label="Emission/j" value={facts.emissions_day} source={src("emissions_day")} fmt={fmtTao} />
+              <FactRow label="Emission %" value={facts.emissions_pct} source={src("emissions_pct")} fmt={fmtPct} />
+              <FactRow label="Root prop" value={facts.root_proportion} source={src("root_proportion")} fmt={fmtPctR} />
+              <FactRow label="Circ. Supply" value={facts.circulating_supply} source={src("circulating_supply")} fmt={fmtTao} />
+              <FactRow label="Total Supply" value={facts.total_supply} source={src("total_supply")} fmt={fmtTao} />
+              <FactRow label="Burn %" value={facts.incentive_burn_pct} source={src("incentive_burn_pct")} fmt={fmtPct} />
+            </div>
+            <div>
+              <div className="font-mono text-[7px] tracking-[0.2em] uppercase text-muted-foreground mb-1">{fr ? "RISQUE EXTERNE" : "EXTERNAL RISK"}</div>
+              <FactRow label="TaoFlute" value={facts.external_status} source={facts.taoflute_match ? "taoflute" : "unavailable"} />
+              {facts.liq_price != null && <FactRow label="Liq. Price" value={facts.liq_price} source="taoflute" fmt={fmtTao} />}
+              {facts.liq_haircut != null && <FactRow label="Liq. Haircut" value={facts.liq_haircut} source="taoflute" fmt={fmtPct} />}
+              {facts.taoflute_flags.length > 0 && (
+                <div className="font-mono text-[8px] text-muted-foreground mt-1">
+                  Flags: {facts.taoflute_flags.join(", ")}
+                </div>
+              )}
+              <div className="font-mono text-[7px] tracking-[0.2em] uppercase text-muted-foreground mb-1 mt-2">{fr ? "SIGNAL SOCIAL" : "SOCIAL SIGNAL"}</div>
+              <FactRow label="Mentions 24h" value={facts.social_mentions_24h} source={src("social_mentions_24h")} fmt={fmtInt} />
+              <FactRow label="Signal" value={facts.social_signal_strength} source={src("social_signal_strength")} fmt={fmtInt} />
+              <FactRow label="Crédibilité" value={facts.social_credibility_score} source={src("social_credibility_score")} fmt={fmtInt} />
+              <FactRow label="Sentiment" value={facts.social_sentiment_score} source={src("social_sentiment_score")} fmt={fmtInt} />
             </div>
             <div>
               <div className="font-mono text-[7px] tracking-[0.2em] uppercase text-muted-foreground mb-1">META</div>
-              <FactRow label="Rank" sourced={facts.rank} fmt={fmtInt} />
-              <FactRow label="Last Sync" sourced={facts.lastSyncTs} fmt={(v: string) => v.slice(0, 19)} />
-              <div className="flex items-center justify-between py-0.5">
-                <span className="font-mono text-[9px] text-muted-foreground">TAO/USD</span>
-                <span className="font-mono text-[10px] text-foreground/80">{fmtUsd(facts.taoUsd)}</span>
-              </div>
+              <FactRow label="TaoStats sync" value={facts.taostats_timestamp} source="taostats" fmt={(v: string) => v?.slice(0, 19) ?? "—"} />
+              <FactRow label="TaoFlute sync" value={facts.taoflute_timestamp} source="taoflute" fmt={(v: string) => v?.slice(0, 19) ?? "—"} />
+              <FactRow label="Social sync" value={facts.social_timestamp} source="social" fmt={(v: string) => v?.slice(0, 19) ?? "—"} />
+              <FactRow label="Sentinel ts" value={facts.sentinel_timestamp} source="computed" fmt={(v: string) => v?.slice(0, 19)} />
             </div>
           </div>
         )}
