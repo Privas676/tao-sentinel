@@ -104,6 +104,9 @@ export type SubnetDecision = {
   delistCategory: string;
   delistScore: number;
 
+  /* ── TaoFlute resolved status (STRICT subnet_id matching) ── */
+  taoFluteStatus: TaoFluteResolvedStatus;
+
   /* ── Raw references for deep-dive ── */
   score: UnifiedSubnetScore;
   verdict?: SubnetVerdictData;
