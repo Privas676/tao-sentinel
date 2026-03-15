@@ -59,6 +59,7 @@ export default function SubnetDetailPage() {
 
   const s = scores.get(netuid);
   const decision = decisions.get(netuid);
+  const subnetFacts = canonicalFacts.get(netuid);
   const spark = sparklines?.get(netuid) || [];
   const radar = useMemo(() => radarData?.find(r => r.netuid === netuid) || null, [radarData, netuid]);
   const inPortfolio = isOwned(netuid);
