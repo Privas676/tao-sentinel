@@ -227,6 +227,7 @@ function deriveFinalAction(
   v: SubnetVerdictData | undefined,
   v3: VerdictV3Result | undefined,
   isSystem: boolean,
+  tf: TaoFluteResolvedStatus,
 ): FinalAction {
   // 1. System
   if (isSystem) return "SYSTÈME";
@@ -235,10 +236,23 @@ function deriveFinalAction(
   if (s.isOverridden) return "SORTIR";
   if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") return "SORTIR";
   if (s.depegProbability >= 50) return "SORTIR";
-  if (s.delistCategory === "DEPEG_PRIORITY") return "SORTIR";
 
-  // 2b. HIGH_RISK_NEAR_DELIST — NEVER allow ENTRER
-  if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") {
+  // R2: TaoFlute PRIORITY → guardrail_active = true → force EXIT
+  if (tf.taoflute_severity === "priority") return "SORTIR";
+
+  // Only use delistCategory for non-TaoFlute subnets (auto-computed)
+  // R1: If !taoflute_match, delistCategory from auto-scoring still applies but NOT as "external"
+  if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "SORTIR";
+
+  // R3: TaoFlute WATCH → never force EXIT, but cap at SURVEILLER
+  if (tf.taoflute_severity === "watch") {
+    // Never allow ENTRER for watch subnets
+    if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
+    // Fall through but will be capped below
+  }
+
+  // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute)
+  if (s.delistCategory === "HIGH_RISK_NEAR_DELIST" && !tf.taoflute_match) {
     if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
     return "SURVEILLER";
   }
