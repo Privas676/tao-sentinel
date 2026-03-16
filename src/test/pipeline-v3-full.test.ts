@@ -270,7 +270,7 @@ describe("V3 Pipeline: system subnet", () => {
 
 describe("V3 Pipeline: TaoFlute priority overrides V3 ENTER", () => {
   // Use a known TaoFlute PRIORITY subnet ID with a healthy payload
-  const priorityNetuid = TAOFLUTE_PRIORITY_CONFIRMED[0]; // first confirmed priority
+  const priorityNetuid = Array.from(TAOFLUTE_PRIORITY_CONFIRMED)[0]; // first confirmed priority
 
   it("healthy payload + TaoFlute priority → ÉVITER", () => {
     // Run facts/concordance/scoring with healthy data
