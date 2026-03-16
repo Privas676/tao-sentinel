@@ -272,12 +272,12 @@ describe("Pipeline integration: multi-tick state confirmation", () => {
     const ticks = DEFAULT_DECISION_SETTINGS.confirmationTicks;
     let lastOutput;
     for (let i = 0; i < ticks + 1; i++) {
-      lastOutput = mgr.tick([engineOut], "ALIGNED");
+      lastOutput = mgr.tick(engineOut, "ALIGNED");
     }
 
-    const sn70 = lastOutput!.find(o => o.netuid === netuid);
-    expect(sn70).toBeDefined();
-    expect(sn70!.state).toBe("DEPEG_CONFIRMED");
+    expect(lastOutput).toBeDefined();
+    expect(lastOutput!.netuid).toBe(netuid);
+    expect(lastOutput!.state).toBe("DEPEG_CONFIRMED");
   });
 });
 
