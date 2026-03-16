@@ -300,7 +300,7 @@ describe("V3 Pipeline: TaoFlute priority overrides V3 ENTER", () => {
 /* ═══════════════════════════════════════════════════ */
 
 describe("V3 Pipeline: TaoFlute watch caps V3 ENTER to SURVEILLER", () => {
-  const watchNetuid = TAOFLUTE_WATCH_CONFIRMED[0]; // first confirmed watch
+  const watchNetuid = Array.from(TAOFLUTE_WATCH_CONFIRMED)[0]; // first confirmed watch
 
   it("healthy payload + TaoFlute watch → SURVEILLER (never ENTRER)", () => {
     const facts = extractSubnetFacts(watchNetuid, { ...HEALTHY_PAYLOAD, netuid: watchNetuid }, TAO_USD);
