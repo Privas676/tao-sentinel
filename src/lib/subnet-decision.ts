@@ -234,7 +234,7 @@ function deriveBlockReasons(s: UnifiedSubnetScore, v?: SubnetVerdictData, fr = t
   if (s.isOverridden) reasons.push(fr ? "Override de protection actif" : "Protection override active");
   if (s.depegProbability >= 50) reasons.push(fr ? `Risque depeg ${s.depegProbability}%` : `Depeg risk ${s.depegProbability}%`);
   if (s.delistCategory === "DEPEG_PRIORITY") reasons.push(fr ? "Priorité delist/depeg" : "Delist/depeg priority");
-  if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") reasons.push(fr ? "Proche délistage" : "Near delist");
+  if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") reasons.push(fr ? "Structure fragile — surveillance" : "Fragile structure — monitoring");
   if (s.systemStatus === "DEPEG") reasons.push(fr ? "Statut DEPEG" : "DEPEG status");
   if (s.systemStatus === "ZONE_CRITIQUE") reasons.push(fr ? "Zone critique" : "Critical zone");
   if (s.risk > 65) reasons.push(fr ? `Risque structurel élevé (${s.risk})` : `High structural risk (${s.risk})`);
@@ -304,9 +304,10 @@ function deriveFinalAction(
   }
 
   // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute subnets only)
+  // Softened: only force SORTIR with extreme conditions, let market data through
   if (s.delistCategory === "HIGH_RISK_NEAR_DELIST" && !tf.taoflute_match) {
-    if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
-    return "SURVEILLER";
+    if (s.depegProbability >= 50 || s.risk >= 70) return "SORTIR";
+    // Don't force SURVEILLER — let V3/fallback decide with market context
   }
 
   // 3. V3 verdict — PRIMARY analytical decision (when available)
@@ -433,7 +434,10 @@ function deriveSignalPrincipal(s: UnifiedSubnetScore, fa: FinalAction, rawSignal
   if (special?.isSystem) return fr ? "Infrastructure réseau" : "Network infrastructure";
   if (s.isOverridden) return s.overrideReasons[0] || (fr ? "Zone critique" : "Critical zone");
   if (s.depegProbability >= 50) return `Depeg ${s.depegProbability}%`;
-  if (s.delistCategory !== "NORMAL") return fr ? "Risque delist" : "Delist risk";
+  // For TaoFlute WATCH subnets: DON'T crush market signal, just note external watch
+  // For DEPEG_PRIORITY: keep strong warning
+  if (s.delistCategory === "DEPEG_PRIORITY") return fr ? "Risque delist critique" : "Critical delist risk";
+  // For non-NORMAL but NOT depeg priority: let V3/market signal through instead of blanket "Risque delist"
 
   // V3 primary reason is the most informative
   if (v3) {

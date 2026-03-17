@@ -230,10 +230,10 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
   // Score: clamp to 0–100
   const score = Math.min(100, Math.round(totalWeight));
 
-  // Category
+  // Category — raised threshold: 45 (was 35) to avoid false positives on active subnets
   let category: DelistCategory = "NORMAL";
   if (score >= 65) category = "DEPEG_PRIORITY";
-  else if (score >= 35) category = "HIGH_RISK_NEAR_DELIST";
+  else if (score >= 45) category = "HIGH_RISK_NEAR_DELIST";
 
   return { netuid: sn.netuid, category, score, reasons, factors: topFactors(factors), source: "" };
 }
@@ -343,11 +343,13 @@ export function delistCategoryColor(cat: DelistCategory): string {
   }
 }
 
-/** Get category label */
-export function delistCategoryLabel(cat: DelistCategory, fr: boolean): string {
+/** Get category label — contextual wording based on source */
+export function delistCategoryLabel(cat: DelistCategory, fr: boolean, isExternalWatch = false): string {
   switch (cat) {
     case "DEPEG_PRIORITY": return fr ? "🔴 RISQUE DEREG" : "🔴 DEREG RISK";
-    case "HIGH_RISK_NEAR_DELIST": return fr ? "🟠 PROCHE DELIST" : "🟠 NEAR DELIST";
+    case "HIGH_RISK_NEAR_DELIST":
+      if (isExternalWatch) return fr ? "🟠 WATCH EXTERNE" : "🟠 EXTERNAL WATCH";
+      return fr ? "🟠 STRUCTURE FRAGILE" : "🟠 FRAGILE STRUCTURE";
     case "NORMAL": return "Normal";
   }
 }
