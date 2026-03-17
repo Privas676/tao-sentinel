@@ -37,6 +37,21 @@ vi.mock("@/hooks/use-delist-mode", () => ({
   useDelistMode: () => ({ delistMode: "manual", setDelistMode: vi.fn() }),
 }));
 
+vi.mock("@/hooks/use-canonical-subnets", () => ({
+  useCanonicalSubnets: () => ({
+    decisions: new Map(),
+    isLoading: false,
+  }),
+}));
+
+vi.mock("@/hooks/use-local-portfolio", () => ({
+  useLocalPortfolio: () => ({
+    netuids: [],
+    has: () => false,
+    toggle: vi.fn(),
+  }),
+}));
+
 vi.mock("@/lib/i18n", () => ({
   useI18n: () => ({
     t: (k: string) => {
@@ -141,7 +156,6 @@ describe("AlertsPage", () => {
     ];
     renderAlerts(events);
     fireEvent.click(screen.getByText("Critiques"));
-    // After critical filter, only critical events should show
     const breakEls = screen.queryAllByText(/ZONE CRITIQUE/);
     const emptyEls = screen.queryAllByText(/Aucune alerte/);
     expect(breakEls.length + emptyEls.length).toBeGreaterThanOrEqual(1);
@@ -159,7 +173,6 @@ describe("AlertsPage", () => {
   });
 
   it("shows dismissed count after dismissing", () => {
-    // Dismissed alerts are tracked in localStorage
     const key = "alerts-dismissed";
     localStorage.setItem(key, JSON.stringify({ "BREAK::5::2025": Date.now() }));
     renderAlerts([makeEvent(1, "BREAK", 5, 3)]);

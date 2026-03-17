@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 const mockSetLang = vi.fn();
 const mockSetMode = vi.fn();
@@ -42,11 +44,14 @@ vi.mock("@/hooks/use-push-notifications", () => ({
   }),
 }));
 
-import { render, screen, fireEvent } from "@testing-library/react";
 import SettingsPage from "@/pages/SettingsPage";
 
 function renderSettings() {
-  return render(<SettingsPage />);
+  return render(
+    <MemoryRouter>
+      <SettingsPage />
+    </MemoryRouter>
+  );
 }
 
 describe("SettingsPage", () => {
