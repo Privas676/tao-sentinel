@@ -57,11 +57,11 @@ describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
     expect(["ENTRER", "SURVEILLER"]).toContain(d.finalAction);
   });
 
-  it("isBlocked is true when raw signal is opportunity + HIGH_RISK_NEAR_DELIST", () => {
+  it("preserves market signal when HIGH_RISK_NEAR_DELIST + good metrics", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", opp: 70, momentumScore: 60 });
     const d = buildSubnetDecision(s, undefined, undefined, true);
-    expect(d.isBlocked).toBe(true);
-    expect(d.blockReasons.length).toBeGreaterThan(0);
+    // With softened rules, market data is preserved — not blanket blocked
+    expect(["ENTRER", "SURVEILLER"]).toContain(d.finalAction);
   });
 
   it("portfolioAction is coherent with finalAction for near-delist", () => {
