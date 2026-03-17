@@ -108,7 +108,7 @@ describe("AlertsPage", () => {
   });
 
   it("renders page title", () => {
-    renderAlerts();
+    renderAlerts([]);
     expect(screen.getByText("Risk & Alerts")).toBeInTheDocument();
   });
 
