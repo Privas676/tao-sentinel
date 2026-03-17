@@ -1,33 +1,45 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-// --- Mocks (hoisting-safe: use object refs, not let reassignment) ---
+// --- Hoisted mocks (safe for vi.mock factory references) ---
 
-const mockNavigate = vi.fn();
+const {
+  mockNavigate,
+  mockToast,
+  authState,
+  mockMaybeSingle,
+  mockUpdateEq,
+  mockUpdate,
+  mockUpload,
+  mockGetPublicUrl,
+} = vi.hoisted(() => {
+  const mockNavigate = vi.fn();
+  const mockToast = { success: vi.fn(), error: vi.fn() };
+  const authState = {
+    user: { id: "user-123", email: "test@example.com" } as any,
+    loading: false,
+  };
+  const mockMaybeSingle = vi.fn();
+  const mockUpdateEq = vi.fn().mockReturnValue({ error: null });
+  const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq });
+  const mockUpload = vi.fn().mockResolvedValue({ error: null });
+  const mockGetPublicUrl = vi.fn().mockReturnValue({
+    data: { publicUrl: "https://cdn.example.com/avatar.png" },
+  });
+  return { mockNavigate, mockToast, authState, mockMaybeSingle, mockUpdateEq, mockUpdate, mockUpload, mockGetPublicUrl };
+});
+
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mockNavigate,
 }));
 
-const mockToast = { success: vi.fn(), error: vi.fn() };
 vi.mock("sonner", () => ({
   toast: mockToast,
 }));
 
-const authState = {
-  user: { id: "user-123", email: "test@example.com" } as any,
-  loading: false,
-};
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ user: authState.user, loading: authState.loading }),
 }));
-
-const mockMaybeSingle = vi.fn();
-const mockUpdateEq = vi.fn().mockReturnValue({ error: null });
-const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq });
-const mockUpload = vi.fn().mockResolvedValue({ error: null });
-const mockGetPublicUrl = vi.fn().mockReturnValue({
-  data: { publicUrl: "https://cdn.example.com/avatar.png" },
-});
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -118,15 +130,11 @@ describe("ProfilePage", () => {
     const file = new File(["x".repeat(3 * 1024 * 1024)], "big.png", {
       type: "image/png",
     });
-    const input = document.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement;
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(mockToast.error).toHaveBeenCalledWith(
-        "L'image doit faire moins de 2 Mo"
-      );
+      expect(mockToast.error).toHaveBeenCalledWith("L'image doit faire moins de 2 Mo");
     });
     expect(mockUpload).not.toHaveBeenCalled();
   });
@@ -136,30 +144,22 @@ describe("ProfilePage", () => {
     await waitFor(() => screen.getByText("Profil"));
 
     const file = new File(["img"], "photo.jpg", { type: "image/jpeg" });
-    const input = document.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement;
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(mockUpload).toHaveBeenCalledWith("user-123/avatar.jpg", file, {
-        upsert: true,
-      });
+      expect(mockUpload).toHaveBeenCalledWith("user-123/avatar.jpg", file, { upsert: true });
       expect(mockToast.success).toHaveBeenCalledWith("Avatar mis à jour");
     });
   });
 
   it("shows upload error via toast", async () => {
-    mockUpload.mockResolvedValue({
-      error: { message: "Upload failed" },
-    });
+    mockUpload.mockResolvedValue({ error: { message: "Upload failed" } });
     render(<ProfilePage />);
     await waitFor(() => screen.getByText("Profil"));
 
     const file = new File(["img"], "photo.png", { type: "image/png" });
-    const input = document.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement;
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
@@ -169,10 +169,7 @@ describe("ProfilePage", () => {
 
   it("shows avatar image when avatarUrl is set", async () => {
     mockMaybeSingle.mockResolvedValue({
-      data: {
-        display_name: "Eve",
-        avatar_url: "https://cdn.example.com/eve.png",
-      },
+      data: { display_name: "Eve", avatar_url: "https://cdn.example.com/eve.png" },
       error: null,
     });
     render(<ProfilePage />);
