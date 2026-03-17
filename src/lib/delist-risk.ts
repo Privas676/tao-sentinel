@@ -230,10 +230,10 @@ export function computeDelistRiskScore(sn: SubnetMetricsForDelist): DelistRiskRe
   // Score: clamp to 0–100
   const score = Math.min(100, Math.round(totalWeight));
 
-  // Category
+  // Category — raised threshold: 45 (was 35) to avoid false positives on active subnets
   let category: DelistCategory = "NORMAL";
   if (score >= 65) category = "DEPEG_PRIORITY";
-  else if (score >= 35) category = "HIGH_RISK_NEAR_DELIST";
+  else if (score >= 45) category = "HIGH_RISK_NEAR_DELIST";
 
   return { netuid: sn.netuid, category, score, reasons, factors: topFactors(factors), source: "" };
 }
