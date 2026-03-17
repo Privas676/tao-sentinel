@@ -160,7 +160,7 @@ describe("AlertsPage", () => {
       makeEvent(2, "BREAK", 5, 3),
     ];
     renderAlerts(events);
-    fireEvent.click(screen.getByText("Bloquant"));
+    fireEvent.click(screen.getAllByText("Bloquant")[0]);
     const breakEls = screen.queryAllByText(/ZONE CRITIQUE/);
     const emptyEls = screen.queryAllByText(/Aucune alerte/);
     expect(breakEls.length + emptyEls.length).toBeGreaterThanOrEqual(1);
