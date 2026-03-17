@@ -55,6 +55,9 @@ vi.mock("@/hooks/use-subnet-scores", () => ({
     isLoading: false,
     subnetList: [],
     marketContext: undefined,
+    dataAlignment: "aligned",
+    dataAgeDebug: [],
+    dataConfidence: { score: 80, reasons: [] },
   }),
 }));
 
