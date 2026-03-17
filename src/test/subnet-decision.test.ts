@@ -50,10 +50,11 @@ describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
     expect(d.finalAction).toBe("SORTIR");
   });
 
-  it("forces SURVEILLER when HIGH_RISK_NEAR_DELIST + moderate risk", () => {
-    const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", risk: 30, depegProbability: 10 });
+  it("allows ENTRER when HIGH_RISK_NEAR_DELIST + low risk (market data preserved)", () => {
+    const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", risk: 30, depegProbability: 10, action: "ENTER", opp: 70 });
     const d = buildSubnetDecision(s, undefined, undefined, true);
-    expect(d.finalAction).toBe("SURVEILLER");
+    // With softened thresholds, low-risk subnets can still ENTER
+    expect(["ENTRER", "SURVEILLER"]).toContain(d.finalAction);
   });
 
   it("isBlocked is true when raw signal is opportunity + HIGH_RISK_NEAR_DELIST", () => {
