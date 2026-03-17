@@ -343,11 +343,13 @@ export function delistCategoryColor(cat: DelistCategory): string {
   }
 }
 
-/** Get category label */
-export function delistCategoryLabel(cat: DelistCategory, fr: boolean): string {
+/** Get category label — contextual wording based on source */
+export function delistCategoryLabel(cat: DelistCategory, fr: boolean, isExternalWatch = false): string {
   switch (cat) {
     case "DEPEG_PRIORITY": return fr ? "🔴 RISQUE DEREG" : "🔴 DEREG RISK";
-    case "HIGH_RISK_NEAR_DELIST": return fr ? "🟠 PROCHE DELIST" : "🟠 NEAR DELIST";
+    case "HIGH_RISK_NEAR_DELIST":
+      if (isExternalWatch) return fr ? "🟠 WATCH EXTERNE" : "🟠 EXTERNAL WATCH";
+      return fr ? "🟠 STRUCTURE FRAGILE" : "🟠 FRAGILE STRUCTURE";
     case "NORMAL": return "Normal";
   }
 }

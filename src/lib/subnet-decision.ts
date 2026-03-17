@@ -234,7 +234,7 @@ function deriveBlockReasons(s: UnifiedSubnetScore, v?: SubnetVerdictData, fr = t
   if (s.isOverridden) reasons.push(fr ? "Override de protection actif" : "Protection override active");
   if (s.depegProbability >= 50) reasons.push(fr ? `Risque depeg ${s.depegProbability}%` : `Depeg risk ${s.depegProbability}%`);
   if (s.delistCategory === "DEPEG_PRIORITY") reasons.push(fr ? "Priorité delist/depeg" : "Delist/depeg priority");
-  if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") reasons.push(fr ? "Proche délistage" : "Near delist");
+  if (s.delistCategory === "HIGH_RISK_NEAR_DELIST") reasons.push(fr ? "Structure fragile — surveillance" : "Fragile structure — monitoring");
   if (s.systemStatus === "DEPEG") reasons.push(fr ? "Statut DEPEG" : "DEPEG status");
   if (s.systemStatus === "ZONE_CRITIQUE") reasons.push(fr ? "Zone critique" : "Critical zone");
   if (s.risk > 65) reasons.push(fr ? `Risque structurel élevé (${s.risk})` : `High structural risk (${s.risk})`);
