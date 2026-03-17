@@ -304,9 +304,10 @@ function deriveFinalAction(
   }
 
   // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute subnets only)
+  // Softened: only force SORTIR with extreme conditions, let market data through
   if (s.delistCategory === "HIGH_RISK_NEAR_DELIST" && !tf.taoflute_match) {
-    if (s.depegProbability >= 30 || s.risk >= 60) return "SORTIR";
-    return "SURVEILLER";
+    if (s.depegProbability >= 50 || s.risk >= 70) return "SORTIR";
+    // Don't force SURVEILLER — let V3/fallback decide with market context
   }
 
   // 3. V3 verdict — PRIMARY analytical decision (when available)
