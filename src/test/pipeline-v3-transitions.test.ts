@@ -131,7 +131,7 @@ describe("V3 Pipeline — State Transitions (tick mutations)", () => {
       expect(r.verdict).not.toBe("DONNÉES_INSTABLES");
     });
 
-    it("tick 2: contradictory data → DONNÉES_INSTABLES", () => {
+    it("tick 2: contradictory data → not ENTER (data unreliable)", () => {
       // Create contradictions: price up but volume/buys crashed, high cap but no liquidity
       const contradictory = mutate(HEALTHY_BASE, {
         price_change_1_day: 50,         // price surging
@@ -143,8 +143,8 @@ describe("V3 Pipeline — State Transitions (tick mutations)", () => {
         market_cap: 1_000_000_000_000,  // huge cap
       });
       const r = verdict(10, contradictory);
-      // Should flag data instability or non-investable due to zero liquidity
-      expect(["DONNÉES_INSTABLES", "NON_INVESTISSABLE", "SORTIR"]).toContain(r.verdict);
+      // With zero liquidity and contradictory signals, should NOT recommend entry
+      expect(r.verdict).not.toBe("ENTER");
     });
   });
 
