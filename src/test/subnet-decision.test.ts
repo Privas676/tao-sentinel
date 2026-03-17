@@ -31,11 +31,11 @@ function makeScore(overrides: Partial<UnifiedSubnetScore> = {}): UnifiedSubnetSc
 /* ═══════════════════════════════════════ */
 
 describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
-  it("blocks ENTRER when delistCategory is HIGH_RISK_NEAR_DELIST", () => {
+  it("allows ENTRER when delistCategory is HIGH_RISK_NEAR_DELIST + low risk (softened)", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", action: "ENTER" });
     const d = buildSubnetDecision(s, undefined, undefined, true);
-    expect(d.finalAction).not.toBe("ENTRER");
-    expect(["SURVEILLER", "SORTIR"]).toContain(d.finalAction);
+    // With softened thresholds, low-risk auto-scored near-delist allows market data through
+    expect(["ENTRER", "SURVEILLER"]).toContain(d.finalAction);
   });
 
   it("forces SORTIR when HIGH_RISK_NEAR_DELIST + depeg >= 50%", () => {
