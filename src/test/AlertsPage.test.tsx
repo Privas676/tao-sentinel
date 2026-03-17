@@ -174,7 +174,7 @@ describe("AlertsPage", () => {
 
   it("renders impact hierarchy description", () => {
     renderAlerts([]);
-    expect(screen.getByText(/Hiérarchie d'impact/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Hiérarchie d'impact/).length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows dismissed count after dismissing", () => {
