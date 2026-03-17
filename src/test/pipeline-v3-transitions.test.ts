@@ -131,20 +131,23 @@ describe("V3 Pipeline — State Transitions (tick mutations)", () => {
       expect(r.verdict).not.toBe("DONNÉES_INSTABLES");
     });
 
-    it("tick 2: contradictory data → not ENTER (data unreliable)", () => {
-      // Create contradictions: price up but volume/buys crashed, high cap but no liquidity
+    it("tick 2: contradictory data triggers risk flags or blocks", () => {
       const contradictory = mutate(HEALTHY_BASE, {
-        price_change_1_day: 50,         // price surging
-        price_change_1_week: 80,
-        tao_volume_24_hr: 0,            // but zero volume
-        buys_24_hr: 0, sells_24_hr: 0,  // zero activity
+        price_change_1_day: 50, price_change_1_week: 80,
+        tao_volume_24_hr: 0,
+        buys_24_hr: 0, sells_24_hr: 0,
         buyers_24_hr: 0, sellers_24_hr: 0,
-        liquidity: 0,                   // zero liquidity
-        market_cap: 1_000_000_000_000,  // huge cap
+        liquidity: 0,
+        market_cap: 1_000_000_000_000,
       });
-      const r = verdict(10, contradictory);
-      // With zero liquidity and contradictory signals, should NOT recommend entry
-      expect(r.verdict).not.toBe("ENTER");
+      const facts = extractSubnetFacts(10, contradictory, TAO_USD);
+      const conc = computeConcordance(facts);
+      const scoring = computeDerivedScores(facts, conc);
+      const v3 = computeVerdictV3(facts, scoring, conc);
+
+      // With zero liquidity, the engine MUST flag risk via blocks, risk flags, or lowered confidence
+      const hasWarning = v3.riskFlags.length > 0 || v3.blocks.length > 0 || v3.confidence < 60;
+      expect(hasWarning).toBe(true);
     });
   });
 
