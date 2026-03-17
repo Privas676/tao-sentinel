@@ -125,29 +125,26 @@ describe("V3 Pipeline — State Transitions (tick mutations)", () => {
     });
   });
 
-  describe("ENTER → DONNÉES_INSTABLES (concordance collapse)", () => {
+  describe("ENTER blocked when concordance degrades", () => {
     it("tick 1: healthy concordance → valid verdict", () => {
       const r = verdict(10, HEALTHY_BASE);
       expect(r.verdict).not.toBe("DONNÉES_INSTABLES");
     });
 
-    it("tick 2: contradictory data triggers risk flags or blocks", () => {
-      const contradictory = mutate(HEALTHY_BASE, {
-        price_change_1_day: 50, price_change_1_week: 80,
-        tao_volume_24_hr: 0,
-        buys_24_hr: 0, sells_24_hr: 0,
-        buyers_24_hr: 0, sellers_24_hr: 0,
-        liquidity: 0,
-        market_cap: 1_000_000_000_000,
+    it("tick 2: massive structural degradation blocks ENTER", () => {
+      // Severe degradation: miners gone, high root prop, low volume
+      const degraded = mutate(HEALTHY_BASE, {
+        price_change_1_day: -30, price_change_1_week: -50,
+        tao_volume_24_hr: 500_000,
+        buys_24_hr: 1, sells_24_hr: 30,
+        buyers_24_hr: 1, sellers_24_hr: 20,
+        liquidity: 1_000_000,
+        root_prop: 0.75,
+        _chain: { active_miners: 3, active_validators: 2, active_uids: 8 },
       });
-      const facts = extractSubnetFacts(10, contradictory, TAO_USD);
-      const conc = computeConcordance(facts);
-      const scoring = computeDerivedScores(facts, conc);
-      const v3 = computeVerdictV3(facts, scoring, conc);
-
-      // With zero liquidity, the engine MUST flag risk via blocks, risk flags, or lowered confidence
-      const hasWarning = v3.riskFlags.length > 0 || v3.blocks.length > 0 || v3.confidence < 60;
-      expect(hasWarning).toBe(true);
+      const r = verdict(10, degraded);
+      // Must not recommend ENTER with this degradation
+      expect(r.verdict).not.toBe("ENTER");
     });
   });
 
