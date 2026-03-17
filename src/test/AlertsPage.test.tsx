@@ -37,6 +37,26 @@ vi.mock("@/hooks/use-delist-mode", () => ({
   useDelistMode: () => ({ delistMode: "manual", setDelistMode: vi.fn() }),
 }));
 
+vi.mock("@/hooks/use-canonical-subnets", () => ({
+  useCanonicalSubnets: () => ({
+    decisions: new Map(),
+    isLoading: false,
+  }),
+}));
+
+vi.mock("@/hooks/use-local-portfolio", () => ({
+  useLocalPortfolio: () => ({
+    positions: [],
+    archive: [],
+    ownedNetuids: new Set(),
+    isOwned: () => false,
+    addPosition: vi.fn(),
+    updateQuantity: vi.fn(),
+    removePosition: vi.fn(),
+    sellPosition: vi.fn(),
+  }),
+}));
+
 vi.mock("@/lib/i18n", () => ({
   useI18n: () => ({
     t: (k: string) => {
@@ -88,7 +108,7 @@ describe("AlertsPage", () => {
   });
 
   it("renders page title", () => {
-    renderAlerts();
+    renderAlerts([]);
     expect(screen.getByText("Risk & Alerts")).toBeInTheDocument();
   });
 
@@ -98,18 +118,18 @@ describe("AlertsPage", () => {
   });
 
   it("renders tab buttons", () => {
-    renderAlerts();
+    renderAlerts([]);
     expect(screen.getByText("Toutes")).toBeInTheDocument();
-    expect(screen.getByText("Critiques")).toBeInTheDocument();
-    expect(screen.getByText("Warnings")).toBeInTheDocument();
+    expect(screen.getAllByText("Bloquant").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Surveillance").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Overrides")).toBeInTheDocument();
     expect(screen.getByText("Portfolio")).toBeInTheDocument();
   });
 
   it("renders KPI chips", () => {
     renderAlerts([]);
-    expect(screen.getByText("CRITIQUES")).toBeInTheDocument();
-    expect(screen.getByText("WARNINGS")).toBeInTheDocument();
+    expect(screen.getByText("BLOQUANT")).toBeInTheDocument();
+    expect(screen.getByText("SURVEILLANCE")).toBeInTheDocument();
     expect(screen.getByText("OVERRIDES")).toBeInTheDocument();
   });
 
@@ -140,8 +160,7 @@ describe("AlertsPage", () => {
       makeEvent(2, "BREAK", 5, 3),
     ];
     renderAlerts(events);
-    fireEvent.click(screen.getByText("Critiques"));
-    // After critical filter, only critical events should show
+    fireEvent.click(screen.getAllByText("Bloquant")[0]);
     const breakEls = screen.queryAllByText(/ZONE CRITIQUE/);
     const emptyEls = screen.queryAllByText(/Aucune alerte/);
     expect(breakEls.length + emptyEls.length).toBeGreaterThanOrEqual(1);
@@ -153,13 +172,12 @@ describe("AlertsPage", () => {
     expect(screen.getByText("Par subnet")).toBeInTheDocument();
   });
 
-  it("renders why-it-matters section", () => {
+  it("renders impact hierarchy description", () => {
     renderAlerts([]);
-    expect(screen.getByText(/Pourquoi c'est important/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Hiérarchie d'impact/).length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows dismissed count after dismissing", () => {
-    // Dismissed alerts are tracked in localStorage
     const key = "alerts-dismissed";
     localStorage.setItem(key, JSON.stringify({ "BREAK::5::2025": Date.now() }));
     renderAlerts([makeEvent(1, "BREAK", 5, 3)]);
