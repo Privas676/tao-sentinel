@@ -38,14 +38,14 @@ describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
     expect(["SURVEILLER", "SORTIR"]).toContain(d.finalAction);
   });
 
-  it("forces SORTIR when HIGH_RISK_NEAR_DELIST + depeg >= 30%", () => {
-    const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", depegProbability: 40 });
+  it("forces SORTIR when HIGH_RISK_NEAR_DELIST + depeg >= 50%", () => {
+    const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", depegProbability: 55 });
     const d = buildSubnetDecision(s, undefined, undefined, true);
     expect(d.finalAction).toBe("SORTIR");
   });
 
-  it("forces SORTIR when HIGH_RISK_NEAR_DELIST + high risk", () => {
-    const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", risk: 65 });
+  it("forces SORTIR when HIGH_RISK_NEAR_DELIST + very high risk", () => {
+    const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", risk: 75 });
     const d = buildSubnetDecision(s, undefined, undefined, true);
     expect(d.finalAction).toBe("SORTIR");
   });
