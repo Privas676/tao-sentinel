@@ -118,10 +118,10 @@ describe("AlertsPage", () => {
   });
 
   it("renders tab buttons", () => {
-    renderAlerts();
+    renderAlerts([]);
     expect(screen.getByText("Toutes")).toBeInTheDocument();
-    expect(screen.getByText("Bloquant")).toBeInTheDocument();
-    expect(screen.getByText("Surveillance")).toBeInTheDocument();
+    expect(screen.getAllByText("Bloquant").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Surveillance").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Overrides")).toBeInTheDocument();
     expect(screen.getByText("Portfolio")).toBeInTheDocument();
   });
