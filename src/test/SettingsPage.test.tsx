@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const mockSetLang = vi.fn();
 const mockSetMode = vi.fn();
@@ -44,13 +45,41 @@ vi.mock("@/hooks/use-push-notifications", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-subnet-scores", () => ({
+  useSubnetScores: () => ({
+    scores: new Map(),
+    scoresList: [],
+    sparklines: new Map(),
+    scoreTimestamp: "2025-06-01T12:00:00Z",
+    taoUsd: 350,
+    isLoading: false,
+    subnetList: [],
+    marketContext: undefined,
+  }),
+}));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: () => ({
+      select: () => ({
+        order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }),
+        eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }),
+        gte: () => Promise.resolve({ count: 0, error: null }),
+      }),
+    }),
+  },
+}));
+
 import SettingsPage from "@/pages/SettingsPage";
 
 function renderSettings() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
-      <SettingsPage />
-    </MemoryRouter>
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

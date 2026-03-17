@@ -46,9 +46,14 @@ vi.mock("@/hooks/use-canonical-subnets", () => ({
 
 vi.mock("@/hooks/use-local-portfolio", () => ({
   useLocalPortfolio: () => ({
-    netuids: [],
-    has: () => false,
-    toggle: vi.fn(),
+    positions: [],
+    archive: [],
+    ownedNetuids: new Set(),
+    isOwned: () => false,
+    addPosition: vi.fn(),
+    updateQuantity: vi.fn(),
+    removePosition: vi.fn(),
+    sellPosition: vi.fn(),
   }),
 }));
 
