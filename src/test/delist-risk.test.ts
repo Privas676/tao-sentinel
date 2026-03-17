@@ -161,10 +161,12 @@ describe("delistCategory helpers", () => {
   });
   it("labels FR", () => {
     expect(delistCategoryLabel("DEPEG_PRIORITY", true)).toContain("RISQUE DEREG");
-    expect(delistCategoryLabel("HIGH_RISK_NEAR_DELIST", true)).toContain("PROCHE DELIST");
+    expect(delistCategoryLabel("HIGH_RISK_NEAR_DELIST", true)).toContain("STRUCTURE FRAGILE");
+    expect(delistCategoryLabel("HIGH_RISK_NEAR_DELIST", true, true)).toContain("WATCH EXTERNE");
   });
   it("labels EN", () => {
     expect(delistCategoryLabel("DEPEG_PRIORITY", false)).toContain("DEREG RISK");
-    expect(delistCategoryLabel("HIGH_RISK_NEAR_DELIST", false)).toContain("NEAR DELIST");
+    expect(delistCategoryLabel("HIGH_RISK_NEAR_DELIST", false)).toContain("FRAGILE STRUCTURE");
+    expect(delistCategoryLabel("HIGH_RISK_NEAR_DELIST", false, true)).toContain("EXTERNAL WATCH");
   });
 });
