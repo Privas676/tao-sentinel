@@ -96,11 +96,13 @@ describe("V3 Pipeline — State Transitions (tick mutations)", () => {
 
   describe("SURVEILLER → ENTER (conditions improving)", () => {
     const weakStart = mutate(HEALTHY_BASE, {
-      price_change_1_day: -5, price_change_1_week: -10,
-      tao_volume_24_hr: 20_000_000_000,
-      buys_24_hr: 15, sells_24_hr: 18,
-      liquidity: 200_000_000_000,
-      root_prop: 0.35,
+      price_change_1_hour: -3, price_change_1_day: -12, price_change_1_week: -20, price_change_1_month: -15,
+      tao_volume_24_hr: 5_000_000_000,
+      buys_24_hr: 8, sells_24_hr: 22,
+      buyers_24_hr: 5, sellers_24_hr: 15,
+      liquidity: 80_000_000_000,
+      root_prop: 0.45,
+      alpha_staked: 20_000_000_000,
     });
 
     it("tick 1: weak data produces SURVEILLER", () => {
