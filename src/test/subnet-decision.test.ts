@@ -77,11 +77,11 @@ describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
 /* ═══════════════════════════════════════ */
 
 describe("subnet-decision — SN-90 scenario", () => {
-  it("SN-90 with HIGH_RISK_NEAR_DELIST + depeg 40% → SORTIR, not ENTRER", () => {
+  it("SN-90 with HIGH_RISK_NEAR_DELIST + depeg 55% → SORTIR, not ENTRER", () => {
     const s = makeScore({
       netuid: 90,
       delistCategory: "HIGH_RISK_NEAR_DELIST",
-      depegProbability: 40,
+      depegProbability: 55,
       opp: 70,
       risk: 30,
       action: "ENTER",
