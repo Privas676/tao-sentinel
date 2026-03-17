@@ -25,6 +25,8 @@ export default defineConfig(({ mode }) => ({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
+        // Force new SW on each build — no stale cache served
+        additionalManifestEntries: [],
       },
       manifest: {
         name: "TAO Sentinel — Bittensor Intelligence",

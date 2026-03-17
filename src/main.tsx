@@ -68,15 +68,21 @@ function mountApp() {
 }
 
 stabilizePreviewRuntime().finally(() => {
+  const CURRENT_VERSION = "v0.3.1";
+
   if (!isPreviewHost && "caches" in window) {
     caches.keys().then((names) => {
       for (const name of names) {
-        if (!name.includes("v0.2.0")) caches.delete(name);
+        if (!name.includes(CURRENT_VERSION)) {
+          console.log("[startup] Purging stale cache:", name);
+          caches.delete(name);
+        }
       }
     });
   }
 
   if (!isPreviewHost && "serviceWorker" in navigator) {
+    // Force SW update check on every page load
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       for (const reg of registrations) {
         reg.update().catch(() => {});
