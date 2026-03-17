@@ -120,16 +120,16 @@ describe("AlertsPage", () => {
   it("renders tab buttons", () => {
     renderAlerts();
     expect(screen.getByText("Toutes")).toBeInTheDocument();
-    expect(screen.getByText("Critiques")).toBeInTheDocument();
-    expect(screen.getByText("Warnings")).toBeInTheDocument();
+    expect(screen.getByText("Bloquant")).toBeInTheDocument();
+    expect(screen.getByText("Surveillance")).toBeInTheDocument();
     expect(screen.getByText("Overrides")).toBeInTheDocument();
     expect(screen.getByText("Portfolio")).toBeInTheDocument();
   });
 
   it("renders KPI chips", () => {
     renderAlerts([]);
-    expect(screen.getByText("CRITIQUES")).toBeInTheDocument();
-    expect(screen.getByText("WARNINGS")).toBeInTheDocument();
+    expect(screen.getByText("BLOQUANT")).toBeInTheDocument();
+    expect(screen.getByText("SURVEILLANCE")).toBeInTheDocument();
     expect(screen.getByText("OVERRIDES")).toBeInTheDocument();
   });
 
