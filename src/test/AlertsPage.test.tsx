@@ -172,9 +172,9 @@ describe("AlertsPage", () => {
     expect(screen.getByText("Par subnet")).toBeInTheDocument();
   });
 
-  it("renders why-it-matters section", () => {
+  it("renders impact hierarchy description", () => {
     renderAlerts([]);
-    expect(screen.getByText(/Pourquoi c'est important/)).toBeInTheDocument();
+    expect(screen.getByText(/Hiérarchie d'impact/)).toBeInTheDocument();
   });
 
   it("shows dismissed count after dismissing", () => {
