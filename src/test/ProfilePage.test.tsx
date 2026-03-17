@@ -1,23 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-// --- Mocks ---
+// --- Mocks (hoisting-safe: use object refs, not let reassignment) ---
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mockNavigate,
 }));
 
-const mockToastSuccess = vi.fn();
-const mockToastError = vi.fn();
+const mockToast = { success: vi.fn(), error: vi.fn() };
 vi.mock("sonner", () => ({
-  toast: { success: mockToastSuccess, error: mockToastError },
+  toast: mockToast,
 }));
 
-let mockUser: any = { id: "user-123", email: "test@example.com" };
-let mockAuthLoading = false;
+const authState = {
+  user: { id: "user-123", email: "test@example.com" } as any,
+  loading: false,
+};
 vi.mock("@/hooks/use-auth", () => ({
-  useAuth: () => ({ user: mockUser, loading: mockAuthLoading }),
+  useAuth: () => ({ user: authState.user, loading: authState.loading }),
 }));
 
 const mockMaybeSingle = vi.fn();
@@ -55,8 +56,8 @@ import ProfilePage from "@/pages/ProfilePage";
 describe("ProfilePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUser = { id: "user-123", email: "test@example.com" };
-    mockAuthLoading = false;
+    authState.user = { id: "user-123", email: "test@example.com" };
+    authState.loading = false;
     mockMaybeSingle.mockResolvedValue({
       data: { display_name: "Alice", avatar_url: null },
       error: null,
@@ -66,13 +67,13 @@ describe("ProfilePage", () => {
   });
 
   it("renders loading state initially", () => {
-    mockAuthLoading = true;
+    authState.loading = true;
     render(<ProfilePage />);
     expect(screen.getByText("Chargement…")).toBeInTheDocument();
   });
 
   it("redirects to /auth when not authenticated", () => {
-    mockUser = null;
+    authState.user = null;
     render(<ProfilePage />);
     expect(mockNavigate).toHaveBeenCalledWith("/auth");
   });
@@ -106,7 +107,7 @@ describe("ProfilePage", () => {
       expect(mockUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ display_name: "Bob" })
       );
-      expect(mockToastSuccess).toHaveBeenCalledWith("Profil mis à jour");
+      expect(mockToast.success).toHaveBeenCalledWith("Profil mis à jour");
     });
   });
 
@@ -123,7 +124,7 @@ describe("ProfilePage", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith(
+      expect(mockToast.error).toHaveBeenCalledWith(
         "L'image doit faire moins de 2 Mo"
       );
     });
@@ -144,7 +145,7 @@ describe("ProfilePage", () => {
       expect(mockUpload).toHaveBeenCalledWith("user-123/avatar.jpg", file, {
         upsert: true,
       });
-      expect(mockToastSuccess).toHaveBeenCalledWith("Avatar mis à jour");
+      expect(mockToast.success).toHaveBeenCalledWith("Avatar mis à jour");
     });
   });
 
@@ -162,7 +163,7 @@ describe("ProfilePage", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith("Upload failed");
+      expect(mockToast.error).toHaveBeenCalledWith("Upload failed");
     });
   });
 
