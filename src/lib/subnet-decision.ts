@@ -433,7 +433,10 @@ function deriveSignalPrincipal(s: UnifiedSubnetScore, fa: FinalAction, rawSignal
   if (special?.isSystem) return fr ? "Infrastructure réseau" : "Network infrastructure";
   if (s.isOverridden) return s.overrideReasons[0] || (fr ? "Zone critique" : "Critical zone");
   if (s.depegProbability >= 50) return `Depeg ${s.depegProbability}%`;
-  if (s.delistCategory !== "NORMAL") return fr ? "Risque delist" : "Delist risk";
+  // For TaoFlute WATCH subnets: DON'T crush market signal, just note external watch
+  // For DEPEG_PRIORITY: keep strong warning
+  if (s.delistCategory === "DEPEG_PRIORITY") return fr ? "Risque delist critique" : "Critical delist risk";
+  // For non-NORMAL but NOT depeg priority: let V3/market signal through instead of blanket "Risque delist"
 
   // V3 primary reason is the most informative
   if (v3) {
