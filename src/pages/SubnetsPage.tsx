@@ -595,132 +595,220 @@ export default function SubnetsPage() {
           </span>
         </div>
 
-        {/* ═══ MASTER TABLE ═══ */}
-        <SwipeHint storageKey="swipe-subnets-v4" />
+        {/* ═══ MASTER TABLE / CARD VIEW ═══ */}
+        {!isMobile && <SwipeHint storageKey="swipe-subnets-v4" />}
 
-        <div className="rounded-xl overflow-hidden border border-border" style={{ boxShadow: "var(--shadow-card)" }}>
-          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
-            <table className="w-full font-mono" style={{ minWidth: isCompact ? 680 : 1100 }}>
-              <thead>
-                <tr className="bg-muted/20 border-b border-border">
-                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground sticky left-0 z-10 bg-background cursor-pointer" onClick={() => toggleSort("netuid")}>
-                    SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-                  </th>
-                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground sticky left-[44px] z-10 bg-background cursor-pointer" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }} onClick={() => toggleSort("name")}>
-                    Subnet {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
-                  </th>
-                  <SortHeader col="action" label="Action" align="center" />
-                  <SortHeader col="conviction" label="Conv." align="center" />
-                  <SortHeader col="risk" label="Risk" align="right" />
-                  <SortHeader col="opp" label="Opp." align="right" />
-                  <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Signal</th>
-                  <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">{fr ? "Ext." : "Ext."}</th>
-                  {!isCompact && (
-                    <>
-                      <SortHeader col="confidence" label="Conf." align="right" />
-                      <SortHeader col="momentum" label="Mom." align="right" />
-                      <SortHeader col="liquidity" label="Liq." align="center" />
-                      <SortHeader col="stability" label="Struct." align="center" />
-                      <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">PF</th>
-                    </>
-                  )}
-                  <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground">7d</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={isCompact ? 8 : 13} className="py-12 text-center text-muted-foreground text-[11px]">
-                      {fr ? "Aucun subnet ne correspond aux filtres actifs." : "No subnets match active filters."}
-                    </td>
-                  </tr>
-                ) : rows.map((r) => {
-                  const fa = r.decision.finalAction;
-                  const isSystemRow = r.decision.isSystem;
-                  const convColor = r.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : r.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
-                  const liqColor = r.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : r.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
-                  const structColor = r.structureLevel === "HEALTHY" ? "hsl(var(--signal-go))" : r.structureLevel === "FRAGILE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
-                  return (
-                    <tr
-                      key={r.netuid}
-                      className="transition-colors cursor-pointer hover:bg-accent/30"
-                      style={{
-                        borderBottom: "1px solid hsl(var(--border))",
-                        ...(r.isOverridden ? { background: "hsla(var(--signal-break), 0.03)", borderLeft: "2px solid hsla(var(--signal-break), 0.4)" } : {}),
-                        ...(isSystemRow && !r.isOverridden ? { background: "hsla(var(--signal-system), 0.02)", borderLeft: "2px solid hsla(var(--signal-system), 0.25)" } : {}),
-                      }}
-                      onClick={() => setDrawerRow(r)}
-                    >
-                      <td className="py-2 px-2.5 text-[10px] text-muted-foreground sticky left-0 z-[5] bg-background">{r.netuid}</td>
-                      <td className="py-2 px-2.5 text-[10px] sticky left-[44px] z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
-                        <span className="text-foreground/85 font-medium">{r.name}</span>
-                        {SPECIAL_SUBNETS[r.netuid]?.isSystem && (
-                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-system), 0.08)", color: "hsl(var(--signal-system))", border: "1px solid hsla(var(--signal-system), 0.2)" }}>
-                            🔷 {fr ? SPECIAL_SUBNETS[r.netuid].label : SPECIAL_SUBNETS[r.netuid].labelEn}
-                          </span>
-                        )}
-                        {!SPECIAL_SUBNETS[r.netuid]?.isSystem && SPECIAL_SUBNETS[r.netuid] && (
-                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-hold), 0.08)", color: "hsl(var(--signal-hold))", border: "1px solid hsla(var(--signal-hold), 0.2)" }}>
-                            {fr ? SPECIAL_SUBNETS[r.netuid].label : SPECIAL_SUBNETS[r.netuid].labelEn}
-                          </span>
-                        )}
-                        {r.isOverridden && (
-                          <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-break), 0.08)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.2)" }}>⛔</span>
-                        )}
-                      </td>
-                      {/* ── ACTION COLUMN: uses finalAction (single source of truth) ── */}
-                      <td className="py-2 px-2.5 text-center">
-                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{
-                          color: finalActionColor(fa),
-                          background: finalActionBg(fa),
-                        }}>
-                          {finalActionIcon(fa)} {finalActionLabel(fa, fr)}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2.5 text-center">
-                        <span className="font-mono text-[9px] font-bold" style={{ color: convColor }}>{r.convictionLevel}</span>
-                      </td>
-                      <td className="py-2 px-2.5 text-right font-mono text-[10px] font-bold" style={{ color: riskColor(r.risk) }}>{r.risk}</td>
-                      <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: opportunityColor(r.opp) }}>{r.opp}</td>
-                      <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
-                      <td className="py-2 px-2.5 text-center">
-                        {r.extLabel.startsWith("P") ? (
-                          <span className="font-mono text-[8px] font-black px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-break), 0.12)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.25)" }}>
-                            {r.extLabel}
-                          </span>
-                        ) : r.extLabel === "WATCH" ? (
-                          <span className="font-mono text-[7px] font-bold px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-go-spec), 0.1)", color: "hsl(var(--signal-go-spec))", border: "1px solid hsla(var(--signal-go-spec), 0.2)" }}>
-                            WATCH
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-[9px]">—</span>
-                        )}
-                      </td>
-                      {!isCompact && (
-                        <>
-                          <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: confianceColor(r.confianceScore) }}>{r.confianceScore}%</td>
-                          <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: r.momentumScore >= 55 ? "hsl(var(--signal-go))" : r.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))" }}>{Math.round(r.momentumScore)}</td>
-                          <td className="py-2 px-2.5 text-center">
-                            <span className="font-mono text-[9px]" style={{ color: liqColor }}>{r.liquidityLevel === "HIGH" ? "●" : r.liquidityLevel === "MEDIUM" ? "◐" : "○"}</span>
-                          </td>
-                          <td className="py-2 px-2.5 text-center">
-                            <span className="font-mono text-[9px]" style={{ color: structColor }}>{r.structureLevel === "HEALTHY" ? "✓" : r.structureLevel === "FRAGILE" ? "~" : "✕"}</span>
-                          </td>
-                          <td className="py-2 px-2.5 text-center">
-                            {r.owned ? <span className="text-[9px]" style={{ color: "hsl(var(--gold))" }}>★</span> : <span className="text-muted-foreground">—</span>}
-                          </td>
-                        </>
+        {isMobile ? (
+          /* ── Mobile: stacked card view ── */
+          <div className="space-y-2">
+            {rows.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground text-[11px] rounded-xl border border-border bg-card" style={{ boxShadow: "var(--shadow-card)" }}>
+                {fr ? "Aucun subnet ne correspond aux filtres actifs." : "No subnets match active filters."}
+              </div>
+            ) : rows.map((r) => {
+              const fa = r.decision.finalAction;
+              const isSystemRow = r.decision.isSystem;
+              const convColor = r.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : r.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
+              const liqColor = r.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : r.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
+              const structColor = r.structureLevel === "HEALTHY" ? "hsl(var(--signal-go))" : r.structureLevel === "FRAGILE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
+              return (
+                <div
+                  key={r.netuid}
+                  className="rounded-xl border border-border bg-card p-3 cursor-pointer transition-colors hover:bg-accent/30"
+                  style={{
+                    boxShadow: "var(--shadow-card)",
+                    ...(r.isOverridden ? { borderLeftWidth: 3, borderLeftColor: "hsl(var(--signal-break))" } : {}),
+                    ...(isSystemRow && !r.isOverridden ? { borderLeftWidth: 3, borderLeftColor: "hsl(var(--signal-system))" } : {}),
+                  }}
+                  onClick={() => setDrawerRow(r)}
+                >
+                  {/* Row 1: SN + Name + Action badge */}
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="font-mono text-[10px] text-muted-foreground shrink-0">{r.netuid}</span>
+                      <span className="font-mono text-[11px] text-foreground/85 font-medium truncate">{r.name}</span>
+                      {SPECIAL_SUBNETS[r.netuid]?.isSystem && (
+                        <span className="text-[7px] px-1 py-0.5 rounded font-bold shrink-0" style={{ background: "hsla(var(--signal-system), 0.08)", color: "hsl(var(--signal-system))", border: "1px solid hsla(var(--signal-system), 0.2)" }}>🔷</span>
                       )}
-                      <td className="py-2 px-2.5 text-center">
-                        <SparklineMini data={r.spark} width={44} height={14} />
+                      {r.isOverridden && (
+                        <span className="text-[7px] px-1 py-0.5 rounded font-bold shrink-0" style={{ background: "hsla(var(--signal-break), 0.08)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.2)" }}>⛔</span>
+                      )}
+                    </div>
+                    <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded shrink-0" style={{
+                      color: finalActionColor(fa),
+                      background: finalActionBg(fa),
+                    }}>
+                      {finalActionIcon(fa)} {finalActionLabel(fa, fr)}
+                    </span>
+                  </div>
+
+                  {/* Row 2: Key metrics grid */}
+                  <div className="grid grid-cols-4 gap-1.5 mb-2">
+                    <div className="text-center rounded bg-muted/20 py-1">
+                      <div className="font-mono text-[7px] text-muted-foreground tracking-wider">CONV</div>
+                      <div className="font-mono text-[10px] font-bold" style={{ color: convColor }}>{r.convictionLevel}</div>
+                    </div>
+                    <div className="text-center rounded bg-muted/20 py-1">
+                      <div className="font-mono text-[7px] text-muted-foreground tracking-wider">RISK</div>
+                      <div className="font-mono text-[10px] font-bold" style={{ color: riskColor(r.risk) }}>{r.risk}</div>
+                    </div>
+                    <div className="text-center rounded bg-muted/20 py-1">
+                      <div className="font-mono text-[7px] text-muted-foreground tracking-wider">OPP</div>
+                      <div className="font-mono text-[10px] font-bold" style={{ color: opportunityColor(r.opp) }}>{r.opp}</div>
+                    </div>
+                    <div className="text-center rounded bg-muted/20 py-1">
+                      <div className="font-mono text-[7px] text-muted-foreground tracking-wider">MOM</div>
+                      <div className="font-mono text-[10px] font-bold" style={{ color: r.momentumScore >= 55 ? "hsl(var(--signal-go))" : r.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))" }}>{Math.round(r.momentumScore)}</div>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Secondary metrics + sparkline */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[8px] text-muted-foreground" style={{ color: confianceColor(r.confianceScore) }}>Conf {r.confianceScore}%</span>
+                      <span className="font-mono text-[8px]" style={{ color: liqColor }}>Liq {r.liquidityLevel === "HIGH" ? "●" : r.liquidityLevel === "MEDIUM" ? "◐" : "○"}</span>
+                      <span className="font-mono text-[8px]" style={{ color: structColor }}>Str {r.structureLevel === "HEALTHY" ? "✓" : r.structureLevel === "FRAGILE" ? "~" : "✕"}</span>
+                      {r.owned && <span className="text-[8px]" style={{ color: "hsl(var(--gold))" }}>★</span>}
+                      {r.extLabel.startsWith("P") ? (
+                        <span className="font-mono text-[7px] font-black px-1 py-0.5 rounded" style={{ background: "hsla(var(--signal-break), 0.12)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.25)" }}>{r.extLabel}</span>
+                      ) : r.extLabel === "WATCH" ? (
+                        <span className="font-mono text-[7px] font-bold px-1 py-0.5 rounded" style={{ background: "hsla(var(--signal-go-spec), 0.1)", color: "hsl(var(--signal-go-spec))", border: "1px solid hsla(var(--signal-go-spec), 0.2)" }}>WATCH</span>
+                      ) : null}
+                    </div>
+                    <SparklineMini data={r.spark} width={44} height={14} />
+                  </div>
+
+                  {/* Row 4: Signal */}
+                  <div className="font-mono text-[9px] text-muted-foreground mt-1.5 truncate">{r.signalPrincipal}</div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ── Desktop: classic table ── */
+          <div className="rounded-xl overflow-hidden border border-border" style={{ boxShadow: "var(--shadow-card)" }}>
+            <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+              <table className="w-full font-mono" style={{ minWidth: isCompact ? 680 : 1100 }}>
+                <thead>
+                  <tr className="bg-muted/20 border-b border-border">
+                    <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground sticky left-0 z-10 bg-background cursor-pointer" onClick={() => toggleSort("netuid")}>
+                      SN {sortCol === "netuid" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+                    </th>
+                    <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground sticky left-[44px] z-10 bg-background cursor-pointer" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }} onClick={() => toggleSort("name")}>
+                      Subnet {sortCol === "name" ? (sortDir === "desc" ? "▼" : "▲") : ""}
+                    </th>
+                    <SortHeader col="action" label="Action" align="center" />
+                    <SortHeader col="conviction" label="Conv." align="center" />
+                    <SortHeader col="risk" label="Risk" align="right" />
+                    <SortHeader col="opp" label="Opp." align="right" />
+                    <th className="py-2.5 px-2.5 text-left font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">Signal</th>
+                    <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">{fr ? "Ext." : "Ext."}</th>
+                    {!isCompact && (
+                      <>
+                        <SortHeader col="confidence" label="Conf." align="right" />
+                        <SortHeader col="momentum" label="Mom." align="right" />
+                        <SortHeader col="liquidity" label="Liq." align="center" />
+                        <SortHeader col="stability" label="Struct." align="center" />
+                        <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground whitespace-nowrap">PF</th>
+                      </>
+                    )}
+                    <th className="py-2.5 px-2.5 text-center font-mono text-[8px] tracking-wider uppercase text-muted-foreground">7d</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={isCompact ? 8 : 13} className="py-12 text-center text-muted-foreground text-[11px]">
+                        {fr ? "Aucun subnet ne correspond aux filtres actifs." : "No subnets match active filters."}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ) : rows.map((r) => {
+                    const fa = r.decision.finalAction;
+                    const isSystemRow = r.decision.isSystem;
+                    const convColor = r.convictionLevel === "HIGH" ? "hsl(var(--signal-go))" : r.convictionLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--muted-foreground))";
+                    const liqColor = r.liquidityLevel === "HIGH" ? "hsl(var(--signal-go))" : r.liquidityLevel === "MEDIUM" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
+                    const structColor = r.structureLevel === "HEALTHY" ? "hsl(var(--signal-go))" : r.structureLevel === "FRAGILE" ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))";
+                    return (
+                      <tr
+                        key={r.netuid}
+                        className="transition-colors cursor-pointer hover:bg-accent/30"
+                        style={{
+                          borderBottom: "1px solid hsl(var(--border))",
+                          ...(r.isOverridden ? { background: "hsla(var(--signal-break), 0.03)", borderLeft: "2px solid hsla(var(--signal-break), 0.4)" } : {}),
+                          ...(isSystemRow && !r.isOverridden ? { background: "hsla(var(--signal-system), 0.02)", borderLeft: "2px solid hsla(var(--signal-system), 0.25)" } : {}),
+                        }}
+                        onClick={() => setDrawerRow(r)}
+                      >
+                        <td className="py-2 px-2.5 text-[10px] text-muted-foreground sticky left-0 z-[5] bg-background">{r.netuid}</td>
+                        <td className="py-2 px-2.5 text-[10px] sticky left-[44px] z-[5] bg-background" style={{ boxShadow: "4px 0 6px -2px hsla(0,0%,0%,0.3)" }}>
+                          <span className="text-foreground/85 font-medium">{r.name}</span>
+                          {SPECIAL_SUBNETS[r.netuid]?.isSystem && (
+                            <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-system), 0.08)", color: "hsl(var(--signal-system))", border: "1px solid hsla(var(--signal-system), 0.2)" }}>
+                              🔷 {fr ? SPECIAL_SUBNETS[r.netuid].label : SPECIAL_SUBNETS[r.netuid].labelEn}
+                            </span>
+                          )}
+                          {!SPECIAL_SUBNETS[r.netuid]?.isSystem && SPECIAL_SUBNETS[r.netuid] && (
+                            <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-hold), 0.08)", color: "hsl(var(--signal-hold))", border: "1px solid hsla(var(--signal-hold), 0.2)" }}>
+                              {fr ? SPECIAL_SUBNETS[r.netuid].label : SPECIAL_SUBNETS[r.netuid].labelEn}
+                            </span>
+                          )}
+                          {r.isOverridden && (
+                            <span className="ml-1.5 text-[7px] px-1 py-0.5 rounded font-bold" style={{ background: "hsla(var(--signal-break), 0.08)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.2)" }}>⛔</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2.5 text-center">
+                          <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded" style={{
+                            color: finalActionColor(fa),
+                            background: finalActionBg(fa),
+                          }}>
+                            {finalActionIcon(fa)} {finalActionLabel(fa, fr)}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2.5 text-center">
+                          <span className="font-mono text-[9px] font-bold" style={{ color: convColor }}>{r.convictionLevel}</span>
+                        </td>
+                        <td className="py-2 px-2.5 text-right font-mono text-[10px] font-bold" style={{ color: riskColor(r.risk) }}>{r.risk}</td>
+                        <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: opportunityColor(r.opp) }}>{r.opp}</td>
+                        <td className="py-2 px-2.5 text-left font-mono text-[9px] text-muted-foreground truncate" style={{ maxWidth: 140 }}>{r.signalPrincipal}</td>
+                        <td className="py-2 px-2.5 text-center">
+                          {r.extLabel.startsWith("P") ? (
+                            <span className="font-mono text-[8px] font-black px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-break), 0.12)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.25)" }}>
+                              {r.extLabel}
+                            </span>
+                          ) : r.extLabel === "WATCH" ? (
+                            <span className="font-mono text-[7px] font-bold px-1.5 py-0.5 rounded" style={{ background: "hsla(var(--signal-go-spec), 0.1)", color: "hsl(var(--signal-go-spec))", border: "1px solid hsla(var(--signal-go-spec), 0.2)" }}>
+                              WATCH
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-[9px]">—</span>
+                          )}
+                        </td>
+                        {!isCompact && (
+                          <>
+                            <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: confianceColor(r.confianceScore) }}>{r.confianceScore}%</td>
+                            <td className="py-2 px-2.5 text-right font-mono text-[10px]" style={{ color: r.momentumScore >= 55 ? "hsl(var(--signal-go))" : r.momentumScore >= 35 ? "hsl(var(--signal-go-spec))" : "hsl(var(--signal-break))" }}>{Math.round(r.momentumScore)}</td>
+                            <td className="py-2 px-2.5 text-center">
+                              <span className="font-mono text-[9px]" style={{ color: liqColor }}>{r.liquidityLevel === "HIGH" ? "●" : r.liquidityLevel === "MEDIUM" ? "◐" : "○"}</span>
+                            </td>
+                            <td className="py-2 px-2.5 text-center">
+                              <span className="font-mono text-[9px]" style={{ color: structColor }}>{r.structureLevel === "HEALTHY" ? "✓" : r.structureLevel === "FRAGILE" ? "~" : "✕"}</span>
+                            </td>
+                            <td className="py-2 px-2.5 text-center">
+                              {r.owned ? <span className="text-[9px]" style={{ color: "hsl(var(--gold))" }}>★</span> : <span className="text-muted-foreground">—</span>}
+                            </td>
+                          </>
+                        )}
+                        <td className="py-2 px-2.5 text-center">
+                          <SparklineMini data={r.spark} width={44} height={14} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <QuickViewDrawer row={drawerRow} open={!!drawerRow} onClose={() => setDrawerRow(null)} fr={fr} onAddWatchlist={(netuid) => addPosition(netuid, 0)} />

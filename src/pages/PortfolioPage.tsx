@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
@@ -101,6 +102,7 @@ function portfolioActionColor(a: string): string {
 export default function PortfolioPage() {
   const { lang } = useI18n();
   const fr = lang === "fr";
+  const isMobile = useIsMobile();
   const portfolio = useLocalPortfolio();
   const [showAdd, setShowAdd] = useState(false);
   const [showAlloc, setShowAlloc] = useState(false);
@@ -583,9 +585,9 @@ export default function PortfolioPage() {
         )}
 
         {/* ══════════════════════════════════ */}
-        {/*   5. POSITIONS TABLE                */}
+        {/*   5. POSITIONS TABLE / CARDS          */}
         {/* ══════════════════════════════════ */}
-        <SwipeHint storageKey="swipe-portfolio-v1" />
+        {!isMobile && <SwipeHint storageKey="swipe-portfolio-v1" />}
         <SectionCard>
           <div className="flex items-center justify-between px-5 py-3 border-b border-border">
             <div className="flex items-center gap-2.5">
@@ -607,7 +609,87 @@ export default function PortfolioPage() {
                 + {fr ? "Ajouter un subnet" : "Add a subnet"}
               </button>
             </div>
+          ) : isMobile ? (
+            /* ── Mobile: stacked card view ── */
+            <div className="p-3 space-y-2">
+              {rows.sort((a, b) => {
+                const order: Record<string, number> = { SORTIR: 0, "RÉDUIRE": 1, RENFORCER: 2, CONSERVER: 3 };
+                return (order[a.pAction] ?? 3) - (order[b.pAction] ?? 3);
+              }).map(r => {
+                const weight = analytics ? (analytics.totalTao > 0 ? (r.taoInvest / analytics.totalTao) * 100 : 0) : 0;
+                const conv = r.verdict ? Math.max(r.verdict.entryScore, r.verdict.holdScore) : Math.round(Math.abs(r.opp - r.risk) * (r.confianceScore / 100));
+                const aColor = portfolioActionColor(r.pAction);
+                const isAvoid = r.finalAction === "ÉVITER";
+                const actionLabel = isAvoid ? (fr ? "⛔ ÉVITER" : "⛔ AVOID")
+                  : r.finalAction === "SORTIR" ? (fr ? "🔴 SORTIR" : "🔴 EXIT")
+                  : r.pAction;
+                const actionColor = isAvoid ? "hsl(4,80%,40%)"
+                  : r.finalAction === "SORTIR" ? BREAK
+                  : aColor;
+
+                return (
+                  <div key={r.netuid} className="rounded-xl border border-border bg-card/50 p-3" style={{ boxShadow: "var(--shadow-card)" }}>
+                    {/* Row 1: Subnet + Action */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <Link to={`/subnets/${r.netuid}`} className="flex items-center gap-1.5 min-w-0 flex-1 hover:text-foreground transition-colors">
+                        <span className="font-mono text-[10px] text-muted-foreground shrink-0">SN-{r.netuid}</span>
+                        <span className="font-mono text-[11px] text-foreground/80 font-medium truncate">{r.name}</span>
+                        {r.isOverridden && <span className="text-[7px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 shrink-0">OVR</span>}
+                      </Link>
+                      <span className="font-mono text-[9px] font-bold tracking-wider px-2 py-0.5 rounded shrink-0" style={{
+                        color: actionColor,
+                        background: `color-mix(in srgb, ${actionColor} 8%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${actionColor} 15%, transparent)`,
+                      }}>
+                        {actionLabel}
+                      </span>
+                    </div>
+
+                    {/* Row 2: Position + Weight */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-mono text-[11px] text-foreground/70">
+                        <InlineEditQty value={r.taoInvest} onSave={v => { portfolio.updateQuantity(r.netuid, v); toast.success("✓"); }} />
+                        <span className="text-muted-foreground ml-1">τ</span>
+                      </div>
+                      <span className="font-mono text-[10px] text-muted-foreground">{weight.toFixed(1)}%</span>
+                    </div>
+
+                    {/* Row 3: Metrics grid */}
+                    <div className="grid grid-cols-4 gap-1.5 mb-2">
+                      <div className="text-center rounded bg-muted/20 py-1">
+                        <div className="font-mono text-[7px] text-muted-foreground tracking-wider">CONV</div>
+                        <div className="font-mono text-[10px] font-bold" style={{ color: conv > 20 ? GO : conv > 0 ? WARN : BREAK }}>{conv}</div>
+                      </div>
+                      <div className="text-center rounded bg-muted/20 py-1">
+                        <div className="font-mono text-[7px] text-muted-foreground tracking-wider">RISK</div>
+                        <div className="font-mono text-[10px] font-bold" style={{ color: r.risk > 60 ? BREAK : r.risk > 40 ? WARN : GO }}>{r.risk}</div>
+                      </div>
+                      <div className="text-center rounded bg-muted/20 py-1">
+                        <div className="font-mono text-[7px] text-muted-foreground tracking-wider">OPP</div>
+                        <div className="font-mono text-[10px] font-bold" style={{ color: r.opp > 60 ? GO : r.opp > 30 ? WARN : MUTED }}>{r.opp}</div>
+                      </div>
+                      <div className="text-center rounded bg-muted/20 py-1">
+                        <div className="font-mono text-[7px] text-muted-foreground tracking-wider">MOM</div>
+                        <Sparkline data={sparklines?.get(r.netuid) || []} />
+                      </div>
+                    </div>
+
+                    {/* Row 4: Signal + Actions */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{r.signalReason}</span>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => handleSell(r.netuid)} className="font-mono text-[8px] px-2 py-1 rounded border border-destructive/15 text-destructive/60 hover:text-destructive transition-colors">
+                          {fr ? "Vendre" : "Sell"}
+                        </button>
+                        <button onClick={() => portfolio.removePosition(r.netuid)} className="font-mono text-[8px] px-1.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground transition-colors">✕</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
+            /* ── Desktop: classic table ── */
             <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
               <table className="w-full text-left font-mono" style={{ minWidth: 820 }}>
                 <thead>
@@ -651,7 +733,6 @@ export default function PortfolioPage() {
                         <td className="py-3 px-3 font-mono text-[11px] font-bold" style={{ color: r.risk > 60 ? BREAK : r.risk > 40 ? WARN : GO }}>{r.risk}</td>
                         <td className="py-3 px-3">
                           {(() => {
-                            // Single badge: show canonical finalAction as primary, never double-truth
                             const isAvoid = r.finalAction === "ÉVITER";
                             const label = isAvoid ? (fr ? "⛔ ÉVITER" : "⛔ AVOID")
                               : r.finalAction === "SORTIR" ? (fr ? "🔴 SORTIR" : "🔴 EXIT")
