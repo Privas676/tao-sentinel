@@ -102,6 +102,7 @@ function portfolioActionColor(a: string): string {
 export default function PortfolioPage() {
   const { lang } = useI18n();
   const fr = lang === "fr";
+  const isMobile = useIsMobile();
   const portfolio = useLocalPortfolio();
   const [showAdd, setShowAdd] = useState(false);
   const [showAlloc, setShowAlloc] = useState(false);
