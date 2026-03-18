@@ -18,6 +18,7 @@ import SocialSettingsPage from "./pages/SocialSettingsPage";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { UpdateBanner } from "@/components/UpdateBanner";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +77,7 @@ const App = () => (
             </BrowserRouter>
           </ErrorBoundary>
           <Toaster />
+          <UpdateBanner />
         </TooltipProvider>
       </I18nProvider>
     </AuthProvider>
