@@ -772,6 +772,8 @@ export default function PortfolioPage() {
               </table>
             </div>
           )}
+        </SectionCard>
+
         {/* ── Archive ── */}
         {portfolio.archive.length > 0 && (
           <SectionCard>
