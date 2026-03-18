@@ -77,6 +77,7 @@ const App = () => (
             </BrowserRouter>
           </ErrorBoundary>
           <Toaster />
+          <UpdateBanner />
         </TooltipProvider>
       </I18nProvider>
     </AuthProvider>
