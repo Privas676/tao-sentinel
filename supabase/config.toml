@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.sync-social-x]
 verify_jwt = false
+
+[functions.backfill-social-mentions]
+verify_jwt = false
