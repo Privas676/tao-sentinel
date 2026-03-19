@@ -24,7 +24,8 @@ const BREAK = "hsl(var(--signal-break))";
 
 const TIER_COLORS: Record<string, string> = { A: GO, B: GOLD, C: "hsl(var(--muted-foreground))" };
 const CAT_ICONS: Record<string, string> = { official: "🏛", influencer: "📢", builder: "🔧", fund: "💰", media: "📰" };
-const SIGNAL_COLORS: Record<string, string> = { bullish: GO, bearish: BREAK, watch: GOLD, pump_risk: BREAK, none: "hsl(var(--muted-foreground))" };
+const SIGNAL_COLORS: Record<string, string> = { bullish: GO, positive: GO, bearish: BREAK, caution: GOLD, watch: GOLD, pump_risk: BREAK, neutral: "hsl(var(--muted-foreground))", none: "hsl(var(--muted-foreground))" };
+const SIGNAL_LABELS: Record<string, string> = { bullish: "BULLISH", positive: "POSITIVE", bearish: "BEARISH", caution: "CAUTION", pump_risk: "PUMP RISK", neutral: "NEUTRAL", watch: "WATCH", none: "—" };
 
 type SocialTab = "leaderboard" | "posts" | "accounts" | "alerts";
 const TABS: { key: SocialTab; icon: string; fr: string; en: string }[] = [
@@ -107,33 +108,79 @@ function formatAge(hours: number, fr: boolean): string {
 /* ── Leaderboard Tab ── */
 function LeaderboardTab({ scores, fr }: { scores: SocialSubnetScore[]; fr: boolean }) {
   if (!scores.length) return <EmptyState fr={fr} text={fr ? "Aucun score social disponible" : "No social scores available"} />;
+
+  // Transparency summary
+  const totalMentions = scores.reduce((s, x) => s + x.raw_mention_count, 0);
+  const totalAccounts = new Set(scores.flatMap(s => Array.from({ length: s.unique_account_count }, (_, i) => `${s.subnet_uid}-${i}`))).size;
+  const scoreDate = scores[0]?.score_date ?? "—";
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-border">
-            {["Subnet", fr ? "Mentions" : "Mentions", fr ? "Comptes" : "Accounts", "Conviction", "Smart KOL", "Heat", "Pump Risk", fr ? "Signal" : "Signal"].map(h => (
-              <th key={h} className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground px-3 py-2 text-left">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {scores.map(s => (
-            <tr key={s.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
-              <td className="font-mono text-[11px] font-bold px-3 py-2.5" style={{ color: GOLD }}>SN-{s.subnet_uid}</td>
-              <td className="font-mono text-[10px] px-3 py-2.5 text-foreground/70">{s.raw_mention_count}</td>
-              <td className="font-mono text-[10px] px-3 py-2.5 text-foreground/70">{s.unique_account_count}</td>
-              <td className="font-mono text-[10px] px-3 py-2.5"><ScorePill value={s.social_conviction_score} /></td>
-              <td className="font-mono text-[10px] px-3 py-2.5"><ScorePill value={s.smart_kol_score} /></td>
-              <td className="font-mono text-[10px] px-3 py-2.5"><ScorePill value={s.social_heat_score} /></td>
-              <td className="font-mono text-[10px] px-3 py-2.5"><ScorePill value={s.pump_risk_score} invert /></td>
-              <td className="font-mono text-[9px] font-bold px-3 py-2.5 uppercase" style={{ color: SIGNAL_COLORS[s.final_social_signal] || GOLD }}>
-                {s.final_social_signal}
-              </td>
+    <div className="space-y-3">
+      {/* Transparency banner */}
+      <div className="px-4 py-2.5 rounded-lg border border-border bg-muted/5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[10px]">🔍</span>
+          <span className="font-mono text-[9px] font-bold text-foreground/70 tracking-wider uppercase">
+            {fr ? "Transparence du calcul" : "Calculation Transparency"}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[8px] text-muted-foreground">
+          <div>
+            <span className="text-foreground/50">{fr ? "Posts retenus" : "Posts analyzed"}: </span>
+            <span className="text-foreground/80 font-bold">{totalMentions}</span>
+          </div>
+          <div>
+            <span className="text-foreground/50">{fr ? "Subnets scorés" : "Subnets scored"}: </span>
+            <span className="text-foreground/80 font-bold">{scores.length}</span>
+          </div>
+          <div>
+            <span className="text-foreground/50">{fr ? "Fenêtre" : "Window"}: </span>
+            <span className="text-foreground/80 font-bold">7j</span>
+          </div>
+          <div>
+            <span className="text-foreground/50">{fr ? "Score du" : "Score from"}: </span>
+            <span className="text-foreground/80 font-bold">{scoreDate}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 mt-1.5 font-mono text-[7px] text-muted-foreground/60">
+          <span>Tier A: ×1.0</span>
+          <span>Tier B: ×0.8</span>
+          <span>Tier C: ×0.65</span>
+          <span>|</span>
+          <span>{fr ? "Self-mention: -35%" : "Self-mention: -35%"}</span>
+          <span>|</span>
+          <span>{fr ? "Social ≠ décision finale" : "Social ≠ final decision"}</span>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border">
+              {["Subnet", fr ? "Mentions" : "Mentions", fr ? "Comptes" : "Accounts", "Conviction", "Smart KOL", "Heat", "Pump Risk", fr ? "Signal" : "Signal"].map(h => (
+                <th key={h} className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground px-3 py-2 text-left">{h}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {scores.map(s => (
+              <tr key={s.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
+                <td className="font-mono text-[11px] font-bold px-3 py-2.5" style={{ color: GOLD }}>SN-{s.subnet_uid}</td>
+                <td className="font-mono text-[10px] px-3 py-2.5 text-foreground/70">{s.raw_mention_count}</td>
+                <td className="font-mono text-[10px] px-3 py-2.5 text-foreground/70">{s.unique_account_count}</td>
+                <td className="font-mono text-[10px] px-3 py-2.5"><ScorePill value={s.social_conviction_score} /></td>
+                <td className="font-mono text-[10px] px-3 py-2.5"><ScorePill value={s.smart_kol_score} /></td>
+                <td className="font-mono text-[10px] px-3 py-2.5"><ScorePill value={s.social_heat_score} /></td>
+                <td className="font-mono text-[10px] px-3 py-2.5"><ScorePill value={s.pump_risk_score} invert /></td>
+                <td className="font-mono text-[9px] font-bold px-3 py-2.5 uppercase" style={{ color: SIGNAL_COLORS[s.final_social_signal] || GOLD }}>
+                  {SIGNAL_LABELS[s.final_social_signal] || s.final_social_signal}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
