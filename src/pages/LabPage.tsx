@@ -5,6 +5,7 @@ import RadarPage from "./RadarPage";
 import MethodologyPage from "./MethodologyPage";
 import QuantDiagnosticsPage from "./QuantDiagnosticsPage";
 import SocialSignalPanel from "@/components/social/SocialSignalPanel";
+import EarlyPumpPanel from "@/components/lab/EarlyPumpPanel";
 
 /* ═══════════════════════════════════════════════════════ */
 /*   LAB — Expert Tools & Diagnostics                      */
@@ -14,6 +15,7 @@ const GOLD = "hsl(var(--gold))";
 
 const TABS = [
   { key: "tools", icon: "🛠", label_fr: "Outils", label_en: "Tools" },
+  { key: "pump", icon: "🚀", label_fr: "Early Pump", label_en: "Early Pump" },
   { key: "social", icon: "📡", label_fr: "Social", label_en: "Social" },
   { key: "radar", icon: "📡", label_fr: "Radar", label_en: "Radar" },
   { key: "quant", icon: "🔬", label_fr: "Quant", label_en: "Quant" },
@@ -58,6 +60,7 @@ export default function LabPage() {
       {/* ── Tab Content ── */}
       <div className="flex-1 overflow-hidden">
         {activeTab === "tools" && <ToolsPanel />}
+        {activeTab === "pump" && <EarlyPumpPanel />}
         {activeTab === "social" && <SocialSignalPanel />}
         {activeTab === "radar" && <RadarPage />}
         {activeTab === "quant" && <QuantDiagnosticsPage />}
