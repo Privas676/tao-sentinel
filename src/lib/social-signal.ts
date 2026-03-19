@@ -285,8 +285,6 @@ export function alertSeverityIcon(severity: string): string {
 
 /* ── Social Source Validation ── */
 
-const MOCK_PATTERNS = /mock|fake|demo|sample|placeholder/i;
-
 /** Returns true only for a real X/Twitter status URL */
 export function isValidSocialSourceUrl(url: string | null | undefined): boolean {
   if (!url) return false;
@@ -296,30 +294,26 @@ export function isValidSocialSourceUrl(url: string | null | undefined): boolean 
     if (!u.pathname.includes("/status/")) return false;
     const statusPart = u.pathname.split("/status/")[1]?.split(/[/?#]/)[0] ?? "";
     if (!statusPart) return false;
-    if (MOCK_PATTERNS.test(statusPart)) return false;
     return true;
   } catch {
     return false;
   }
 }
 
-export type SocialSourceState = "valid" | "mock" | "missing";
+export type SocialSourceState = "valid" | "missing";
 
 /** Determine the source state for a social item */
-export function getSocialSourceState(item: { url?: string | null; external_post_id?: string | null }): SocialSourceState {
-  if (!item.url && !item.external_post_id) return "missing";
-  if (item.external_post_id && MOCK_PATTERNS.test(item.external_post_id)) return "mock";
-  if (item.url && !isValidSocialSourceUrl(item.url)) return "mock";
-  if (item.url && isValidSocialSourceUrl(item.url)) return "valid";
+export function getSocialSourceState(item: { url?: string | null }): SocialSourceState {
+  if (!item.url) return "missing";
+  if (isValidSocialSourceUrl(item.url)) return "valid";
   return "missing";
 }
 
 /** Human-readable label for the source link */
-export function getSocialSourceLabel(item: { url?: string | null; external_post_id?: string | null }, fr = true): string {
+export function getSocialSourceLabel(item: { url?: string | null }, fr = true): string {
   const state = getSocialSourceState(item);
   switch (state) {
     case "valid": return fr ? "Voir sur X" : "View on X";
-    case "mock": return fr ? "Source mock" : "Mock source";
     case "missing": return fr ? "Source non disponible" : "Source unavailable";
   }
 }

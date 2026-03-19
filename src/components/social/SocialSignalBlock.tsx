@@ -63,7 +63,7 @@ export default function SocialSignalBlock({ subnetUid, finalAction }: { subnetUi
           <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-gold">Social Signal</span>
         </div>
         <p className="font-mono text-[9px] text-muted-foreground">
-          {fr ? "Aucun signal social utile détecté pour ce subnet." : "No useful social signal detected for this subnet."}
+          {fr ? "Pipeline social non connecté — aucune donnée disponible." : "Social pipeline not connected — no data available."}
         </p>
       </div>
     );
