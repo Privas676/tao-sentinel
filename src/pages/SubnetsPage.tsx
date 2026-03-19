@@ -8,6 +8,8 @@ import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
 import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useMobileViewMode } from "@/hooks/use-mobile-view-mode";
+import { MobileViewToggle } from "@/components/MobileViewToggle";
 import { taoFluteColumnLabel } from "@/lib/taoflute-resolver";
 import { finalActionColor as canonicalFaColor, finalActionIcon as canonicalFaIcon, finalActionLabel as canonicalFaLabel } from "@/lib/subnet-decision";
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
