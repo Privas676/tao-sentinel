@@ -1,8 +1,9 @@
 /* ═══════════════════════════════════════════════════════════ */
-/*   EARLY PUMP DETECTOR — Identify subnets emerging from     */
-/*   obscurity before the crowd, using verifiable public data */
-/*   NO mock data — purely derived from canonical facts +     */
-/*   social scores + market metrics.                          */
+/*   PUMP DETECTOR — Two distinct detectors:                   */
+/*   1. EARLY_PUMP_CANDIDATE — emerging before the crowd       */
+/*   2. LATE_PUMP / OVEREXTENDED — already too advanced        */
+/*   NO mock data — purely derived from canonical facts +      */
+/*   canonical decisions.                                      */
 /* ═══════════════════════════════════════════════════════════ */
 
 import type { CanonicalSubnetFacts } from "./canonical-types";
@@ -12,14 +13,16 @@ import { clamp } from "./gauge-types";
 /* ── Types ── */
 
 export type EarlyPumpTag =
-  | "EARLY_PUMP_CANDIDATE"   // high score, no critical block
-  | "EARLY_PUMP_WATCH"       // high score but external risk active
-  | "LATE_MOMENTUM"          // pump already advanced
+  | "EARLY_PUMP_CANDIDATE"   // emerging, no critical block
+  | "EARLY_PUMP_WATCH"       // emerging but external risk active
+  | "LATE_PUMP"              // pump already too advanced / overheated
+  | "OVEREXTENDED"           // extreme overextension, high revert risk
   | null;                    // no signal
 
 export type EarlyPumpResult = {
   tag: EarlyPumpTag;
-  early_pump_score: number;          // 0-100 composite
+  early_pump_score: number;          // 0-100 composite (early detector)
+  overextension_score: number;       // 0-100 composite (late detector)
   social_acceleration_score: number; // 0-100
   market_awakening_score: number;    // 0-100
   execution_viability_score: number; // 0-100
@@ -29,16 +32,10 @@ export type EarlyPumpResult = {
   source_refs: string[];
 };
 
-/* ── Weights ── */
-const W_SOCIAL = 0.25;
-const W_MARKET = 0.35;
-const W_EXECUTION = 0.20;
-const W_INVALIDATION = 0.20;
-
 /* ── Thresholds ── */
 const EARLY_PUMP_THRESHOLD = 55;
-const LATE_MOMENTUM_CHANGE_7D = 40;   // if 7d change > 40%, pump is already advanced
-const LATE_MOMENTUM_CHANGE_24H = 25;  // if 24h change > 25%, pump is already advanced
+const OVEREXTENDED_THRESHOLD = 65;
+const LATE_PUMP_THRESHOLD = 50;
 
 /* ═══════════════════════════════════ */
 /*   1. SOCIAL ACCELERATION SCORE     */
@@ -52,20 +49,16 @@ function computeSocialAcceleration(
 
   const mentions = f.social_mentions_24h ?? 0;
   const uniqueAccounts = f.social_unique_accounts ?? 0;
-  const kolScore = f.social_kol_mentions ?? 0;  // 0-100, weighted by tier A/B
+  const kolScore = f.social_kol_mentions ?? 0;
   const hypeScore = f.social_hype_score ?? 0;
   const signalStrength = f.social_signal_strength ?? 0;
 
-  // Mentions present → base signal
   if (mentions >= 2) {
     score += 15;
     reasons.push(`${mentions} mentions sociales détectées`);
   }
-  if (mentions >= 5) {
-    score += 10;
-  }
+  if (mentions >= 5) score += 10;
 
-  // Unique account diversity (anti-single-source)
   if (uniqueAccounts >= 3) {
     score += 20;
     reasons.push(`${uniqueAccounts} comptes uniques — signal diversifié`);
@@ -73,12 +66,10 @@ function computeSocialAcceleration(
     score += 10;
     reasons.push(`${uniqueAccounts} comptes uniques`);
   } else if (uniqueAccounts === 1 && mentions > 0) {
-    // Penalty: single source concentration
     score -= 10;
     reasons.push("Source unique — concentration sociale");
   }
 
-  // KOL tier A/B weighting (smart_kol_score > 50 = tier A/B present)
   if (kolScore > 70) {
     score += 25;
     reasons.push(`KOL Tier A/B actif (score: ${kolScore})`);
@@ -87,7 +78,6 @@ function computeSocialAcceleration(
     reasons.push(`Signal KOL modéré (score: ${kolScore})`);
   }
 
-  // Heat / hype momentum
   if (hypeScore > 60) {
     score += 15;
     reasons.push(`Heat sociale élevée (${hypeScore})`);
@@ -95,7 +85,6 @@ function computeSocialAcceleration(
     score += 8;
   }
 
-  // Signal strength from conviction engine
   if (signalStrength > 40) {
     score += 15;
     reasons.push(`Conviction sociale ${signalStrength}/100`);
@@ -129,8 +118,7 @@ function computeMarketAwakening(
     score += 20;
     reasons.push(`Hausse 24h progressive: +${ch24h.toFixed(1)}%`);
   } else if (ch24h > 25) {
-    // Already extended — reduces "early" qualification
-    score += 5;
+    score += 5; // already extended
   }
 
   if (ch1h > 1 && ch1h <= 10) {
@@ -138,34 +126,27 @@ function computeMarketAwakening(
     reasons.push(`Mouvement 1h: +${ch1h.toFixed(1)}%`);
   }
 
-  // 7d trend should be emerging, not already exploded
   if (ch7d > 5 && ch7d <= 40) {
     score += 15;
     reasons.push(`Tendance 7j émergente: +${ch7d.toFixed(1)}%`);
   }
 
-  // Volume acceleration
   if (vol24h > 0.5) {
     score += 10;
     reasons.push(`Volume 24h: ${vol24h.toFixed(2)} τ`);
   }
-  if (vol24h > 2) {
-    score += 5;
-  }
+  if (vol24h > 2) score += 5;
 
-  // Buy pressure
   if (buys > 3 && sentiment > 55) {
     score += 15;
     reasons.push(`Pression acheteuse: ${buys} achats, sentiment ${sentiment}%`);
   }
 
-  // Unique buyers growing
   if (buyers >= 3) {
     score += 10;
     reasons.push(`${buyers} acheteurs uniques`);
   }
 
-  // Momentum from decision engine
   if (momentum > 55 && momentum <= 80) {
     score += 15;
     reasons.push(`Momentum croissant (${momentum}/100)`);
@@ -183,7 +164,7 @@ function computeExecutionViability(
   d: CanonicalSubnetDecision,
 ): { score: number; reasons: string[] } {
   const reasons: string[] = [];
-  let score = 50; // baseline: assume viable until proven otherwise
+  let score = 50;
 
   const liqScore = d.liquidity_quality_score;
   const execScore = d.execution_quality_score;
@@ -191,7 +172,6 @@ function computeExecutionViability(
   const spread = f.spread ?? 100;
   const depth = f.depth ?? 0;
 
-  // Liquidity quality from canonical decision
   if (liqScore > 60) {
     score += 20;
     reasons.push(`Liquidité correcte (${liqScore}/100)`);
@@ -202,15 +182,12 @@ function computeExecutionViability(
     reasons.push(`Liquidité faible (${liqScore}/100)`);
   }
 
-  // Execution quality
-  if (execScore > 60) {
-    score += 15;
-  } else if (execScore < 35) {
+  if (execScore > 60) score += 15;
+  else if (execScore < 35) {
     score -= 15;
     reasons.push(`Exécution dégradée (${execScore}/100)`);
   }
 
-  // Slippage check
   if (slippage < 5) {
     score += 10;
     reasons.push(`Slippage acceptable (${slippage.toFixed(1)}%)`);
@@ -219,18 +196,14 @@ function computeExecutionViability(
     reasons.push(`Slippage excessif (${slippage.toFixed(1)}%)`);
   }
 
-  // Spread check
-  if (spread < 0.5) {
-    score += 5;
-  } else if (spread > 2) {
+  if (spread < 0.5) score += 5;
+  else if (spread > 2) {
     score -= 10;
     reasons.push(`Spread élevé (${spread.toFixed(2)}%)`);
   }
 
-  // Depth minimum
-  if (depth > 50) {
-    score += 5;
-  } else if (depth < 5) {
+  if (depth > 50) score += 5;
+  else if (depth < 5) {
     score -= 15;
     reasons.push(`Profondeur insuffisante (${depth.toFixed(1)} τ)`);
   }
@@ -239,7 +212,85 @@ function computeExecutionViability(
 }
 
 /* ═══════════════════════════════════ */
-/*   4. INVALIDATION SCORE (MALUS)    */
+/*   4. OVEREXTENSION SCORE (NEW)     */
+/*   Detects late pump / overheated   */
+/* ═══════════════════════════════════ */
+
+function computeOverextension(
+  f: CanonicalSubnetFacts,
+  d: CanonicalSubnetDecision,
+): { score: number; reasons: string[] } {
+  const reasons: string[] = [];
+  let score = 0;
+
+  const ch1h = f.change_1h ?? 0;
+  const ch24h = f.change_24h ?? 0;
+  const ch7d = f.change_7d ?? 0;
+  const slippage = f.slippage_10tau ?? 0;
+  const spread = f.spread ?? 0;
+  const hypeScore = f.social_hype_score ?? 0;
+
+  // Extreme price rise = overextended
+  if (ch24h > 40) {
+    score += 30;
+    reasons.push(`Hausse 24h extrême: +${ch24h.toFixed(1)}%`);
+  } else if (ch24h > 25) {
+    score += 20;
+    reasons.push(`Hausse 24h forte: +${ch24h.toFixed(1)}%`);
+  }
+
+  if (ch7d > 80) {
+    score += 25;
+    reasons.push(`Expansion 7j massive: +${ch7d.toFixed(1)}%`);
+  } else if (ch7d > 50) {
+    score += 15;
+    reasons.push(`Expansion 7j rapide: +${ch7d.toFixed(1)}%`);
+  }
+
+  if (ch1h > 15) {
+    score += 15;
+    reasons.push(`Spike 1h: +${ch1h.toFixed(1)}%`);
+  }
+
+  // Late social euphoria (high hype without early foundation)
+  if (hypeScore > 70) {
+    score += 15;
+    reasons.push(`Euphorie sociale tardive (heat: ${hypeScore})`);
+  }
+
+  // Concentration too high
+  if (d.concentration_risk_score > 60) {
+    score += 15;
+    reasons.push(`Concentration élevée (${d.concentration_risk_score}/100)`);
+  }
+
+  // Execution degradation under pump pressure
+  if (slippage > 10) {
+    score += 10;
+    reasons.push(`Slippage dégradé sous pression (${slippage.toFixed(1)}%)`);
+  }
+  if (spread > 1.5) {
+    score += 5;
+    reasons.push(`Spread élargi (${spread.toFixed(2)}%)`);
+  }
+
+  // Structural fragility under expansion
+  if (d.structural_fragility_score > 60) {
+    score += 10;
+    reasons.push(`Structure fragile sous expansion (${d.structural_fragility_score}/100)`);
+  }
+
+  // Momentum already maxed out (> 80 = likely topping)
+  if (d.momentum_score > 80) {
+    score += 10;
+    reasons.push(`Momentum saturé (${d.momentum_score}/100)`);
+  }
+
+  return { score: clamp(score, 0, 100), reasons };
+}
+
+/* ═══════════════════════════════════ */
+/*   5. INVALIDATION SCORE (MALUS)    */
 /* ═══════════════════════════════════ */
 
 function computeInvalidation(
@@ -249,7 +300,6 @@ function computeInvalidation(
   const reasons: string[] = [];
   let score = 0;
 
-  // TaoFlute WATCH / Priority malus
   const extStatus = f.external_status;
   if (extStatus.startsWith("P")) {
     score += 40;
@@ -259,7 +309,6 @@ function computeInvalidation(
     reasons.push("TaoFlute WATCH — surveillance externe active");
   }
 
-  // Delist risk from decision engine
   if (d.delist_risk_score > 60) {
     score += 20;
     reasons.push(`Risque delist élevé (${d.delist_risk_score}/100)`);
@@ -267,7 +316,6 @@ function computeInvalidation(
     score += 10;
   }
 
-  // Depeg risk
   if (d.depeg_risk_score > 50) {
     score += 20;
     reasons.push(`Risque depeg (${d.depeg_risk_score}/100)`);
@@ -275,27 +323,16 @@ function computeInvalidation(
     score += 10;
   }
 
-  // Concentration risk (extreme)
   if (d.concentration_risk_score > 70) {
     score += 15;
     reasons.push(`Concentration extrême (${d.concentration_risk_score}/100)`);
   }
 
-  // Structural fragility (toxic structure)
   if (d.structural_fragility_score > 70) {
     score += 15;
     reasons.push(`Structure fragile (${d.structural_fragility_score}/100)`);
   }
 
-  // Pump already too advanced (not "early" anymore)
-  const ch7d = f.change_7d ?? 0;
-  const ch24h = f.change_24h ?? 0;
-  if (ch7d > LATE_MOMENTUM_CHANGE_7D || ch24h > LATE_MOMENTUM_CHANGE_24H) {
-    score += 25;
-    reasons.push(`Pump déjà avancé (7j: +${ch7d.toFixed(1)}%, 24h: +${ch24h.toFixed(1)}%)`);
-  }
-
-  // Guardrail active = blocked by engine
   if (d.guardrail_active && (d.final_action === "SORTIR" || d.final_action === "ÉVITER")) {
     score += 30;
     reasons.push("Garde-fou actif — verdict bloquant");
@@ -305,87 +342,93 @@ function computeInvalidation(
 }
 
 /* ═══════════════════════════════════ */
-/*   COMPOSITE SCORE & TAG            */
+/*   COMPOSITE SCORES & TAG           */
 /* ═══════════════════════════════════ */
+
+const W_SOCIAL = 0.25;
+const W_MARKET = 0.35;
+const W_EXECUTION = 0.20;
+const W_INVALIDATION = 0.20;
 
 export function detectEarlyPump(
   facts: CanonicalSubnetFacts,
   decision: CanonicalSubnetDecision,
 ): EarlyPumpResult {
   const now = new Date().toISOString();
+  const empty: EarlyPumpResult = { tag: null, early_pump_score: 0, overextension_score: 0, social_acceleration_score: 0, market_awakening_score: 0, execution_viability_score: 0, invalidation_score: 0, reasons: [], detected_at: now, source_refs: [] };
 
-  // Skip system subnets
-  if (facts.subnet_id === 0) {
-    return { tag: null, early_pump_score: 0, social_acceleration_score: 0, market_awakening_score: 0, execution_viability_score: 0, invalidation_score: 0, reasons: [], detected_at: now, source_refs: [] };
-  }
+  if (facts.subnet_id === 0) return empty;
 
   const social = computeSocialAcceleration(facts);
   const market = computeMarketAwakening(facts, decision);
   const execution = computeExecutionViability(facts, decision);
+  const overext = computeOverextension(facts, decision);
   const invalidation = computeInvalidation(facts, decision);
 
-  // Composite: weighted sum minus invalidation penalty
-  const rawScore =
-    social.score * W_SOCIAL +
-    market.score * W_MARKET +
-    execution.score * W_EXECUTION;
+  // ── Early pump composite ──
+  const earlyRaw = social.score * W_SOCIAL + market.score * W_MARKET + execution.score * W_EXECUTION;
+  const earlyPenalty = invalidation.score * W_INVALIDATION;
+  const earlyPumpScore = clamp(Math.round(earlyRaw - earlyPenalty), 0, 100);
 
-  const penalty = invalidation.score * W_INVALIDATION;
-  const earlyPumpScore = clamp(Math.round(rawScore - penalty), 0, 100);
+  // ── Overextension composite ──
+  const overextensionScore = overext.score;
 
-  // Collect all reasons
-  const allReasons = [...social.reasons, ...market.reasons, ...execution.reasons, ...invalidation.reasons];
-
-  // Collect verifiable source refs
+  // Collect reasons & refs
+  const allReasons = [...social.reasons, ...market.reasons, ...execution.reasons, ...overext.reasons, ...invalidation.reasons];
   const refs: string[] = [];
   if (facts.taostats_source_url) refs.push(facts.taostats_source_url);
   if (facts.taoflute_source_ref) refs.push(facts.taoflute_source_ref);
   if (facts.social_source_refs?.length) refs.push(...facts.social_source_refs);
 
-  // Determine tag
+  // ── Determine tag — two independent detectors ──
   let tag: EarlyPumpTag = null;
 
-  const ch7d = facts.change_7d ?? 0;
-  const ch24h = facts.change_24h ?? 0;
-  const isPumpAdvanced = ch7d > LATE_MOMENTUM_CHANGE_7D || ch24h > LATE_MOMENTUM_CHANGE_24H;
   const hasExternalRisk = facts.external_status !== "NONE";
   const hasCriticalBlock = decision.final_action === "SORTIR" || decision.final_action === "ÉVITER";
   const hasSocialSignal = social.score >= 15;
   const hasMarketSignal = market.score >= 20;
 
-  if (earlyPumpScore >= EARLY_PUMP_THRESHOLD) {
-    if (isPumpAdvanced) {
-      // Already advanced — "late momentum", not "early"
-      tag = "LATE_MOMENTUM";
-    } else if (hasCriticalBlock) {
-      // Blocked by guardrails
+  // DETECTOR 2: Late pump / overextended (checked FIRST — takes priority)
+  if (overextensionScore >= OVEREXTENDED_THRESHOLD) {
+    tag = "OVEREXTENDED";
+    allReasons.push("Surchauffe détectée — risque de retour violent");
+  } else if (overextensionScore >= LATE_PUMP_THRESHOLD) {
+    tag = "LATE_PUMP";
+    allReasons.push("Pump avancé — phase tardive");
+  }
+
+  // DETECTOR 1: Early pump (only if NOT already tagged as late/overextended)
+  if (!tag && earlyPumpScore >= EARLY_PUMP_THRESHOLD) {
+    if (hasCriticalBlock) {
+      // Blocked by guardrails — no tag
       tag = null;
     } else if (hasExternalRisk) {
-      // External risk present but score is high
       tag = "EARLY_PUMP_WATCH";
     } else {
       tag = "EARLY_PUMP_CANDIDATE";
     }
-  } else if (earlyPumpScore >= 40 && isPumpAdvanced && hasMarketSignal) {
-    // Lower threshold but pump is already happening
-    tag = "LATE_MOMENTUM";
+
+    // Downgrade rules
+    if (tag === "EARLY_PUMP_CANDIDATE" && !hasMarketSignal) {
+      tag = "EARLY_PUMP_WATCH";
+      allReasons.push("Social seul sans confirmation marché — signal atténué");
+    }
+    if (tag === "EARLY_PUMP_CANDIDATE" && !hasSocialSignal) {
+      tag = "EARLY_PUMP_WATCH";
+      allReasons.push("Marché actif sans validation sociale minimale — signal watch");
+    }
   }
 
-  // Rule: social alone without market → no strong signal
-  if (tag === "EARLY_PUMP_CANDIDATE" && !hasMarketSignal) {
-    tag = "EARLY_PUMP_WATCH";
-    allReasons.push("Social seul sans confirmation marché — signal atténué");
-  }
-
-  // Rule: market alone without minimal social → downgrade
-  if (tag === "EARLY_PUMP_CANDIDATE" && !hasSocialSignal) {
-    tag = "EARLY_PUMP_WATCH";
-    allReasons.push("Marché actif sans validation sociale minimale — signal watch");
+  // Safety: never tag EARLY if overextension is significant
+  if ((tag === "EARLY_PUMP_CANDIDATE" || tag === "EARLY_PUMP_WATCH") && overextensionScore >= LATE_PUMP_THRESHOLD) {
+    tag = "LATE_PUMP";
+    allReasons.push("Reclassé LATE_PUMP — surextension détectée malgré signaux early");
   }
 
   return {
     tag,
     early_pump_score: earlyPumpScore,
+    overextension_score: overextensionScore,
     social_acceleration_score: social.score,
     market_awakening_score: market.score,
     execution_viability_score: execution.score,
@@ -406,8 +449,7 @@ export function detectAllEarlyPumps(
   for (const [netuid, facts] of factsMap) {
     const decision = decisionsMap.get(netuid);
     if (!decision) continue;
-    const result = detectEarlyPump(facts, decision);
-    results.set(netuid, result);
+    results.set(netuid, detectEarlyPump(facts, decision));
   }
   return results;
 }
