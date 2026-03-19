@@ -239,7 +239,7 @@ export function computeSocialOverlay(
   }
 
   // Contradiction: social bullish but structural risk high
-  if (signal === "bullish" && finalAction === "SORTIR") {
+  if ((signal === "bullish" || signal === "positive") && (finalAction === "SORTIR" || finalAction === "ÉVITER")) {
     conflictMessage = fr
       ? "Conflit : narratif fort mais structure fragile — garde-fous actifs"
       : "Conflict: strong narrative but fragile structure — safeguards active";
