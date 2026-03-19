@@ -11,7 +11,7 @@ import {
   type SocialAlert,
 } from "@/hooks/use-social-signal";
 import { useSocialPostMentions } from "@/hooks/use-social-signal";
-import { alertSeverityIcon, getSocialSourceState, getSocialSourceLabel } from "@/lib/social-signal";
+import { alertSeverityIcon } from "@/lib/social-signal";
 import { SectionCard, SectionTitle } from "@/components/settings/SettingsShared";
 
 /* ═══════════════════════════════════════════════════════ */
@@ -34,18 +34,74 @@ const TABS: { key: SocialTab; icon: string; fr: string; en: string }[] = [
   { key: "alerts", icon: "🚨", fr: "Alertes", en: "Alerts" },
 ];
 
-/* ── Demo Banner ── */
-function DemoBanner({ fr }: { fr: boolean }) {
+/* ── Pipeline Status Banner ── */
+function PipelineStatusBanner({ fr, hasPosts, hasScores, latestPostAt, latestScoreDate }: {
+  fr: boolean;
+  hasPosts: boolean;
+  hasScores: boolean;
+  latestPostAt: string | null;
+  latestScoreDate: string | null;
+}) {
+  const now = Date.now();
+  const postAgeHours = latestPostAt ? (now - new Date(latestPostAt).getTime()) / (1000 * 60 * 60) : Infinity;
+  const isStale = hasPosts && postAgeHours > 6;
+  const isOffline = !hasPosts && !hasScores;
+
+  if (isOffline) {
+    return (
+      <div className="rounded-lg border px-4 py-3 flex items-center gap-3"
+        style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--muted) / 0.15)" }}>
+        <span className="text-base">⚙️</span>
+        <div className="flex-1">
+          <span className="font-mono text-[10px] font-bold text-foreground/80 block">
+            {fr ? "Pipeline social non configuré" : "Social pipeline not configured"}
+          </span>
+          <span className="font-mono text-[8px] text-muted-foreground block mt-0.5">
+            {fr
+              ? "Aucune donnée sociale disponible. Le pipeline d'ingestion X/Twitter n'est pas encore branché."
+              : "No social data available. The X/Twitter ingestion pipeline is not yet connected."}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isStale) {
+    return (
+      <div className="rounded-lg border px-4 py-2.5 flex items-center gap-3"
+        style={{ borderColor: "rgba(229,57,53,0.25)", background: "rgba(229,57,53,0.05)" }}>
+        <span className="text-sm animate-pulse">🔴</span>
+        <div className="flex-1">
+          <span className="font-mono text-[10px] font-bold block" style={{ color: "rgba(229,57,53,0.85)" }}>
+            {fr ? "Feed social obsolète" : "Social feed stale"}
+          </span>
+          <span className="font-mono text-[8px] text-muted-foreground block mt-0.5">
+            {fr ? "Dernier post il y a" : "Last post"} {formatAge(postAgeHours, fr)}
+            {latestScoreDate && <> · {fr ? "Dernier score" : "Last score"}: {latestScoreDate}</>}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Healthy — show last sync info
   return (
-    <div className="rounded-lg border border-border/60 bg-muted/15 px-4 py-2 flex items-center gap-2">
-      <span className="text-xs">🧪</span>
-      <span className="font-mono text-[9px] text-muted-foreground leading-relaxed">
-        {fr
-          ? "Mode démonstration sociale — certaines sources sont simulées"
-          : "Social demo mode — some sources are simulated"}
+    <div className="rounded-lg border px-4 py-2 flex items-center gap-3"
+      style={{ borderColor: `${GO}30`, background: `${GO}05` }}>
+      <span className="text-sm">🟢</span>
+      <span className="font-mono text-[8px] text-muted-foreground">
+        {fr ? "Dernier post" : "Last post"}: {latestPostAt ? timeAgo(latestPostAt, fr) : "—"}
+        {latestScoreDate && <> · {fr ? "Score du" : "Score from"} {latestScoreDate}</>}
       </span>
     </div>
   );
+}
+
+function formatAge(hours: number, fr: boolean): string {
+  if (hours < 1) return fr ? "< 1h" : "< 1h";
+  if (hours < 24) return `${Math.floor(hours)}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}${fr ? "j" : "d"}`;
 }
 
 /* ── Leaderboard Tab ── */
@@ -84,28 +140,21 @@ function LeaderboardTab({ scores, fr }: { scores: SocialSubnetScore[]; fr: boole
 
 /* ── Post Source Button ── */
 function PostSourceAction({ post, fr }: { post: SocialPost; fr: boolean }) {
-  const state = getSocialSourceState(post);
-  const label = getSocialSourceLabel(post, fr);
-
-  if (state === "valid") {
+  if (!post.url) {
     return (
-      <a href={post.url!} target="_blank" rel="noopener noreferrer"
-        className="font-mono text-[8px] px-2 py-1 rounded border transition-all hover:opacity-80"
-        style={{ borderColor: `${GOLD}40`, color: GOLD }}>
-        → {label}
-      </a>
+      <span className="font-mono text-[8px] px-2 py-1 rounded border text-muted-foreground opacity-50"
+        style={{ borderColor: "hsl(var(--border))" }}>
+        {fr ? "Source non disponible" : "Source unavailable"}
+      </span>
     );
   }
 
   return (
-    <span className="font-mono text-[8px] px-2 py-1 rounded border inline-flex items-center gap-1"
-      style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))", opacity: 0.5, cursor: "default" }}
-      aria-disabled="true">
-      {state === "mock" && (
-        <span className="font-mono text-[7px] px-1 py-px rounded bg-muted text-muted-foreground font-bold">MOCK</span>
-      )}
-      {label}
-    </span>
+    <a href={post.url} target="_blank" rel="noopener noreferrer"
+      className="font-mono text-[8px] px-2 py-1 rounded border transition-all hover:opacity-80"
+      style={{ borderColor: `${GOLD}40`, color: GOLD }}>
+      → {fr ? "Voir sur X" : "View on X"}
+    </a>
   );
 }
 
@@ -114,13 +163,12 @@ function PostsTab({ posts, fr }: { posts: SocialPost[]; fr: boolean }) {
   const postIds = posts.map(p => p.id);
   const { data: allMentions = [] } = useSocialPostMentions(postIds.length ? postIds : undefined);
 
-  if (!posts.length) return <EmptyState fr={fr} text={fr ? "Aucun post collecté" : "No posts collected"} />;
+  if (!posts.length) return <EmptyState fr={fr} text={fr ? "Aucun post collecté — pipeline en attente de configuration" : "No posts collected — pipeline awaiting configuration"} />;
   return (
     <div className="divide-y divide-border">
       {posts.map(p => {
         const mentions = allMentions.filter(m => m.post_id === p.id);
         const acct = p.account as any;
-        const sourceState = getSocialSourceState(p);
         return (
           <div key={p.id} className="px-4 py-3 hover:bg-muted/5 transition-colors">
             {/* Author line */}
@@ -131,9 +179,6 @@ function PostsTab({ posts, fr }: { posts: SocialPost[]; fr: boolean }) {
                 <span className="font-mono text-[8px] text-muted-foreground">{acct.display_name}</span>
               )}
               <span className="font-mono text-[8px] px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase">{p.post_type}</span>
-              {sourceState === "mock" && (
-                <span className="font-mono text-[7px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-bold">MOCK</span>
-              )}
               <span className="font-mono text-[8px] text-muted-foreground ml-auto">{timeAgo(p.posted_at, fr)}</span>
             </div>
 
@@ -261,6 +306,9 @@ export default function SocialSignalPanel() {
   const activeAccounts = accounts.filter(a => a.is_active).length;
   const activeAlerts = alerts.length;
 
+  const latestPostAt = posts.length > 0 ? posts[0].posted_at : null;
+  const latestScoreDate = scores.length > 0 ? scores[0].score_date : null;
+
   return (
     <div className="h-full overflow-y-auto pb-8">
       <div className="px-4 sm:px-6 py-5 max-w-[900px] mx-auto space-y-4">
@@ -285,8 +333,14 @@ export default function SocialSignalPanel() {
           </div>
         </div>
 
-        {/* Demo banner */}
-        <DemoBanner fr={fr} />
+        {/* Pipeline status */}
+        <PipelineStatusBanner
+          fr={fr}
+          hasPosts={posts.length > 0}
+          hasScores={scores.length > 0}
+          latestPostAt={latestPostAt}
+          latestScoreDate={latestScoreDate}
+        />
 
         {/* Sub-tabs */}
         <div className="flex border-b border-border">
