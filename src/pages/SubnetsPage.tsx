@@ -282,7 +282,7 @@ export default function SubnetsPage() {
 
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug, isLoading } = useSubnetScores();
-  const { decisions, decisionsList, isLoading: decisionsLoading } = useCanonicalSubnets();
+  const { decisions, decisionsList, earlyPumps, isLoading: decisionsLoading } = useCanonicalSubnets();
   
 
   // ── Action counts from DECISIONS (single source of truth) ──
