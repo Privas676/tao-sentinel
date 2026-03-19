@@ -629,29 +629,56 @@ export default function CompassPage() {
 
         {/* ═══ 4b. EARLY PUMP DETECTOR ═══ */}
         {(() => {
-          const epCandidates = [...earlyPumps.entries()].filter(([, ep]) => ep.tag === "EARLY_PUMP_CANDIDATE" || ep.tag === "EARLY_PUMP_WATCH").sort(([, a], [, b]) => b.early_pump_score - a.early_pump_score).slice(0, 5);
-          if (epCandidates.length === 0) return null;
+          const epEarly = [...earlyPumps.entries()].filter(([, ep]) => ep.tag === "EARLY_PUMP_CANDIDATE" || ep.tag === "EARLY_PUMP_WATCH").sort(([, a], [, b]) => b.early_pump_score - a.early_pump_score).slice(0, 5);
+          const epLate = [...earlyPumps.entries()].filter(([, ep]) => ep.tag === "LATE_PUMP" || ep.tag === "OVEREXTENDED").sort(([, a], [, b]) => b.overextension_score - a.overextension_score).slice(0, 5);
+          if (epEarly.length === 0 && epLate.length === 0) return null;
           return (
-            <section>
-              <SectionHeader title={fr ? "EARLY PUMP DETECTOR" : "EARLY PUMP DETECTOR"} icon="🚀" badge={
-                <span className="font-mono text-[9px] px-2 py-0.5 rounded font-bold" style={{ background: "hsla(280, 80%, 65%, 0.08)", color: "hsl(280, 80%, 65%)", border: "1px solid hsla(280, 80%, 65%, 0.2)" }}>{epCandidates.length}</span>
-              } />
-              <div className="rounded-xl overflow-hidden" style={{ background: "hsla(280, 80%, 65%, 0.02)", border: "1px solid hsla(280, 80%, 65%, 0.08)" }}>
-                {epCandidates.map(([netuid, ep], idx) => {
-                  const s = enrichedSignals.find(x => x.netuid === netuid);
-                  return (
-                    <div key={netuid} className="flex items-center gap-2 py-2.5 px-3 cursor-pointer hover:bg-white/[0.02] transition-all"
-                      style={{ borderBottom: idx < epCandidates.length - 1 ? "1px solid hsla(280, 80%, 65%, 0.06)" : "none" }}
-                      onClick={() => s && setPanelSignal(s)}>
-                      <span className="font-mono font-bold text-[11px]" style={{ color: GOLD, minWidth: 48 }}>SN-{netuid}</span>
-                      <span className="font-mono text-[10px] truncate text-muted-foreground" style={{ flex: 1 }}>{s?.name ?? "—"}</span>
-                      <EarlyPumpBadge tag={ep.tag} score={ep.early_pump_score} size="sm" showScore reasons={ep.reasons} />
-                      <span className="font-mono text-[10px] font-bold" style={{ color: "hsl(280, 80%, 65%)" }}>{ep.early_pump_score}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+            <>
+              {epEarly.length > 0 && (
+                <section>
+                  <SectionHeader title={fr ? "EARLY PUMP DETECTOR" : "EARLY PUMP DETECTOR"} icon="🚀" badge={
+                    <span className="font-mono text-[9px] px-2 py-0.5 rounded font-bold" style={{ background: "hsla(280, 80%, 65%, 0.08)", color: "hsl(280, 80%, 65%)", border: "1px solid hsla(280, 80%, 65%, 0.2)" }}>{epEarly.length}</span>
+                  } />
+                  <div className="rounded-xl overflow-hidden" style={{ background: "hsla(280, 80%, 65%, 0.02)", border: "1px solid hsla(280, 80%, 65%, 0.08)" }}>
+                    {epEarly.map(([netuid, ep], idx) => {
+                      const s = enrichedSignals.find(x => x.netuid === netuid);
+                      return (
+                        <div key={netuid} className="flex items-center gap-2 py-2.5 px-3 cursor-pointer hover:bg-white/[0.02] transition-all"
+                          style={{ borderBottom: idx < epEarly.length - 1 ? "1px solid hsla(280, 80%, 65%, 0.06)" : "none" }}
+                          onClick={() => s && setPanelSignal(s)}>
+                          <span className="font-mono font-bold text-[11px]" style={{ color: GOLD, minWidth: 48 }}>SN-{netuid}</span>
+                          <span className="font-mono text-[10px] truncate text-muted-foreground" style={{ flex: 1 }}>{s?.name ?? "—"}</span>
+                          <EarlyPumpBadge tag={ep.tag} score={ep.early_pump_score} size="sm" showScore reasons={ep.reasons} />
+                          <span className="font-mono text-[10px] font-bold" style={{ color: "hsl(280, 80%, 65%)" }}>{ep.early_pump_score}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+              {epLate.length > 0 && (
+                <section>
+                  <SectionHeader title={fr ? "LATE PUMP / OVEREXTENDED" : "LATE PUMP / OVEREXTENDED"} icon="🔥" badge={
+                    <span className="font-mono text-[9px] px-2 py-0.5 rounded font-bold" style={{ background: "hsla(25, 90%, 55%, 0.08)", color: "hsl(25, 90%, 55%)", border: "1px solid hsla(25, 90%, 55%, 0.2)" }}>{epLate.length}</span>
+                  } />
+                  <div className="rounded-xl overflow-hidden" style={{ background: "hsla(25, 90%, 55%, 0.02)", border: "1px solid hsla(25, 90%, 55%, 0.08)" }}>
+                    {epLate.map(([netuid, ep], idx) => {
+                      const s = enrichedSignals.find(x => x.netuid === netuid);
+                      return (
+                        <div key={netuid} className="flex items-center gap-2 py-2.5 px-3 cursor-pointer hover:bg-white/[0.02] transition-all"
+                          style={{ borderBottom: idx < epLate.length - 1 ? "1px solid hsla(25, 90%, 55%, 0.06)" : "none" }}
+                          onClick={() => s && setPanelSignal(s)}>
+                          <span className="font-mono font-bold text-[11px]" style={{ color: GOLD, minWidth: 48 }}>SN-{netuid}</span>
+                          <span className="font-mono text-[10px] truncate text-muted-foreground" style={{ flex: 1 }}>{s?.name ?? "—"}</span>
+                          <EarlyPumpBadge tag={ep.tag} score={ep.overextension_score} size="sm" showScore reasons={ep.reasons} />
+                          <span className="font-mono text-[10px] font-bold" style={{ color: "hsl(25, 90%, 55%)" }}>{ep.overextension_score}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+            </>
           );
         })()}
 

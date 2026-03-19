@@ -5,11 +5,10 @@
 import type { EarlyPumpTag } from "@/lib/early-pump-detector";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const TAG_CONFIG: Record<Exclude<EarlyPumpTag, null>, { icon: string; label: string; label_fr: string; color: string; bg: string; border: string }> = {
+const TAG_CONFIG: Record<Exclude<EarlyPumpTag, null>, { icon: string; label: string; color: string; bg: string; border: string }> = {
   EARLY_PUMP_CANDIDATE: {
     icon: "🚀",
     label: "EARLY PUMP",
-    label_fr: "EARLY PUMP",
     color: "hsl(280, 80%, 65%)",
     bg: "hsla(280, 80%, 65%, 0.08)",
     border: "hsla(280, 80%, 65%, 0.20)",
@@ -17,18 +16,23 @@ const TAG_CONFIG: Record<Exclude<EarlyPumpTag, null>, { icon: string; label: str
   EARLY_PUMP_WATCH: {
     icon: "👁",
     label: "PUMP WATCH",
-    label_fr: "PUMP WATCH",
     color: "hsl(38, 80%, 55%)",
     bg: "hsla(38, 80%, 55%, 0.08)",
     border: "hsla(38, 80%, 55%, 0.20)",
   },
-  LATE_MOMENTUM: {
-    icon: "⚡",
-    label: "LATE MOM.",
-    label_fr: "LATE MOM.",
-    color: "hsl(200, 70%, 55%)",
-    bg: "hsla(200, 70%, 55%, 0.08)",
-    border: "hsla(200, 70%, 55%, 0.20)",
+  LATE_PUMP: {
+    icon: "🔥",
+    label: "LATE PUMP",
+    color: "hsl(25, 90%, 55%)",
+    bg: "hsla(25, 90%, 55%, 0.08)",
+    border: "hsla(25, 90%, 55%, 0.20)",
+  },
+  OVEREXTENDED: {
+    icon: "⚠️",
+    label: "OVEREXTENDED",
+    color: "hsl(4, 80%, 55%)",
+    bg: "hsla(4, 80%, 55%, 0.08)",
+    border: "hsla(4, 80%, 55%, 0.20)",
   },
 };
 
