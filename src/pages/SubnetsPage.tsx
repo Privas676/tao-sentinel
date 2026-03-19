@@ -275,8 +275,8 @@ export default function SubnetsPage() {
   const { t, lang } = useI18n();
   const fr = lang === "fr";
   const isMobile = useIsMobile();
-  const { mode: viewMode, toggle: toggleViewMode } = useMobileViewMode();
-  const showCards = isMobile && viewMode === "cards";
+  const { mode: mobileViewMode, toggle: toggleMobileView } = useMobileViewMode();
+  const showCards = isMobile && mobileViewMode === "cards";
   const { ownedNetuids, addPosition } = useLocalPortfolio();
 
   // ── Data sources ──
