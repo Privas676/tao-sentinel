@@ -600,9 +600,16 @@ export default function SubnetsPage() {
         </div>
 
         {/* ═══ MASTER TABLE / CARD VIEW ═══ */}
-        {!isMobile && <SwipeHint storageKey="swipe-subnets-v4" />}
-
         {isMobile ? (
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground/40">
+              {showCards ? (fr ? "Vue cartes" : "Card view") : (fr ? "Vue tableau" : "Table view")}
+            </span>
+            <MobileViewToggle mode={viewMode} onToggle={toggleViewMode} />
+          </div>
+        ) : <SwipeHint storageKey="swipe-subnets-v4" />}
+
+        {showCards ? (
           /* ── Mobile: stacked card view ── */
           <div className="space-y-2">
             {rows.length === 0 ? (
