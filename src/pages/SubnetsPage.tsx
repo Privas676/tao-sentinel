@@ -645,6 +645,7 @@ export default function SubnetsPage() {
                       {r.isOverridden && (
                         <span className="text-[7px] px-1 py-0.5 rounded font-bold shrink-0" style={{ background: "hsla(var(--signal-break), 0.08)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.2)" }}>⛔</span>
                       )}
+                      <EarlyPumpBadge tag={earlyPumps.get(r.netuid)?.tag ?? null} size="sm" />
                     </div>
                     <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded shrink-0" style={{
                       color: finalActionColor(fa),
