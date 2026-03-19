@@ -1,9 +1,9 @@
-/* ═══════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════ */
 /*   USE CANONICAL SUBNETS — Single unified hook           */
 /*   Exposes CanonicalSubnetFacts + CanonicalSubnetDecision */
-/*   for ALL subnets. Every page MUST consume from here.   */
+/*   + EarlyPumpResult for ALL subnets.                    */
 /*   NO local re-derivation. ONE truth. ZERO doublons.     */
-/* ═══════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════ */
 
 import { useMemo } from "react";
 import { useSubnetDecisions, type SubnetDecision } from "@/hooks/use-subnet-decisions";
@@ -12,16 +12,20 @@ import { useSocialSubnetScores } from "@/hooks/use-social-signal";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { buildAllCanonicalFacts } from "@/lib/canonical-facts";
 import { buildAllCanonicalDecisions } from "@/lib/canonical-decision";
+import { detectAllEarlyPumps, type EarlyPumpResult } from "@/lib/early-pump-detector";
 import type { CanonicalSubnetFacts } from "@/lib/canonical-types";
 import type { CanonicalSubnetDecision } from "@/lib/canonical-types";
 
 export type { CanonicalSubnetFacts, CanonicalSubnetDecision } from "@/lib/canonical-types";
+export type { EarlyPumpResult, EarlyPumpTag } from "@/lib/early-pump-detector";
 
 export type CanonicalSubnetsResult = {
   /** Canonical facts per subnet (merged TaoStats + TaoFlute + Social) */
   facts: Map<number, CanonicalSubnetFacts>;
   /** Canonical decisions per subnet (single truth) */
   canonicalDecisions: Map<number, CanonicalSubnetDecision>;
+  /** Early pump detection results per subnet */
+  earlyPumps: Map<number, EarlyPumpResult>;
   /** Legacy SubnetDecision objects (for backward compat) */
   decisions: Map<number, SubnetDecision>;
   decisionsList: SubnetDecision[];
@@ -39,6 +43,7 @@ export function useCanonicalSubnets(): CanonicalSubnetsResult {
       return {
         facts: new Map<number, CanonicalSubnetFacts>(),
         canonicalDecisions: new Map<number, CanonicalSubnetDecision>(),
+        earlyPumps: new Map<number, EarlyPumpResult>(),
         decisions: new Map<number, SubnetDecision>(),
         decisionsList: [] as SubnetDecision[],
         isLoading: true,
@@ -59,9 +64,13 @@ export function useCanonicalSubnets(): CanonicalSubnetsResult {
       canonicalFacts,
     );
 
+    // Detect early pump candidates
+    const earlyPumps = detectAllEarlyPumps(canonicalFacts, canonicalDecisions);
+
     return {
       facts: canonicalFacts,
       canonicalDecisions,
+      earlyPumps,
       decisions,
       decisionsList,
       isLoading: false,

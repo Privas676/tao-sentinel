@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import { useCanonicalSubnets, type CanonicalSubnetFacts } from "@/hooks/use-canonical-subnets";
+import { EarlyPumpBadge } from "@/components/sentinel/EarlyPumpBadge";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import {
   clamp, opportunityColor, riskColor, computeSmartCapital, computeASMicro, stabilityColor,
@@ -209,7 +210,7 @@ export default function CompassPage() {
 
   // ── Data sources — useCanonicalSubnets is the single source of truth ──
   const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence, isLoading } = useSubnetScores();
-  const { facts: canonicalFacts, decisions } = useCanonicalSubnets();
+  const { facts: canonicalFacts, decisions, earlyPumps } = useCanonicalSubnets();
 
 
   const { data: rawSignals } = useQuery({
@@ -566,6 +567,7 @@ export default function CompassPage() {
                         const faL = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "ÉVITER" ? (fr ? "ÉVITER" : "AVOID") : (fr ? "SURVEILLER" : "MONITOR");
                         return <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: faC }}>{faI} {faL}</span>;
                       })()}
+                      <EarlyPumpBadge tag={earlyPumps.get(v.netuid)?.tag ?? null} score={earlyPumps.get(v.netuid)?.early_pump_score} size="sm" />
                       <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{v.overrideReasons[0] || v.name}</span>
                       <span className="font-mono text-[10px] font-bold" style={{ color: s.key === "exit" ? riskColor(v.risk) : opportunityColor(v.opp) }}>
                         {s.key === "exit" ? v.risk : v.opp}
@@ -625,7 +627,34 @@ export default function CompassPage() {
           </section>
         )}
 
-        {/* ═══ 5. ALERTES CRITIQUES ═══ */}
+        {/* ═══ 4b. EARLY PUMP DETECTOR ═══ */}
+        {(() => {
+          const epCandidates = [...earlyPumps.entries()].filter(([, ep]) => ep.tag === "EARLY_PUMP_CANDIDATE" || ep.tag === "EARLY_PUMP_WATCH").sort(([, a], [, b]) => b.early_pump_score - a.early_pump_score).slice(0, 5);
+          if (epCandidates.length === 0) return null;
+          return (
+            <section>
+              <SectionHeader title={fr ? "EARLY PUMP DETECTOR" : "EARLY PUMP DETECTOR"} icon="🚀" badge={
+                <span className="font-mono text-[9px] px-2 py-0.5 rounded font-bold" style={{ background: "hsla(280, 80%, 65%, 0.08)", color: "hsl(280, 80%, 65%)", border: "1px solid hsla(280, 80%, 65%, 0.2)" }}>{epCandidates.length}</span>
+              } />
+              <div className="rounded-xl overflow-hidden" style={{ background: "hsla(280, 80%, 65%, 0.02)", border: "1px solid hsla(280, 80%, 65%, 0.08)" }}>
+                {epCandidates.map(([netuid, ep], idx) => {
+                  const s = enrichedSignals.find(x => x.netuid === netuid);
+                  return (
+                    <div key={netuid} className="flex items-center gap-2 py-2.5 px-3 cursor-pointer hover:bg-white/[0.02] transition-all"
+                      style={{ borderBottom: idx < epCandidates.length - 1 ? "1px solid hsla(280, 80%, 65%, 0.06)" : "none" }}
+                      onClick={() => s && setPanelSignal(s)}>
+                      <span className="font-mono font-bold text-[11px]" style={{ color: GOLD, minWidth: 48 }}>SN-{netuid}</span>
+                      <span className="font-mono text-[10px] truncate text-muted-foreground" style={{ flex: 1 }}>{s?.name ?? "—"}</span>
+                      <EarlyPumpBadge tag={ep.tag} score={ep.early_pump_score} size="sm" showScore reasons={ep.reasons} />
+                      <span className="font-mono text-[10px] font-bold" style={{ color: "hsl(280, 80%, 65%)" }}>{ep.early_pump_score}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })()}
+
         {criticalRisks.length > 0 && (
           <section>
             <SectionHeader title={fr ? "ALERTES CRITIQUES" : "CRITICAL ALERTS"} icon="🚨" accentVar="--destructive" badge={

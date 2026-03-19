@@ -5,6 +5,7 @@ import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
+import { EarlyPumpBadge } from "@/components/sentinel/EarlyPumpBadge";
 import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -281,7 +282,7 @@ export default function SubnetsPage() {
 
   // ── Data sources ──
   const { scoresList, sparklines, scoreTimestamp, dataAlignment, dataAgeDebug, isLoading } = useSubnetScores();
-  const { decisions, decisionsList, isLoading: decisionsLoading } = useCanonicalSubnets();
+  const { decisions, decisionsList, earlyPumps, isLoading: decisionsLoading } = useCanonicalSubnets();
   
 
   // ── Action counts from DECISIONS (single source of truth) ──
@@ -644,6 +645,7 @@ export default function SubnetsPage() {
                       {r.isOverridden && (
                         <span className="text-[7px] px-1 py-0.5 rounded font-bold shrink-0" style={{ background: "hsla(var(--signal-break), 0.08)", color: "hsl(var(--signal-break))", border: "1px solid hsla(var(--signal-break), 0.2)" }}>⛔</span>
                       )}
+                      <EarlyPumpBadge tag={earlyPumps.get(r.netuid)?.tag ?? null} size="sm" />
                     </div>
                     <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded shrink-0" style={{
                       color: finalActionColor(fa),
