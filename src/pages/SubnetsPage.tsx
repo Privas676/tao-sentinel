@@ -605,7 +605,7 @@ export default function SubnetsPage() {
             <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground/40">
               {showCards ? (fr ? "Vue cartes" : "Card view") : (fr ? "Vue tableau" : "Table view")}
             </span>
-            <MobileViewToggle mode={viewMode} onToggle={toggleViewMode} />
+            <MobileViewToggle mode={mobileViewMode} onToggle={toggleMobileView} />
           </div>
         ) : <SwipeHint storageKey="swipe-subnets-v4" />}
 
