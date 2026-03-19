@@ -1,5 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useMobileViewMode } from "@/hooks/use-mobile-view-mode";
+import { MobileViewToggle } from "@/components/MobileViewToggle";
 import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
@@ -103,6 +105,8 @@ export default function PortfolioPage() {
   const { lang } = useI18n();
   const fr = lang === "fr";
   const isMobile = useIsMobile();
+  const { mode: viewMode, toggle: toggleViewMode } = useMobileViewMode();
+  const showCards = isMobile && viewMode === "cards";
   const portfolio = useLocalPortfolio();
   const [showAdd, setShowAdd] = useState(false);
   const [showAlloc, setShowAlloc] = useState(false);
@@ -587,7 +591,14 @@ export default function PortfolioPage() {
         {/* ══════════════════════════════════ */}
         {/*   5. POSITIONS TABLE / CARDS          */}
         {/* ══════════════════════════════════ */}
-        {!isMobile && <SwipeHint storageKey="swipe-portfolio-v1" />}
+        {isMobile ? (
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground/40">
+              {showCards ? (fr ? "Vue cartes" : "Card view") : (fr ? "Vue tableau" : "Table view")}
+            </span>
+            <MobileViewToggle mode={viewMode} onToggle={toggleViewMode} />
+          </div>
+        ) : <SwipeHint storageKey="swipe-portfolio-v1" />}
         <SectionCard>
           <div className="flex items-center justify-between px-5 py-3 border-b border-border">
             <div className="flex items-center gap-2.5">
@@ -609,7 +620,7 @@ export default function PortfolioPage() {
                 + {fr ? "Ajouter un subnet" : "Add a subnet"}
               </button>
             </div>
-          ) : isMobile ? (
+          ) : showCards ? (
             /* ── Mobile: stacked card view ── */
             <div className="p-3 space-y-2">
               {rows.sort((a, b) => {

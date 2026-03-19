@@ -8,6 +8,8 @@ import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
 import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useMobileViewMode } from "@/hooks/use-mobile-view-mode";
+import { MobileViewToggle } from "@/components/MobileViewToggle";
 import { taoFluteColumnLabel } from "@/lib/taoflute-resolver";
 import { finalActionColor as canonicalFaColor, finalActionIcon as canonicalFaIcon, finalActionLabel as canonicalFaLabel } from "@/lib/subnet-decision";
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
@@ -273,6 +275,8 @@ export default function SubnetsPage() {
   const { t, lang } = useI18n();
   const fr = lang === "fr";
   const isMobile = useIsMobile();
+  const { mode: mobileViewMode, toggle: toggleMobileView } = useMobileViewMode();
+  const showCards = isMobile && mobileViewMode === "cards";
   const { ownedNetuids, addPosition } = useLocalPortfolio();
 
   // ── Data sources ──
@@ -596,9 +600,16 @@ export default function SubnetsPage() {
         </div>
 
         {/* ═══ MASTER TABLE / CARD VIEW ═══ */}
-        {!isMobile && <SwipeHint storageKey="swipe-subnets-v4" />}
-
         {isMobile ? (
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-mono text-[8px] tracking-widest uppercase text-muted-foreground/40">
+              {showCards ? (fr ? "Vue cartes" : "Card view") : (fr ? "Vue tableau" : "Table view")}
+            </span>
+            <MobileViewToggle mode={mobileViewMode} onToggle={toggleMobileView} />
+          </div>
+        ) : <SwipeHint storageKey="swipe-subnets-v4" />}
+
+        {showCards ? (
           /* ── Mobile: stacked card view ── */
           <div className="space-y-2">
             {rows.length === 0 ? (
