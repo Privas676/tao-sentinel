@@ -567,6 +567,7 @@ export default function CompassPage() {
                         const faL = fa === "ENTRER" ? (fr ? "ENTRER" : "ENTER") : fa === "SORTIR" ? (fr ? "SORTIR" : "EXIT") : fa === "ÉVITER" ? (fr ? "ÉVITER" : "AVOID") : (fr ? "SURVEILLER" : "MONITOR");
                         return <span className="font-mono text-[9px] font-bold whitespace-nowrap" style={{ color: faC }}>{faI} {faL}</span>;
                       })()}
+                      <EarlyPumpBadge tag={earlyPumps.get(v.netuid)?.tag ?? null} score={earlyPumps.get(v.netuid)?.early_pump_score} size="sm" />
                       <span className="font-mono text-[9px] text-muted-foreground truncate flex-1">{v.overrideReasons[0] || v.name}</span>
                       <span className="font-mono text-[10px] font-bold" style={{ color: s.key === "exit" ? riskColor(v.risk) : opportunityColor(v.opp) }}>
                         {s.key === "exit" ? v.risk : v.opp}
