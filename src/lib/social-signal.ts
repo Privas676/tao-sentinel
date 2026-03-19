@@ -210,8 +210,8 @@ export function computeSocialOverlay(
   const conviction = subnetScore.socialConviction;
   const pumpRisk = subnetScore.pumpRisk;
 
-  // RULE: social NEVER overrides SORTIR
-  if (finalAction === "SORTIR" && (signal === "bullish" || conviction >= 60)) {
+  // RULE: social NEVER overrides SORTIR or ÉVITER
+  if ((finalAction === "SORTIR" || finalAction === "ÉVITER") && (signal === "bullish" || signal === "positive" || conviction >= 60)) {
     conflictMessage = fr
       ? "Opportunité sociale détectée mais bloquée par garde-fous structurels"
       : "Social opportunity detected but blocked by structural safeguards";
