@@ -98,14 +98,32 @@ export default function SocialSignalBlock({ subnetUid, finalAction }: { subnetUi
         <MetricBar label={fr ? "Risque Pump" : "Pump Risk"} value={overlay.pumpRisk} color={BREAK} />
       </div>
 
-      {/* Mentions summary */}
+      {/* Transparency + Signal */}
       {score && (
-        <div className="px-4 py-2 border-t border-border flex items-center gap-4 font-mono text-[8px] text-muted-foreground">
-          <span>{score.raw_mention_count} {fr ? "mentions 24h" : "mentions 24h"}</span>
-          <span>{score.unique_account_count} {fr ? "comptes uniques" : "unique accounts"}</span>
-          <span className="uppercase font-bold" style={{ color: overlay.finalSignal === "bullish" ? GO : overlay.finalSignal === "bearish" ? BREAK : GOLD }}>
-            {overlay.finalSignal}
-          </span>
+        <div className="px-4 py-2.5 border-t border-border space-y-1.5">
+          <div className="flex items-center gap-4 font-mono text-[8px] text-muted-foreground flex-wrap">
+            <span>{score.raw_mention_count} {fr ? "mentions" : "mentions"}</span>
+            <span>{score.unique_account_count} {fr ? "comptes" : "accounts"}</span>
+            <span>{fr ? "Fenêtre" : "Window"}: 7j</span>
+            <span>{fr ? "Score du" : "From"} {score.score_date}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[9px] font-bold uppercase" style={{ 
+              color: overlay.finalSignal === "bullish" ? GO 
+                : overlay.finalSignal === "positive" ? GO
+                : overlay.finalSignal === "bearish" ? BREAK 
+                : overlay.finalSignal === "caution" ? GOLD
+                : overlay.finalSignal === "pump_risk" ? BREAK
+                : "hsl(var(--muted-foreground))" 
+            }}>
+              {overlay.finalSignal === "positive" ? "POSITIVE" 
+                : overlay.finalSignal === "caution" ? "CAUTION"
+                : overlay.finalSignal.toUpperCase()}
+            </span>
+            <span className="font-mono text-[7px] text-muted-foreground/50">
+              {fr ? "· enrichit la décision, ne remplace pas les faits" : "· enriches decision, does not replace facts"}
+            </span>
+          </div>
         </div>
       )}
 
