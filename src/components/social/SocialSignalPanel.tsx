@@ -24,7 +24,8 @@ const BREAK = "hsl(var(--signal-break))";
 
 const TIER_COLORS: Record<string, string> = { A: GO, B: GOLD, C: "hsl(var(--muted-foreground))" };
 const CAT_ICONS: Record<string, string> = { official: "🏛", influencer: "📢", builder: "🔧", fund: "💰", media: "📰" };
-const SIGNAL_COLORS: Record<string, string> = { bullish: GO, bearish: BREAK, watch: GOLD, pump_risk: BREAK, none: "hsl(var(--muted-foreground))" };
+const SIGNAL_COLORS: Record<string, string> = { bullish: GO, positive: GO, bearish: BREAK, caution: GOLD, watch: GOLD, pump_risk: BREAK, neutral: "hsl(var(--muted-foreground))", none: "hsl(var(--muted-foreground))" };
+const SIGNAL_LABELS: Record<string, string> = { bullish: "BULLISH", positive: "POSITIVE", bearish: "BEARISH", caution: "CAUTION", pump_risk: "PUMP RISK", neutral: "NEUTRAL", watch: "WATCH", none: "—" };
 
 type SocialTab = "leaderboard" | "posts" | "accounts" | "alerts";
 const TABS: { key: SocialTab; icon: string; fr: string; en: string }[] = [

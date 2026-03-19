@@ -9,7 +9,7 @@
 
 export type PostType = "original" | "reply" | "quote" | "repost";
 export type Sentiment = "bullish" | "neutral" | "bearish";
-export type SocialSignal = "none" | "watch" | "bullish" | "bearish" | "pump_risk";
+export type SocialSignal = "none" | "neutral" | "positive" | "bullish" | "caution" | "bearish" | "pump_risk" | "watch";
 export type AlertType = "kol_call" | "multi_account_buzz" | "pump_risk" | "bearish_warning" | "official_mention" | "fund_signal" | "builder_update";
 export type PostClassification = "MENTION" | "WATCH" | "BULLISH_CALL" | "BEARISH_WARNING" | "ECOSYSTEM_NEWS" | "PROJECT_UPDATE" | "FUND_FLOW_SIGNAL" | "PUMP_SIGNAL";
 
