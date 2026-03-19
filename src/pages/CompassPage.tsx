@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import { useCanonicalSubnets, type CanonicalSubnetFacts } from "@/hooks/use-canonical-subnets";
+import { EarlyPumpBadge } from "@/components/sentinel/EarlyPumpBadge";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
 import {
   clamp, opportunityColor, riskColor, computeSmartCapital, computeASMicro, stabilityColor,
