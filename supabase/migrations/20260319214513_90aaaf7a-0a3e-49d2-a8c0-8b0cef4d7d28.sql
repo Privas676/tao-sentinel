@@ -1,0 +1,2 @@
+ALTER TABLE public.social_subnet_scores DROP CONSTRAINT social_subnet_scores_final_social_signal_check;
+ALTER TABLE public.social_subnet_scores ADD CONSTRAINT social_subnet_scores_final_social_signal_check CHECK (final_social_signal = ANY (ARRAY['none'::text, 'neutral'::text, 'positive'::text, 'bullish'::text, 'caution'::text, 'bearish'::text, 'pump_risk'::text, 'watch'::text]));
