@@ -105,6 +105,8 @@ export default function PortfolioPage() {
   const { lang } = useI18n();
   const fr = lang === "fr";
   const isMobile = useIsMobile();
+  const { mode: viewMode, toggle: toggleViewMode } = useMobileViewMode();
+  const showCards = isMobile && viewMode === "cards";
   const portfolio = useLocalPortfolio();
   const [showAdd, setShowAdd] = useState(false);
   const [showAlloc, setShowAlloc] = useState(false);
