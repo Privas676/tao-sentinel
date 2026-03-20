@@ -6,6 +6,7 @@ import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
+import { useAuth } from "@/hooks/use-auth";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
 import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
