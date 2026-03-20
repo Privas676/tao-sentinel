@@ -120,8 +120,9 @@ export default function PortfolioPage() {
   const { priorityList } = useExternalDelist();
   const priorityNetuids = useMemo(() => new Set(priorityList.map(p => p.netuid)), [priorityList]);
 
-  // ── Seed portfolio positions (one-time import) ──
+  // ── Seed portfolio positions (one-time import for authenticated users) ──
   useEffect(() => {
+    if (!user || portfolioLoading || portfolio.positions.length > 0) return;
     const SEED_KEY = "portfolio_seed_v1";
     if (localStorage.getItem(SEED_KEY)) return;
     const seed = [
@@ -150,7 +151,7 @@ export default function PortfolioPage() {
       }
     }
     localStorage.setItem(SEED_KEY, Date.now().toString());
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, portfolioLoading, portfolio.positions.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmtVal = (tao: number) => currency === "USD" ? `$${(tao * (taoUsd || 0)).toFixed(2)}` : `${tao.toFixed(2)} τ`;
 
