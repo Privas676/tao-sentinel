@@ -296,7 +296,7 @@ export default function PortfolioPage() {
   /* ═══════════════════════════════════════ */
   /*   RENDER                                */
   /* ═══════════════════════════════════════ */
-  if (isLoading) return <PageLoadingState label={fr ? "Chargement portfolio..." : "Loading portfolio..."} />;
+  if (isLoading || portfolioLoading) return <PageLoadingState label={fr ? "Chargement portfolio..." : "Loading portfolio..."} />;
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">
