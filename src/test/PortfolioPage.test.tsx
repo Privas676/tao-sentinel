@@ -27,12 +27,14 @@ let mockPositions: any[] = [];
 
 vi.mock("@/hooks/use-local-portfolio", () => ({
   useLocalPortfolio: () => ({
-    positions: mockPositions, archive: [],
+    positions: mockPositions, archive: [], events: [],
     ownedNetuids: new Set(mockPositions.map((p: any) => p.subnet_id)),
     isOwned: (n: number) => mockPositions.some((p: any) => p.subnet_id === n),
+    isLoading: false,
     addPosition: mockAddPosition, removePosition: vi.fn(), sellPosition: mockSellPosition, updateQuantity: vi.fn(),
   }),
 }));
+vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "test-user" }, session: null, loading: false, signOut: vi.fn() }) }));
 
 const mockScores = new Map([
   [1, { netuid: 1, name: "Alpha", opp: 70, risk: 25, asymmetry: 45, stability: 75, sc: "ACCUMULATION", action: "ENTER", isOverridden: false, systemStatus: "OK", confianceScore: 80, state: "GO", consensusPrice: 0.05, alphaPrice: 0.05, momentumLabel: "FORT", momentumScore: 70, healthScores: {} as any, depegProbability: 0, delistCategory: "NORMAL" }],
