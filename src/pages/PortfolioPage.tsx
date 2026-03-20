@@ -103,6 +103,7 @@ function portfolioActionColor(a: string): string {
 /*   MAIN PAGE                              */
 /* ═══════════════════════════════════════ */
 export default function PortfolioPage() {
+  const { user } = useAuth();
   const { lang } = useI18n();
   const fr = lang === "fr";
   const isMobile = useIsMobile();
