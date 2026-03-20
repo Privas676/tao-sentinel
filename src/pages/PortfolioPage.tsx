@@ -108,6 +108,7 @@ export default function PortfolioPage() {
   const { mode: viewMode, toggle: toggleViewMode } = useMobileViewMode();
   const showCards = isMobile && viewMode === "cards";
   const portfolio = useLocalPortfolio();
+  const portfolioLoading = portfolio.isLoading;
   const [showAdd, setShowAdd] = useState(false);
   const [showAlloc, setShowAlloc] = useState(false);
   const [addNetuid, setAddNetuid] = useState<number>(1);
