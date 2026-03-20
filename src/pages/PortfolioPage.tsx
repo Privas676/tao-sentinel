@@ -6,6 +6,7 @@ import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
 import { useI18n } from "@/lib/i18n";
 import { useLocalPortfolio } from "@/hooks/use-local-portfolio";
+import { useAuth } from "@/hooks/use-auth";
 import { useSubnetScores, type UnifiedSubnetScore, SPECIAL_SUBNETS } from "@/hooks/use-subnet-scores";
 import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
 import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
@@ -102,12 +103,14 @@ function portfolioActionColor(a: string): string {
 /*   MAIN PAGE                              */
 /* ═══════════════════════════════════════ */
 export default function PortfolioPage() {
+  const { user } = useAuth();
   const { lang } = useI18n();
   const fr = lang === "fr";
   const isMobile = useIsMobile();
   const { mode: viewMode, toggle: toggleViewMode } = useMobileViewMode();
   const showCards = isMobile && viewMode === "cards";
   const portfolio = useLocalPortfolio();
+  const portfolioLoading = portfolio.isLoading;
   const [showAdd, setShowAdd] = useState(false);
   const [showAlloc, setShowAlloc] = useState(false);
   const [addNetuid, setAddNetuid] = useState<number>(1);
@@ -119,8 +122,9 @@ export default function PortfolioPage() {
   const { priorityList } = useExternalDelist();
   const priorityNetuids = useMemo(() => new Set(priorityList.map(p => p.netuid)), [priorityList]);
 
-  // ── Seed portfolio positions (one-time import) ──
+  // ── Seed portfolio positions (one-time import for authenticated users) ──
   useEffect(() => {
+    if (!user || portfolioLoading || portfolio.positions.length > 0) return;
     const SEED_KEY = "portfolio_seed_v1";
     if (localStorage.getItem(SEED_KEY)) return;
     const seed = [
@@ -149,7 +153,7 @@ export default function PortfolioPage() {
       }
     }
     localStorage.setItem(SEED_KEY, Date.now().toString());
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, portfolioLoading, portfolio.positions.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmtVal = (tao: number) => currency === "USD" ? `$${(tao * (taoUsd || 0)).toFixed(2)}` : `${tao.toFixed(2)} τ`;
 
@@ -292,7 +296,7 @@ export default function PortfolioPage() {
   /* ═══════════════════════════════════════ */
   /*   RENDER                                */
   /* ═══════════════════════════════════════ */
-  if (isLoading) return <PageLoadingState label={fr ? "Chargement portfolio..." : "Loading portfolio..."} />;
+  if (isLoading || portfolioLoading) return <PageLoadingState label={fr ? "Chargement portfolio..." : "Loading portfolio..."} />;
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-auto pb-8">

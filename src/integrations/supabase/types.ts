@@ -284,6 +284,72 @@ export type Database = {
         }
         Relationships: []
       }
+      portfolio_events: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          note: string | null
+          price: number | null
+          quantity_tao: number | null
+          subnet_id: number
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          price?: number | null
+          quantity_tao?: number | null
+          subnet_id: number
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          price?: number | null
+          quantity_tao?: number | null
+          subnet_id?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      portfolio_positions: {
+        Row: {
+          created_at: string
+          entry_price: number | null
+          id: string
+          note: string | null
+          quantity_tao: number
+          subnet_id: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entry_price?: number | null
+          id?: string
+          note?: string | null
+          quantity_tao?: number
+          subnet_id: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entry_price?: number | null
+          id?: string
+          note?: string | null
+          quantity_tao?: number
+          subnet_id?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       positions: {
         Row: {
           capital: number
