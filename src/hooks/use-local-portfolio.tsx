@@ -344,11 +344,18 @@ export function useLocalPortfolio() {
         return prev.filter((p) => p.subnet_id !== subnet_id);
       });
 
-      if (!userId || !removed) return;
+      console.log("[portfolio] removePosition called", { subnet_id, removed, userId });
+
+      if (!userId || !removed) {
+        console.warn("[portfolio] removePosition skipped persist", { userId, removed });
+        return;
+      }
 
       try {
         const event = await logEvent(userId, subnet_id, "REMOVE");
+        console.log("[portfolio] REMOVE event logged", event);
         await persistDelete(subnet_id);
+        console.log("[portfolio] DELETE persisted for subnet", subnet_id);
         appendEvent(event);
       } catch (error) {
         console.error("[portfolio] Failed to persist removal", error);
