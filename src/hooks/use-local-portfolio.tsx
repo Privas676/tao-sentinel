@@ -370,49 +370,39 @@ export function useLocalPortfolio() {
 
   const sellPosition = useCallback(
     async (subnet_id: number, closedPrice?: number) => {
-      let soldPosition: LocalPosition | null = null;
-      let archivedPosition: ArchivedPosition | null = null;
+      const snapshot = positions;
+      const archiveSnapshot = archive;
+      const pos = snapshot.find((p) => p.subnet_id === subnet_id);
+      if (!pos) return;
 
-      setPositions((prev) => {
-        const pos = prev.find((p) => p.subnet_id === subnet_id);
-        if (!pos) return prev;
+      const pnl = closedPrice && pos.entry_price
+        ? (closedPrice - pos.entry_price) * pos.quantity_tao
+        : undefined;
 
-        soldPosition = pos;
-        const pnl = closedPrice && pos.entry_price
-          ? (closedPrice - pos.entry_price) * pos.quantity_tao
-          : undefined;
+      const archivedPosition: ArchivedPosition = {
+        ...pos,
+        closed_at: new Date().toISOString(),
+        closed_price: closedPrice,
+        pnl_estimated: pnl,
+      };
 
-        archivedPosition = {
-          ...pos,
-          closed_at: new Date().toISOString(),
-          closed_price: closedPrice,
-          pnl_estimated: pnl,
-        };
+      // Optimistic update
+      setPositions((prev) => prev.filter((p) => p.subnet_id !== subnet_id));
+      setArchive((prev) => [...prev, archivedPosition]);
 
-        return prev.filter((p) => p.subnet_id !== subnet_id);
-      });
-
-      if (archivedPosition) {
-        setArchive((prev) => [...prev, archivedPosition!]);
-      }
-
-      if (!userId || !soldPosition) return;
+      if (!userId) return;
 
       try {
-        const event = await logEvent(
-          userId,
-          subnet_id,
-          "SELL",
-          soldPosition.quantity_tao,
-          closedPrice,
-        );
+        const event = await logEvent(userId, subnet_id, "SELL", pos.quantity_tao, closedPrice);
         await persistDelete(subnet_id);
         appendEvent(event);
       } catch (error) {
-        console.error("[portfolio] Failed to persist sell", error);
+        console.error("[portfolio] Failed to persist sell, rolling back", error);
+        setPositions(snapshot);
+        setArchive(archiveSnapshot);
       }
     },
-    [appendEvent, persistDelete, userId],
+    [appendEvent, archive, persistDelete, positions, userId],
   );
 
   const ownedNetuids = useMemo(() => new Set(positions.map((p) => p.subnet_id)), [positions]);
