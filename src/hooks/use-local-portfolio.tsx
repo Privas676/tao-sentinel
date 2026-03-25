@@ -337,31 +337,35 @@ export function useLocalPortfolio() {
 
   const removePosition = useCallback(
     async (subnet_id: number) => {
-      let removed = false;
+      const snapshot = positions;
+      const exists = snapshot.some((p) => p.subnet_id === subnet_id);
 
-      setPositions((prev) => {
-        removed = prev.some((p) => p.subnet_id === subnet_id);
-        return prev.filter((p) => p.subnet_id !== subnet_id);
-      });
+      if (!exists) {
+        console.warn("[portfolio] removePosition: subnet not found", subnet_id);
+        return;
+      }
 
-      console.log("[portfolio] removePosition called", { subnet_id, removed, userId });
+      // Optimistic UI update
+      setPositions((prev) => prev.filter((p) => p.subnet_id !== subnet_id));
 
-      if (!userId || !removed) {
-        console.warn("[portfolio] removePosition skipped persist", { userId, removed });
+      if (!userId) {
+        // Offline / not logged in — local-only removal (saved via useEffect)
+        console.log("[portfolio] removePosition local-only", subnet_id);
         return;
       }
 
       try {
         const event = await logEvent(userId, subnet_id, "REMOVE");
-        console.log("[portfolio] REMOVE event logged", event);
         await persistDelete(subnet_id);
         console.log("[portfolio] DELETE persisted for subnet", subnet_id);
         appendEvent(event);
       } catch (error) {
-        console.error("[portfolio] Failed to persist removal", error);
+        console.error("[portfolio] Failed to persist removal, rolling back", error);
+        // Rollback UI to previous state
+        setPositions(snapshot);
       }
     },
-    [appendEvent, persistDelete, userId],
+    [appendEvent, persistDelete, positions, userId],
   );
 
   const sellPosition = useCallback(
