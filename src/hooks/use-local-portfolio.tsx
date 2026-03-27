@@ -337,31 +337,43 @@ export function useLocalPortfolio() {
 
   const removePosition = useCallback(
     async (subnet_id: number) => {
-      const snapshot = positions;
-      const exists = snapshot.some((p) => p.subnet_id === subnet_id);
+      console.log("[portfolio] removePosition called", { subnet_id, userId, positionsLength: positions.length });
+
+      // Use functional setter to get the true current state
+      let snapshot: LocalPosition[] = [];
+      let exists = false;
+
+      setPositions((prev) => {
+        snapshot = prev;
+        exists = prev.some((p) => p.subnet_id === subnet_id);
+        if (!exists) {
+          console.warn("[portfolio] removePosition: subnet not found in state", subnet_id, prev.map(p => p.subnet_id));
+          return prev; // no change
+        }
+        console.log("[portfolio] removePosition: optimistic removal of", subnet_id);
+        return prev.filter((p) => p.subnet_id !== subnet_id);
+      });
+
+      // Wait a tick for the functional setter to execute
+      await new Promise((r) => setTimeout(r, 0));
 
       if (!exists) {
-        console.warn("[portfolio] removePosition: subnet not found", subnet_id);
         return;
       }
 
-      // Optimistic UI update
-      setPositions((prev) => prev.filter((p) => p.subnet_id !== subnet_id));
-
       if (!userId) {
-        // Offline / not logged in — local-only removal (saved via useEffect)
-        console.log("[portfolio] removePosition local-only", subnet_id);
+        console.log("[portfolio] removePosition local-only (no userId)", subnet_id);
         return;
       }
 
       try {
+        console.log("[portfolio] removePosition: persisting DELETE to cloud...", subnet_id);
         const event = await logEvent(userId, subnet_id, "REMOVE");
         await persistDelete(subnet_id);
         console.log("[portfolio] DELETE persisted for subnet", subnet_id);
         appendEvent(event);
       } catch (error) {
         console.error("[portfolio] Failed to persist removal, rolling back", error);
-        // Rollback UI to previous state
         setPositions(snapshot);
       }
     },
