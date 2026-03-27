@@ -337,29 +337,26 @@ export function useLocalPortfolio() {
 
   const removePosition = useCallback(
     async (subnet_id: number) => {
-      console.log("[portfolio] removePosition called", { subnet_id, userId, positionsLength: positions.length });
+      console.log("[portfolio] removePosition called", { subnet_id, userId });
 
-      // Use functional setter to get the true current state
-      let snapshot: LocalPosition[] = [];
-      let exists = false;
-
-      setPositions((prev) => {
-        snapshot = prev;
-        exists = prev.some((p) => p.subnet_id === subnet_id);
-        if (!exists) {
-          console.warn("[portfolio] removePosition: subnet not found in state", subnet_id, prev.map(p => p.subnet_id));
-          return prev; // no change
-        }
-        console.log("[portfolio] removePosition: optimistic removal of", subnet_id);
-        return prev.filter((p) => p.subnet_id !== subnet_id);
+      // Read current state synchronously via ref-like pattern
+      const currentPositions = await new Promise<LocalPosition[]>((resolve) => {
+        setPositions((prev) => {
+          resolve(prev);
+          return prev; // don't mutate yet
+        });
       });
 
-      // Wait a tick for the functional setter to execute
-      await new Promise((r) => setTimeout(r, 0));
-
-      if (!exists) {
+      const pos = currentPositions.find((p) => p.subnet_id === subnet_id);
+      if (!pos) {
+        console.warn("[portfolio] removePosition: subnet not found", subnet_id, currentPositions.map(p => p.subnet_id));
         return;
       }
+
+      // Optimistic removal
+      const snapshot = currentPositions;
+      setPositions((prev) => prev.filter((p) => p.subnet_id !== subnet_id));
+      console.log("[portfolio] removePosition: optimistic removal of", subnet_id);
 
       if (!userId) {
         console.log("[portfolio] removePosition local-only (no userId)", subnet_id);
@@ -368,8 +365,10 @@ export function useLocalPortfolio() {
 
       try {
         console.log("[portfolio] removePosition: persisting DELETE to cloud...", subnet_id);
-        const event = await logEvent(userId, subnet_id, "REMOVE");
-        await persistDelete(subnet_id);
+        const [event] = await Promise.all([
+          logEvent(userId, subnet_id, "REMOVE"),
+          persistDelete(subnet_id),
+        ]);
         console.log("[portfolio] DELETE persisted for subnet", subnet_id);
         appendEvent(event);
       } catch (error) {
@@ -377,16 +376,20 @@ export function useLocalPortfolio() {
         setPositions(snapshot);
       }
     },
-    [appendEvent, persistDelete, positions, userId],
+    [appendEvent, persistDelete, userId],
   );
 
   const sellPosition = useCallback(
     async (subnet_id: number, closedPrice?: number) => {
-      const snapshot = positions;
-      const archiveSnapshot = archive;
-      const pos = snapshot.find((p) => p.subnet_id === subnet_id);
+      // Read current state without stale closure
+      const currentPositions = await new Promise<LocalPosition[]>((resolve) => {
+        setPositions((prev) => { resolve(prev); return prev; });
+      });
+
+      const pos = currentPositions.find((p) => p.subnet_id === subnet_id);
       if (!pos) return;
 
+      const snapshot = currentPositions;
       const pnl = closedPrice && pos.entry_price
         ? (closedPrice - pos.entry_price) * pos.quantity_tao
         : undefined;
@@ -405,16 +408,18 @@ export function useLocalPortfolio() {
       if (!userId) return;
 
       try {
-        const event = await logEvent(userId, subnet_id, "SELL", pos.quantity_tao, closedPrice);
-        await persistDelete(subnet_id);
+        const [event] = await Promise.all([
+          logEvent(userId, subnet_id, "SELL", pos.quantity_tao, closedPrice),
+          persistDelete(subnet_id),
+        ]);
         appendEvent(event);
       } catch (error) {
         console.error("[portfolio] Failed to persist sell, rolling back", error);
         setPositions(snapshot);
-        setArchive(archiveSnapshot);
+        setArchive((prev) => prev.filter((a) => a !== archivedPosition));
       }
     },
-    [appendEvent, archive, persistDelete, positions, userId],
+    [appendEvent, persistDelete, userId],
   );
 
   const ownedNetuids = useMemo(() => new Set(positions.map((p) => p.subnet_id)), [positions]);
