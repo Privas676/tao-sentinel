@@ -381,11 +381,15 @@ export function useLocalPortfolio() {
 
   const sellPosition = useCallback(
     async (subnet_id: number, closedPrice?: number) => {
-      const snapshot = positions;
-      const archiveSnapshot = archive;
-      const pos = snapshot.find((p) => p.subnet_id === subnet_id);
+      // Read current state without stale closure
+      const currentPositions = await new Promise<LocalPosition[]>((resolve) => {
+        setPositions((prev) => { resolve(prev); return prev; });
+      });
+
+      const pos = currentPositions.find((p) => p.subnet_id === subnet_id);
       if (!pos) return;
 
+      const snapshot = currentPositions;
       const pnl = closedPrice && pos.entry_price
         ? (closedPrice - pos.entry_price) * pos.quantity_tao
         : undefined;
@@ -404,16 +408,18 @@ export function useLocalPortfolio() {
       if (!userId) return;
 
       try {
-        const event = await logEvent(userId, subnet_id, "SELL", pos.quantity_tao, closedPrice);
-        await persistDelete(subnet_id);
+        const [event] = await Promise.all([
+          logEvent(userId, subnet_id, "SELL", pos.quantity_tao, closedPrice),
+          persistDelete(subnet_id),
+        ]);
         appendEvent(event);
       } catch (error) {
         console.error("[portfolio] Failed to persist sell, rolling back", error);
         setPositions(snapshot);
-        setArchive(archiveSnapshot);
+        setArchive((prev) => prev.filter((a) => a !== archivedPosition));
       }
     },
-    [appendEvent, archive, persistDelete, positions, userId],
+    [appendEvent, persistDelete, userId],
   );
 
   const ownedNetuids = useMemo(() => new Set(positions.map((p) => p.subnet_id)), [positions]);
