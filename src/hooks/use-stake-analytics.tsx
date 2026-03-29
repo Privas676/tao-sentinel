@@ -195,9 +195,9 @@ export function useStakeAnalytics() {
         }
       }
 
-      const { data: subnets } = await supabase.from("subnets").select("netuid, name");
+      const { data: subnets } = await supabase.from("subnets").select("netuid, name, display_name, canonical_name");
       const nameMap = new Map<number, string>();
-      for (const s of subnets || []) nameMap.set(s.netuid, s.name || `SN-${s.netuid}`);
+      for (const s of subnets || []) nameMap.set(s.netuid, (s as any).display_name || (s as any).canonical_name || s.name || `SN-${s.netuid}`);
 
       // Compute total emission for emission share
       let totalEmission = 0;

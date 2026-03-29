@@ -365,9 +365,12 @@ export function useSubnetScores(): UnifiedScoresResult {
   const { data: subnetList } = useQuery({
     queryKey: ["unified-subnet-names"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("subnets").select("netuid, name").order("netuid");
+      const { data, error } = await supabase.from("subnets").select("netuid, name, display_name, canonical_name").order("netuid");
       if (error) throw error;
-      return (data || []).map(s => ({ netuid: s.netuid, name: s.name || `SN-${s.netuid}` }));
+      return (data || []).map(s => ({
+        netuid: s.netuid,
+        name: (s as any).display_name || (s as any).canonical_name || s.name || `SN-${s.netuid}`,
+      }));
     },
   });
 
