@@ -174,6 +174,13 @@ Deno.serve(async (req: Request) => {
       for (const row of subnetRows) {
         const netuid = row.netuid ?? row.sn_id ?? row.subnet_id ?? row.id;
         if (!netuid || isNaN(Number(netuid))) continue;
+        const nid = Number(netuid);
+
+        // Skip excluded subnets (confirmed false positives)
+        if (TAOFLUTE_EXCLUDED.has(nid)) {
+          result.excluded++;
+          continue;
+        }
 
         const liqPrice = findNumericField(row, ["liq_price", "metagraph_price", "price"]);
         const liqHaircut = findNumericField(row, ["liq_haircut", "haircut"]);
@@ -181,9 +188,9 @@ Deno.serve(async (req: Request) => {
 
         // Extract dereg_place for reconciliation
         const deregPlace = Number(row.dereg_place);
-        const subnetName = String(row.subnet_name ?? row.name ?? `SN-${netuid}`);
+        const subnetName = String(row.subnet_name ?? row.name ?? `SN-${nid}`);
         if (!isNaN(deregPlace) && deregPlace > 0) {
-          deregData.push({ netuid: Number(netuid), rank: deregPlace, name: subnetName });
+          deregData.push({ netuid: nid, rank: deregPlace, name: subnetName });
         }
 
         const { error } = await supabase
