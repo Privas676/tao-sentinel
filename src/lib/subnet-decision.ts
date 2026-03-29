@@ -21,6 +21,18 @@ import {
   type TaoFluteResolvedStatus,
   type TaoFluteSeverity,
 } from "@/lib/taoflute-resolver";
+import {
+  type LayeredDecision,
+  buildCanonicalLayer,
+  buildTaoFluteLayer,
+  buildTaoStatsLayer,
+  buildSocialLayer,
+  fuseDecision,
+} from "@/lib/decision-fusion";
+import {
+  computeOfficialDeregRisk,
+  extractDeregInputFromPayload,
+} from "@/lib/canonical-dereg";
 
 /* ── Types ── */
 
