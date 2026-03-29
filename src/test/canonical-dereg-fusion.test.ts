@@ -206,6 +206,8 @@ describe("fuseDecision", () => {
 
     const result = fuseDecision(42, canonical, tf, strongTaostats, bullishSocial, "ENTRER");
     expect(result.dominant_layer).toBe("TAOSTATS");
+    expect(result.canonical.verdict).toBe("SAFE");
+    expect(strongTaostats.verdict).toBe("STRONG");
     expect(result.final_confidence).toBeGreaterThanOrEqual(60);
     expect(result.final_supports.length).toBeGreaterThan(0);
   });
