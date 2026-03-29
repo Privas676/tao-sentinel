@@ -1013,22 +1013,37 @@ export type Database = {
       }
       subnets: {
         Row: {
+          canonical_name: string | null
+          display_name: string | null
           first_seen_at: string | null
           last_seen_at: string | null
           name: string | null
+          name_conflict_log: Json | null
+          name_updated_at: string | null
           netuid: number
+          source_name: string | null
         }
         Insert: {
+          canonical_name?: string | null
+          display_name?: string | null
           first_seen_at?: string | null
           last_seen_at?: string | null
           name?: string | null
+          name_conflict_log?: Json | null
+          name_updated_at?: string | null
           netuid: number
+          source_name?: string | null
         }
         Update: {
+          canonical_name?: string | null
+          display_name?: string | null
           first_seen_at?: string | null
           last_seen_at?: string | null
           name?: string | null
+          name_conflict_log?: Json | null
+          name_updated_at?: string | null
           netuid?: number
+          source_name?: string | null
         }
         Relationships: []
       }
