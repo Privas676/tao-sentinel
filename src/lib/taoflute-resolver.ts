@@ -34,52 +34,41 @@ export type TaoFluteResolvedStatus = {
 
 /* ── Confirmed lists (updated from validated Taoflute screenshots 2026-03) ── */
 
+/* Fallback lists — synced with DB 2026-03-29 (DB data always takes precedence) */
 export const TAOFLUTE_PRIORITY_CONFIRMED: ReadonlySet<number> = new Set([
-  70,  // Vericore
-  82,  // Hermes
-  55,  // NIOME
-  57,  // Sparket.AI
-  102, // Vocence
-  84,  // ChipForge (Tatsu)
-  79,  // MVTRX
-  66,  // AlphaCore
-  78,  // Loosh
-  128, // ByteLeap
+  78,  // Loosh (P1)
+  36,  // (P2)
+  57,  // Sparket.AI (P3)
+  32,  // (P4)
+  79,  // MVTRX (P5)
+  55,  // NIOME (P6)
+  118, // (P7)
+  72,  // (P8)
+  110, // (P9)
+  40,  // (P10)
+  70,  // Vericore (legacy P1 from manual seed)
 ]);
 
 export const TAOFLUTE_WATCH_CONFIRMED: ReadonlySet<number> = new Set([
-  126, // Poker44
-  87,  // Luminar Network
-  80,  // dogelayer
-  91,  // Bitstarter #1
-  94,  // Bitsota
-  96,  // X
-  109, // Reserved
-  31,  // Halftime
-  47,  // EvoIAI
-  99,  // Leoma
-  108, // TalkHead
-  38,  // colosseum
-  97,  // Constantinople
-  114, // SOMA
-  107, // Minos
-  113, // TensorUSD
-  92,  // LUCID
+  3, 7, 20, 27, 31, 37, 38, 42, 45, 47, 59, 67, 69, 76, 77,
+  80, 82, 83, 84, 86, 87, 89, 90, 91, 92, 94, 96, 97, 99,
+  101, 104, 106, 107, 108, 109, 113, 114, 116, 117, 120, 122, 126, 128,
 ]);
 
-/* ── Priority rank map (for confirmed priority subnets) ── */
+/* ── Priority rank map (fallback for confirmed priority subnets) ── */
 
 const PRIORITY_RANK_MAP: ReadonlyMap<number, number> = new Map([
-  [70, 1],   // Vericore
-  [82, 2],   // Hermes
-  [55, 3],   // NIOME
-  [57, 4],   // Sparket.AI
-  [102, 5],  // Vocence
-  [84, 6],   // ChipForge
-  [79, 7],   // MVTRX
-  [66, 8],   // AlphaCore
-  [78, 9],   // Loosh
-  [128, 10], // ByteLeap
+  [78, 1],   // Loosh
+  [36, 2],
+  [57, 3],   // Sparket.AI
+  [32, 4],
+  [79, 5],   // MVTRX
+  [55, 6],   // NIOME
+  [118, 7],
+  [72, 8],
+  [110, 9],
+  [40, 10],
+  [70, 1],   // Vericore (legacy)
 ]);
 
 /* ── Exclusion list — subnets that must NEVER show TaoFlute status ── */
