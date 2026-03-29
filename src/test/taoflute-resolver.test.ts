@@ -48,20 +48,20 @@ describe("TaoFlute — Test 1: absent subnet shows no external", () => {
 /*  Test 2: Priority subnet shows P#       */
 /* ═══════════════════════════════════════ */
 describe("TaoFlute — Test 2: priority subnet shows P#", () => {
-  it("SN-82 (Hermes) → P2", () => {
-    const status = resolveTaoFluteStatus(82);
+  it("SN-79 (MVTRX) → P5", () => {
+    const status = resolveTaoFluteStatus(79);
     expect(status.taoflute_match).toBe(true);
     expect(status.taoflute_severity).toBe("priority");
-    expect(status.taoflute_priority_rank).toBe(2);
-    expect(taoFluteColumnLabel(status)).toBe("P2");
+    expect(status.taoflute_priority_rank).toBe(5);
+    expect(taoFluteColumnLabel(status)).toBe("P5");
   });
 
-  it("SN-78 (Loosh) → P9", () => {
+  it("SN-78 (Loosh) → P1", () => {
     const status = resolveTaoFluteStatus(78);
     expect(status.taoflute_match).toBe(true);
     expect(status.taoflute_severity).toBe("priority");
-    expect(status.taoflute_priority_rank).toBe(9);
-    expect(taoFluteColumnLabel(status)).toBe("P9");
+    expect(status.taoflute_priority_rank).toBe(1);
+    expect(taoFluteColumnLabel(status)).toBe("P1");
   });
 });
 
@@ -110,12 +110,12 @@ describe("TaoFlute — Test 5: SN-64 Chutes excluded", () => {
 });
 
 /* ═══════════════════════════════════════ */
-/*  Test 6: SN-78 → P9 + SORTIR           */
+/*  Test 6: SN-78 → P1 + ÉVITER            */
 /* ═══════════════════════════════════════ */
 describe("TaoFlute — Test 6: SN-78 Loosh full scenario", () => {
-  it("SN-78 → TaoFlute P9 and verdict ÉVITER", () => {
+  it("SN-78 → TaoFlute P1 and verdict ÉVITER", () => {
     const status = resolveTaoFluteStatus(78);
-    expect(taoFluteColumnLabel(status)).toBe("P9");
+    expect(taoFluteColumnLabel(status)).toBe("P1");
 
     const s = makeScore({ netuid: 78, opp: 80, risk: 15, action: "ENTER", confianceScore: 90 });
     const d = buildSubnetDecision(s, undefined, undefined, true, status);

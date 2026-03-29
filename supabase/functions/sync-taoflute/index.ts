@@ -85,6 +85,23 @@ const DELIST_QUERIES = [
   `SELECT * FROM delist_watch LIMIT 100`,
 ];
 
+/* ── Subnets excluded from TaoFlute processing (confirmed false positives) ── */
+const TAOFLUTE_EXCLUDED = new Set([64]); // SN-64 Chutes
+
+/* ── API call logger ── */
+async function logApiCall(sb: any, endpoint: string, opts: {
+  statusCode?: number; rateLimited?: boolean; responseMs?: number; error?: string; metadata?: any;
+}) {
+  try {
+    await sb.from("api_call_log").insert({
+      function_name: "sync-taoflute", endpoint,
+      status_code: opts.statusCode ?? null, cached: false, deduplicated: false,
+      rate_limited: opts.rateLimited ?? false, response_ms: opts.responseMs ?? null,
+      error_message: opts.error ?? null, metadata: opts.metadata ?? {},
+    });
+  } catch { /* non-blocking */ }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -98,6 +115,7 @@ Deno.serve(async (req: Request) => {
   const result = {
     status: "ok" as "ok" | "degraded" | "unavailable",
     metricsUpdated: 0,
+    excluded: 0,
     subnetsReconciled: 0,
     eventsLogged: 0,
     tablesFound: [] as string[],
@@ -136,6 +154,7 @@ Deno.serve(async (req: Request) => {
       ? buildSmartQueries(availableTables)
       : SUBNET_QUERIES;
 
+    const t0 = Date.now();
     for (const sql of metricsQueries) {
       try {
         const queryResult = await grafanaQuery(sql, controller.signal);
@@ -143,11 +162,12 @@ Deno.serve(async (req: Request) => {
         if (rows.length > 0) {
           subnetRows = rows;
           console.log(`Metrics query success: ${rows.length} rows from: ${sql.slice(0, 80)}`);
+          await logApiCall(supabase, "taoflute/grafana/metrics", { statusCode: 200, responseMs: Date.now() - t0, metadata: { rows: rows.length, query: sql.slice(0, 60) } });
           break;
         }
       } catch (e: any) {
-        // Try next query
         console.log(`Query failed: ${sql.slice(0, 60)} — ${e.message.slice(0, 100)}`);
+        await logApiCall(supabase, "taoflute/grafana/metrics", { error: e.message.slice(0, 200), responseMs: Date.now() - t0 });
       }
     }
 
@@ -156,6 +176,13 @@ Deno.serve(async (req: Request) => {
       for (const row of subnetRows) {
         const netuid = row.netuid ?? row.sn_id ?? row.subnet_id ?? row.id;
         if (!netuid || isNaN(Number(netuid))) continue;
+        const nid = Number(netuid);
+
+        // Skip excluded subnets (confirmed false positives)
+        if (TAOFLUTE_EXCLUDED.has(nid)) {
+          result.excluded++;
+          continue;
+        }
 
         const liqPrice = findNumericField(row, ["liq_price", "metagraph_price", "price"]);
         const liqHaircut = findNumericField(row, ["liq_haircut", "haircut"]);
@@ -163,9 +190,9 @@ Deno.serve(async (req: Request) => {
 
         // Extract dereg_place for reconciliation
         const deregPlace = Number(row.dereg_place);
-        const subnetName = String(row.subnet_name ?? row.name ?? `SN-${netuid}`);
+        const subnetName = String(row.subnet_name ?? row.name ?? `SN-${nid}`);
         if (!isNaN(deregPlace) && deregPlace > 0) {
-          deregData.push({ netuid: Number(netuid), rank: deregPlace, name: subnetName });
+          deregData.push({ netuid: nid, rank: deregPlace, name: subnetName });
         }
 
         const { error } = await supabase
