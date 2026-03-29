@@ -23,6 +23,7 @@ import {
 } from "@/lib/taoflute-resolver";
 import {
   type LayeredDecision,
+  type SocialLayerInput,
   buildCanonicalLayer,
   buildTaoFluteLayer,
   buildTaoStatsLayer,
@@ -538,6 +539,7 @@ export function buildSubnetDecision(
   v3: VerdictV3Result | undefined,
   fr: boolean,
   tfStatus?: TaoFluteResolvedStatus,
+  socialInput?: SocialLayerInput | null,
 ): SubnetDecision {
   const special = SPECIAL_SUBNETS[s.netuid];
   const isSystem = !!special?.isSystem;
@@ -609,8 +611,8 @@ export function buildSubnetDecision(
     timestamp: null,
   });
 
-  // Social layer — will be populated when social scores are available via hook
-  const socialLayer = buildSocialLayer(null);
+  // Social layer — populated from useSocialSubnetScores when available
+  const socialLayer = buildSocialLayer(socialInput ?? null);
 
   const layeredDecision = fuseDecision(
     s.netuid, canonicalLayer, taoFluteLayer, taostatsLayer, socialLayer, finalAction, fr,
@@ -682,11 +684,13 @@ export function buildAllDecisions(
   verdictsV3: Map<number, VerdictV3Result>,
   fr: boolean,
   taoFluteStatuses?: Map<number, TaoFluteResolvedStatus>,
+  socialScores?: Map<number, SocialLayerInput>,
 ): Map<number, SubnetDecision> {
   const map = new Map<number, SubnetDecision>();
   for (const s of scoresList) {
     const tf = taoFluteStatuses?.get(s.netuid);
-    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), verdictsV3.get(s.netuid), fr, tf));
+    const social = socialScores?.get(s.netuid) ?? null;
+    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), verdictsV3.get(s.netuid), fr, tf, social));
   }
   return map;
 }

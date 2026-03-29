@@ -11,9 +11,11 @@ import { useMemo } from "react";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { useExternalDelist } from "@/hooks/use-external-delist";
+import { useSocialSubnetScores } from "@/hooks/use-social-signal";
 import { useI18n } from "@/lib/i18n";
 import { buildAllDecisions, type SubnetDecision } from "@/lib/subnet-decision";
 import { resolveAllTaoFluteStatuses } from "@/lib/taoflute-resolver";
+import type { SocialLayerInput } from "@/lib/decision-fusion";
 
 export type { SubnetDecision } from "@/lib/subnet-decision";
 
@@ -29,6 +31,7 @@ export function useSubnetDecisions(): SubnetDecisionsResult {
   const { scoresList, verdictsV3, isLoading: scoresLoading } = useSubnetScores();
   const { verdicts, isLoading: verdictsLoading } = useSubnetVerdicts();
   const { taoFluteStatuses, isLoading: delistLoading } = useExternalDelist();
+  const { data: socialScoresRaw, isLoading: socialLoading } = useSocialSubnetScores();
 
   const result = useMemo(() => {
     // Wait for BOTH scores AND verdicts to avoid race condition
@@ -51,11 +54,31 @@ export function useSubnetDecisions(): SubnetDecisionsResult {
       allTfStatuses.set(id, status); // DB data takes precedence
     }
 
-    const decisions = buildAllDecisions(scoresList, verdicts, verdictsV3, fr, allTfStatuses);
+    // Build social scores map from DB data
+    const socialMap = new Map<number, SocialLayerInput>();
+    if (socialScoresRaw?.length) {
+      for (const ss of socialScoresRaw) {
+        socialMap.set(ss.subnet_uid, {
+          mentions_24h: ss.raw_mention_count,
+          unique_accounts: ss.unique_account_count,
+          kol_score: Math.round(ss.smart_kol_score * 100),
+          heat_score: Math.round(ss.social_heat_score * 100),
+          conviction_score: Math.round(ss.social_conviction_score * 100),
+          pump_risk_score: Math.round(ss.pump_risk_score * 100),
+          narrative_strength: Math.round(ss.narrative_strength * 100),
+          final_signal: ss.final_social_signal,
+          last_post_at: null,
+          source_urls: [],
+          timestamp: ss.created_at,
+        });
+      }
+    }
+
+    const decisions = buildAllDecisions(scoresList, verdicts, verdictsV3, fr, allTfStatuses, socialMap);
     const decisionsList = Array.from(decisions.values());
 
     return { decisions, decisionsList, isLoading: false };
-  }, [scoresList, verdicts, verdictsV3, fr, scoresLoading, verdictsLoading, taoFluteStatuses]);
+  }, [scoresList, verdicts, verdictsV3, fr, scoresLoading, verdictsLoading, taoFluteStatuses, socialScoresRaw]);
 
   return result;
 }
