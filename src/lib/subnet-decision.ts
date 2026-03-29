@@ -125,6 +125,9 @@ export type SubnetDecision = {
 
   /* ── v3 verdict (primary driver when available) ── */
   verdictV3?: VerdictV3Result;
+
+  /* ── 4-layer fusion decision (canonical, taoflute, taostats, social) ── */
+  layeredDecision?: LayeredDecision;
 };
 
 /* ── Public helpers for UI consistency ── */
