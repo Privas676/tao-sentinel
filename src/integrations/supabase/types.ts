@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_cache_state: {
+        Row: {
+          cache_key: string
+          function_name: string
+          last_fetched_at: string
+          metadata: Json | null
+          ttl_minutes: number
+        }
+        Insert: {
+          cache_key: string
+          function_name: string
+          last_fetched_at?: string
+          metadata?: Json | null
+          ttl_minutes?: number
+        }
+        Update: {
+          cache_key?: string
+          function_name?: string
+          last_fetched_at?: string
+          metadata?: Json | null
+          ttl_minutes?: number
+        }
+        Relationships: []
+      }
+      api_call_log: {
+        Row: {
+          cached: boolean
+          deduplicated: boolean
+          endpoint: string
+          error_message: string | null
+          function_name: string
+          id: number
+          metadata: Json | null
+          rate_limited: boolean
+          response_ms: number | null
+          status_code: number | null
+          ts: string
+        }
+        Insert: {
+          cached?: boolean
+          deduplicated?: boolean
+          endpoint: string
+          error_message?: string | null
+          function_name: string
+          id?: never
+          metadata?: Json | null
+          rate_limited?: boolean
+          response_ms?: number | null
+          status_code?: number | null
+          ts?: string
+        }
+        Update: {
+          cached?: boolean
+          deduplicated?: boolean
+          endpoint?: string
+          error_message?: string | null
+          function_name?: string
+          id?: never
+          metadata?: Json | null
+          rate_limited?: boolean
+          response_ms?: number | null
+          status_code?: number | null
+          ts?: string
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           alignment_status: string | null

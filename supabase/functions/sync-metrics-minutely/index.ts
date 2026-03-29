@@ -7,6 +7,19 @@ const corsHeaders = {
 
 const RAO = 1e9;
 
+async function logApiCall(sb: any, endpoint: string, opts: {
+  statusCode?: number; rateLimited?: boolean; responseMs?: number; error?: string; metadata?: any;
+}) {
+  try {
+    await sb.from("api_call_log").insert({
+      function_name: "sync-metrics-minutely", endpoint,
+      status_code: opts.statusCode ?? null, cached: false, deduplicated: false,
+      rate_limited: opts.rateLimited ?? false, response_ms: opts.responseMs ?? null,
+      error_message: opts.error ?? null, metadata: opts.metadata ?? {},
+    });
+  } catch { /* non-blocking */ }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -15,10 +28,30 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("TAOSTATS_API_KEY")!;
     const headers = { Authorization: apiKey, Accept: "application/json" };
 
+    const t0 = Date.now();
     const [poolRes, subnetRes] = await Promise.all([
       fetch("https://api.taostats.io/api/dtao/pool/latest/v1?limit=200", { headers }),
       fetch("https://api.taostats.io/api/subnet/latest/v1", { headers }),
     ]);
+    const apiMs = Date.now() - t0;
+
+    // Log API calls
+    await Promise.all([
+      logApiCall(sb, "dtao/pool/latest/v1", { statusCode: poolRes.status, rateLimited: poolRes.status === 429, responseMs: apiMs }),
+      logApiCall(sb, "subnet/latest/v1", { statusCode: subnetRes.status, rateLimited: subnetRes.status === 429, responseMs: apiMs }),
+    ]);
+
+    // Graceful degradation on rate limit — return stale data notice instead of crashing
+    if (poolRes.status === 429 || subnetRes.status === 429) {
+      console.warn(`[sync-metrics] Rate-limited (pool=${poolRes.status}, subnet=${subnetRes.status}). Serving stale data.`);
+      if (!poolRes.ok) await poolRes.text();
+      if (!subnetRes.ok) await subnetRes.text();
+      return new Response(JSON.stringify({
+        ok: false, rate_limited: true,
+        message: "Taostats rate-limited, serving stale data from DB",
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (!poolRes.ok) throw new Error(`Taostats pools error: ${poolRes.status}`);
     if (!subnetRes.ok) throw new Error(`Taostats subnet error: ${subnetRes.status}`);
 
