@@ -300,9 +300,12 @@ export function extractDeregInputFromPayload(
 
   const chain = (payload._chain ?? payload) as Record<string, unknown>;
 
+  // Try to extract subnet_limit from chain data if not provided
+  const resolvedSubnetLimit = subnetLimit ?? safeNum(chain.subnet_limit) ?? safeNum(chain.max_subnets);
+
   return {
     netuid,
-    rank: safeNum(payload.rank),
+    rank: safeNum(payload.rank ?? chain.rank),
     emission: safeNum(chain.emission),
     active_miners: safeNum(chain.active_miners),
     active_validators: safeNum(chain.active_validators),
@@ -312,7 +315,7 @@ export function extractDeregInputFromPayload(
     market_cap: safeNum(payload.market_cap),
     liquidity: safeNum(payload.liquidity),
     total_subnets: totalSubnets,
-    subnet_limit: subnetLimit,
+    subnet_limit: resolvedSubnetLimit,
   };
 }
 
