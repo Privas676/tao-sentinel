@@ -157,6 +157,13 @@ Deno.serve(async (req) => {
           bonds_moving_average: chain.bonds_moving_average,
           activity_cutoff: chain.activity_cutoff,
           weight_set_rate_limit: chain.weight_set_rate_limit,
+          // Canonical dereg fields (immunity, tempo, subnet limit)
+          immunity_period: chain.immunity_period ?? chain.immunity_period_blocks ?? null,
+          tempo: chain.tempo ?? null,
+          subnet_limit: chain.subnet_limit ?? chain.max_subnets ?? null,
+          created_at_block: chain.created_at_block ?? chain.registered_at ?? null,
+          last_step: chain.last_step ?? null,
+          rank: chain.rank ?? null,
         } : null,
       };
 
