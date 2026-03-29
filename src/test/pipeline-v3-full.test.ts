@@ -22,9 +22,19 @@ import type { UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 
 const TAO_USD = 450;
 
+/** TaoFlute "none" status to isolate pipeline tests from hardcoded watch lists */
+const TF_NONE: import("@/lib/taoflute-resolver").TaoFluteResolvedStatus = {
+  subnet_id: 0,
+  taoflute_match: false,
+  taoflute_watch_risk: false,
+  taoflute_priority_rank: null,
+  taoflute_severity: "none",
+  externalRisk: null,
+};
+
 /* ─── Helper: run the full V3 pipeline from raw payload ─── */
 
-function runPipeline(netuid: number, payload: any): {
+function runPipeline(netuid: number, payload: any, tfOverride?: import("@/lib/taoflute-resolver").TaoFluteResolvedStatus): {
   v3: VerdictV3Result;
   decision: SubnetDecision;
 } {
@@ -33,8 +43,8 @@ function runPipeline(netuid: number, payload: any): {
   const scoring = computeDerivedScores(facts, concordance);
   const v3 = computeVerdictV3(facts, scoring, concordance);
 
-  // Build a minimal UnifiedSubnetScore from the V3 result + facts
-  const tf = resolveTaoFluteStatus(netuid);
+  // Use provided TaoFlute status or default to NONE (isolates from hardcoded lists)
+  const tf = tfOverride ?? { ...TF_NONE, subnet_id: netuid };
   const mockUnified = buildMockUnified(netuid, payload, v3, facts);
   const decision = buildSubnetDecision(mockUnified, undefined, v3, true, tf);
 
