@@ -22,6 +22,7 @@ function isValidName(n: unknown): n is string {
 const SOURCE_PRIORITY: Record<string, number> = {
   taostats_identity: 100,
   taostats_latest: 80,
+  taostats: 80,          // legacy backfill source name
   subnetalpha: 60,
   unknown: 0,
 };
