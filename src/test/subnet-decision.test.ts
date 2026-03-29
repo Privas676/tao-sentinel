@@ -44,40 +44,40 @@ function makeScore(overrides: Partial<UnifiedSubnetScore> = {}): UnifiedSubnetSc
 describe("subnet-decision — HIGH_RISK_NEAR_DELIST", () => {
   it("allows ENTRER when delistCategory is HIGH_RISK_NEAR_DELIST + low risk (softened)", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", action: "ENTER" });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     // With softened thresholds, low-risk auto-scored near-delist allows market data through
     expect(["ENTRER", "SURVEILLER"]).toContain(d.finalAction);
   });
 
   it("forces SORTIR when HIGH_RISK_NEAR_DELIST + depeg >= 50%", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", depegProbability: 55 });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     expect(d.finalAction).toBe("SORTIR");
   });
 
   it("forces SORTIR when HIGH_RISK_NEAR_DELIST + very high risk", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", risk: 75 });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     expect(d.finalAction).toBe("SORTIR");
   });
 
   it("allows ENTRER when HIGH_RISK_NEAR_DELIST + low risk (market data preserved)", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", risk: 30, depegProbability: 10, action: "ENTER", opp: 70 });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     // With softened thresholds, low-risk subnets can still ENTER
     expect(["ENTRER", "SURVEILLER"]).toContain(d.finalAction);
   });
 
   it("preserves market signal when HIGH_RISK_NEAR_DELIST + good metrics", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", opp: 70, momentumScore: 60 });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     // With softened rules, market data is preserved — not blanket blocked
     expect(["ENTRER", "SURVEILLER"]).toContain(d.finalAction);
   });
 
   it("portfolioAction is coherent with finalAction for near-delist", () => {
     const s = makeScore({ delistCategory: "HIGH_RISK_NEAR_DELIST", depegProbability: 55 });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     // finalAction = SORTIR → portfolioAction must be SORTIR
     expect(d.portfolioAction).toBe("SORTIR");
   });
@@ -98,7 +98,7 @@ describe("subnet-decision — SN-90 scenario", () => {
       action: "ENTER",
       confianceScore: 80,
     });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     expect(d.finalAction).not.toBe("ENTRER");
     expect(d.finalAction).toBe("SORTIR");
     expect(d.badgeAction).toBe("SORS");
@@ -113,7 +113,7 @@ describe("subnet-decision — SN-90 scenario", () => {
 describe("subnet-decision — DEPEG_PRIORITY", () => {
   it("always forces ÉVITER (terminal block)", () => {
     const s = makeScore({ delistCategory: "DEPEG_PRIORITY" });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     expect(d.finalAction).toBe("ÉVITER");
   });
 });
@@ -125,13 +125,13 @@ describe("subnet-decision — DEPEG_PRIORITY", () => {
 describe("subnet-decision — Normal", () => {
   it("NORMAL + ENTER + low risk → ENTRER", () => {
     const s = makeScore({ delistCategory: "NORMAL", action: "ENTER", risk: 30 });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     expect(d.finalAction).toBe("ENTRER");
   });
 
   it("NORMAL + EXIT → SORTIR", () => {
     const s = makeScore({ delistCategory: "NORMAL", action: "EXIT" });
-    const d = buildSubnetDecision(s, undefined, undefined, true);
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
     expect(d.finalAction).toBe("SORTIR");
   });
 });
