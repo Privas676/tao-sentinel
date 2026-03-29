@@ -21,6 +21,18 @@ import {
   type TaoFluteResolvedStatus,
   type TaoFluteSeverity,
 } from "@/lib/taoflute-resolver";
+import {
+  type LayeredDecision,
+  buildCanonicalLayer,
+  buildTaoFluteLayer,
+  buildTaoStatsLayer,
+  buildSocialLayer,
+  fuseDecision,
+} from "@/lib/decision-fusion";
+import {
+  computeOfficialDeregRisk,
+  extractDeregInputFromPayload,
+} from "@/lib/canonical-dereg";
 
 /* ── Types ── */
 
@@ -113,6 +125,9 @@ export type SubnetDecision = {
 
   /* ── v3 verdict (primary driver when available) ── */
   verdictV3?: VerdictV3Result;
+
+  /* ── 4-layer fusion decision (canonical, taoflute, taostats, social) ── */
+  layeredDecision?: LayeredDecision;
 };
 
 /* ── Public helpers for UI consistency ── */
@@ -571,6 +586,36 @@ export function buildSubnetDecision(
   if (tf.taoflute_severity === "priority") effectiveDelistScore = Math.max(effectiveDelistScore, 85);
   else if (tf.taoflute_severity === "watch") effectiveDelistScore = Math.max(effectiveDelistScore, 60);
 
+  // ── 4-Layer Fusion Decision ──
+  const rawPayload = (s as any).rawPayload ?? null;
+  const totalSubnets = 128; // approximate; could be dynamic
+  const deregInput = extractDeregInputFromPayload(s.netuid, rawPayload, totalSubnets);
+  const deregRisk = computeOfficialDeregRisk(deregInput);
+  const canonicalLayer = buildCanonicalLayer(deregRisk, null);
+  const taoFluteLayer = buildTaoFluteLayer(tf, null);
+
+  // TaoStats layer from health scores
+  const flowScore = Math.round(
+    ((s.healthScores.volumeHealth ?? 50) + (s.healthScores.activityHealth ?? 50)) / 2
+  );
+  const structScore = Math.round(s.stability);
+  const execScore = Math.round(s.healthScores.liquidityHealth ?? 50);
+  const taostatsLayer = buildTaoStatsLayer({
+    liquidityHealth: s.healthScores.liquidityHealth ?? 50,
+    flowScore,
+    structureScore: structScore,
+    momentumScore: s.momentumScore,
+    executionScore: execScore,
+    timestamp: null,
+  });
+
+  // Social layer — will be populated when social scores are available via hook
+  const socialLayer = buildSocialLayer(null);
+
+  const layeredDecision = fuseDecision(
+    s.netuid, canonicalLayer, taoFluteLayer, taostatsLayer, socialLayer, finalAction, fr,
+  );
+
   return {
     netuid: s.netuid,
     name: s.name,
@@ -622,6 +667,7 @@ export function buildSubnetDecision(
     score: s,
     verdict: v,
     verdictV3: v3,
+    layeredDecision,
   };
 }
 

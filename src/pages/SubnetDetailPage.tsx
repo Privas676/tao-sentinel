@@ -3,6 +3,7 @@ import { useI18n } from "@/lib/i18n";
 import { useSubnetScores, SPECIAL_SUBNETS, type UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import { useCanonicalSubnets } from "@/hooks/use-canonical-subnets";
 import { RawFactsSection, ConcordanceSection, DerivedScoresSection, VerdictProvenanceSection } from "@/components/subnet/ProofSections";
+import DecisionLayersCard from "@/components/subnet/DecisionLayersCard";
 import SocialSignalBlock from "@/components/social/SocialSignalBlock";
 import type { SubnetDecision } from "@/hooks/use-subnet-decisions";
 import { useStakeAnalytics } from "@/hooks/use-stake-analytics";
@@ -258,6 +259,12 @@ export default function SubnetDetailPage() {
         </SectionCard>
 
         {/* ══════════════════════════════════════════ */}
+        {/*   BLOC 3a: SOURCES DE DÉCISION (4 couches)  */}
+        {/* ══════════════════════════════════════════ */}
+        {decision.layeredDecision && (
+          <DecisionLayersCard ld={decision.layeredDecision} fr={fr} />
+        )}
+
         {/* ══════════════════════════════════════════ */}
         {/*   BLOC 3b: SOCIAL SIGNAL                     */}
         {/* ══════════════════════════════════════════ */}
