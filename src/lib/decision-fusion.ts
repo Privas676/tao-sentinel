@@ -405,8 +405,9 @@ export function fuseDecision(
   // ── Confidence ──
   // Higher confidence when layers agree, lower when divergent
   let confidence = 50; // base
-  if (canonical.verdict === "SAFE" && !taofluteActive && (taostats.verdict === "STRONG" || taostats.verdict === "HEALTHY")) confidence = 75;
-  if (canonical.verdict === "SAFE" && !taofluteActive && taostats.verdict === "STRONG") confidence = 80;
+  const canonicalSafe = canonical.verdict === "SAFE" || canonical.verdict === "LOW_RISK";
+  if (canonicalSafe && !taofluteActive && (taostats.verdict === "STRONG" || taostats.verdict === "HEALTHY")) confidence = 75;
+  if (canonicalSafe && !taofluteActive && taostats.verdict === "STRONG") confidence = 80;
   if (canonicalDangerous && taofluteActive) confidence = 90; // convergent danger
   if (divergenceNotes.length > 0) confidence = Math.max(30, confidence - 15);
   if (social.social_verdict === "PUMP_RISK") confidence = Math.max(20, confidence - 10);
