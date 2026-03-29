@@ -609,27 +609,8 @@ export function buildSubnetDecision(
     timestamp: null,
   });
 
-  // Social layer (from derivedScoring if available, otherwise empty)
-  const socialInput = s.derivedScoring?.socialSignal
-    ? {
-        mentions_24h: (s.derivedScoring.socialSignal as any).mentions_24h ?? 0,
-        unique_accounts: (s.derivedScoring.socialSignal as any).unique_accounts ?? 0,
-        kol_score: (s.derivedScoring.socialSignal as any).kol_score ?? 0,
-        heat_score: (s.derivedScoring.socialSignal as any).heat_score ?? 0,
-        conviction_score: (s.derivedScoring.socialSignal as any).conviction_score ?? 0,
-        pump_risk_score: (s.derivedScoring.socialSignal as any).pump_risk_score ?? 0,
-        narrative_strength: (s.derivedScoring.socialSignal as any).narrative_strength ?? 0,
-        final_signal: (s.derivedScoring.socialSignal as any).final_signal ?? "NEUTRAL",
-        last_post_at: null,
-        source_urls: [],
-        timestamp: null,
-      }
-    : null;
-  const socialLayer = buildSocialLayer(socialInput);
-
-  const layeredDecision = fuseDecision(
-    s.netuid, canonicalLayer, taoFluteLayer, taostatsLayer, socialLayer, finalAction, fr,
-  );
+  // Social layer — will be populated when social scores are available via hook
+  const socialLayer = buildSocialLayer(null);
 
   return {
     netuid: s.netuid,
