@@ -683,11 +683,13 @@ export function buildAllDecisions(
   verdictsV3: Map<number, VerdictV3Result>,
   fr: boolean,
   taoFluteStatuses?: Map<number, TaoFluteResolvedStatus>,
+  socialScores?: Map<number, SocialLayerInput>,
 ): Map<number, SubnetDecision> {
   const map = new Map<number, SubnetDecision>();
   for (const s of scoresList) {
     const tf = taoFluteStatuses?.get(s.netuid);
-    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), verdictsV3.get(s.netuid), fr, tf));
+    const social = socialScores?.get(s.netuid) ?? null;
+    map.set(s.netuid, buildSubnetDecision(s, verdicts.get(s.netuid), verdictsV3.get(s.netuid), fr, tf, social));
   }
   return map;
 }
