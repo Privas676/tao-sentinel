@@ -11,9 +11,11 @@ import { useMemo } from "react";
 import { useSubnetScores } from "@/hooks/use-subnet-scores";
 import { useSubnetVerdicts } from "@/hooks/use-subnet-verdict";
 import { useExternalDelist } from "@/hooks/use-external-delist";
+import { useSocialSubnetScores } from "@/hooks/use-social-signal";
 import { useI18n } from "@/lib/i18n";
 import { buildAllDecisions, type SubnetDecision } from "@/lib/subnet-decision";
 import { resolveAllTaoFluteStatuses } from "@/lib/taoflute-resolver";
+import type { SocialLayerInput } from "@/lib/decision-fusion";
 
 export type { SubnetDecision } from "@/lib/subnet-decision";
 
