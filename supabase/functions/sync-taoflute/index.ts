@@ -85,6 +85,23 @@ const DELIST_QUERIES = [
   `SELECT * FROM delist_watch LIMIT 100`,
 ];
 
+/* ── Subnets excluded from TaoFlute processing (confirmed false positives) ── */
+const TAOFLUTE_EXCLUDED = new Set([64]); // SN-64 Chutes
+
+/* ── API call logger ── */
+async function logApiCall(sb: any, endpoint: string, opts: {
+  statusCode?: number; rateLimited?: boolean; responseMs?: number; error?: string; metadata?: any;
+}) {
+  try {
+    await sb.from("api_call_log").insert({
+      function_name: "sync-taoflute", endpoint,
+      status_code: opts.statusCode ?? null, cached: false, deduplicated: false,
+      rate_limited: opts.rateLimited ?? false, response_ms: opts.responseMs ?? null,
+      error_message: opts.error ?? null, metadata: opts.metadata ?? {},
+    });
+  } catch { /* non-blocking */ }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -98,6 +115,7 @@ Deno.serve(async (req: Request) => {
   const result = {
     status: "ok" as "ok" | "degraded" | "unavailable",
     metricsUpdated: 0,
+    excluded: 0,
     subnetsReconciled: 0,
     eventsLogged: 0,
     tablesFound: [] as string[],
