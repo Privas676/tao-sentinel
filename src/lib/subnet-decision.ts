@@ -538,6 +538,7 @@ export function buildSubnetDecision(
   v3: VerdictV3Result | undefined,
   fr: boolean,
   tfStatus?: TaoFluteResolvedStatus,
+  socialInput?: SocialLayerInput | null,
 ): SubnetDecision {
   const special = SPECIAL_SUBNETS[s.netuid];
   const isSystem = !!special?.isSystem;
