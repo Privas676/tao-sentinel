@@ -154,6 +154,7 @@ Deno.serve(async (req: Request) => {
       ? buildSmartQueries(availableTables)
       : SUBNET_QUERIES;
 
+    const t0 = Date.now();
     for (const sql of metricsQueries) {
       try {
         const queryResult = await grafanaQuery(sql, controller.signal);
@@ -161,11 +162,12 @@ Deno.serve(async (req: Request) => {
         if (rows.length > 0) {
           subnetRows = rows;
           console.log(`Metrics query success: ${rows.length} rows from: ${sql.slice(0, 80)}`);
+          await logApiCall(supabase, "taoflute/grafana/metrics", { statusCode: 200, responseMs: Date.now() - t0, metadata: { rows: rows.length, query: sql.slice(0, 60) } });
           break;
         }
       } catch (e: any) {
-        // Try next query
         console.log(`Query failed: ${sql.slice(0, 60)} — ${e.message.slice(0, 100)}`);
+        await logApiCall(supabase, "taoflute/grafana/metrics", { error: e.message.slice(0, 200), responseMs: Date.now() - t0 });
       }
     }
 
