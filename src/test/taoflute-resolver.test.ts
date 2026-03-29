@@ -110,12 +110,12 @@ describe("TaoFlute — Test 5: SN-64 Chutes excluded", () => {
 });
 
 /* ═══════════════════════════════════════ */
-/*  Test 6: SN-78 → P9 + SORTIR           */
+/*  Test 6: SN-78 → P1 + ÉVITER            */
 /* ═══════════════════════════════════════ */
 describe("TaoFlute — Test 6: SN-78 Loosh full scenario", () => {
-  it("SN-78 → TaoFlute P9 and verdict ÉVITER", () => {
+  it("SN-78 → TaoFlute P1 and verdict ÉVITER", () => {
     const status = resolveTaoFluteStatus(78);
-    expect(taoFluteColumnLabel(status)).toBe("P9");
+    expect(taoFluteColumnLabel(status)).toBe("P1");
 
     const s = makeScore({ netuid: 78, opp: 80, risk: 15, action: "ENTER", confianceScore: 90 });
     const d = buildSubnetDecision(s, undefined, undefined, true, status);
