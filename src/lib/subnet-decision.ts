@@ -23,6 +23,7 @@ import {
 } from "@/lib/taoflute-resolver";
 import {
   type LayeredDecision,
+  type SocialLayerInput,
   buildCanonicalLayer,
   buildTaoFluteLayer,
   buildTaoStatsLayer,
