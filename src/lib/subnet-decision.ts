@@ -610,8 +610,8 @@ export function buildSubnetDecision(
     timestamp: null,
   });
 
-  // Social layer — will be populated when social scores are available via hook
-  const socialLayer = buildSocialLayer(null);
+  // Social layer — populated from useSocialSubnetScores when available
+  const socialLayer = buildSocialLayer(socialInput ?? null);
 
   const layeredDecision = fuseDecision(
     s.netuid, canonicalLayer, taoFluteLayer, taostatsLayer, socialLayer, finalAction, fr,
