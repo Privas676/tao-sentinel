@@ -586,6 +586,51 @@ export function buildSubnetDecision(
   if (tf.taoflute_severity === "priority") effectiveDelistScore = Math.max(effectiveDelistScore, 85);
   else if (tf.taoflute_severity === "watch") effectiveDelistScore = Math.max(effectiveDelistScore, 60);
 
+  // ── 4-Layer Fusion Decision ──
+  const rawPayload = (s as any).rawPayload ?? null;
+  const totalSubnets = 128; // approximate; could be dynamic
+  const deregInput = extractDeregInputFromPayload(s.netuid, rawPayload, totalSubnets);
+  const deregRisk = computeOfficialDeregRisk(deregInput);
+  const canonicalLayer = buildCanonicalLayer(deregRisk, null);
+  const taoFluteLayer = buildTaoFluteLayer(tf, null);
+
+  // TaoStats layer from health scores
+  const flowScore = Math.round(
+    ((s.healthScores.volumeHealth ?? 50) + (s.healthScores.activityHealth ?? 50)) / 2
+  );
+  const structScore = Math.round(s.stability);
+  const execScore = Math.round(s.healthScores.liquidityHealth ?? 50);
+  const taostatsLayer = buildTaoStatsLayer({
+    liquidityHealth: s.healthScores.liquidityHealth ?? 50,
+    flowScore,
+    structureScore: structScore,
+    momentumScore: s.momentumScore,
+    executionScore: execScore,
+    timestamp: null,
+  });
+
+  // Social layer (from derivedScoring if available, otherwise empty)
+  const socialInput = s.derivedScoring?.socialSignal
+    ? {
+        mentions_24h: (s.derivedScoring.socialSignal as any).mentions_24h ?? 0,
+        unique_accounts: (s.derivedScoring.socialSignal as any).unique_accounts ?? 0,
+        kol_score: (s.derivedScoring.socialSignal as any).kol_score ?? 0,
+        heat_score: (s.derivedScoring.socialSignal as any).heat_score ?? 0,
+        conviction_score: (s.derivedScoring.socialSignal as any).conviction_score ?? 0,
+        pump_risk_score: (s.derivedScoring.socialSignal as any).pump_risk_score ?? 0,
+        narrative_strength: (s.derivedScoring.socialSignal as any).narrative_strength ?? 0,
+        final_signal: (s.derivedScoring.socialSignal as any).final_signal ?? "NEUTRAL",
+        last_post_at: null,
+        source_urls: [],
+        timestamp: null,
+      }
+    : null;
+  const socialLayer = buildSocialLayer(socialInput);
+
+  const layeredDecision = fuseDecision(
+    s.netuid, canonicalLayer, taoFluteLayer, taostatsLayer, socialLayer, finalAction, fr,
+  );
+
   return {
     netuid: s.netuid,
     name: s.name,
@@ -637,6 +682,7 @@ export function buildSubnetDecision(
     score: s,
     verdict: v,
     verdictV3: v3,
+    layeredDecision,
   };
 }
 
