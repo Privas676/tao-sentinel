@@ -2,6 +2,17 @@ import { describe, it, expect } from "vitest";
 import { buildSubnetDecision, type SubnetDecision } from "@/lib/subnet-decision";
 import type { UnifiedSubnetScore } from "@/hooks/use-subnet-scores";
 import type { SubnetVerdictData } from "@/hooks/use-subnet-verdict";
+import type { TaoFluteResolvedStatus } from "@/lib/taoflute-resolver";
+
+/** TaoFlute "none" status to isolate tests from hardcoded watch lists */
+const TF_NONE: TaoFluteResolvedStatus = {
+  subnet_id: 90,
+  taoflute_match: false,
+  taoflute_watch_risk: false,
+  taoflute_priority_rank: null,
+  taoflute_severity: "none",
+  externalRisk: null,
+};
 
 /* ── Minimal score helper ── */
 
