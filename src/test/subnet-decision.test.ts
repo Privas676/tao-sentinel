@@ -122,6 +122,59 @@ describe("subnet-decision — DEPEG_PRIORITY", () => {
 /*  Normal flow still works                 */
 /* ═══════════════════════════════════════ */
 
+/* ═══════════════════════════════════════ */
+/*  Social BULLISH + Canonical CRITICAL     */
+/*  → must NEVER be ENTRER                  */
+/* ═══════════════════════════════════════ */
+
+describe("subnet-decision — Social BULLISH cannot override Canonical CRITICAL", () => {
+  it("forces SORTIR or ÉVITER when canonical is CRITICAL despite social BULLISH", () => {
+    // Simulate a subnet with terrible structural risk but strong social hype
+    const s = makeScore({
+      delistCategory: "HIGH_RISK_NEAR_DELIST",
+      delistScore: 85,
+      risk: 80,
+      depegProbability: 60,
+      opp: 70,
+      action: "ENTER",
+      confianceScore: 90,
+      momentumScore: 70,
+    });
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
+    // Canonical CRITICAL + high depeg must block ENTRER regardless of social
+    expect(d.finalAction).not.toBe("ENTRER");
+    expect(["SORTIR", "ÉVITER"]).toContain(d.finalAction);
+  });
+
+  it("ENTRER is blocked even with perfect momentum + social when risk >= 75", () => {
+    const s = makeScore({
+      delistCategory: "HIGH_RISK_NEAR_DELIST",
+      delistScore: 70,
+      risk: 75,
+      depegProbability: 10,
+      opp: 80,
+      action: "ENTER",
+      momentumScore: 90,
+    });
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
+    expect(d.finalAction).not.toBe("ENTRER");
+  });
+
+  it("DEPEG_PRIORITY always blocks ENTRER regardless of social signal", () => {
+    const s = makeScore({
+      delistCategory: "DEPEG_PRIORITY",
+      delistScore: 90,
+      opp: 90,
+      risk: 20,
+      action: "ENTER",
+      momentumScore: 95,
+    });
+    const d = buildSubnetDecision(s, undefined, undefined, true, TF_NONE);
+    expect(d.finalAction).toBe("ÉVITER");
+    expect(d.finalAction).not.toBe("ENTRER");
+  });
+});
+
 describe("subnet-decision — Normal", () => {
   it("NORMAL + ENTER + low risk → ENTRER", () => {
     const s = makeScore({ delistCategory: "NORMAL", action: "ENTER", risk: 30 });
