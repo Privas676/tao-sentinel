@@ -259,6 +259,12 @@ export default function SubnetDetailPage() {
         </SectionCard>
 
         {/* ══════════════════════════════════════════ */}
+        {/*   BLOC 3a: SOURCES DE DÉCISION (4 couches)  */}
+        {/* ══════════════════════════════════════════ */}
+        {decision.layeredDecision && (
+          <DecisionLayersCard ld={decision.layeredDecision} fr={fr} />
+        )}
+
         {/* ══════════════════════════════════════════ */}
         {/*   BLOC 3b: SOCIAL SIGNAL                     */}
         {/* ══════════════════════════════════════════ */}
