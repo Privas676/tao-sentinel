@@ -52,6 +52,8 @@ export type ProtectionInput = {
   price24hAgo?: number | null;
   price7dAgo?: number | null;
   historyDays?: number;
+  /** When true, market-data-dependent override flags are suppressed (Taostats 429) */
+  marketDataDegraded?: boolean;
 };
 
 export type ProtectionOutput = {
