@@ -128,35 +128,39 @@ export function evaluateRiskOverride(params: {
   }
 
   // 3. Zone critique (fort)
-  if (state === "BREAK" || state === "EXIT_FAST") {
+  // In degraded mode, state may be BREAK/EXIT_FAST due to missing data — skip
+  if ((state === "BREAK" || state === "EXIT_FAST") && !marketDataDegraded) {
     flags.push("ZONE_CRITIQUE_STATE");
     reasons.push("Zone critique active");
   }
 
   // 4. Pool faible (fort)
-  if (taoInPool !== undefined && taoInPool < THRESHOLDS.TAO_POOL_CRITICAL) {
+  // In degraded mode, taoInPool=0 is a data artifact, not a real signal
+  if (taoInPool !== undefined && taoInPool < THRESHOLDS.TAO_POOL_CRITICAL && !marketDataDegraded) {
     flags.push("POOL_FAIBLE");
     reasons.push(`TAO en pool critique (${taoInPool.toFixed(1)})`);
   }
 
   // 5. Liquidity stress (fort)
-  if (liquidityUsd !== undefined && liquidityUsd < THRESHOLDS.LIQUIDITY_USD_CRITICAL) {
+  // In degraded mode, liquidityUsd=0 is a data artifact
+  if (liquidityUsd !== undefined && liquidityUsd < THRESHOLDS.LIQUIDITY_USD_CRITICAL && !marketDataDegraded) {
     flags.push("LIQUIDITY_STRESS");
     reasons.push(`Liquidité critique ($${Math.round(liquidityUsd)})`);
   }
-  if (liquidityCollapse && !flags.includes("LIQUIDITY_STRESS")) {
+  if (liquidityCollapse && !flags.includes("LIQUIDITY_STRESS") && !marketDataDegraded) {
     flags.push("LIQUIDITY_STRESS");
     reasons.push("Effondrement liquidité");
   }
 
-  // 6. Emission zero (moyen-fort)
+  // 6. Emission zero (moyen-fort) — kept even in degraded mode (chain data is reliable)
   if (emissionTao !== undefined && emissionTao <= 0.001) {
     flags.push("EMISSION_ZERO");
     reasons.push("Émission nulle/critique");
   }
 
   // 7. Vol/MC anomalie (moyen)
-  if (volumeMcRatio !== undefined && volumeMcRatio < THRESHOLDS.VOL_MC_MIN) {
+  // In degraded mode, volumeMcRatio=0 is a data artifact
+  if (volumeMcRatio !== undefined && volumeMcRatio < THRESHOLDS.VOL_MC_MIN && !marketDataDegraded) {
     flags.push("VOL_MC_ANOMALIE");
     reasons.push(`Vol/MC trop faible (${(volumeMcRatio * 100).toFixed(2)}%)`);
   }
