@@ -403,6 +403,21 @@ function deriveFinalAction(
       v3Action = "SURVEILLER";
     }
 
+    // DEGRADED MODE PROMOTION: allow ENTRER when V3 is SURVEILLER but subnet has
+    // strong momentum and no critical blocker. In degraded mode, V3 can't produce
+    // ENTER because derived scores are corrupted from zeroed market data.
+    // We use the engine-level momentum + structure as a proxy for entry quality.
+    if (degraded && v3Action === "SURVEILLER" && !criticalBlock && !isWatch) {
+      const hasStrongMomentum = s.momentumScore >= 60;
+      const hasDecentStructure = s.stability >= 40;
+      const notInRiskList = !DEPEG_PRIORITY_MANUAL.includes(s.netuid) &&
+        !HIGH_RISK_NEAR_DELIST_MANUAL.includes(s.netuid);
+      const notOverridden = !s.isOverridden;
+      if (hasStrongMomentum && hasDecentStructure && notInRiskList && notOverridden) {
+        v3Action = "ENTRER";
+      }
+    }
+
     // R3: TaoFlute WATCH cap
     if (isWatch) {
       if (v3Action === "ENTRER") v3Action = "SURVEILLER";
