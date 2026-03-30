@@ -49,72 +49,29 @@ Deno.serve(async (req) => {
 
       let taofluteFallbackCount = 0;
       try {
-        // Query TaoFlute Grafana for immunity_period and subnet_limit
-        const TAOFLUTE_BASE = "https://taoflute.com";
-        const DATASOURCE_UID = "eeza6pofrbgn4d";
-        const fallbackQueries = [
-          `SELECT * FROM materialized_overview_data ORDER BY netuid LIMIT 200`,
-          `SELECT * FROM subnets_overview ORDER BY netuid LIMIT 200`,
-          `SELECT * FROM subnet_overview ORDER BY netuid LIMIT 200`,
-          `SELECT * FROM subnets ORDER BY netuid LIMIT 200`,
-        ];
+        // Use already-scraped TaoFlute data from external_taoflute_metrics table
+        const { data: tfMetrics } = await sb
+          .from("external_taoflute_metrics")
+          .select("netuid, raw_data")
+          .eq("is_stale", false)
+          .order("scraped_at", { ascending: false })
+          .limit(500);
 
-        let taoFluteRows: Record<string, any>[] = [];
-        for (const sql of fallbackQueries) {
-          try {
-            const resp = await fetch(`${TAOFLUTE_BASE}/api/ds/query`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "User-Agent": "TAO-Sentinel/1.0", "Accept": "application/json" },
-              body: JSON.stringify({
-                queries: [{ refId: "A", datasource: { uid: DATASOURCE_UID }, rawSql: sql, format: "table" }],
-                from: "now-1h", to: "now",
-              }),
-            });
-            if (!resp.ok) {
-              console.log(`[fallback] ${sql.slice(0, 50)} → HTTP ${resp.status}`);
-              continue;
-            }
-            const result = await resp.json();
-            const frames = result?.results?.A?.frames;
-            if (!frames || frames.length === 0) {
-              console.log(`[fallback] ${sql.slice(0, 50)} → no frames`);
-              continue;
-            }
-            const frame = frames[0];
-            const schema = frame?.schema?.fields || [];
-            const data = frame?.data?.values || [];
-            if (schema.length === 0 || data.length === 0) {
-              console.log(`[fallback] ${sql.slice(0, 50)} → empty schema/data`);
-              continue;
-            }
-            const rowCount = data[0]?.length || 0;
-            console.log(`[fallback] ${sql.slice(0, 50)} → ${rowCount} rows, fields: ${schema.map((f: any) => f.name).join(",")}`);
-            for (let i = 0; i < rowCount; i++) {
-              const row: Record<string, any> = {};
-              for (let j = 0; j < schema.length; j++) {
-                row[schema[j].name] = data[j]?.[i] ?? null;
-              }
-              taoFluteRows.push(row);
-            }
-            if (taoFluteRows.length > 0) break;
-          } catch (qe: any) {
-            console.log(`[fallback] ${sql.slice(0, 50)} → error: ${qe.message}`);
-          }
+        // Dedupe to latest per netuid
+        const tfMap = new Map<number, Record<string, any>>();
+        for (const r of (tfMetrics || [])) {
+          if (!tfMap.has(r.netuid) && r.raw_data) tfMap.set(r.netuid, r.raw_data);
         }
 
-        await logApiCall(sb, "taoflute/grafana/fallback", {
-          statusCode: taoFluteRows.length > 0 ? 200 : 0,
+        console.log(`[fallback] TaoFlute DB: ${tfMap.size} subnets with raw_data`);
+
+        await logApiCall(sb, "taoflute/db/fallback", {
+          statusCode: tfMap.size > 0 ? 200 : 0,
           responseMs: Date.now() - t0,
-          metadata: { rows: taoFluteRows.length, reason: "taostats_429_fallback" },
+          metadata: { subnets: tfMap.size, reason: "taostats_429_fallback" },
         });
 
-        if (taoFluteRows.length > 0) {
-          // Build a map of TaoFlute data by netuid
-          const tfMap = new Map<number, Record<string, any>>();
-          for (const r of taoFluteRows) {
-            const nid = Number(r.netuid ?? r.sn_id ?? r.subnet_id);
-            if (!isNaN(nid)) tfMap.set(nid, r);
-          }
+        if (tfMap.size > 0) {
 
           // Fetch latest rows from subnet_metrics_ts and enrich with TaoFlute immunity data
           const { data: latestRows } = await sb
