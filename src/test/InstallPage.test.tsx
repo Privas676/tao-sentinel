@@ -35,6 +35,10 @@ function renderInstall() {
 }
 
 describe("InstallPage", () => {
+  beforeAll(async () => {
+    await loadInstallPage();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockMatchMedia.mockReturnValue({
