@@ -404,12 +404,12 @@ function deriveFinalAction(
 
   // 4. FALLBACK: old verdict engine (backward compat)
   if (v && v.verdict === "SORS") {
-    if (degraded && !criticalBlock && s.risk < 70) return "SURVEILLER";
+    if (degraded && !criticalBlock) return "SURVEILLER";
     if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
     return "SORTIR";
   }
   if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) {
-    if (degraded && !criticalBlock && s.risk < 70) return "SURVEILLER";
+    if (degraded && !criticalBlock) return "SURVEILLER";
     if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
     return "SORTIR";
   }
