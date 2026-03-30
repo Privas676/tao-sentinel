@@ -22,9 +22,16 @@ const mockMatchMedia = vi.fn().mockReturnValue({
 
 Object.defineProperty(window, "matchMedia", { writable: true, value: mockMatchMedia });
 
+let InstallPageComponent: React.ComponentType | null = null;
+
+async function loadInstallPage() {
+  const mod = await import("@/pages/InstallPage");
+  InstallPageComponent = mod.default;
+}
+
 function renderInstall() {
-  const InstallPage = require("@/pages/InstallPage").default;
-  return render(<InstallPage />);
+  if (!InstallPageComponent) throw new Error("InstallPage not loaded");
+  return render(<InstallPageComponent />);
 }
 
 describe("InstallPage", () => {
