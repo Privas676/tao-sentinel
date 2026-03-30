@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
+import React from "react";
 import { render, screen } from "@testing-library/react";
 
 vi.mock("@/lib/i18n", () => ({
