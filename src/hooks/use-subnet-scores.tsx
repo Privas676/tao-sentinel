@@ -664,12 +664,25 @@ export function useSubnetScores(): UnifiedScoresResult {
     const derivedMap = computeAllDerivedScores(factsMap, concordanceMap, externalHaircuts);
     const verdictsV3Map = computeAllVerdictsV3(factsMap, derivedMap, concordanceMap);
 
-    // Attach new layers to each scored subnet
+    // Attach new layers to each scored subnet + mark degraded mode
+    const fallbackCount = rawPayloadSources
+      ? [...rawPayloadSources.values()].filter(src => src === "taoflute_fallback").length
+      : 0;
+    const totalSources = rawPayloadSources?.size ?? 0;
+    const isGlobalDegradedMode = totalSources > 0 && fallbackCount > totalSources * 0.5;
+
     for (const s of scored) {
       s.facts = factsMap.get(s.netuid);
       s.concordance = concordanceMap.get(s.netuid);
       s.derivedScoring = derivedMap.get(s.netuid);
       s.verdictV3 = verdictsV3Map.get(s.netuid);
+      // Mark subnets using fallback market data
+      const src = rawPayloadSources?.get(s.netuid);
+      s.marketDataDegraded = isGlobalDegradedMode || src === "taoflute_fallback" || (!src && isGlobalDegradedMode);
+    }
+
+    if (isGlobalDegradedMode) {
+      console.warn(`[DEGRADED-MODE] ${fallbackCount}/${totalSources} subnets using TaoFlute fallback data — decision softening active`);
     }
 
     // Sort by asymmetry desc (default)
