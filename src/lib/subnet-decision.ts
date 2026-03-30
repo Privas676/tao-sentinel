@@ -365,6 +365,11 @@ function deriveFinalAction(
       v3Action = "SURVEILLER";
     }
 
+    // DEGRADED MODE ABSOLUTE GUARD: never produce ÉVITER without critical blocker
+    if (degraded && v3Action === "ÉVITER" && !criticalBlock) {
+      v3Action = "SURVEILLER";
+    }
+
     // R3: TaoFlute WATCH cap
     if (isWatch) {
       if (v3Action === "ENTRER") v3Action = "SURVEILLER";

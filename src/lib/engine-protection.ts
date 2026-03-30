@@ -52,6 +52,8 @@ export type ProtectionInput = {
   price24hAgo?: number | null;
   price7dAgo?: number | null;
   historyDays?: number;
+  /** When true, market-data-dependent override flags are suppressed (Taostats 429) */
+  marketDataDegraded?: boolean;
 };
 
 export type ProtectionOutput = {
@@ -84,6 +86,7 @@ export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
     liquidityUsd: input.liquidityUsd,
     volumeMcRatio: input.volumeMcRatio,
     taoInPool: input.taoInPool,
+    marketDataDegraded: input.marketDataDegraded,
   });
 
   // 2. Delist risk — always computed from metrics
