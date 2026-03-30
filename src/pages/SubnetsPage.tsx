@@ -16,6 +16,7 @@ import { finalActionColor as canonicalFaColor, finalActionIcon as canonicalFaIco
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
+import DegradedModeBadge from "@/components/DegradedModeBadge";
 import SwipeHint from "@/components/SwipeHint";
 import {
   opportunityColor, riskColor, stabilityColor,
