@@ -16,6 +16,7 @@ import { finalActionColor as canonicalFaColor, finalActionIcon as canonicalFaIco
 import { PageHeader, SectionHeader, StatusBadge, ActionBadge, ConfidenceBar, SparklineMini, FilterChipGroup } from "@/components/sentinel";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
+import DegradedModeBadge from "@/components/DegradedModeBadge";
 import SwipeHint from "@/components/SwipeHint";
 import {
   opportunityColor, riskColor, stabilityColor,
@@ -450,7 +451,7 @@ export default function SubnetsPage() {
             ? "Vue maître de tous les subnets — filtrable par action, risque, conviction et portefeuille."
             : "Master view of all subnets — filterable by action, risk, conviction, and portfolio."}
           icon="📋"
-          badge={<DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" />}
+          badge={<><DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" /><DegradedModeBadge degradedCount={decisionsList.filter(d => d.degradedDecisionMode).length} totalCount={decisionsList.length} className="text-[7px] px-1.5" /></>}
           actions={
             <div className="flex items-center gap-3">
               {/* View mode toggle */}

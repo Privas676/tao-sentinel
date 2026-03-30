@@ -96,6 +96,8 @@ export type UnifiedSubnetScore = {
   concordance?: ConcordanceResult;
   /** NEW: Verdict v3 result */
   verdictV3?: VerdictV3Result;
+  /** NEW: Market data from fallback source (degraded mode) */
+  marketDataDegraded?: boolean;
 };
 
 export type UnifiedScoresResult = {
@@ -216,18 +218,28 @@ export function useSubnetScores(): UnifiedScoresResult {
         const { data, error } = await supabase
           .from("subnet_metrics_ts")
           .select("netuid, raw_payload, source, ts")
-          .eq("source", "taostats")
+          .in("source", ["taostats", "taoflute_fallback"])
           .order("ts", { ascending: false })
-          .limit(300);
+          .limit(500);
         apiTrackerRef.current.record({ timestamp: Date.now(), success: !error, latencyMs: performance.now() - t0, source: "taostats:raw_payloads" });
         if (error) throw error;
         const map = new Map<number, any>();
+        const sources = new Map<number, string>();
         let latestTs: string | null = null;
         for (const r of data || []) {
           if (!latestTs && r.ts) latestTs = r.ts;
-          if (!map.has(r.netuid) && r.raw_payload) map.set(r.netuid, r.raw_payload);
+          if (!r.raw_payload) continue;
+          const existingSource = sources.get(r.netuid);
+          if (!existingSource) {
+            map.set(r.netuid, r.raw_payload);
+            sources.set(r.netuid, r.source ?? "unknown");
+          } else if (existingSource !== "taostats" && r.source === "taostats") {
+            // Prefer taostats over fallback
+            map.set(r.netuid, r.raw_payload);
+            sources.set(r.netuid, "taostats");
+          }
         }
-        return createSnapshot(map, "taostats:raw_payloads", null, latestTs);
+        return createSnapshot({ payloads: map, sources }, "taostats:raw_payloads", null, latestTs);
       } catch (e) {
         apiTrackerRef.current.record({ timestamp: Date.now(), success: false, latencyMs: performance.now() - t0, source: "taostats:raw_payloads" });
         throw e;
@@ -235,7 +247,9 @@ export function useSubnetScores(): UnifiedScoresResult {
     },
     refetchInterval: 120_000,
   });
-  const rawPayloads = rawPayloadsSnapshot?.payload;
+  const rawPayloadsData = rawPayloadsSnapshot?.payload as { payloads: Map<number, any>; sources: Map<number, string> } | undefined;
+  const rawPayloads = rawPayloadsData?.payloads;
+  const rawPayloadSources = rawPayloadsData?.sources;
 
   const { data: taoUsdSnapshot } = useQuery({
     queryKey: ["unified-tao-usd"],
@@ -255,16 +269,20 @@ export function useSubnetScores(): UnifiedScoresResult {
         const { data, error } = await supabase
           .from("subnet_metrics_ts")
           .select("netuid, price, cap, vol_24h, liquidity, ts, source")
-          .eq("source", "taostats")
+          .in("source", ["taostats", "taoflute_fallback"])
           .order("ts", { ascending: false })
-          .limit(200);
+          .limit(400);
         apiTrackerRef.current.record({ timestamp: Date.now(), success: !error, latencyMs: performance.now() - t0, source: "taostats:metrics" });
         if (error) throw error;
         const map = new Map<number, SourceMetrics>();
         let latestTs: string | null = null;
         for (const r of data || []) {
           if (!latestTs && r.ts) latestTs = r.ts;
-          if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
+          const existing = map.get(r.netuid);
+          // Prefer taostats over taoflute_fallback
+          if (!existing || (existing.source !== "taostats" && r.source === "taostats")) {
+            map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: r.source ?? "taostats" });
+          }
         }
         return createSnapshot(map, "taostats:metrics", null, latestTs);
       } catch (e) {
@@ -646,12 +664,25 @@ export function useSubnetScores(): UnifiedScoresResult {
     const derivedMap = computeAllDerivedScores(factsMap, concordanceMap, externalHaircuts);
     const verdictsV3Map = computeAllVerdictsV3(factsMap, derivedMap, concordanceMap);
 
-    // Attach new layers to each scored subnet
+    // Attach new layers to each scored subnet + mark degraded mode
+    const fallbackCount = rawPayloadSources
+      ? [...rawPayloadSources.values()].filter(src => src === "taoflute_fallback").length
+      : 0;
+    const totalSources = rawPayloadSources?.size ?? 0;
+    const isGlobalDegradedMode = totalSources > 0 && fallbackCount > totalSources * 0.5;
+
     for (const s of scored) {
       s.facts = factsMap.get(s.netuid);
       s.concordance = concordanceMap.get(s.netuid);
       s.derivedScoring = derivedMap.get(s.netuid);
       s.verdictV3 = verdictsV3Map.get(s.netuid);
+      // Mark subnets using fallback market data
+      const src = rawPayloadSources?.get(s.netuid);
+      s.marketDataDegraded = isGlobalDegradedMode || src === "taoflute_fallback" || (!src && isGlobalDegradedMode);
+    }
+
+    if (isGlobalDegradedMode) {
+      console.warn(`[DEGRADED-MODE] ${fallbackCount}/${totalSources} subnets using TaoFlute fallback data — decision softening active`);
     }
 
     // Sort by asymmetry desc (default)
