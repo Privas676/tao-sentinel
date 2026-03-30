@@ -96,6 +96,8 @@ export type UnifiedSubnetScore = {
   concordance?: ConcordanceResult;
   /** NEW: Verdict v3 result */
   verdictV3?: VerdictV3Result;
+  /** NEW: Market data from fallback source (degraded mode) */
+  marketDataDegraded?: boolean;
 };
 
 export type UnifiedScoresResult = {
