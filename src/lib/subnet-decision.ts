@@ -327,7 +327,7 @@ function deriveFinalAction(
   // 1. System
   if (isSystem) return "SYSTÈME";
 
-  const criticalBlock = hasConfirmedCriticalBlocker(s, tf);
+  const criticalBlock = hasConfirmedCriticalBlocker(s, tf, degraded);
 
   // 2. Hard protection overrides
   // DEGRADED MODE: only allow ÉVITER for confirmed critical blockers
