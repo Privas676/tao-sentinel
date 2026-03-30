@@ -441,6 +441,7 @@ export default function CompassPage() {
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <TaoPriceTicker taoUsd={taoUsd} scoreTimestamp={scoreTimestamp} />
             <DataAlignmentBadge dataAlignment={dataAlignment} dataAgeDebug={dataAgeDebug} className="text-[7px] px-1.5" />
+            <DegradedModeBadge degradedCount={specScoresList.filter(d => d.degradedDecisionMode).length} totalCount={specScoresList.length} className="text-[7px] px-1.5" />
             {killSwitch.active && (
               <span className="font-mono text-[9px] px-2 py-0.5 rounded animate-pulse" style={{ background: "hsla(var(--destructive), 0.1)", color: "hsl(var(--destructive))", border: "1px solid hsla(var(--destructive), 0.2)" }}>
                 🛡 SAFE MODE
