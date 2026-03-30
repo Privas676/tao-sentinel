@@ -417,14 +417,15 @@ function deriveFinalAction(
     // ENTER because derived scores are corrupted from zeroed market data.
     // We use the engine-level momentum + structure as a proxy for entry quality.
     if (degraded && v3Action === "SURVEILLER" && !criticalBlock && !isWatch) {
-      const hasStrongMomentum = s.momentumScore >= 55;
-      const hasDecentStructure = s.stability >= 25 || s.momentumScore >= 70;
+      // Tighter thresholds: only promote the strongest setups in degraded mode
+      // Target: ~10-20 subnets with genuinely strong momentum + structure
+      const hasStrongMomentum = s.momentumScore >= 70;
+      const hasDecentStructure = s.stability >= 35 || s.momentumScore >= 80;
+      const lowRisk = s.risk < 65;
       const notInRiskList = !DEPEG_PRIORITY_MANUAL.includes(s.netuid) &&
         !HIGH_RISK_NEAR_DELIST_MANUAL.includes(s.netuid);
-      // In degraded mode, isOverridden may be a false positive from auto-computed data
-      // Only block promotion if the override is NOT from market-data-dependent flags
-      const overrideBlocks = criticalBlock; // already checked above
-      if (hasStrongMomentum && hasDecentStructure && notInRiskList && !overrideBlocks) {
+      const overrideBlocks = criticalBlock;
+      if (hasStrongMomentum && hasDecentStructure && lowRisk && notInRiskList && !overrideBlocks) {
         v3Action = "ENTRER";
       }
     }
