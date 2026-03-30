@@ -34,6 +34,7 @@ import {
   computeOfficialDeregRisk,
   extractDeregInputFromPayload,
 } from "@/lib/canonical-dereg";
+import { DEPEG_PRIORITY_MANUAL } from "@/lib/delist-risk";
 
 /* ── Types ── */
 
@@ -285,11 +286,21 @@ function v3ToFinalAction(v3Verdict: VerdictV3, degraded = false, hasCriticalBloc
 /**
  * Returns true if there is a CONFIRMED critical blocker that does NOT
  * depend on market data quality (i.e., real even when Taostats is 429).
+ * In degraded mode, auto-computed DEPEG_PRIORITY from zeroed market data
+ * is NOT considered a confirmed blocker — only TaoFlute priority and
+ * manually-listed subnets count.
  */
-function hasConfirmedCriticalBlocker(s: UnifiedSubnetScore, tf: TaoFluteResolvedStatus): boolean {
+function hasConfirmedCriticalBlocker(s: UnifiedSubnetScore, tf: TaoFluteResolvedStatus, degraded = false): boolean {
   if (tf.taoflute_severity === "priority") return true;
   if (s.depegProbability >= 50) return true;
-  if (s.delistCategory === "DEPEG_PRIORITY") return true;
+  // In degraded mode, auto-computed DEPEG_PRIORITY from zeroed data is unreliable
+  if (s.delistCategory === "DEPEG_PRIORITY") {
+    if (degraded) {
+      // Only count as critical if subnet is in the manual priority list OR TaoFlute-matched
+      return tf.taoflute_match || DEPEG_PRIORITY_MANUAL.includes(s.netuid);
+    }
+    return true;
+  }
   return false;
 }
 
@@ -316,7 +327,7 @@ function deriveFinalAction(
   // 1. System
   if (isSystem) return "SYSTÈME";
 
-  const criticalBlock = hasConfirmedCriticalBlocker(s, tf);
+  const criticalBlock = hasConfirmedCriticalBlocker(s, tf, degraded);
 
   // 2. Hard protection overrides
   // DEGRADED MODE: only allow ÉVITER for confirmed critical blockers
