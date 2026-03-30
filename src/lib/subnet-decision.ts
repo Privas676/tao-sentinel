@@ -705,6 +705,10 @@ export function buildSubnetDecision(
     verdict: v,
     verdictV3: v3,
     layeredDecision,
+
+    hasMarketData,
+    degradedDecisionMode: degraded,
+    marketSourceStatus,
   };
 }
 
