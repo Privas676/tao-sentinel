@@ -129,6 +129,11 @@ export type SubnetDecision = {
 
   /* ── 4-layer fusion decision (canonical, taoflute, taostats, social) ── */
   layeredDecision?: LayeredDecision;
+
+  /* ── Market data quality / degraded mode indicators ── */
+  hasMarketData: boolean;
+  degradedDecisionMode: boolean;
+  marketSourceStatus: "full" | "fallback" | "missing";
 };
 
 /* ── Public helpers for UI consistency ── */
