@@ -573,12 +573,17 @@ export function buildSubnetDecision(
 ): SubnetDecision {
   const special = SPECIAL_SUBNETS[s.netuid];
   const isSystem = !!special?.isSystem;
+  const degraded = !!s.marketDataDegraded;
 
   // ── Resolve TaoFlute status (strict subnet_id matching) ──
   const tf = tfStatus ?? resolveTaoFluteStatus(s.netuid);
 
+  // ── Determine market data status ──
+  const hasMarketData = !degraded;
+  const marketSourceStatus: SubnetDecision["marketSourceStatus"] = degraded ? "fallback" : "full";
+
   // ── AUTHORITATIVE FINAL ACTION — V3 primary, protection overrides, TaoFlute guardrails ──
-  const finalAction = deriveFinalAction(s, v, v3, isSystem, tf);
+  const finalAction = deriveFinalAction(s, v, v3, isSystem, tf, degraded);
   const reconciledAction = finalActionToEngineAction(finalAction);
 
   // ── Conviction — prefer V3 ──
