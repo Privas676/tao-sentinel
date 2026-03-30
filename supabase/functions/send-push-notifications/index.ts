@@ -435,12 +435,19 @@ Deno.serve(async (req) => {
     }
 
     /* ── Get subscribers + VAPID keys ── */
-    const [{ data: subs }, { data: config }] = await Promise.all([
+    const [{ data: subs }, { data: configRow }] = await Promise.all([
       sb.from("push_subscriptions").select("id, endpoint, p256dh, auth"),
-      sb.from("push_config").select("vapid_public_key, vapid_private_key").eq("id", 1).maybeSingle(),
+      sb.from("push_config").select("vapid_public_key").eq("id", 1).maybeSingle(),
     ]);
 
-    if (!subs?.length || !config) {
+    // Read VAPID private key from environment secret (not from DB)
+    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+    const config = configRow ? {
+      vapid_public_key: configRow.vapid_public_key,
+      vapid_private_key: vapidPrivateKey ?? "",
+    } : null;
+
+    if (!subs?.length || !config || !vapidPrivateKey) {
       return new Response(JSON.stringify({
         ok: true, sent: 0, reason: !subs?.length ? "no_subscribers" : "no_vapid_keys",
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
