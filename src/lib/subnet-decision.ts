@@ -34,7 +34,7 @@ import {
   computeOfficialDeregRisk,
   extractDeregInputFromPayload,
 } from "@/lib/canonical-dereg";
-import { DEPEG_PRIORITY_MANUAL } from "@/lib/delist-risk";
+import { DEPEG_PRIORITY_MANUAL, HIGH_RISK_NEAR_DELIST_MANUAL } from "@/lib/delist-risk";
 
 /* ── Types ── */
 
@@ -291,13 +291,23 @@ function v3ToFinalAction(v3Verdict: VerdictV3, degraded = false, hasCriticalBloc
  * manually-listed subnets count.
  */
 function hasConfirmedCriticalBlocker(s: UnifiedSubnetScore, tf: TaoFluteResolvedStatus, degraded = false): boolean {
+  // TaoFlute PRIORITY is always a hard blocker (regardless of degraded mode)
   if (tf.taoflute_severity === "priority") return true;
-  if (s.depegProbability >= 50) return true;
-  // In degraded mode, auto-computed DEPEG_PRIORITY from zeroed data is unreliable
+  // Depeg probability from the state machine (based on manual lists, not market data)
+  // Only count as critical if NOT in degraded mode OR if subnet is in the top-3 manual list
+  if (s.depegProbability >= 50) {
+    if (degraded) {
+      // In degraded mode, only the top-3 DEPEG_PRIORITY_MANUAL subnets have confirmed depeg
+      return DEPEG_PRIORITY_MANUAL.slice(0, 3).includes(s.netuid);
+    }
+    return true;
+  }
+  // DEPEG_PRIORITY category from auto-scoring
   if (s.delistCategory === "DEPEG_PRIORITY") {
     if (degraded) {
-      // Only count as critical if subnet is in the manual priority list OR TaoFlute-matched
-      return tf.taoflute_match || DEPEG_PRIORITY_MANUAL.includes(s.netuid);
+      // In degraded mode, auto-computed DEPEG_PRIORITY is unreliable (zeroed data artifact)
+      // Only count as critical if subnet is in the DEPEG_PRIORITY manual list (not just HIGH_RISK)
+      return DEPEG_PRIORITY_MANUAL.includes(s.netuid);
     }
     return true;
   }
@@ -391,6 +401,21 @@ function deriveFinalAction(
     // DEGRADED MODE ABSOLUTE GUARD: never produce ÉVITER without critical blocker
     if (degraded && v3Action === "ÉVITER" && !criticalBlock) {
       v3Action = "SURVEILLER";
+    }
+
+    // DEGRADED MODE PROMOTION: allow ENTRER when V3 is SURVEILLER but subnet has
+    // strong momentum and no critical blocker. In degraded mode, V3 can't produce
+    // ENTER because derived scores are corrupted from zeroed market data.
+    // We use the engine-level momentum + structure as a proxy for entry quality.
+    if (degraded && v3Action === "SURVEILLER" && !criticalBlock && !isWatch) {
+      const hasStrongMomentum = s.momentumScore >= 55;
+      const hasDecentStructure = s.stability >= 25 || s.momentumScore >= 70;
+      const notInRiskList = !DEPEG_PRIORITY_MANUAL.includes(s.netuid) &&
+        !HIGH_RISK_NEAR_DELIST_MANUAL.includes(s.netuid);
+      const notOverridden = !s.isOverridden;
+      if (hasStrongMomentum && hasDecentStructure && notInRiskList && notOverridden) {
+        v3Action = "ENTRER";
+      }
     }
 
     // R3: TaoFlute WATCH cap
