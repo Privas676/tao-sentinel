@@ -98,12 +98,17 @@ Deno.serve(async (req) => {
             const chain = payload._chain || {};
 
             // Enrich with TaoFlute immunity/dereg data from raw_data
+            // Derive subnet_limit from total TaoFlute subnets count
+            const derivedSubnetLimit = tfMap.size > 50 ? tfMap.size : null;
+
             const enrichedChain = {
               ...chain,
               immunity_period: tf.immunity_period ?? tf.immunity ?? chain.immunity_period ?? null,
+              passed_immunity: tf.passed_immunity ?? chain.passed_immunity ?? null,
               tempo: tf.tempo ?? chain.tempo ?? null,
-              subnet_limit: tf.subnet_limit ?? tf.max_subnets ?? chain.subnet_limit ?? null,
+              subnet_limit: tf.subnet_limit ?? tf.max_subnets ?? chain.subnet_limit ?? derivedSubnetLimit,
               rank: tf.dereg_place ?? tf.rank ?? chain.rank ?? null,
+              dereg_place_one_week_out: tf.dereg_place_one_week_out ?? null,
               _fallback_source: "taoflute_db",
             };
 
