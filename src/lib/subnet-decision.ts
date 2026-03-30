@@ -356,9 +356,11 @@ function deriveFinalAction(
 
   // Only use delistCategory for non-TaoFlute subnets (auto-computed)
   // DEGRADED MODE: auto-computed DEPEG_PRIORITY from zeroed market data is unreliable
+  // In degraded mode, do NOT early-return here — let subnets flow through to V3 block
+  // where the promotion logic can evaluate momentum/stability for potential ENTRER
   if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) {
-    if (degraded) return "SURVEILLER"; // zero data artifact, not real depeg
-    return "ÉVITER";
+    if (!degraded) return "ÉVITER";
+    // degraded: fall through to V3 block (will be capped at SURVEILLER minimum)
   }
 
   // R3: TaoFlute WATCH → cap at SURVEILLER by default
@@ -368,12 +370,12 @@ function deriveFinalAction(
   }
 
   // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute subnets only)
+  // In degraded mode, do NOT early-return — let promotion logic evaluate
   if (s.delistCategory === "HIGH_RISK_NEAR_DELIST" && !tf.taoflute_match) {
-    if (degraded) {
-      // In degraded mode, HIGH_RISK_NEAR_DELIST may be a false positive → SURVEILLER
-      return "SURVEILLER";
+    if (!degraded) {
+      if (s.depegProbability >= 50 || s.risk >= 70) return "SORTIR";
     }
-    if (s.depegProbability >= 50 || s.risk >= 70) return "SORTIR";
+    // degraded: fall through to V3 block
   }
 
   // 3. V3 verdict — PRIMARY analytical decision (when available)
