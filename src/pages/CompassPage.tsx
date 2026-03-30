@@ -19,6 +19,7 @@ import {
 } from "@/lib/strategy-engine";
 import { confianceColor } from "@/lib/data-fusion";
 import DataAlignmentBadge from "@/components/DataAlignmentBadge";
+import DegradedModeBadge from "@/components/DegradedModeBadge";
 import { evaluateKillSwitch, type KillSwitchResult } from "@/lib/push-kill-switch";
 import { useAuditLogger } from "@/hooks/use-audit-log";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
