@@ -34,6 +34,7 @@ import {
   computeOfficialDeregRisk,
   extractDeregInputFromPayload,
 } from "@/lib/canonical-dereg";
+import { DEPEG_PRIORITY_MANUAL } from "@/lib/delist-risk";
 
 /* ── Types ── */
 
