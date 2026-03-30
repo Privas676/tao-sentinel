@@ -340,14 +340,21 @@ function deriveFinalAction(
   const criticalBlock = hasConfirmedCriticalBlocker(s, tf, degraded);
 
   // 2. Hard protection overrides
-  // DEGRADED MODE: only allow ÉVITER for confirmed critical blockers
+  // DEGRADED MODE: don't early-return for auto-computed overrides — let V3 promotion logic evaluate
+  // Only confirmed critical blockers force ÉVITER; others fall through to V3 block
   if (s.isOverridden) {
-    if (degraded && !criticalBlock) return "SURVEILLER";
-    return "ÉVITER";
+    if (degraded && !criticalBlock) {
+      // fall through to V3 block for promotion evaluation
+    } else {
+      return "ÉVITER";
+    }
   }
   if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") {
-    if (degraded && !criticalBlock) return "SURVEILLER";
-    return "ÉVITER";
+    if (degraded && !criticalBlock) {
+      // fall through to V3 block for promotion evaluation
+    } else {
+      return "ÉVITER";
+    }
   }
   if (s.depegProbability >= 50) return "SORTIR";
 
@@ -356,9 +363,11 @@ function deriveFinalAction(
 
   // Only use delistCategory for non-TaoFlute subnets (auto-computed)
   // DEGRADED MODE: auto-computed DEPEG_PRIORITY from zeroed market data is unreliable
+  // In degraded mode, do NOT early-return here — let subnets flow through to V3 block
+  // where the promotion logic can evaluate momentum/stability for potential ENTRER
   if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) {
-    if (degraded) return "SURVEILLER"; // zero data artifact, not real depeg
-    return "ÉVITER";
+    if (!degraded) return "ÉVITER";
+    // degraded: fall through to V3 block (will be capped at SURVEILLER minimum)
   }
 
   // R3: TaoFlute WATCH → cap at SURVEILLER by default
@@ -368,12 +377,12 @@ function deriveFinalAction(
   }
 
   // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute subnets only)
+  // In degraded mode, do NOT early-return — let promotion logic evaluate
   if (s.delistCategory === "HIGH_RISK_NEAR_DELIST" && !tf.taoflute_match) {
-    if (degraded) {
-      // In degraded mode, HIGH_RISK_NEAR_DELIST may be a false positive → SURVEILLER
-      return "SURVEILLER";
+    if (!degraded) {
+      if (s.depegProbability >= 50 || s.risk >= 70) return "SORTIR";
     }
-    if (s.depegProbability >= 50 || s.risk >= 70) return "SORTIR";
+    // degraded: fall through to V3 block
   }
 
   // 3. V3 verdict — PRIMARY analytical decision (when available)
@@ -412,8 +421,10 @@ function deriveFinalAction(
       const hasDecentStructure = s.stability >= 25 || s.momentumScore >= 70;
       const notInRiskList = !DEPEG_PRIORITY_MANUAL.includes(s.netuid) &&
         !HIGH_RISK_NEAR_DELIST_MANUAL.includes(s.netuid);
-      const notOverridden = !s.isOverridden;
-      if (hasStrongMomentum && hasDecentStructure && notInRiskList && notOverridden) {
+      // In degraded mode, isOverridden may be a false positive from auto-computed data
+      // Only block promotion if the override is NOT from market-data-dependent flags
+      const overrideBlocks = criticalBlock; // already checked above
+      if (hasStrongMomentum && hasDecentStructure && notInRiskList && !overrideBlocks) {
         v3Action = "ENTRER";
       }
     }
