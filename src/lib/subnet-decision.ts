@@ -268,16 +268,29 @@ function deriveBlockReasons(s: UnifiedSubnetScore, v?: SubnetVerdictData, fr = t
 
 /**
  * Map VerdictV3 to FinalAction.
+ * In degraded mode (no market data), NON_INVESTISSABLE is softened to
+ * SURVEILLER unless a confirmed critical blocker is present.
  */
-function v3ToFinalAction(v3Verdict: VerdictV3): FinalAction {
+function v3ToFinalAction(v3Verdict: VerdictV3, degraded = false, hasCriticalBlock = false): FinalAction {
   switch (v3Verdict) {
     case "ENTER": return "ENTRER";
     case "SURVEILLER": return "SURVEILLER";
     case "SORTIR": return "SORTIR";
     case "DONNÉES_INSTABLES": return "SURVEILLER";
-    case "NON_INVESTISSABLE": return "ÉVITER";
+    case "NON_INVESTISSABLE": return (degraded && !hasCriticalBlock) ? "SURVEILLER" : "ÉVITER";
     case "SYSTÈME": return "SYSTÈME";
   }
+}
+
+/**
+ * Returns true if there is a CONFIRMED critical blocker that does NOT
+ * depend on market data quality (i.e., real even when Taostats is 429).
+ */
+function hasConfirmedCriticalBlocker(s: UnifiedSubnetScore, tf: TaoFluteResolvedStatus): boolean {
+  if (tf.taoflute_severity === "priority") return true;
+  if (s.depegProbability >= 50) return true;
+  if (s.delistCategory === "DEPEG_PRIORITY") return true;
+  return false;
 }
 
 /**
