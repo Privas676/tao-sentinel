@@ -566,6 +566,13 @@ export function useSubnetScores(): UnifiedScoresResult {
         s.dataUncertain = true;
       }
     }
+    // ── Early degraded mode detection (before protection phase) ──
+    const earlyFallbackCount = rawPayloadSources
+      ? [...rawPayloadSources.values()].filter(src => src === "taoflute_fallback").length
+      : 0;
+    const earlyTotalSources = rawPayloadSources?.size ?? 0;
+    const isEarlyDegradedMode = earlyTotalSources > 0 && earlyFallbackCount > earlyTotalSources * 0.5;
+
     const protectionResults = new Map<number, ReturnType<typeof evaluateProtection>>();
     for (const s of subnetInputs) {
       const special = SPECIAL_SUBNETS[s.netuid];
