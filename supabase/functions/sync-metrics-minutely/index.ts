@@ -53,9 +53,10 @@ Deno.serve(async (req) => {
         const TAOFLUTE_BASE = "https://taoflute.com";
         const DATASOURCE_UID = "eeza6pofrbgn4d";
         const fallbackQueries = [
-          `SELECT netuid, immunity_period, tempo, subnet_limit, dereg_place FROM subnets_overview ORDER BY netuid LIMIT 200`,
-          `SELECT netuid, immunity_period, tempo, subnet_limit FROM subnet_overview ORDER BY netuid LIMIT 200`,
-          `SELECT netuid, immunity_period, tempo FROM subnets ORDER BY netuid LIMIT 200`,
+          `SELECT * FROM materialized_overview_data ORDER BY netuid LIMIT 200`,
+          `SELECT * FROM subnets_overview ORDER BY netuid LIMIT 200`,
+          `SELECT * FROM subnet_overview ORDER BY netuid LIMIT 200`,
+          `SELECT * FROM subnets ORDER BY netuid LIMIT 200`,
         ];
 
         let taoFluteRows: Record<string, any>[] = [];
@@ -69,15 +70,25 @@ Deno.serve(async (req) => {
                 from: "now-1h", to: "now",
               }),
             });
-            if (!resp.ok) continue;
+            if (!resp.ok) {
+              console.log(`[fallback] ${sql.slice(0, 50)} → HTTP ${resp.status}`);
+              continue;
+            }
             const result = await resp.json();
             const frames = result?.results?.A?.frames;
-            if (!frames || frames.length === 0) continue;
+            if (!frames || frames.length === 0) {
+              console.log(`[fallback] ${sql.slice(0, 50)} → no frames`);
+              continue;
+            }
             const frame = frames[0];
             const schema = frame?.schema?.fields || [];
             const data = frame?.data?.values || [];
-            if (schema.length === 0 || data.length === 0) continue;
+            if (schema.length === 0 || data.length === 0) {
+              console.log(`[fallback] ${sql.slice(0, 50)} → empty schema/data`);
+              continue;
+            }
             const rowCount = data[0]?.length || 0;
+            console.log(`[fallback] ${sql.slice(0, 50)} → ${rowCount} rows, fields: ${schema.map((f: any) => f.name).join(",")}`);
             for (let i = 0; i < rowCount; i++) {
               const row: Record<string, any> = {};
               for (let j = 0; j < schema.length; j++) {
@@ -86,7 +97,9 @@ Deno.serve(async (req) => {
               taoFluteRows.push(row);
             }
             if (taoFluteRows.length > 0) break;
-          } catch { /* try next query */ }
+          } catch (qe: any) {
+            console.log(`[fallback] ${sql.slice(0, 50)} → error: ${qe.message}`);
+          }
         }
 
         await logApiCall(sb, "taoflute/grafana/fallback", {
