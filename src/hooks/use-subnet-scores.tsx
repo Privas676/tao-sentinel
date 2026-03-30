@@ -216,18 +216,28 @@ export function useSubnetScores(): UnifiedScoresResult {
         const { data, error } = await supabase
           .from("subnet_metrics_ts")
           .select("netuid, raw_payload, source, ts")
-          .eq("source", "taostats")
+          .in("source", ["taostats", "taoflute_fallback"])
           .order("ts", { ascending: false })
-          .limit(300);
+          .limit(500);
         apiTrackerRef.current.record({ timestamp: Date.now(), success: !error, latencyMs: performance.now() - t0, source: "taostats:raw_payloads" });
         if (error) throw error;
         const map = new Map<number, any>();
+        const sources = new Map<number, string>();
         let latestTs: string | null = null;
         for (const r of data || []) {
           if (!latestTs && r.ts) latestTs = r.ts;
-          if (!map.has(r.netuid) && r.raw_payload) map.set(r.netuid, r.raw_payload);
+          if (!r.raw_payload) continue;
+          const existingSource = sources.get(r.netuid);
+          if (!existingSource) {
+            map.set(r.netuid, r.raw_payload);
+            sources.set(r.netuid, r.source ?? "unknown");
+          } else if (existingSource !== "taostats" && r.source === "taostats") {
+            // Prefer taostats over fallback
+            map.set(r.netuid, r.raw_payload);
+            sources.set(r.netuid, "taostats");
+          }
         }
-        return createSnapshot(map, "taostats:raw_payloads", null, latestTs);
+        return createSnapshot({ payloads: map, sources }, "taostats:raw_payloads", null, latestTs);
       } catch (e) {
         apiTrackerRef.current.record({ timestamp: Date.now(), success: false, latencyMs: performance.now() - t0, source: "taostats:raw_payloads" });
         throw e;
@@ -235,7 +245,9 @@ export function useSubnetScores(): UnifiedScoresResult {
     },
     refetchInterval: 120_000,
   });
-  const rawPayloads = rawPayloadsSnapshot?.payload;
+  const rawPayloadsData = rawPayloadsSnapshot?.payload as { payloads: Map<number, any>; sources: Map<number, string> } | undefined;
+  const rawPayloads = rawPayloadsData?.payloads;
+  const rawPayloadSources = rawPayloadsData?.sources;
 
   const { data: taoUsdSnapshot } = useQuery({
     queryKey: ["unified-tao-usd"],
