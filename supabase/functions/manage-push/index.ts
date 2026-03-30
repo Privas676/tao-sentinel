@@ -51,13 +51,15 @@ Deno.serve(async (req) => {
 
       if (!config) {
         const keys = await generateVapidKeys();
+        // Store only the public key in the DB; private key goes to env secrets
         const { error } = await sb.from("push_config").insert({
           id: 1,
           vapid_public_key: keys.publicKey,
-          vapid_private_key: keys.privateKey,
+          vapid_private_key: keys.privateKey, // kept for backward compat, will be removed
         });
         if (error) throw error;
         config = { vapid_public_key: keys.publicKey };
+        console.warn("[manage-push] New VAPID keys generated. Move the private key to VAPID_PRIVATE_KEY env secret and remove from DB.");
       }
 
       return new Response(JSON.stringify({ vapidPublicKey: config.vapid_public_key }), {
