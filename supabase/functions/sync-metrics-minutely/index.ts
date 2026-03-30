@@ -41,14 +41,128 @@ Deno.serve(async (req) => {
       logApiCall(sb, "subnet/latest/v1", { statusCode: subnetRes.status, rateLimited: subnetRes.status === 429, responseMs: apiMs }),
     ]);
 
-    // Graceful degradation on rate limit — return stale data notice instead of crashing
+    // Graceful degradation on rate limit — fallback to TaoFlute for immunity/subnet_limit
     if (poolRes.status === 429 || subnetRes.status === 429) {
-      console.warn(`[sync-metrics] Rate-limited (pool=${poolRes.status}, subnet=${subnetRes.status}). Serving stale data.`);
+      console.warn(`[sync-metrics] Rate-limited (pool=${poolRes.status}, subnet=${subnetRes.status}). Trying TaoFlute fallback.`);
       if (!poolRes.ok) await poolRes.text();
       if (!subnetRes.ok) await subnetRes.text();
+
+      let taofluteFallbackCount = 0;
+      try {
+        // Query TaoFlute Grafana for immunity_period and subnet_limit
+        const TAOFLUTE_BASE = "https://taoflute.com";
+        const DATASOURCE_UID = "eeza6pofrbgn4d";
+        const fallbackQueries = [
+          `SELECT netuid, immunity_period, tempo, subnet_limit, dereg_place FROM subnets_overview ORDER BY netuid LIMIT 200`,
+          `SELECT netuid, immunity_period, tempo, subnet_limit FROM subnet_overview ORDER BY netuid LIMIT 200`,
+          `SELECT netuid, immunity_period, tempo FROM subnets ORDER BY netuid LIMIT 200`,
+        ];
+
+        let taoFluteRows: Record<string, any>[] = [];
+        for (const sql of fallbackQueries) {
+          try {
+            const resp = await fetch(`${TAOFLUTE_BASE}/api/ds/query`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "User-Agent": "TAO-Sentinel/1.0", "Accept": "application/json" },
+              body: JSON.stringify({
+                queries: [{ refId: "A", datasource: { uid: DATASOURCE_UID }, rawSql: sql, format: "table" }],
+                from: "now-1h", to: "now",
+              }),
+            });
+            if (!resp.ok) continue;
+            const result = await resp.json();
+            const frames = result?.results?.A?.frames;
+            if (!frames || frames.length === 0) continue;
+            const frame = frames[0];
+            const schema = frame?.schema?.fields || [];
+            const data = frame?.data?.values || [];
+            if (schema.length === 0 || data.length === 0) continue;
+            const rowCount = data[0]?.length || 0;
+            for (let i = 0; i < rowCount; i++) {
+              const row: Record<string, any> = {};
+              for (let j = 0; j < schema.length; j++) {
+                row[schema[j].name] = data[j]?.[i] ?? null;
+              }
+              taoFluteRows.push(row);
+            }
+            if (taoFluteRows.length > 0) break;
+          } catch { /* try next query */ }
+        }
+
+        await logApiCall(sb, "taoflute/grafana/fallback", {
+          statusCode: taoFluteRows.length > 0 ? 200 : 0,
+          responseMs: Date.now() - t0,
+          metadata: { rows: taoFluteRows.length, reason: "taostats_429_fallback" },
+        });
+
+        if (taoFluteRows.length > 0) {
+          // Build a map of TaoFlute data by netuid
+          const tfMap = new Map<number, Record<string, any>>();
+          for (const r of taoFluteRows) {
+            const nid = Number(r.netuid ?? r.sn_id ?? r.subnet_id);
+            if (!isNaN(nid)) tfMap.set(nid, r);
+          }
+
+          // Fetch latest rows from subnet_metrics_ts and enrich with TaoFlute immunity data
+          const { data: latestRows } = await sb
+            .from("subnet_metrics_ts")
+            .select("netuid, raw_payload")
+            .order("ts", { ascending: false })
+            .limit(500);
+
+          // Dedupe to latest per netuid
+          const latestMap = new Map<number, any>();
+          for (const r of (latestRows || [])) {
+            if (!latestMap.has(r.netuid)) latestMap.set(r.netuid, r);
+          }
+
+          const now = new Date();
+          const tsRounded = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes()).toISOString();
+          const enrichedRows: any[] = [];
+
+          for (const [netuid, existing] of latestMap) {
+            const tf = tfMap.get(netuid);
+            if (!tf) continue;
+
+            const payload = existing.raw_payload || {};
+            const chain = payload._chain || {};
+
+            // Enrich with TaoFlute immunity/dereg data
+            const enrichedChain = {
+              ...chain,
+              immunity_period: tf.immunity_period ?? chain.immunity_period ?? null,
+              tempo: tf.tempo ?? chain.tempo ?? null,
+              subnet_limit: tf.subnet_limit ?? chain.subnet_limit ?? null,
+              rank: tf.dereg_place ?? chain.rank ?? null,
+              _fallback_source: "taoflute_grafana",
+            };
+
+            enrichedRows.push({
+              netuid,
+              ts: tsRounded,
+              price: existing.raw_payload?.price ? Number(existing.raw_payload.price) : null,
+              cap: existing.raw_payload?.market_cap ? Number(existing.raw_payload.market_cap) / RAO : null,
+              source: "taoflute_fallback",
+              raw_payload: { ...payload, _chain: enrichedChain },
+            });
+          }
+
+          if (enrichedRows.length > 0) {
+            const { error } = await sb.from("subnet_metrics_ts").insert(enrichedRows);
+            if (!error) taofluteFallbackCount = enrichedRows.length;
+            else console.error("TaoFlute fallback insert error:", error.message);
+          }
+        }
+      } catch (e: any) {
+        console.warn(`TaoFlute fallback failed: ${e.message}`);
+      }
+
       return new Response(JSON.stringify({
-        ok: false, rate_limited: true,
-        message: "Taostats rate-limited, serving stale data from DB",
+        ok: taofluteFallbackCount > 0, rate_limited: true,
+        fallback: "taoflute", fallback_enriched: taofluteFallbackCount,
+        message: taofluteFallbackCount > 0
+          ? `Taostats rate-limited, enriched ${taofluteFallbackCount} subnets via TaoFlute fallback`
+          : "Taostats rate-limited, TaoFlute fallback also empty — serving stale data",
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
