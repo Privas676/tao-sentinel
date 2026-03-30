@@ -679,7 +679,7 @@ export function buildSubnetDecision(
     opp: s.opp,
     risk: s.risk,
     asymmetry: s.asymmetry,
-    confidence: s.confianceScore,
+    confidence: degraded ? Math.max(10, s.confianceScore - 20) : s.confianceScore,
     momentumScore: s.momentumScore,
     momentumLabel: s.momentumLabel,
     stability: s.stability,
