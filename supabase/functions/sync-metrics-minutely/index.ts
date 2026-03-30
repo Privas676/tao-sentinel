@@ -97,14 +97,14 @@ Deno.serve(async (req) => {
             const payload = existing.raw_payload || {};
             const chain = payload._chain || {};
 
-            // Enrich with TaoFlute immunity/dereg data
+            // Enrich with TaoFlute immunity/dereg data from raw_data
             const enrichedChain = {
               ...chain,
-              immunity_period: tf.immunity_period ?? chain.immunity_period ?? null,
+              immunity_period: tf.immunity_period ?? tf.immunity ?? chain.immunity_period ?? null,
               tempo: tf.tempo ?? chain.tempo ?? null,
-              subnet_limit: tf.subnet_limit ?? chain.subnet_limit ?? null,
-              rank: tf.dereg_place ?? chain.rank ?? null,
-              _fallback_source: "taoflute_grafana",
+              subnet_limit: tf.subnet_limit ?? tf.max_subnets ?? chain.subnet_limit ?? null,
+              rank: tf.dereg_place ?? tf.rank ?? chain.rank ?? null,
+              _fallback_source: "taoflute_db",
             };
 
             enrichedRows.push({
