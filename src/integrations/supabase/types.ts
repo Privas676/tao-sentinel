@@ -506,7 +506,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: number
-          vapid_private_key: string
+          vapid_private_key?: string
           vapid_public_key: string
         }
         Update: {
