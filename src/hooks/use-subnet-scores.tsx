@@ -616,6 +616,7 @@ export function useSubnetScores(): UnifiedScoresResult {
         price24hAgo,
         price7dAgo,
         historyDays: sparkLen,
+        marketDataDegraded: isEarlyDegradedMode || (rawPayloadSources?.get(s.netuid) === "taoflute_fallback"),
       };
       protectionResults.set(s.netuid, evaluateProtection(protInput));
     }
