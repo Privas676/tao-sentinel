@@ -105,6 +105,7 @@ export function evaluateRiskOverride(params: {
     netuid, state, psi, risk, quality, liquidityCollapse,
     emissionTao, taoInPool, liquidityUsd, volumeMcRatio, slippagePct, minersActive,
   } = params;
+    marketDataDegraded = false,
 
   const flags: OverrideFlag[] = [];
   const reasons: string[] = [];
