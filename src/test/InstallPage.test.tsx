@@ -75,7 +75,7 @@ describe("InstallPage", () => {
     renderInstall();
     expect(screen.getByText(/Ouvrir cette page dans Safari/)).toBeInTheDocument();
     expect(screen.getByText(/Appuyer sur le bouton Partager/)).toBeInTheDocument();
-    expect(screen.getByText(/écran d'accueil/)).toBeInTheDocument();
+    expect(screen.getAllByText(/écran d'accueil/).length).toBeGreaterThan(0);
   });
 
   it("renders Android install steps", () => {
