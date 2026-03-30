@@ -371,12 +371,20 @@ function deriveFinalAction(
     let v3Action = v3ToFinalAction(v3.verdict, degraded, criticalBlock);
 
     // If v3 says ENTER, apply additional safety guards from the scoring layer
+    // DEGRADED MODE: relax thresholds since risk/opp scores are inflated/deflated
+    // from zeroed market data — use structural thresholds only
     if (v3Action === "ENTRER") {
-      if (s.risk >= 50 || s.opp < 20 || s.confianceScore < 30) v3Action = "SURVEILLER";
+      if (degraded) {
+        // In degraded mode, only block ENTER for very high risk or confirmed blockers
+        if (criticalBlock || s.risk >= 80 || s.confianceScore < 10) v3Action = "SURVEILLER";
+      } else {
+        if (s.risk >= 50 || s.opp < 20 || s.confianceScore < 30) v3Action = "SURVEILLER";
+      }
     }
 
     // DEGRADED MODE: cap SORTIR to SURVEILLER unless confirmed blocker
-    if (degraded && v3Action === "SORTIR" && !criticalBlock && s.risk < 70) {
+    // Risk threshold raised because risk scores are inflated from missing data
+    if (degraded && v3Action === "SORTIR" && !criticalBlock) {
       v3Action = "SURVEILLER";
     }
 
@@ -396,12 +404,12 @@ function deriveFinalAction(
 
   // 4. FALLBACK: old verdict engine (backward compat)
   if (v && v.verdict === "SORS") {
-    if (degraded && !criticalBlock && s.risk < 70) return "SURVEILLER";
+    if (degraded && !criticalBlock) return "SURVEILLER";
     if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
     return "SORTIR";
   }
   if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) {
-    if (degraded && !criticalBlock && s.risk < 70) return "SURVEILLER";
+    if (degraded && !criticalBlock) return "SURVEILLER";
     if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
     return "SORTIR";
   }
