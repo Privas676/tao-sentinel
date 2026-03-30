@@ -86,6 +86,7 @@ export function evaluateProtection(input: ProtectionInput): ProtectionOutput {
     liquidityUsd: input.liquidityUsd,
     volumeMcRatio: input.volumeMcRatio,
     taoInPool: input.taoInPool,
+    marketDataDegraded: input.marketDataDegraded,
   });
 
   // 2. Delist risk — always computed from metrics
