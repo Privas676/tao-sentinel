@@ -421,8 +421,10 @@ function deriveFinalAction(
       const hasDecentStructure = s.stability >= 25 || s.momentumScore >= 70;
       const notInRiskList = !DEPEG_PRIORITY_MANUAL.includes(s.netuid) &&
         !HIGH_RISK_NEAR_DELIST_MANUAL.includes(s.netuid);
-      const notOverridden = !s.isOverridden;
-      if (hasStrongMomentum && hasDecentStructure && notInRiskList && notOverridden) {
+      // In degraded mode, isOverridden may be a false positive from auto-computed data
+      // Only block promotion if the override is NOT from market-data-dependent flags
+      const overrideBlocks = criticalBlock; // already checked above
+      if (hasStrongMomentum && hasDecentStructure && notInRiskList && !overrideBlocks) {
         v3Action = "ENTRER";
       }
     }
