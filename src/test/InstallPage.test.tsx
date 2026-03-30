@@ -120,6 +120,8 @@ describe("InstallPage", () => {
 
   it("does not show native install button without beforeinstallprompt", () => {
     renderInstall();
-    expect(screen.queryByText(/Installer l'application/)).toBeNull();
+    // The page contains instruction text with "Installer l'application" but no native install button
+    // Native button would have role="button" with that text
+    expect(screen.queryByRole("button", { name: /Installer l'application/ })).toBeNull();
   });
 });
