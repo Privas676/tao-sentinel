@@ -334,7 +334,11 @@ function deriveFinalAction(
   if (tf.taoflute_severity === "priority") return "ÉVITER";
 
   // Only use delistCategory for non-TaoFlute subnets (auto-computed)
-  if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "ÉVITER";
+  // DEGRADED MODE: auto-computed DEPEG_PRIORITY from zeroed market data is unreliable
+  if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) {
+    if (degraded) return "SURVEILLER"; // zero data artifact, not real depeg
+    return "ÉVITER";
+  }
 
   // R3: TaoFlute WATCH → cap at SURVEILLER by default
   const isWatch = tf.taoflute_severity === "watch";
