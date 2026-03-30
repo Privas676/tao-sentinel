@@ -98,6 +98,8 @@ export function evaluateRiskOverride(params: {
   volumeMcRatio?: number;
   slippagePct?: number;
   minersActive?: number;
+  /** When true, market-data-dependent flags are suppressed (Taostats 429) */
+  marketDataDegraded?: boolean;
 }): RiskOverrideResult {
   const {
     netuid, state, psi, risk, quality, liquidityCollapse,
