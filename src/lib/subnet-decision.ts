@@ -340,14 +340,21 @@ function deriveFinalAction(
   const criticalBlock = hasConfirmedCriticalBlocker(s, tf, degraded);
 
   // 2. Hard protection overrides
-  // DEGRADED MODE: only allow ÉVITER for confirmed critical blockers
+  // DEGRADED MODE: don't early-return for auto-computed overrides — let V3 promotion logic evaluate
+  // Only confirmed critical blockers force ÉVITER; others fall through to V3 block
   if (s.isOverridden) {
-    if (degraded && !criticalBlock) return "SURVEILLER";
-    return "ÉVITER";
+    if (degraded && !criticalBlock) {
+      // fall through to V3 block for promotion evaluation
+    } else {
+      return "ÉVITER";
+    }
   }
   if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") {
-    if (degraded && !criticalBlock) return "SURVEILLER";
-    return "ÉVITER";
+    if (degraded && !criticalBlock) {
+      // fall through to V3 block for promotion evaluation
+    } else {
+      return "ÉVITER";
+    }
   }
   if (s.depegProbability >= 50) return "SORTIR";
 
