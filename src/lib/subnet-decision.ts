@@ -311,50 +311,61 @@ function deriveFinalAction(
   v3: VerdictV3Result | undefined,
   isSystem: boolean,
   tf: TaoFluteResolvedStatus,
+  degraded: boolean = false,
 ): FinalAction {
   // 1. System
   if (isSystem) return "SYSTÈME";
 
-  // 2. Hard protection overrides — ALWAYS SORTIR regardless of v3
-  if (s.isOverridden) return "ÉVITER";
-  if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") return "ÉVITER";
+  const criticalBlock = hasConfirmedCriticalBlocker(s, tf);
+
+  // 2. Hard protection overrides
+  // DEGRADED MODE: only allow ÉVITER for confirmed critical blockers
+  if (s.isOverridden) {
+    if (degraded && !criticalBlock) return "SURVEILLER";
+    return "ÉVITER";
+  }
+  if (s.systemStatus === "DEPEG" || s.systemStatus === "ZONE_CRITIQUE" || s.systemStatus === "DEREGISTRATION") {
+    if (degraded && !criticalBlock) return "SURVEILLER";
+    return "ÉVITER";
+  }
   if (s.depegProbability >= 50) return "SORTIR";
 
-  // R2: TaoFlute PRIORITY → guardrail_active = true → force EXIT
+  // R2: TaoFlute PRIORITY → guardrail_active = true → force EXIT (always, even degraded)
   if (tf.taoflute_severity === "priority") return "ÉVITER";
 
   // Only use delistCategory for non-TaoFlute subnets (auto-computed)
-  // R1: If !taoflute_match, delistCategory from auto-scoring still applies but NOT as "external"
   if (s.delistCategory === "DEPEG_PRIORITY" && !tf.taoflute_match) return "ÉVITER";
 
   // R3: TaoFlute WATCH → cap at SURVEILLER by default
-  // Only escalate to SORTIR if VERY STRONG internal weakness (extreme risk or very high depeg)
-  // Note: depeg >= 50 is already caught above (line 287), so only extreme risk matters here
   const isWatch = tf.taoflute_severity === "watch";
   if (isWatch) {
-    // WATCH + extreme risk only → SORTIR
     if (s.risk >= 75) return "SORTIR";
-    // Everything else for WATCH → falls through to V3/fallback, capped to SURVEILLER below
   }
 
   // 2b. HIGH_RISK_NEAR_DELIST from auto-scoring (non-TaoFlute subnets only)
-  // Softened: only force SORTIR with extreme conditions, let market data through
   if (s.delistCategory === "HIGH_RISK_NEAR_DELIST" && !tf.taoflute_match) {
+    if (degraded) {
+      // In degraded mode, HIGH_RISK_NEAR_DELIST may be a false positive → SURVEILLER
+      return "SURVEILLER";
+    }
     if (s.depegProbability >= 50 || s.risk >= 70) return "SORTIR";
-    // Don't force SURVEILLER — let V3/fallback decide with market context
   }
 
   // 3. V3 verdict — PRIMARY analytical decision (when available)
   if (v3) {
-    let v3Action = v3ToFinalAction(v3.verdict);
+    let v3Action = v3ToFinalAction(v3.verdict, degraded, criticalBlock);
 
     // If v3 says ENTER, apply additional safety guards from the scoring layer
     if (v3Action === "ENTRER") {
-      // Quality gate: insufficient opportunity or excessive risk → SURVEILLER
       if (s.risk >= 50 || s.opp < 20 || s.confianceScore < 30) v3Action = "SURVEILLER";
     }
 
-    // R3: TaoFlute WATCH cap — never allow ENTRER, cap SORTIR to SURVEILLER unless strong weakness
+    // DEGRADED MODE: cap SORTIR to SURVEILLER unless confirmed blocker
+    if (degraded && v3Action === "SORTIR" && !criticalBlock && s.risk < 70) {
+      v3Action = "SURVEILLER";
+    }
+
+    // R3: TaoFlute WATCH cap
     if (isWatch) {
       if (v3Action === "ENTRER") v3Action = "SURVEILLER";
       if (v3Action === "SORTIR" && s.risk < 70 && s.depegProbability < 40) v3Action = "SURVEILLER";
@@ -363,13 +374,14 @@ function deriveFinalAction(
     return v3Action;
   }
 
-  // 4. FALLBACK: old verdict engine (backward compat for subnets without v3 data)
+  // 4. FALLBACK: old verdict engine (backward compat)
   if (v && v.verdict === "SORS") {
-    // If WATCH, only allow SORTIR with strong internal weakness
+    if (degraded && !criticalBlock && s.risk < 70) return "SURVEILLER";
     if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
     return "SORTIR";
   }
   if (s.action === "EXIT" && (!v || v.verdict !== "RENTRE")) {
+    if (degraded && !criticalBlock && s.risk < 70) return "SURVEILLER";
     if (isWatch && s.risk < 70 && s.depegProbability < 40) return "SURVEILLER";
     return "SORTIR";
   }
