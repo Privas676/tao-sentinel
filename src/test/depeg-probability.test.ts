@@ -68,7 +68,9 @@ describe("computeDepegState", () => {
   });
 
   it("explicit rank beyond total listed returns NONE", () => {
-    const state = computeDepegState(makeInput({ netuid: 999, deregistrationRank: 50 }));
+    // totalListed = DEPEG_PRIORITY_MANUAL.length + HIGH_RISK_NEAR_DELIST_MANUAL.length (currently 54)
+    // rank 50 <= 54, so it's WATCH. Use rank > totalListed to get NONE.
+    const state = computeDepegState(makeInput({ netuid: 999, deregistrationRank: 999 }));
     expect(state).toBe("NONE");
   });
 

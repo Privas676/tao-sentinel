@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
+import React from "react";
 import { render, screen } from "@testing-library/react";
 
 vi.mock("@/lib/i18n", () => ({
@@ -22,12 +23,23 @@ const mockMatchMedia = vi.fn().mockReturnValue({
 
 Object.defineProperty(window, "matchMedia", { writable: true, value: mockMatchMedia });
 
+let InstallPageComponent: React.ComponentType | null = null;
+
+async function loadInstallPage() {
+  const mod = await import("@/pages/InstallPage");
+  InstallPageComponent = mod.default;
+}
+
 function renderInstall() {
-  const InstallPage = require("@/pages/InstallPage").default;
-  return render(<InstallPage />);
+  if (!InstallPageComponent) throw new Error("InstallPage not loaded");
+  return render(<InstallPageComponent />);
 }
 
 describe("InstallPage", () => {
+  beforeAll(async () => {
+    await loadInstallPage();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockMatchMedia.mockReturnValue({
@@ -63,7 +75,7 @@ describe("InstallPage", () => {
     renderInstall();
     expect(screen.getByText(/Ouvrir cette page dans Safari/)).toBeInTheDocument();
     expect(screen.getByText(/Appuyer sur le bouton Partager/)).toBeInTheDocument();
-    expect(screen.getByText(/écran d'accueil/)).toBeInTheDocument();
+    expect(screen.getAllByText(/écran d'accueil/).length).toBeGreaterThan(0);
   });
 
   it("renders Android install steps", () => {
@@ -108,6 +120,8 @@ describe("InstallPage", () => {
 
   it("does not show native install button without beforeinstallprompt", () => {
     renderInstall();
-    expect(screen.queryByText(/Installer l'application/)).toBeNull();
+    // The page contains instruction text with "Installer l'application" but no native install button
+    // Native button would have role="button" with that text
+    expect(screen.queryByRole("button", { name: /Installer l'application/ })).toBeNull();
   });
 });

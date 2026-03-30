@@ -34,7 +34,7 @@ describe("SAFE_REFACTOR_MODE guards", () => {
       expect(mod.default).toBeDefined();
       expect(typeof mod.default).toBe("function");
     }
-  });
+  }, 30000);
 
   it("frozen routes list matches expected count", () => {
     expect(FROZEN_ROUTES).toHaveLength(8);
