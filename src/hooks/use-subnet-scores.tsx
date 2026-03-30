@@ -267,16 +267,20 @@ export function useSubnetScores(): UnifiedScoresResult {
         const { data, error } = await supabase
           .from("subnet_metrics_ts")
           .select("netuid, price, cap, vol_24h, liquidity, ts, source")
-          .eq("source", "taostats")
+          .in("source", ["taostats", "taoflute_fallback"])
           .order("ts", { ascending: false })
-          .limit(200);
+          .limit(400);
         apiTrackerRef.current.record({ timestamp: Date.now(), success: !error, latencyMs: performance.now() - t0, source: "taostats:metrics" });
         if (error) throw error;
         const map = new Map<number, SourceMetrics>();
         let latestTs: string | null = null;
         for (const r of data || []) {
           if (!latestTs && r.ts) latestTs = r.ts;
-          if (!map.has(r.netuid)) map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: "taostats" });
+          const existing = map.get(r.netuid);
+          // Prefer taostats over taoflute_fallback
+          if (!existing || (existing.source !== "taostats" && r.source === "taostats")) {
+            map.set(r.netuid, { netuid: r.netuid, price: Number(r.price) || null, cap: Number(r.cap) || null, vol24h: Number(r.vol_24h) || null, liquidity: Number(r.liquidity) || null, ts: r.ts, source: r.source ?? "taostats" });
+          }
         }
         return createSnapshot(map, "taostats:metrics", null, latestTs);
       } catch (e) {
