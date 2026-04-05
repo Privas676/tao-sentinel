@@ -67,53 +67,54 @@ function mountApp() {
   createRoot(root).render(<App />);
 }
 
-stabilizePreviewRuntime().finally(() => {
-  const CURRENT_VERSION = "v0.3.1";
+// ── BOOT: mount immediately, never block on async cleanup ──
+hardenStartupRoute();
 
-  if (!isPreviewHost && "caches" in window) {
-    caches.keys().then((names) => {
-      for (const name of names) {
-        if (!name.includes(CURRENT_VERSION)) {
-          console.log("[startup] Purging stale cache:", name);
-          caches.delete(name);
-        }
-      }
-    });
+try {
+  mountApp();
+} catch (error) {
+  console.error("[startup] Boot crash:", error);
+  const root = document.getElementById("root");
+  if (root) {
+    root.innerHTML = `
+      <main style="min-height:100vh;display:grid;place-items:center;padding:24px;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;background:#0a0a0a;color:#f5f5f5;">
+        <section style="max-width:560px;text-align:center;line-height:1.6;">
+          <h1 style="font-size:14px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;opacity:.9;">Boot diagnostic</h1>
+          <p style="font-size:12px;opacity:.75;margin:0 0 16px;">Le chargement initial a échoué. Rechargez la page. Si le problème persiste, ouvrez /compass directement.</p>
+          <a href="/compass" style="display:inline-block;padding:8px 12px;border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#f5f5f5;text-decoration:none;font-size:11px;letter-spacing:.06em;">Aller à Compass</a>
+        </section>
+      </main>
+    `;
   }
+}
 
-  if (!isPreviewHost && "serviceWorker" in navigator) {
-    // Force SW update check on every page load
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      for (const reg of registrations) {
-        reg.update().catch(() => {});
+// Async cleanup runs in background — never blocks rendering
+stabilizePreviewRuntime().catch(() => {});
+
+const CURRENT_VERSION = "v0.3.1";
+
+if (!isPreviewHost && "caches" in window) {
+  caches.keys().then((names) => {
+    for (const name of names) {
+      if (!name.includes(CURRENT_VERSION)) {
+        console.log("[startup] Purging stale cache:", name);
+        caches.delete(name);
       }
-    });
-
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!sessionStorage.getItem("sw_reloaded")) {
-        sessionStorage.setItem("sw_reloaded", "1");
-        window.location.reload();
-      }
-    });
-  }
-
-  hardenStartupRoute();
-
-  try {
-    mountApp();
-  } catch (error) {
-    console.error("[startup] Boot crash:", error);
-    const root = document.getElementById("root");
-    if (root) {
-      root.innerHTML = `
-        <main style="min-height:100vh;display:grid;place-items:center;padding:24px;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;background:#0a0a0a;color:#f5f5f5;">
-          <section style="max-width:560px;text-align:center;line-height:1.6;">
-            <h1 style="font-size:14px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;opacity:.9;">Boot diagnostic</h1>
-            <p style="font-size:12px;opacity:.75;margin:0 0 16px;">Le chargement initial a échoué. Rechargez la page. Si le problème persiste, ouvrez /compass directement.</p>
-            <a href="/compass" style="display:inline-block;padding:8px 12px;border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#f5f5f5;text-decoration:none;font-size:11px;letter-spacing:.06em;">Aller à Compass</a>
-          </section>
-        </main>
-      `;
     }
-  }
-});
+  });
+}
+
+if (!isPreviewHost && "serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const reg of registrations) {
+      reg.update().catch(() => {});
+    }
+  });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!sessionStorage.getItem("sw_reloaded")) {
+      sessionStorage.setItem("sw_reloaded", "1");
+      window.location.reload();
+    }
+  });
+}
