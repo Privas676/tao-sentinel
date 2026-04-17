@@ -91,7 +91,7 @@ try {
 // Async cleanup runs in background — never blocks rendering
 stabilizePreviewRuntime().catch(() => {});
 
-const CURRENT_VERSION = "v0.3.15";
+const CURRENT_VERSION = "v0.3.16";
 
 if (!isPreviewHost && "caches" in window) {
   caches.keys().then((names) => {
