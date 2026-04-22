@@ -104,12 +104,29 @@ if (!isPreviewHost && "caches" in window) {
   });
 }
 
-if (!isPreviewHost && "serviceWorker" in navigator) {
+// Detect iframe — Lovable preview runs the app inside an iframe and SWs
+// must NEVER register there (cache pollution + routing interference).
+const isInIframe = (() => {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+})();
+
+if (!isPreviewHost && !isInIframe && "serviceWorker" in navigator) {
+  // Update push SW if already registered.
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     for (const reg of registrations) {
       reg.update().catch(() => {});
     }
   });
+
+  // Register the retry SW (intercepts navigations + GET fetches and
+  // retries 502/503/504 with exponential backoff).
+  navigator.serviceWorker
+    .register("/sw-retry.js", { scope: "/" })
+    .catch((err) => console.warn("[startup] sw-retry registration failed:", err));
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (!sessionStorage.getItem("sw_reloaded")) {
