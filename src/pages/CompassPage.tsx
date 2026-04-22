@@ -451,8 +451,8 @@ export default function CompassPage() {
           </div>
 
           <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.03) 0%, transparent 100%)", border: "1px solid hsla(var(--gold), 0.08)", boxShadow: "0 4px 24px -4px hsla(var(--gold), 0.06)" }}>
-            <div className="p-6 sm:p-8">
-              <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-10">
+            <div className="p-4 sm:p-8">
+              <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-10">
                 {/* Score central */}
                 <div className="flex flex-col items-center flex-shrink-0">
                   <span className="font-mono tracking-[0.25em] uppercase text-muted-foreground" style={{ fontSize: 7 }}>SENTINEL INDEX</span>
