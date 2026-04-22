@@ -456,10 +456,10 @@ export default function CompassPage() {
                 {/* Score central */}
                 <div className="flex flex-col items-center flex-shrink-0">
                   <span className="font-mono tracking-[0.25em] uppercase text-muted-foreground" style={{ fontSize: 7 }}>SENTINEL INDEX</span>
-                  <span className="font-mono font-bold leading-none mt-1" style={{ fontSize: isMobile ? 56 : 72, color: sentinelIndexColor(sentinelIndex), textShadow: `0 0 50px ${sentinelIndexColor(sentinelIndex)}20` }}>
+                  <span className="font-mono font-bold leading-none mt-1" style={{ fontSize: isMobile ? 48 : 72, color: sentinelIndexColor(sentinelIndex), textShadow: `0 0 50px ${sentinelIndexColor(sentinelIndex)}20` }}>
                     {sentinelIndex}
                   </span>
-                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 10 : 12, color: sentinelIndexColor(sentinelIndex) }}>
+                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 9 : 12, color: sentinelIndexColor(sentinelIndex) }}>
                     {sentinelLabel}
                   </span>
                   <div className="mt-3 w-28">
