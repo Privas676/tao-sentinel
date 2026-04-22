@@ -46,5 +46,49 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Auto-retry with exponential backoff when the dev server returns 502
+      // (typically during a Vite restart). Polls the current URL until it
+      // responds with 200, then reloads — no manual refresh needed.
+      (function () {
+        var BOOT_TIMEOUT_MS = 4000;
+        var MAX_DELAY_MS = 16000;
+        var attempt = 0;
+
+        function probe() {
+          var delay = Math.min(1000 * Math.pow(2, attempt), MAX_DELAY_MS);
+          attempt++;
+          setTimeout(function () {
+            fetch(window.location.pathname + '?__probe=' + Date.now(), {
+              method: 'GET',
+              cache: 'no-store',
+              credentials: 'same-origin',
+            })
+              .then(function (res) {
+                if (res.ok) {
+                  window.location.reload();
+                } else if (res.status === 502 || res.status === 503 || res.status === 504) {
+                  probe();
+                } else {
+                  console.warn('[boot-retry] Probe got status', res.status);
+                }
+              })
+              .catch(function () {
+                probe();
+              });
+          }, delay);
+        }
+
+        // If the React app hasn't mounted after BOOT_TIMEOUT_MS, assume the
+        // initial document was a 502 placeholder and start probing.
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          if (!root || root.childElementCount === 0) {
+            console.warn('[boot-retry] App did not mount, starting backoff probe…');
+            probe();
+          }
+        }, BOOT_TIMEOUT_MS);
+      })();
+    </script>
   </body>
 </html>
