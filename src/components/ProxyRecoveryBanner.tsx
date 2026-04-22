@@ -51,6 +51,13 @@ export function ProxyRecoveryBanner() {
   const [recovering, setRecovering] = useState(false);
   const failureCountRef = useRef(0);
 
+  const openBanner = (nextReason: Reason) => {
+    if (!canShowBanner()) return;
+    setReason(nextReason);
+    setOpen(true);
+    markBannerShown();
+  };
+
   // Background health check — detects server outages between user actions.
   useEffect(() => {
     let cancelled = false;
@@ -72,8 +79,7 @@ export function ProxyRecoveryBanner() {
         if (isGatewayDown) {
           failureCountRef.current += 1;
           if (failureCountRef.current >= FAILURES_BEFORE_BANNER) {
-            setReason("health-check");
-            setOpen(true);
+            openBanner("health-check");
           }
         } else {
           failureCountRef.current = 0;
@@ -85,8 +91,7 @@ export function ProxyRecoveryBanner() {
         if (cancelled) return;
         failureCountRef.current += 1;
         if (failureCountRef.current >= FAILURES_BEFORE_BANNER) {
-          setReason("health-check");
-          setOpen(true);
+          openBanner("health-check");
         }
       }
     }
@@ -106,8 +111,7 @@ export function ProxyRecoveryBanner() {
       const data = event.data;
       if (!data || data.type !== "SW_RETRY_STATUS") return;
       if (data.phase === "failed") {
-        setReason("sw-failed");
-        setOpen(true);
+        openBanner("sw-failed");
       }
     }
 
