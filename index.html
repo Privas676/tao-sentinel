@@ -49,24 +49,41 @@
     <script>
       // Auto-retry with exponential backoff when the dev server returns 502
       // (typically during a Vite restart). Polls the current URL until it
-      // responds with 200, then reloads — no manual refresh needed.
+      // responds with 200, then restores the user's exact route + query +
+      // hash — no manual refresh, no lost navigation state.
       (function () {
         var BOOT_TIMEOUT_MS = 4000;
         var MAX_DELAY_MS = 16000;
         var attempt = 0;
 
+        // Snapshot the original location BEFORE we mutate anything, so we
+        // can restore the exact route the user was on when the 502 hit.
+        var originalPath = window.location.pathname || '/';
+        var originalSearch = window.location.search || '';
+        var originalHash = window.location.hash || '';
+        var targetUrl = originalPath + originalSearch + originalHash;
+
         function probe() {
           var delay = Math.min(1000 * Math.pow(2, attempt), MAX_DELAY_MS);
           attempt++;
           setTimeout(function () {
-            fetch(window.location.pathname + '?__probe=' + Date.now(), {
+            // Probe with a cache-busting query but DO NOT navigate to it —
+            // it's only used to detect server readiness.
+            var probeUrl = originalPath +
+              (originalSearch ? originalSearch + '&' : '?') +
+              '__probe=' + Date.now();
+            fetch(probeUrl, {
               method: 'GET',
               cache: 'no-store',
               credentials: 'same-origin',
             })
               .then(function (res) {
                 if (res.ok) {
-                  window.location.reload();
+                  // Server is back — restore the exact original URL.
+                  // Using assign() (not reload()) guarantees we land on
+                  // pathname + search + hash even if the browser was
+                  // showing a 502 error page with a different URL.
+                  window.location.assign(targetUrl);
                 } else if (res.status === 502 || res.status === 503 || res.status === 504) {
                   probe();
                 } else {
@@ -84,7 +101,7 @@
         setTimeout(function () {
           var root = document.getElementById('root');
           if (!root || root.childElementCount === 0) {
-            console.warn('[boot-retry] App did not mount, starting backoff probe…');
+            console.warn('[boot-retry] App did not mount on', targetUrl, '— starting backoff probe…');
             probe();
           }
         }, BOOT_TIMEOUT_MS);
