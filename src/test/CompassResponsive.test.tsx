@@ -58,7 +58,7 @@ vi.mock("@/hooks/use-subnet-scores", () => ({
     dataAlignment: "ALIGNED" as const,
     dataAgeDebug: [],
     fleetDistribution: { healthy: 100, degraded: 0, broken: 0 },
-    dataConfidence: 90,
+    dataConfidence: { score: 90, components: { errorRate: 95, freshness: 95, alignment: 95, coverage: 95 }, level: "HIGH", reasons: [] },
     isLoading: false,
   }),
   SPECIAL_SUBNETS: { 0: { isSystem: true } } as Record<number, any>,
