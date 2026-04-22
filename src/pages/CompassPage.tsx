@@ -473,16 +473,16 @@ export default function CompassPage() {
                 {/* Right: directive summary */}
                 <div className="flex-1 flex flex-col gap-4 w-full items-center sm:items-start">
                   {/* Macro posture — prominent */}
-                  <div className="flex items-center gap-3 px-5 py-3 rounded-xl w-full" style={{ background: macroBg(macroRec), border: `1.5px solid ${macroBorder(macroRec)}`, boxShadow: `0 0 24px ${macroBg(macroRec)}` }}>
-                    <span style={{ fontSize: isMobile ? 18 : 22 }}>{macroIcon(macroRec)}</span>
-                    <div className="flex-1">
+                  <div className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl w-full" style={{ background: macroBg(macroRec), border: `1.5px solid ${macroBorder(macroRec)}`, boxShadow: `0 0 24px ${macroBg(macroRec)}` }}>
+                    <span style={{ fontSize: isMobile ? 16 : 22 }}>{macroIcon(macroRec)}</span>
+                    <div className="flex-1 min-w-0">
                       <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground">{fr ? "POSTURE MARCHÉ" : "MARKET POSTURE"}</div>
-                      <div className="font-mono font-bold tracking-[0.12em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 13 : 15 }}>{macroRecLabel}</div>
+                      <div className="font-mono font-bold tracking-[0.1em] truncate" style={{ color: macroColor(macroRec), fontSize: isMobile ? 11 : 15 }}>{macroRecLabel}</div>
                     </div>
                   </div>
 
                   {/* 3 key answers — 5-second scan */}
-                  <div className="grid grid-cols-3 gap-2.5 w-full">
+                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 w-full">
                     <DirectiveCard
                       label={fr ? "MEILLEURE OPP." : "BEST OPP."}
                       value={bestOpp ? `SN-${bestOpp.netuid}` : "—"}
