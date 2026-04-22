@@ -434,7 +434,7 @@ export default function CompassPage() {
 
   return (
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
-      <div className="px-4 sm:px-6 py-5 max-w-[1000px] mx-auto space-y-7 sm:space-y-9">
+      <div className="px-3 sm:px-6 py-4 sm:py-5 max-w-[1000px] mx-auto space-y-5 sm:space-y-9">
 
         {/* ═══ 1. HERO DÉCISIONNEL — MORE DIRECTIVE ═══ */}
         <section>
@@ -451,15 +451,15 @@ export default function CompassPage() {
           </div>
 
           <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, hsla(var(--gold), 0.03) 0%, transparent 100%)", border: "1px solid hsla(var(--gold), 0.08)", boxShadow: "0 4px 24px -4px hsla(var(--gold), 0.06)" }}>
-            <div className="p-6 sm:p-8">
-              <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-10">
+            <div className="p-4 sm:p-8">
+              <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-10">
                 {/* Score central */}
                 <div className="flex flex-col items-center flex-shrink-0">
                   <span className="font-mono tracking-[0.25em] uppercase text-muted-foreground" style={{ fontSize: 7 }}>SENTINEL INDEX</span>
-                  <span className="font-mono font-bold leading-none mt-1" style={{ fontSize: isMobile ? 56 : 72, color: sentinelIndexColor(sentinelIndex), textShadow: `0 0 50px ${sentinelIndexColor(sentinelIndex)}20` }}>
+                  <span className="font-mono font-bold leading-none mt-1" style={{ fontSize: isMobile ? 48 : 72, color: sentinelIndexColor(sentinelIndex), textShadow: `0 0 50px ${sentinelIndexColor(sentinelIndex)}20` }}>
                     {sentinelIndex}
                   </span>
-                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 10 : 12, color: sentinelIndexColor(sentinelIndex) }}>
+                  <span className="font-mono font-bold tracking-[0.2em] mt-0.5" style={{ fontSize: isMobile ? 9 : 12, color: sentinelIndexColor(sentinelIndex) }}>
                     {sentinelLabel}
                   </span>
                   <div className="mt-3 w-28">
@@ -473,16 +473,16 @@ export default function CompassPage() {
                 {/* Right: directive summary */}
                 <div className="flex-1 flex flex-col gap-4 w-full items-center sm:items-start">
                   {/* Macro posture — prominent */}
-                  <div className="flex items-center gap-3 px-5 py-3 rounded-xl w-full" style={{ background: macroBg(macroRec), border: `1.5px solid ${macroBorder(macroRec)}`, boxShadow: `0 0 24px ${macroBg(macroRec)}` }}>
-                    <span style={{ fontSize: isMobile ? 18 : 22 }}>{macroIcon(macroRec)}</span>
-                    <div className="flex-1">
+                  <div className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl w-full" style={{ background: macroBg(macroRec), border: `1.5px solid ${macroBorder(macroRec)}`, boxShadow: `0 0 24px ${macroBg(macroRec)}` }}>
+                    <span style={{ fontSize: isMobile ? 16 : 22 }}>{macroIcon(macroRec)}</span>
+                    <div className="flex-1 min-w-0">
                       <div className="font-mono text-[7px] tracking-[0.15em] uppercase text-muted-foreground">{fr ? "POSTURE MARCHÉ" : "MARKET POSTURE"}</div>
-                      <div className="font-mono font-bold tracking-[0.12em]" style={{ color: macroColor(macroRec), fontSize: isMobile ? 13 : 15 }}>{macroRecLabel}</div>
+                      <div className="font-mono font-bold tracking-[0.1em] truncate" style={{ color: macroColor(macroRec), fontSize: isMobile ? 11 : 15 }}>{macroRecLabel}</div>
                     </div>
                   </div>
 
                   {/* 3 key answers — 5-second scan */}
-                  <div className="grid grid-cols-3 gap-2.5 w-full">
+                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 w-full">
                     <DirectiveCard
                       label={fr ? "MEILLEURE OPP." : "BEST OPP."}
                       value={bestOpp ? `SN-${bestOpp.netuid}` : "—"}
@@ -521,7 +521,7 @@ export default function CompassPage() {
         {/* ═══ 2. DRIVERS DU MOMENT ═══ */}
         <section>
           <SectionHeader title={fr ? "DRIVERS DU MOMENT" : "MARKET DRIVERS"} icon="📊" />
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-2.5">
             {drivers.map(d => (
               <MetricCard key={d.label} label={d.label} value={d.value} icon={d.icon} color={d.color} progress={d.num} />
             ))}
@@ -550,7 +550,7 @@ export default function CompassPage() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
               {sections.map(s => (
                 <div key={s.key} className="rounded-xl overflow-hidden" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
                   <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${s.border}` }}>
@@ -718,7 +718,7 @@ export default function CompassPage() {
         {/* ═══ 6. CARTE DE ROTATION ═══ */}
         <section>
           <SectionHeader title={fr ? "CARTE DE ROTATION" : "ROTATION MAP"} icon="🗺" />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
             {rotationGroups.map(g => (
               <div key={g.key} className="rounded-xl overflow-hidden" style={{ border: `1px solid color-mix(in srgb, ${g.color} 15%, transparent)`, background: `color-mix(in srgb, ${g.color} 3%, transparent)` }}>
                 <div className="px-3 py-2 flex items-center gap-1.5" style={{ borderBottom: `1px solid color-mix(in srgb, ${g.color} 10%, transparent)` }}>
