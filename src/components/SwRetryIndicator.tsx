@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, AlertTriangle, CheckCircle2, EyeOff, Eye } from "lucide-react";
 
 type Phase = "retrying" | "success" | "failed";
 
@@ -11,14 +11,41 @@ interface RetryStatus {
   max: number;
 }
 
+const HIDE_ON_SCROLL_KEY = "sw_retry_hide_on_scroll";
+const SCROLL_RESUME_DELAY_MS = 600;
+
+function readHideOnScroll(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(HIDE_ON_SCROLL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeHideOnScroll(value: boolean) {
+  try {
+    localStorage.setItem(HIDE_ON_SCROLL_KEY, value ? "1" : "0");
+  } catch {
+    // ignore quota / privacy errors
+  }
+}
+
 /**
  * On-screen indicator that listens for messages broadcast by the retry
  * service worker (`public/sw-retry.js`) and shows the current retry
  * attempt. Hides automatically after success/failure.
+ *
+ * Includes an opt-in "auto-hide while scrolling" toggle (persisted in
+ * localStorage) so the badge doesn't distract the user during retries.
  */
 export function SwRetryIndicator() {
   const [status, setStatus] = useState<RetryStatus | null>(null);
+  const [hideOnScroll, setHideOnScroll] = useState<boolean>(() => readHideOnScroll());
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Listen for SW retry status messages.
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
       return;
@@ -54,6 +81,43 @@ export function SwRetryIndicator() {
       if (hideTimer) clearTimeout(hideTimer);
     };
   }, []);
+
+  // Track scroll only when the auto-hide toggle is on.
+  useEffect(() => {
+    if (!hideOnScroll) {
+      setIsScrolling(false);
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+        scrollTimerRef.current = null;
+      }
+      return;
+    }
+
+    function onScroll() {
+      setIsScrolling(true);
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = setTimeout(() => {
+        setIsScrolling(false);
+      }, SCROLL_RESUME_DELAY_MS);
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+        scrollTimerRef.current = null;
+      }
+    };
+  }, [hideOnScroll]);
+
+  function toggleHideOnScroll() {
+    setHideOnScroll((prev) => {
+      const next = !prev;
+      writeHideOnScroll(next);
+      return next;
+    });
+  }
 
   if (!status) return null;
 
@@ -91,11 +155,16 @@ export function SwRetryIndicator() {
         ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
         : "border-red-500/40 bg-red-500/10 text-red-200";
 
+  // While scrolling (and toggle is on), fade out but keep aria-live for SR.
+  const hidden = hideOnScroll && isScrolling;
+
   return (
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed bottom-4 left-1/2 z-[9999] -translate-x-1/2"
+      className={`fixed bottom-4 left-1/2 z-[9999] -translate-x-1/2 transition-opacity duration-200 ${
+        hidden ? "pointer-events-none opacity-0" : "opacity-100"
+      }`}
     >
       <div
         className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium tracking-wide shadow-lg backdrop-blur-md ${tone}`}
@@ -105,6 +174,28 @@ export function SwRetryIndicator() {
         <span className="hidden font-mono text-[10px] opacity-60 sm:inline">
           {shortUrl}
         </span>
+        <button
+          type="button"
+          onClick={toggleHideOnScroll}
+          aria-pressed={hideOnScroll}
+          aria-label={
+            hideOnScroll
+              ? "Désactiver le masquage au défilement"
+              : "Masquer pendant le défilement"
+          }
+          title={
+            hideOnScroll
+              ? "Masquage au défilement : activé"
+              : "Masquage au défilement : désactivé"
+          }
+          className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/20 opacity-60 transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none"
+        >
+          {hideOnScroll ? (
+            <EyeOff className="h-3 w-3" aria-hidden />
+          ) : (
+            <Eye className="h-3 w-3" aria-hidden />
+          )}
+        </button>
       </div>
     </div>
   );
