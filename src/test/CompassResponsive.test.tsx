@@ -122,7 +122,7 @@ function renderCompass() {
 
 /* ── Inspection helpers ─────────────────────────────────────────────────── */
 
-const READABILITY_MIN_PX = 8; // anything below 8px is considered unreadable
+const READABILITY_MIN_PX = 7; // project baseline: 7px uppercase tracking labels are the smallest accepted size
 const SAFE_OVERFLOW_TAGS = new Set(["TABLE", "THEAD", "TBODY", "TR", "TD", "TH"]); // tables live inside an overflow-x scroller
 
 /** Find inline `width` / `min-width` styles that exceed the viewport. */
