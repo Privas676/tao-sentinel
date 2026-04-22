@@ -4,8 +4,35 @@ import { AlertTriangle, RotateCw, Loader2 } from "lucide-react";
 const HEALTH_CHECK_INTERVAL_MS = 10_000;
 const HEALTH_CHECK_TIMEOUT_MS = 5_000;
 const FAILURES_BEFORE_BANNER = 2;
+const CALM_MODE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+const CALM_MODE_STORAGE_KEY = "proxy_recovery_last_shown_at";
 
 type Reason = "health-check" | "sw-failed";
+
+/**
+ * "Calme-toi" mode: prevents the banner from re-appearing more than once
+ * every CALM_MODE_COOLDOWN_MS. Persisted in localStorage so it survives
+ * reloads (which is exactly what we need after a failed recovery attempt).
+ */
+function canShowBanner(): boolean {
+  try {
+    const raw = localStorage.getItem(CALM_MODE_STORAGE_KEY);
+    if (!raw) return true;
+    const last = Number.parseInt(raw, 10);
+    if (!Number.isFinite(last)) return true;
+    return Date.now() - last >= CALM_MODE_COOLDOWN_MS;
+  } catch {
+    return true;
+  }
+}
+
+function markBannerShown(): void {
+  try {
+    localStorage.setItem(CALM_MODE_STORAGE_KEY, String(Date.now()));
+  } catch {
+    // ignore (private mode, quota, etc.)
+  }
+}
 
 /**
  * Detects when the dev/proxy server has gone unresponsive (502/503/504 or
@@ -23,6 +50,13 @@ export function ProxyRecoveryBanner() {
   const [reason, setReason] = useState<Reason | null>(null);
   const [recovering, setRecovering] = useState(false);
   const failureCountRef = useRef(0);
+
+  const openBanner = (nextReason: Reason) => {
+    if (!canShowBanner()) return;
+    setReason(nextReason);
+    setOpen(true);
+    markBannerShown();
+  };
 
   // Background health check — detects server outages between user actions.
   useEffect(() => {
@@ -45,8 +79,7 @@ export function ProxyRecoveryBanner() {
         if (isGatewayDown) {
           failureCountRef.current += 1;
           if (failureCountRef.current >= FAILURES_BEFORE_BANNER) {
-            setReason("health-check");
-            setOpen(true);
+            openBanner("health-check");
           }
         } else {
           failureCountRef.current = 0;
@@ -58,8 +91,7 @@ export function ProxyRecoveryBanner() {
         if (cancelled) return;
         failureCountRef.current += 1;
         if (failureCountRef.current >= FAILURES_BEFORE_BANNER) {
-          setReason("health-check");
-          setOpen(true);
+          openBanner("health-check");
         }
       }
     }
@@ -79,8 +111,7 @@ export function ProxyRecoveryBanner() {
       const data = event.data;
       if (!data || data.type !== "SW_RETRY_STATUS") return;
       if (data.phase === "failed") {
-        setReason("sw-failed");
-        setOpen(true);
+        openBanner("sw-failed");
       }
     }
 
