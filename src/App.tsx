@@ -19,6 +19,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { SwRetryIndicator } from "@/components/SwRetryIndicator";
 
 const queryClient = new QueryClient();
 
@@ -78,6 +79,7 @@ const App = () => (
           </ErrorBoundary>
           <Toaster />
           <UpdateBanner />
+          <SwRetryIndicator />
         </TooltipProvider>
       </I18nProvider>
     </AuthProvider>

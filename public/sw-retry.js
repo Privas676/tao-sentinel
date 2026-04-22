@@ -41,35 +41,65 @@ function backoffDelay(attempt) {
 }
 
 /**
+ * Broadcast a status update to all controlled clients so the UI can
+ * render an on-screen retry indicator.
+ */
+async function broadcast(message) {
+  try {
+    const clients = await self.clients.matchAll({ includeUncontrolled: true });
+    for (const client of clients) {
+      client.postMessage({ type: "SW_RETRY_STATUS", ...message });
+    }
+  } catch {
+    // ignore — broadcast is best-effort
+  }
+}
+
+/**
  * Fetch with retry + exponential backoff for transient gateway errors.
  * Clones the request so the body stream can be replayed across attempts.
  */
 async function fetchWithRetry(request) {
   let lastResponse = null;
   let lastError = null;
+  const url = request.url;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      // Clone so the body remains usable on retry (POST/PUT/PATCH).
       const reqClone = request.clone();
       const response = await fetch(reqClone);
 
       if (!RETRYABLE_STATUSES.has(response.status)) {
+        if (attempt > 0) {
+          broadcast({ phase: "success", url, attempt: attempt + 1, max: MAX_ATTEMPTS });
+        }
         return response;
       }
 
       lastResponse = response;
-      // eslint-disable-next-line no-console
       console.warn(
-        `[sw-retry] ${response.status} on ${request.url} — attempt ${attempt + 1}/${MAX_ATTEMPTS}`,
+        `[sw-retry] ${response.status} on ${url} — attempt ${attempt + 1}/${MAX_ATTEMPTS}`,
       );
+      broadcast({
+        phase: "retrying",
+        url,
+        status: response.status,
+        attempt: attempt + 1,
+        max: MAX_ATTEMPTS,
+      });
     } catch (err) {
       lastError = err;
-      // eslint-disable-next-line no-console
       console.warn(
-        `[sw-retry] network error on ${request.url} — attempt ${attempt + 1}/${MAX_ATTEMPTS}`,
+        `[sw-retry] network error on ${url} — attempt ${attempt + 1}/${MAX_ATTEMPTS}`,
         err,
       );
+      broadcast({
+        phase: "retrying",
+        url,
+        status: 0,
+        attempt: attempt + 1,
+        max: MAX_ATTEMPTS,
+      });
     }
 
     if (attempt < MAX_ATTEMPTS - 1) {
@@ -77,6 +107,7 @@ async function fetchWithRetry(request) {
     }
   }
 
+  broadcast({ phase: "failed", url, attempt: MAX_ATTEMPTS, max: MAX_ATTEMPTS });
   if (lastResponse) return lastResponse;
   throw lastError ?? new Error("[sw-retry] exhausted retries");
 }
