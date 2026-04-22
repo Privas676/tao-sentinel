@@ -20,6 +20,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { SwRetryIndicator } from "@/components/SwRetryIndicator";
+import { ProxyRecoveryBanner } from "@/components/ProxyRecoveryBanner";
 
 const queryClient = new QueryClient();
 
@@ -80,6 +81,7 @@ const App = () => (
           <Toaster />
           <UpdateBanner />
           <SwRetryIndicator />
+          <ProxyRecoveryBanner />
         </TooltipProvider>
       </I18nProvider>
     </AuthProvider>
