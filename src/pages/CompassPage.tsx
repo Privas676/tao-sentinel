@@ -521,7 +521,7 @@ export default function CompassPage() {
         {/* ═══ 2. DRIVERS DU MOMENT ═══ */}
         <section>
           <SectionHeader title={fr ? "DRIVERS DU MOMENT" : "MARKET DRIVERS"} icon="📊" />
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-2.5">
             {drivers.map(d => (
               <MetricCard key={d.label} label={d.label} value={d.value} icon={d.icon} color={d.color} progress={d.num} />
             ))}
