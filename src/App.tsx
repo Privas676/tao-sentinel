@@ -83,6 +83,7 @@ const App = () => (
           <UpdateBanner />
           <SwRetryIndicator />
           <ProxyRecoveryBanner />
+          <PreviewRefreshIndicator />
         </TooltipProvider>
       </I18nProvider>
     </AuthProvider>
