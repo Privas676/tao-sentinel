@@ -21,6 +21,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { SwRetryIndicator } from "@/components/SwRetryIndicator";
 import { ProxyRecoveryBanner } from "@/components/ProxyRecoveryBanner";
+import { PreviewRefreshIndicator } from "@/components/PreviewRefreshIndicator";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +83,7 @@ const App = () => (
           <UpdateBanner />
           <SwRetryIndicator />
           <ProxyRecoveryBanner />
+          <PreviewRefreshIndicator />
         </TooltipProvider>
       </I18nProvider>
     </AuthProvider>
