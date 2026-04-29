@@ -85,6 +85,12 @@ function fmtPct(n: number | null): string {
   return `${sign}${n.toFixed(1)}%`;
 }
 
+function fmtNum(n: number | null, digits = 1): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return n.toFixed(digits);
+}
+
 export type HotNowSectionProps = {
   pulses: Map<number, PulseResult>;
   dataTrust: DataTrustResult;
