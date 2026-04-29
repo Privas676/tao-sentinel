@@ -87,12 +87,22 @@ export function useCanonicalSubnets(): CanonicalSubnetsResult {
 
   const result = useMemo(() => {
     // ── Evaluate data trust (kill switch source) FIRST so it can gate decisions ──
-    // TaoStats is the only HARD-required source for ENTRER/RENFORCER. TaoFlute and
-    // Social are tracked for transparency but not blocking by themselves.
+    // Layer A timestamps : TaoStats (required) + TaoFlute (required if used) + Social (info) + Sentinel (info).
     const socialIso = socialScores?.[0]?.created_at ?? null;
+    // TaoFlute timestamp: take the freshest taoflute_timestamp seen across facts (best-effort).
+    let taofluteIso: string | null = null;
+    for (const f of subnetFacts) {
+      const ts = (f as { taofluteSnapshotAt?: string | null }).taofluteSnapshotAt ?? null;
+      if (ts && (!taofluteIso || new Date(ts).getTime() > new Date(taofluteIso).getTime())) {
+        taofluteIso = ts;
+      }
+    }
+    const sentinelIso = new Date().toISOString();
     const sources: CriticalSource[] = [
       { name: "taostats", lastUpdate: scoreTimestamp ?? null, required: true },
+      { name: "taoflute", lastUpdate: taofluteIso, required: false },
       { name: "social", lastUpdate: socialIso, required: false },
+      { name: "sentinel", lastUpdate: sentinelIso, required: false },
     ];
     const dataTrust = evaluateDataTrust(sources, dataConfidence ?? null);
 
