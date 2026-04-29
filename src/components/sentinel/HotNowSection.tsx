@@ -85,6 +85,12 @@ function fmtPct(n: number | null): string {
   return `${sign}${n.toFixed(1)}%`;
 }
 
+function fmtNum(n: number | null, digits = 1): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return n.toFixed(digits);
+}
+
 export type HotNowSectionProps = {
   pulses: Map<number, PulseResult>;
   dataTrust: DataTrustResult;
@@ -304,6 +310,57 @@ export function HotNowSection({
                     </span>
                   </span>
                 </div>
+
+                {/* Layer A — Faits bruts essentiels */}
+                <div className="mt-1 flex items-center gap-3 font-mono text-[9px] text-muted-foreground/90 flex-wrap">
+                  <span title={fr ? "Volume 24h (TAO)" : "24h volume (TAO)"}>
+                    VOL <span className="text-foreground/80">{fmtNum(p.volume_24h, 2)}</span>
+                  </span>
+                  <span title={fr ? "Liquidité TAO in pool" : "TAO in pool"}>
+                    LIQ <span className="text-foreground/80">{fmtNum(p.liquidity, 1)}</span>
+                  </span>
+                  {p.slippage_1tau != null && (
+                    <span title={fr ? "Slippage 1 TAO" : "Slippage 1 TAO"}>
+                      SLIP1 <span style={{ color: (p.slippage_1tau ?? 0) > 1.5 ? WARN : "inherit" }}>
+                        {fmtNum(p.slippage_1tau, 2)}%
+                      </span>
+                    </span>
+                  )}
+                  {p.slippage_10tau != null && (
+                    <span title={fr ? "Slippage 10 TAO" : "Slippage 10 TAO"}>
+                      SLIP10 <span style={{ color: (p.slippage_10tau ?? 0) > 8 ? WARN : "inherit" }}>
+                        {fmtNum(p.slippage_10tau, 2)}%
+                      </span>
+                    </span>
+                  )}
+                  {p.spread != null && (
+                    <span title={fr ? "Spread" : "Spread"}>
+                      SPR <span className="text-foreground/80">{fmtNum(p.spread, 2)}%</span>
+                    </span>
+                  )}
+                  {(p.buys_count != null || p.sells_count != null) && (
+                    <span title={fr ? "Acheteurs / Vendeurs 24h" : "Buys / Sells 24h"}>
+                      B/S <span className="text-foreground/80">
+                        {p.buys_count ?? 0}/{p.sells_count ?? 0}
+                      </span>
+                    </span>
+                  )}
+                  {p.engineConflict && (
+                    <span
+                      data-testid={`badge-conflict-${p.netuid}`}
+                      className="font-mono text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider"
+                      style={{
+                        color: WARN,
+                        background: `color-mix(in srgb, ${WARN} 10%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${WARN} 22%, transparent)`,
+                      }}
+                      title={p.conflict_reason ?? ""}
+                    >
+                      {fr ? "CONFLIT BRUT/MOTEUR" : "RAW vs ENGINE CONFLICT"}
+                    </span>
+                  )}
+                </div>
+
                 <div className="mt-1 font-mono text-[9px] text-muted-foreground/80 truncate">
                   {actionExplanation(action, p, fr)}
                   {p.reasons.length > 0 && " · " + p.reasons.slice(0, 2).join(" · ")}

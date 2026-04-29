@@ -52,15 +52,27 @@ export type PulseResult = {
   tradability: PulseTradability;
   risk_label: PulseRiskLabel;
   reasons: string[];
-  // Raw market signals echoed for the UI
+  // Raw market signals echoed for the UI (Layer A — faits bruts)
   price_change_1h: number | null;
   price_change_24h: number | null;
   price_change_7d: number | null;
   price_change_30d: number | null;
   volume_24h: number | null;
-  liquidity: number | null;
+  liquidity: number | null;        // tao_in_pool
+  alpha_in_pool: number | null;
+  pool_ratio: number | null;
+  slippage_1tau: number | null;
+  slippage_10tau: number | null;
+  spread: number | null;
+  buys_count: number | null;
+  sells_count: number | null;
+  emissions_pct: number | null;
   data_freshness_ok: boolean;
   has_partial_data: boolean;
+  /** Raw facts trigger a pulse but canonical engine is NEUTRAL — needs human review. */
+  engineConflict: boolean;
+  /** Short label for the conflict (UI). */
+  conflict_reason: string | null;
   detected_at: string;
 };
 
@@ -304,32 +316,52 @@ function classifyRiskLabel(
   return "LOW";
 }
 
-/* ── Liquidity heuristic (no risk filtering, just signal) ── */
+/* ── Liquidity heuristic — RAW FACTS FIRST (no risk-score filtering) ── */
+
+const LIQ_RAW = {
+  poolTau: 50,           // tao_in_pool < 50 TAO
+  vol24hTau: 0.5,        // volume_24h < 0.5 TAO
+  slippage1Pct: 1.5,     // slippage 1 TAO > 1.5%
+  slippage10Pct: 8,      // slippage 10 TAO > 8%
+  spreadPct: 1.5,        // spread > 1.5%
+  poolRatioMin: 0.05,    // pool ratio out of band
+  poolRatioMax: 20,
+} as const;
 
 function isLiquidityWeak(f: CanonicalSubnetFacts): boolean {
   const pool = f.tao_in_pool ?? 0;
   const vol = f.volume_24h ?? 0;
-  // Either condition flags weakness — TaoFlute slippage handled separately.
-  if (pool > 0 && pool < PULSE_THRESHOLDS.illiquidPoolTau) return true;
-  if (vol > 0 && vol < PULSE_THRESHOLDS.illiquidVol24hTau) return true;
-  // missing both = unknown, prefer "not weak" so we still surface the pump
+  if (pool > 0 && pool < LIQ_RAW.poolTau) return true;
+  if (vol > 0 && vol < LIQ_RAW.vol24hTau) return true;
+  if ((f.slippage_1tau ?? 0) > LIQ_RAW.slippage1Pct) return true;
+  if ((f.slippage_10tau ?? 0) > LIQ_RAW.slippage10Pct) return true;
+  if ((f.spread ?? 0) > LIQ_RAW.spreadPct) return true;
+  if (
+    f.tao_pool_ratio != null &&
+    (f.tao_pool_ratio < LIQ_RAW.poolRatioMin || f.tao_pool_ratio > LIQ_RAW.poolRatioMax)
+  ) {
+    return true;
+  }
   return false;
 }
 
-/* ── Toxicity heuristic (any structural / external red flag) ── */
+/* ── Toxicity heuristic — RAW FACTS first, then decision enrichment ── */
 
 function isStructurallyToxic(
   f: CanonicalSubnetFacts,
   decision: CanonicalSubnetDecision | undefined,
 ): boolean {
+  // RAW: emission nulle = subnet structurellement mort
+  if ((f.emissions_pct ?? 1) === 0 && (f.emissions_day ?? 1) === 0) return true;
+  // RAW: external status TaoFlute P1..P10
   if (isExternalToxic(f.external_status)) return true;
+  // Enrichi par le moteur si dispo (mais ne supprime jamais le pump)
   if (decision) {
     if (decision.depeg_risk_score >= 50) return true;
     if (decision.delist_risk_score >= 60) return true;
     if (decision.structural_fragility_score >= 75) return true;
     if (decision.guardrail_active && decision.final_action === "ÉVITER") return true;
   }
-  if ((f.emissions_pct ?? 1) === 0 && (f.emissions_day ?? 1) === 0) return true;
   return false;
 }
 
@@ -366,6 +398,29 @@ export function detectPulse(
   if (hasPartial) reasons.push("Données partielles — score recalibré");
   if (!dataOk) reasons.push("Données non fiables — confirmation requise");
 
+  // ── CONFLIT FAITS BRUTS vs MOTEUR ──
+  // Si les faits bruts détectent un pump mais le moteur dit NEUTRE,
+  // on force la visibilité et on flag pour audit humain.
+  let engineConflict = false;
+  let conflictReason: string | null = null;
+  if (pulseType !== "NONE" && decision) {
+    const fa = decision.final_action;
+    const isEngineNeutral =
+      decision.raw_signal === "NEUTRE" ||
+      fa === "SURVEILLER" ||
+      fa === "AUCUNE_DECISION";
+    const isClassicPump =
+      pulseType === "PUMP_LIVE" ||
+      pulseType === "EXTREME_PUMP" ||
+      pulseType === "DAILY_BREAKOUT" ||
+      pulseType === "WEEKLY_ROTATION";
+    if (isEngineNeutral && isClassicPump) {
+      engineConflict = true;
+      conflictReason = `Faits bruts: pump détecté · Moteur: ${fa}`;
+      reasons.push("Conflit faits bruts vs moteur — needs confirmation");
+    }
+  }
+
   return {
     netuid: facts.subnet_id,
     name: safeName(facts),
@@ -380,8 +435,18 @@ export function detectPulse(
     price_change_30d: facts.change_30d,
     volume_24h: facts.volume_24h,
     liquidity: facts.tao_in_pool,
+    alpha_in_pool: facts.alpha_in_pool,
+    pool_ratio: facts.tao_pool_ratio,
+    slippage_1tau: facts.slippage_1tau,
+    slippage_10tau: facts.slippage_10tau,
+    spread: facts.spread,
+    buys_count: facts.buys_count,
+    sells_count: facts.sells_count,
+    emissions_pct: facts.emissions_pct,
     data_freshness_ok: dataOk,
     has_partial_data: hasPartial,
+    engineConflict,
+    conflict_reason: conflictReason,
     detected_at: new Date().toISOString(),
   };
 }
