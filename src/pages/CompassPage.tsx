@@ -29,6 +29,9 @@ import { MetricCard } from "@/components/sentinel/MetricCard";
 import { SparklineMini } from "@/components/sentinel/SparklineMini";
 import { ConfidenceBar } from "@/components/sentinel/ConfidenceBar";
 import { GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
+import { HotNowSection } from "@/components/sentinel/HotNowSection";
+import { WarningBanner } from "@/components/sentinel/WarningBanner";
+import { dataTrustLabel } from "@/lib/data-trust";
 
 /* ═══════════════════════════════════════════════ */
 /*   COMPASS — Strategic Decision Command Center  */
@@ -436,6 +439,21 @@ export default function CompassPage() {
     <div className="h-full w-full bg-background text-foreground overflow-y-auto overflow-x-hidden">
       <div className="px-3 sm:px-6 py-4 sm:py-5 max-w-[1000px] mx-auto space-y-5 sm:space-y-9">
 
+        {/* ═══ DATA SAFE MODE BANNER — only blocks ENTRER/RENFORCER ═══ */}
+        {dataTrust.isSafeMode && (
+          <WarningBanner
+            level="critical"
+            icon="🛡"
+            title={fr ? "DATA SAFE MODE — décisions actives gelées" : "DATA SAFE MODE — active decisions frozen"}
+            description={
+              (fr
+                ? `${dataTrustLabel(dataTrust.level, true)}. ENTRER et RENFORCER bloqués. HOT NOW, risques, alertes système et positions restent visibles.`
+                : `${dataTrustLabel(dataTrust.level, false)}. ENTER and ADD blocked. HOT NOW, risks, system alerts and positions remain visible.`)
+              + (dataTrust.reasons.length ? " · " + dataTrust.reasons.slice(0, 2).join(" · ") : "")
+            }
+          />
+        )}
+
         {/* ═══ 1. HERO DÉCISIONNEL — MORE DIRECTIVE ═══ */}
         <section>
           <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -517,6 +535,9 @@ export default function CompassPage() {
             </div>
           </div>
         </section>
+
+        {/* ═══ 1b. HOT NOW — TaoStats Price Pulse (raw, never filtered) ═══ */}
+        <HotNowSection pulses={pulses} dataTrust={dataTrust} fr={fr} limit={8} />
 
         {/* ═══ 2. DRIVERS DU MOMENT ═══ */}
         <section>
