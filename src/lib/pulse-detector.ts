@@ -52,15 +52,27 @@ export type PulseResult = {
   tradability: PulseTradability;
   risk_label: PulseRiskLabel;
   reasons: string[];
-  // Raw market signals echoed for the UI
+  // Raw market signals echoed for the UI (Layer A — faits bruts)
   price_change_1h: number | null;
   price_change_24h: number | null;
   price_change_7d: number | null;
   price_change_30d: number | null;
   volume_24h: number | null;
-  liquidity: number | null;
+  liquidity: number | null;        // tao_in_pool
+  alpha_in_pool: number | null;
+  pool_ratio: number | null;
+  slippage_1tau: number | null;
+  slippage_10tau: number | null;
+  spread: number | null;
+  buys_count: number | null;
+  sells_count: number | null;
+  emissions_pct: number | null;
   data_freshness_ok: boolean;
   has_partial_data: boolean;
+  /** Raw facts trigger a pulse but canonical engine is NEUTRAL — needs human review. */
+  engineConflict: boolean;
+  /** Short label for the conflict (UI). */
+  conflict_reason: string | null;
   detected_at: string;
 };
 
