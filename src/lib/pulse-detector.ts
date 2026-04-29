@@ -398,6 +398,29 @@ export function detectPulse(
   if (hasPartial) reasons.push("Données partielles — score recalibré");
   if (!dataOk) reasons.push("Données non fiables — confirmation requise");
 
+  // ── CONFLIT FAITS BRUTS vs MOTEUR ──
+  // Si les faits bruts détectent un pump mais le moteur dit NEUTRE,
+  // on force la visibilité et on flag pour audit humain.
+  let engineConflict = false;
+  let conflictReason: string | null = null;
+  if (pulseType !== "NONE" && decision) {
+    const fa = decision.final_action;
+    const isEngineNeutral =
+      decision.raw_signal === "NEUTRE" ||
+      fa === "SURVEILLER" ||
+      fa === "AUCUNE_DECISION";
+    const isClassicPump =
+      pulseType === "PUMP_LIVE" ||
+      pulseType === "EXTREME_PUMP" ||
+      pulseType === "DAILY_BREAKOUT" ||
+      pulseType === "WEEKLY_ROTATION";
+    if (isEngineNeutral && isClassicPump) {
+      engineConflict = true;
+      conflictReason = `Faits bruts: pump détecté · Moteur: ${fa}`;
+      reasons.push("Conflit faits bruts vs moteur — needs confirmation");
+    }
+  }
+
   return {
     netuid: facts.subnet_id,
     name: safeName(facts),
@@ -412,8 +435,18 @@ export function detectPulse(
     price_change_30d: facts.change_30d,
     volume_24h: facts.volume_24h,
     liquidity: facts.tao_in_pool,
+    alpha_in_pool: facts.alpha_in_pool,
+    pool_ratio: facts.tao_pool_ratio,
+    slippage_1tau: facts.slippage_1tau,
+    slippage_10tau: facts.slippage_10tau,
+    spread: facts.spread,
+    buys_count: facts.buys_count,
+    sells_count: facts.sells_count,
+    emissions_pct: facts.emissions_pct,
     data_freshness_ok: dataOk,
     has_partial_data: hasPartial,
+    engineConflict,
+    conflict_reason: conflictReason,
     detected_at: new Date().toISOString(),
   };
 }
