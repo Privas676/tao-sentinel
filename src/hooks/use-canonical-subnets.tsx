@@ -82,21 +82,16 @@ function gateDecisionForSafeMode(
 export function useCanonicalSubnets(): CanonicalSubnetsResult {
   const { decisions, decisionsList, isLoading: decisionsLoading } = useSubnetDecisions();
   const { subnetFacts, scoreTimestamp, dataConfidence } = useSubnetScores();
-  const { taoFluteStatuses, isLoading: delistLoading, lastUpdated: taoFluteUpdatedAt } =
-    useExternalDelist();
+  const { taoFluteStatuses, isLoading: delistLoading } = useExternalDelist();
   const { data: socialScores, isLoading: socialLoading } = useSocialSubnetScores();
 
   const result = useMemo(() => {
     // ── Evaluate data trust (kill switch source) FIRST so it can gate decisions ──
-    const taoFluteIso =
-      typeof taoFluteUpdatedAt === "number" && taoFluteUpdatedAt > 0
-        ? new Date(taoFluteUpdatedAt).toISOString()
-        : null;
+    // TaoStats is the only HARD-required source for ENTRER/RENFORCER. TaoFlute and
+    // Social are tracked for transparency but not blocking by themselves.
     const socialIso = socialScores?.[0]?.created_at ?? null;
     const sources: CriticalSource[] = [
       { name: "taostats", lastUpdate: scoreTimestamp ?? null, required: true },
-      // TaoFlute is required — without it we can't evaluate external risk
-      { name: "taoflute", lastUpdate: taoFluteIso, required: true },
       { name: "social", lastUpdate: socialIso, required: false },
     ];
     const dataTrust = evaluateDataTrust(sources, dataConfidence ?? null);
@@ -150,7 +145,7 @@ export function useCanonicalSubnets(): CanonicalSubnetsResult {
   }, [
     decisions, decisionsList, decisionsLoading,
     subnetFacts, scoreTimestamp, dataConfidence,
-    taoFluteStatuses, taoFluteUpdatedAt, delistLoading,
+    taoFluteStatuses, delistLoading,
     socialScores, socialLoading,
   ]);
 
