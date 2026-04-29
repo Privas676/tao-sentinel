@@ -30,6 +30,7 @@ import { SparklineMini } from "@/components/sentinel/SparklineMini";
 import { ConfidenceBar } from "@/components/sentinel/ConfidenceBar";
 import { GOLD, GO, WARN, BREAK, MUTED } from "@/components/sentinel/Atoms";
 import { HotNowSection } from "@/components/sentinel/HotNowSection";
+import { SystemAlertsPanel } from "@/components/sentinel/SystemAlertsPanel";
 import { WarningBanner } from "@/components/sentinel/WarningBanner";
 import { dataTrustLabel } from "@/lib/data-trust";
 
@@ -214,7 +215,7 @@ export default function CompassPage() {
 
   // ── Data sources — useCanonicalSubnets is the single source of truth ──
   const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence, isLoading } = useSubnetScores();
-  const { facts: canonicalFacts, decisions, earlyPumps, pulses, dataTrust } = useCanonicalSubnets();
+  const { facts: canonicalFacts, decisions, canonicalDecisions, earlyPumps, pulses, dataTrust } = useCanonicalSubnets();
 
 
   const { data: rawSignals } = useQuery({
@@ -537,7 +538,19 @@ export default function CompassPage() {
         </section>
 
         {/* ═══ 1b. HOT NOW — TaoStats Price Pulse (raw, never filtered) ═══ */}
-        <HotNowSection pulses={pulses} dataTrust={dataTrust} fr={fr} limit={8} />
+        <HotNowSection
+          pulses={pulses}
+          dataTrust={dataTrust}
+          fr={fr}
+          limit={8}
+          decisions={canonicalDecisions}
+          facts={canonicalFacts}
+          heldNetuids={new Set(positions.map(p => p.subnet_id))}
+          sourceTimestamp={scoreTimestamp}
+        />
+
+        {/* ═══ 1c. SYSTEM ALERTS — Data Safe Mode reasons ═══ */}
+        <SystemAlertsPanel dataTrust={dataTrust} fr={fr} />
 
         {/* ═══ 2. DRIVERS DU MOMENT ═══ */}
         <section>

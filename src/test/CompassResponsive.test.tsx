@@ -67,7 +67,16 @@ vi.mock("@/hooks/use-canonical-subnets", () => ({
   useCanonicalSubnets: () => ({
     facts: new Map(),
     decisions: mockDecisionsMap,
+    canonicalDecisions: new Map(),
     earlyPumps: new Map(),
+    pulses: new Map(),
+    dataTrust: {
+      level: "OK", globalConfidence: 95, isSafeMode: false, blockEntryActions: false,
+      worstSource: null, worstAgeSeconds: 0, lastReliableUpdate: new Date().toISOString(),
+      reasons: [], evaluatedAt: new Date().toISOString(),
+    },
+    decisionsList: [],
+    isLoading: false,
   }),
 }));
 vi.mock("@/hooks/use-local-portfolio", () => ({
