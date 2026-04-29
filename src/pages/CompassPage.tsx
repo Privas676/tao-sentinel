@@ -211,7 +211,7 @@ export default function CompassPage() {
 
   // ── Data sources — useCanonicalSubnets is the single source of truth ──
   const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence, isLoading } = useSubnetScores();
-  const { facts: canonicalFacts, decisions, earlyPumps } = useCanonicalSubnets();
+  const { facts: canonicalFacts, decisions, earlyPumps, pulses, dataTrust } = useCanonicalSubnets();
 
 
   const { data: rawSignals } = useQuery({
