@@ -212,6 +212,28 @@ export default function CompassPage() {
   const fr = lang === "fr";
   const isMobile = useIsMobile();
   const { positions } = useLocalPortfolio();
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // ── Manual refresh handler ──
+  const handleRefreshNow = async () => {
+    setIsRefreshing(true);
+    try {
+      await queryClient.refetchQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0]?.toString() ?? "";
+          return (
+            key.startsWith("unified-") ||
+            key.startsWith("external-") ||
+            key === "social_subnet_scores" ||
+            key === "stake-analytics"
+          );
+        },
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // ── Data sources — useCanonicalSubnets is the single source of truth ──
   const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence, isLoading } = useSubnetScores();
