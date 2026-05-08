@@ -488,6 +488,20 @@ export default function CompassPage() {
                 🛡 SAFE MODE
               </span>
             )}
+            <button
+              type="button"
+              onClick={handleRefreshNow}
+              disabled={isRefreshing}
+              className="font-mono text-[9px] px-2 py-0.5 rounded uppercase tracking-wider hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+              style={{
+                color: GOLD,
+                background: `color-mix(in srgb, ${GOLD} 6%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${GOLD} 16%, transparent)`,
+              }}
+              title={fr ? "Actualiser immédiatement toutes les données" : "Refresh all data immediately"}
+            >
+              {isRefreshing ? (fr ? "Actualisation..." : "Refreshing...") : (fr ? "Actualiser maintenant" : "Refresh now")}
+            </button>
             <span className="ml-auto font-mono text-[8px] text-muted-foreground">{specScoresList.length} subnets</span>
           </div>
 
