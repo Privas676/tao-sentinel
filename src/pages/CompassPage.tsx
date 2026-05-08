@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { PageLoadingState } from "@/components/PageLoadingState";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useI18n } from "@/lib/i18n";
@@ -212,6 +212,28 @@ export default function CompassPage() {
   const fr = lang === "fr";
   const isMobile = useIsMobile();
   const { positions } = useLocalPortfolio();
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // ── Manual refresh handler ──
+  const handleRefreshNow = async () => {
+    setIsRefreshing(true);
+    try {
+      await queryClient.refetchQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0]?.toString() ?? "";
+          return (
+            key.startsWith("unified-") ||
+            key.startsWith("external-") ||
+            key === "social_subnet_scores" ||
+            key === "stake-analytics"
+          );
+        },
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // ── Data sources — useCanonicalSubnets is the single source of truth ──
   const { scoresList, sparklines, scoreTimestamp, taoUsd, dataAlignment, dataAgeDebug, fleetDistribution, dataConfidence, isLoading } = useSubnetScores();
@@ -466,6 +488,20 @@ export default function CompassPage() {
                 🛡 SAFE MODE
               </span>
             )}
+            <button
+              type="button"
+              onClick={handleRefreshNow}
+              disabled={isRefreshing}
+              className="font-mono text-[9px] px-2 py-0.5 rounded uppercase tracking-wider hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+              style={{
+                color: GOLD,
+                background: `color-mix(in srgb, ${GOLD} 6%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${GOLD} 16%, transparent)`,
+              }}
+              title={fr ? "Actualiser immédiatement toutes les données" : "Refresh all data immediately"}
+            >
+              {isRefreshing ? (fr ? "Actualisation..." : "Refreshing...") : (fr ? "Actualiser maintenant" : "Refresh now")}
+            </button>
             <span className="ml-auto font-mono text-[8px] text-muted-foreground">{specScoresList.length} subnets</span>
           </div>
 
